@@ -1,0 +1,6 @@
+{
+  "name": "bot-reborn",
+  "compatibility_date": "2026-09-04",
+  // Static assets served by Cloudflare Pages. No build step is required.
+  "pages_build_output_dir": "web"
+}

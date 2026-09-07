@@ -1,0 +1,73 @@
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  margin: 0;
+  padding: 20px;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  text-align: center;
+}
+
+main {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+hr {
+  margin: 20px 0;
+}
+
+button {
+  padding: 15px 20px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+button.primary {
+  padding: 15px 30px;
+  font-size: 18px;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+
+#status {
+  margin-top: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.diagnostics {
+  text-align: left;
+}
+
+.diagnostics h2 {
+  font-size: 16px;
+  text-align: center;
+}
+
+.hint {
+  font-size: 14px;
+  line-height: 1.5;
+  opacity: 0.8;
+}
+
+#log {
+  margin-top: 12px;
+  padding: 10px;
+  min-height: 120px;
+  max-height: 45vh;
+  overflow: auto;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-all;
+  opacity: 0.9;
+}

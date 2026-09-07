@@ -1,0 +1,21 @@
+# Wrangler / Cloudflare
+.wrangler/
+.dev.vars
+
+# Dependencies and build output (this project has no build step; kept in case
+# a toolchain is added later)
+node_modules/
+dist/
+
+# sherpa-onnx models and WASM: large, fetched by script, not vendored
+web/models/
+
+# Personal design notes and specs (Chinese, single-author working documents)
+docs/design-notes/
+docs/superpowers/
+
+# OS and editors
+.DS_Store
+*.swp
+.idea/
+.vscode/

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FT232H WebUSB Console</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <h1>FT232H WebUSB Console</h1>
+
+    <button id="connectBtn" class="primary">1. Connect Device</button>
+
+    <hr>
+
+    <div class="controls">
+      <button data-d4="1" data-d5="0">Forward (D4=1, D5=0)</button>
+      <button data-d4="0" data-d5="1">Reverse (D4=0, D5=1)</button>
+      <button data-d4="0" data-d5="0">Stop (D4=0, D5=0)</button>
+    </div>
+
+    <p id="status">Status: Not connected</p>
+
+    <hr>
+
+    <section class="diagnostics">
+      <h2>Diagnostics</h2>
+      <p class="hint">
+        If the picker's Connect button stays greyed out, use
+        <b>Scan ALL USB devices</b>. It opens the same picker with no vendor
+        filter, so every device the phone can see is listed.
+      </p>
+      <div class="controls">
+        <button id="scanAllBtn">Scan ALL USB devices</button>
+        <button id="readPinsBtn">Read pins</button>
+        <button id="listGrantedBtn">List granted devices</button>
+        <button id="copyLogBtn">Copy log</button>
+      </div>
+      <pre id="log"></pre>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
