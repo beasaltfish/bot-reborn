@@ -312,7 +312,10 @@ export class Brain {
       else running = this.#executor.stop();
       // Not awaited, so a rejection would otherwise go unhandled. The executor
       // reports write failures through its own onError; this only covers the
-      // unexpected.
+      // unexpected. Because it is unawaited, this 'error' earcon can land
+      // AFTER the 'done' earcon and after the spoken reply above, whenever the
+      // rejection actually surfaces — there is no ordering guarantee. That is
+      // fine: this is a last-resort guard, not the normal error path.
       running.catch(() => this.#earcon('error'));
     }
   }

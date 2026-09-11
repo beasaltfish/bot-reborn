@@ -182,16 +182,53 @@ test('validate: an unknown tool name is dropped', () => {
   assert.deepEqual(validate([call('launch_missiles', {})]).actions, []);
 });
 
-/** @param {{ connected?: boolean, reply?: any }} [opts] */
-function brainHarness({ connected = true, reply } = {}) {
+/**
+ * A promise this test controls the settling of, so a test can prove
+ * "X happened before the motion finished" instead of just "X happened before
+ * Y in this array" — event order alone cannot distinguish an awaited
+ * #dispatch from a fire-and-forget one when the fake resolves instantly
+ * either way (see the review note on the test this exists for).
+ * @returns {{ promise: Promise<void>, resolve: (value?: any) => void }}
+ */
+function deferred() {
+  /** @type {(value?: any) => void} */
+  let resolve = () => {};
+  const promise = new Promise((res) => { resolve = res; });
+  return { promise, resolve };
+}
+
+/** @param {{ connected?: boolean, reply?: any, gateMotion?: boolean }} [opts] */
+function brainHarness({ connected = true, reply, gateMotion = false } = {}) {
   /** @type {any[]} */
   const events = [];
+  // Only populated when gateMotion is true. Every move/cruise call then gets
+  // its OWN gate, pushed here in call order, so a test can hold a motion open
+  // and observe what happened while it was still running. Nothing resolves a
+  // gate automatically — the test that asks for this is responsible for
+  // calling .resolve() itself. gateMotion defaults to false, and every other
+  // test's move/cruise still resolves on the next microtask exactly as
+  // before — this is opt-in precisely so it cannot change what an unrelated
+  // test observes (see the review note that added it).
+  /** @type {Array<{ promise: Promise<void>, resolve: (value?: any) => void }>} */
+  const motionGates = [];
   const executor = {
     connected,
     /** @param {any} steps */
-    async move(steps) { events.push({ op: 'move', steps }); },
+    async move(steps) {
+      events.push({ op: 'move', steps });
+      if (!gateMotion) return;
+      const gate = deferred();
+      motionGates.push(gate);
+      await gate.promise;
+    },
     /** @param {any} drive @param {any} steer */
-    async cruise(drive, steer) { events.push({ op: 'cruise', drive, steer }); },
+    async cruise(drive, steer) {
+      events.push({ op: 'cruise', drive, steer });
+      if (!gateMotion) return;
+      const gate = deferred();
+      motionGates.push(gate);
+      await gate.promise;
+    },
     stop() { events.push({ op: 'stop' }); return Promise.resolve(); },
   };
   const llm = {
@@ -212,7 +249,7 @@ function brainHarness({ connected = true, reply } = {}) {
   const earcon = (/** @type {any} */ name) => events.push({ op: 'earcon', name });
   /** @type {{ lang: 'en' | 'zh', replyLang: 'en' | 'zh' | null, bargeIn: boolean }} */
   const config = { lang: 'zh', replyLang: null, bargeIn: true };
-  return { events, executor, llm, tts, config,
+  return { events, executor, llm, tts, config, motionGates,
     brain: new Brain({ llm, executor, tts, earcon, config }) };
 }
 
@@ -247,14 +284,50 @@ test('handle: pure chat speaks and drives nothing', async () => {
 });
 
 test('handle: a move dispatches, beeps, and does NOT wait for the car to finish', async () => {
-  const h = brainHarness({ reply: say(null, [
+  // A pure event-order assertion cannot tell an awaited #dispatch from a
+  // fire-and-forget one when the fake executor resolves on the very next
+  // microtask regardless — the order comes out the same either way. This test
+  // instead holds the motion open (via an unresolved gate) and checks that
+  // handle() returns, and that 'done' and the spoken reply have already
+  // landed, WHILE that gate is still pending. That is the one thing an
+  // awaited #dispatch cannot produce: it would block handle() on the gate,
+  // which nothing here ever resolves until after the assertions below.
+  const h = brainHarness({ gateMotion: true, reply: say('挪一下，好嘞。', [
     { id: 'c1', name: 'move', args: { steps: [{ drive: 'forward', steer: 'straight', duration_ms: 600 }] } },
   ]) });
-  await h.brain.handle('往前走');
+
+  const handlePromise = h.brain.handle('往前走');
+
+  // Race handle() against a short real timer instead of awaiting it directly:
+  // if #dispatch awaits the motion, handle() cannot resolve before the gate
+  // does, and the gate is only resolved further down — so this race would
+  // time out and fail here, cleanly, instead of hanging the suite.
+  const winner = await Promise.race([
+    handlePromise.then(() => 'handle'),
+    new Promise((resolve) => setTimeout(() => resolve('timeout'), 100)),
+  ]);
+  assert.equal(winner, 'handle',
+    'handle() must return without waiting for the car to finish moving (spec §6.3, §6.6)');
+
+  assert.equal(h.motionGates.length, 1, 'the fake executor.move must have been invoked exactly once');
+
+  // Confirm, directly, that the gate really is still pending at this point —
+  // not merely that handle() happened to return first.
+  const stillPending = await Promise.race([
+    h.motionGates[0].promise.then(() => false),
+    Promise.resolve(true),
+  ]);
+  assert.equal(stillPending, true, 'the motion must still be running when done/speak fire');
+
   assert.deepEqual(h.events, [
     { op: 'move', steps: [{ drive: 'forward', steer: 'straight', duration_ms: 600 }] },
     { op: 'earcon', name: 'done' },
+    { op: 'speak', text: '挪一下，好嘞。' },
   ]);
+
+  // Let the motion "finish" now, and confirm that doesn't break anything.
+  h.motionGates[0].resolve();
+  await handlePromise;
 });
 
 test('handle: content AND tool_calls both happen, action first (spec §6.3)', async () => {
