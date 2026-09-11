@@ -1,0 +1,25 @@
+{
+  "name": "bot-reborn",
+  "version": "1.0.0",
+  "description": "Voice-controlled toy car: phone drives an FT232H over WebUSB in async bitbang mode.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "node --test",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.2",
+    "@types/w3c-web-usb": "^1.0.14",
+    "typescript": "^7.0.2"
+  }
+}

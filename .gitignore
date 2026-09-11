@@ -6,6 +6,7 @@
 # a toolchain is added later)
 node_modules/
 dist/
+spike/
 
 # sherpa-onnx models and WASM: large, fetched by script, not vendored
 web/models/

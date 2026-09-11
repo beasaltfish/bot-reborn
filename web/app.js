@@ -1,3 +1,5 @@
+// @ts-nocheck — legacy D4/D5 diagnostic console, replaced wholesale by a
+// later task; not worth annotating for strict/checkJs before it's deleted.
 // FT232H async bitbang control over WebUSB.
 const FTDI_VID = 0x0403;
 const FT232H_PID = 0x6014;
