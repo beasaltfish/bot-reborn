@@ -66,6 +66,30 @@ function namedInput(name) {
   return /** @type {HTMLInputElement} */ (document.querySelector(`input[name="${name}"]`));
 }
 
+// --- One AudioContext for the whole page ----------------------------------
+//
+// Chrome hard-caps a document at 6 AudioContexts and throws on the seventh:
+//   "Failed to construct 'AudioContext': the number of hardware contexts
+//    provided (6) is greater than or equal to the maximum bound (6)"
+// and the page is bricked until reload. Every `new WebAudioTts()` builds one
+// unless it is handed one, and this page constructs a TTS provider on every
+// test click plus one more in ensureBrain() — while calibration ⑪ (spec §12)
+// is literally "listen to the same sentence through each TTS provider in
+// turn": edit the config, click again, once per provider. The page would break
+// doing the exact thing it exists for.
+//
+// Lazy, not module-level: constructing it before a user gesture gets a
+// suspended context and a console warning for nothing.
+
+/** @type {AudioContext | null} */
+let sharedCtx = null;
+
+/** @returns {AudioContext} */
+function audioContext() {
+  if (!sharedCtx) sharedCtx = new AudioContext();
+  return sharedCtx;
+}
+
 /** @param {string} name */
 function testButton(name) {
   return /** @type {HTMLButtonElement} */ (document.querySelector(`[data-test="${name}"]`));
@@ -206,31 +230,29 @@ function toInt16Pcm(buffer) {
 
 /** @param {OpenAiCompatStt} stt @returns {Promise<string>} */
 async function testStt(stt) {
-  const ctx = new AudioContext();
-  try {
-    const lines = [];
-    for (const fixture of STT_FIXTURES) {
-      const response = await fetch(fixture.path);
-      // Cloudflare Pages (wrangler pages dev included) does not 404 a missing
-      // static path — it falls back to serving index.html with status 200.
-      // response.ok alone would call that "found" and hand decodeAudioData an
-      // HTML page, which fails with a cryptic decode error instead of ever
-      // showing the README instructions. The content-type gives it away: a
-      // real .wav is never served as text/html.
-      const contentType = response.headers.get('content-type') ?? '';
-      if (!response.ok || contentType.includes('text/html')) {
-        const readme = await fixtureReadme();
-        throw new Error(`找不到 ${fixture.path}，不能静默跳过这段测试。\n\n${readme}`);
-      }
-      const audioBuffer = await ctx.decodeAudioData(await response.arrayBuffer());
-      const { pcm, sampleRate } = toInt16Pcm(audioBuffer);
-      const text = await stt.transcribe(pcm, sampleRate);
-      lines.push(`${fixture.label}: ${text || '（空）'}`);
+  // Borrow the shared context rather than opening (and closing) one per click:
+  // see audioContext() for why this page counts its AudioContexts.
+  const ctx = audioContext();
+  const lines = [];
+  for (const fixture of STT_FIXTURES) {
+    const response = await fetch(fixture.path);
+    // Cloudflare Pages (wrangler pages dev included) does not 404 a missing
+    // static path — it falls back to serving index.html with status 200.
+    // response.ok alone would call that "found" and hand decodeAudioData an
+    // HTML page, which fails with a cryptic decode error instead of ever
+    // showing the README instructions. The content-type gives it away: a
+    // real .wav is never served as text/html.
+    const contentType = response.headers.get('content-type') ?? '';
+    if (!response.ok || contentType.includes('text/html')) {
+      const readme = await fixtureReadme();
+      throw new Error(`找不到 ${fixture.path}，不能静默跳过这段测试。\n\n${readme}`);
     }
-    return lines.join('\n');
-  } finally {
-    await ctx.close();
+    const audioBuffer = await ctx.decodeAudioData(await response.arrayBuffer());
+    const { pcm, sampleRate } = toInt16Pcm(audioBuffer);
+    const text = await stt.transcribe(pcm, sampleRate);
+    lines.push(`${fixture.label}: ${text || '（空）'}`);
   }
+  return lines.join('\n');
 }
 
 /**
@@ -287,7 +309,7 @@ async function performTest(name) {
       // assertFilled only checks the three ProviderCfg fields, so voice
       // needs its own check or an empty one would reach the API silently.
       if (!cfg.tts.voice) throw new Error('请先在上方「配置」里填写 TTS 的 voice');
-      return testTts(new WebAudioTts(cfg.tts));
+      return testTts(new WebAudioTts(cfg.tts, { audioContext: audioContext() }));
     case 'usb':
       return testUsb(requireFtdi());
     default:
@@ -341,7 +363,7 @@ function ensureBrain(exec) {
   brain = new Brain({
     llm: new OpenAiCompatLlm(cfg.llm),
     executor: exec,
-    tts: new WebAudioTts(cfg.tts),
+    tts: new WebAudioTts(cfg.tts, { audioContext: audioContext() }),
     // Real earcons are earcon.js, which belongs to the second plan (spec
     // §5.6). Here they are log lines: this page tests the chain, not the
     // sound design.
