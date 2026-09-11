@@ -120,6 +120,17 @@ button.danger {
   border: none;
 }
 
+/* The bench page's emergency stop follows the page down: the 20 s byte-rate
+   run (calibration ②) is the one moment the car is most likely to leave the
+   bench, and the button has to be wherever the reader's eyes already are. */
+.stopbar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 8px 0;
+  background: Canvas;
+}
+
 #textForm {
   display: flex;
   gap: 8px;

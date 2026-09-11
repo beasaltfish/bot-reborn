@@ -12,6 +12,12 @@
   <button id="connectBtn" class="primary">1. 连接 FT232H</button>
   <p id="status">状态：未连接</p>
 
+  <!-- spec §4.1 第 2 层。② 一次交出 20 秒的前进字节，没有这个按钮就只能拔线。
+       它同时是 §4.4 里 purgeTx 的现场演示：车应该立刻停，不是 20 秒后才停。 -->
+  <div class="stopbar">
+    <button id="stopBtn" class="danger">■ 急停（purge + 拉低引脚）</button>
+  </div>
+
   <hr>
   <h2>① 极性：A 侧是左还是右</h2>
   <p class="hint">每个按钮把对应引脚拉高 600 ms。看轮子往哪边偏，把结论写进 docs/hardware.md。</p>
@@ -29,6 +35,8 @@
   <p class="hint">
     波特率设 1200，写 3000 个 forward 字节 + 1 个停止字节，一次交出。
     掐秒表量电机转了多久；同时量车走了多远。
+    <b>车要跑出台面就按上面的「急停」</b> —— 这 20 秒里 JS 什么都没在做，
+    唯一能中断它的就是那个按钮。
   </p>
   <div class="controls">
     <button id="byteRateBtn">写 3000 字节（≈ 理论 20 s）</button>

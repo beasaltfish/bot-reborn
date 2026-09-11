@@ -179,6 +179,28 @@ el('connectBtn').addEventListener('click', async () => {
   }
 });
 
+// --- 急停（spec §4.1 第 2 层）-------------------------------------------------
+//
+// 这个页面不经过 Executor，所以没有 generation counter 可以抢占——它本来也不
+// 需要：这里没有续期循环在跑，危险全部来自「已经交给芯片、还没放完」的那堆
+// 字节。所以急停就是 spec §4.4 的第 2、3 步，顺序同样不可变：先 purgeTx 丢掉
+// FIFO 里排队的字节，再写一个 0x00 把引脚拉低。反过来的话 0x00 会被 purge
+// 一起丢掉。② 的 3000 字节要跑 20 秒，没有这个按钮就只能拔线。
+
+el('stopBtn').addEventListener('click', async () => {
+  const dev = requireFtdi();
+  if (!dev) return;
+  try {
+    await dev.purgeTx();
+    await dev.write(new Uint8Array([0x00]));
+    log('■ 急停：purgeTx 丢掉 FIFO 里排队的字节，再写 0x00 拉低引脚');
+  } catch (err) {
+    const e = /** @type {Error} */ (err);
+    log(`!! 急停失败 ${e.name}: ${e.message} —— 拔线`);
+    setStatus(`急停失败：${e.message}`);
+  }
+});
+
 // --- ① 六种引脚组合：判断 A/B 侧对应左/右 -----------------------------------
 
 for (const button of document.querySelectorAll('[data-pins]')) {
