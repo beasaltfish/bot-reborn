@@ -304,20 +304,39 @@ export class Brain {
    * @param {Action[]} actions
    */
   #dispatch(actions) {
-    for (const action of actions) {
-      /** @type {Promise<void>} */
-      let running;
-      if (action.kind === 'move') running = this.#executor.move(action.steps);
-      else if (action.kind === 'cruise') running = this.#executor.cruise(action.drive, action.steer);
-      else running = this.#executor.stop();
-      // Not awaited, so a rejection would otherwise go unhandled. The executor
-      // reports write failures through its own onError; this only covers the
-      // unexpected. Because it is unawaited, this 'error' earcon can land
-      // AFTER the 'done' earcon and after the spoken reply above, whenever the
-      // rejection actually surfaces — there is no ordering guarantee. That is
-      // fine: this is a last-resort guard, not the normal error path.
-      running.catch(() => this.#earcon('error'));
-    }
+    // A `stop` anywhere in the turn is the whole turn. Spec §6.2 argues for
+    // `move.steps` over parallel tool calls but never says what happens when a
+    // provider emits parallel calls anyway — and they do. The loop used to
+    // start every action without awaiting the previous one, and
+    // executor.move() runs synchronously all the way to device.transferOut()
+    // before it yields, so a [move, stop] turn put a full MAX_COAST_MS of
+    // forward bytes on the bus BEFORE the purge. The generation counter bumped,
+    // the renewal loop died, and the car drove a second anyway: a hole in
+    // §4.4's guarantee reachable from ordinary LLM output. Dropping the rest is
+    // right rather than merely ordering them — a turn that says both "go" and
+    // "stop" is a turn whose only safe reading is "stop".
+    /** @type {Action[]} */
+    const ordered = actions.some((a) => a.kind === 'stop') ? [{ kind: 'stop' }] : actions;
+
+    // Sequential inside, unawaited outside: each action still waits for the
+    // previous one's motion to end (which is what restores the ordering the
+    // awaited version had), while handle() returns immediately — the
+    // non-blocking property test/brain.test.js pins.
+    //
+    // The catch is here because nothing awaits this. The executor reports write
+    // failures through its own onError; this only covers the unexpected, and
+    // because it is unawaited the 'error' earcon can land AFTER the 'done'
+    // earcon and after the spoken reply, whenever the rejection surfaces. That
+    // is fine: a last-resort guard, not the normal error path.
+    (async () => { for (const action of ordered) await this.#run(action); })()
+      .catch(() => this.#earcon('error'));
+  }
+
+  /** @param {Action} action @returns {Promise<void>} */
+  #run(action) {
+    if (action.kind === 'move') return this.#executor.move(action.steps);
+    if (action.kind === 'cruise') return this.#executor.cruise(action.drive, action.steer);
+    return this.#executor.stop();
   }
 
   /**

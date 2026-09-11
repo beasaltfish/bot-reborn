@@ -330,6 +330,48 @@ test('handle: a move dispatches, beeps, and does NOT wait for the car to finish'
   await handlePromise;
 });
 
+/** Let a fire-and-forget dispatch chain run to its next await. */
+const flushMicrotasks = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
+
+test('handle: a turn with move AND stop dispatches the stop and nothing else (spec §4.4)', async () => {
+  // Providers do emit parallel tool calls, whatever spec §6.2 prefers. The
+  // dispatch loop used to start every action without awaiting the previous
+  // one, and executor.move() runs synchronously all the way to transferOut, so
+  // this turn put a full second of forward bytes on the bus BEFORE the purge —
+  // the car drove for a second on a turn that contained "stop".
+  const h = brainHarness({ gateMotion: true, reply: say('好，那就不动了。', [
+    { id: 'c1', name: 'move', args: { steps: [{ drive: 'forward', steer: 'straight', duration_ms: 5000 }] } },
+    { id: 'c2', name: 'stop', args: {} },
+  ]) });
+
+  await h.brain.handle('往前开 —— 算了，别动');
+  await flushMicrotasks();
+
+  assert.deepEqual(h.events.filter((e) => e.op !== 'earcon' && e.op !== 'speak'),
+    [{ op: 'stop' }], 'the stop must be the ONLY thing dispatched');
+  assert.equal(h.motionGates.length, 0, 'no motion may be started at all');
+});
+
+test('handle: actions run one at a time, so the second cannot outrun the first', async () => {
+  // Sequencing is what makes the stop above reach the wire first; it has to
+  // hold for the general case too, or the ordering guarantee is accidental.
+  const h = brainHarness({ gateMotion: true, reply: say(null, [
+    { id: 'c1', name: 'move', args: { steps: [{ drive: 'forward', steer: 'straight', duration_ms: 600 }] } },
+    { id: 'c2', name: 'cruise', args: { drive: 'forward', steer: 'straight' } },
+  ]) });
+
+  await h.brain.handle('往前挪一下，然后一直开');
+  await flushMicrotasks();
+  assert.equal(h.motionGates.length, 1,
+    'the cruise must not start while the move is still running');
+  assert.deepEqual(h.events.filter((e) => e.op === 'cruise'), []);
+
+  h.motionGates[0].resolve();
+  await flushMicrotasks();
+  assert.deepEqual(h.events.filter((e) => e.op === 'cruise'),
+    [{ op: 'cruise', drive: 'forward', steer: 'straight' }]);
+});
+
 test('handle: content AND tool_calls both happen, action first (spec §6.3)', async () => {
   const h = brainHarness({ reply: say('好，我往前开两秒，然后给你讲个笑话。', [
     { id: 'c1', name: 'move', args: { steps: [{ drive: 'forward', steer: 'straight', duration_ms: 2000 }] } },
