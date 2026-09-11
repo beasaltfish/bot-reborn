@@ -1,20 +1,38 @@
 # bot-reborn
 
-A minimal WebUSB console for driving a motor through an **FT232H** breakout in
-FTDI async bitbang mode. Pins `D4` and `D5` are used as the two direction
-inputs of the motor driver.
+A voice-controlled toy car. A phone rides on the car and drives an **FT232H**
+breakout over WebUSB in FTDI async bitbang mode; the car's own line-following
+brain is gone. Pins `D4`–`D7` (pin mask `0xF0`) carry the two motor-driver
+inputs and the two steering-coil inputs — see [`docs/hardware.md`](docs/hardware.md),
+and read the D6/D7 soldering warning there before wiring anything.
+
+Design spec: `docs/superpowers/specs/2026-09-07-voice-robot-design.md`.
+v1 is still being implemented — the microphone half (wake word, VAD, session
+state machine) is not here yet. What ships today is the hardware layer, the
+executor, the three providers and the brain, driven from two bring-up pages.
 
 ## Project layout
 
 ```
 .
 ├── README.md
+├── package.json        # `npm test`, `npm run typecheck` — no build step
+├── tsconfig.json       # JSDoc types checked with tsc --checkJs, strict
 ├── wrangler.jsonc      # Cloudflare Pages project config
 ├── docs/
-│   └── hardware.md     # wiring and USB driver notes
+│   ├── hardware.md     # pin map, wiring, calibration results, USB drivers
+│   └── superpowers/    # the design spec and the implementation plan
+├── test/               # node:test, no browser needed
 └── web/                # Pages output directory (deployed as-is)
-    ├── index.html
-    ├── app.js
+    ├── index.html      # links to the two bring-up pages below
+    ├── bench.html/.js  # calibration bench: polarity, byte rate, start threshold
+    ├── setup.html/.js  # provider config, four connectivity tests, typed drive
+    ├── ftdi.js         # FTDI protocol: bitmode, baud rate, byte streams, purgeTx
+    ├── executor.js     # actions → byte buffers, renewal loop, generation preemption
+    ├── brain.js        # tool definitions, system prompt, validator, one turn
+    ├── strings.js      # UI copy and fixed spoken lines (en / zh)
+    ├── providers/      # STT / LLM / TTS, all OpenAI-compatible endpoints
+    ├── fixtures/       # your own STT test audio (not in git — see its README)
     └── style.css
 ```
 
@@ -26,7 +44,27 @@ WebUSB requires a secure context, which includes `http://localhost`:
 npx serve web        # or: python3 -m http.server -d web 8000
 ```
 
-Then open the printed URL in Chrome or Edge.
+Then open the printed URL in Chrome or Edge, and start at `bench.html`
+(hardware) or `setup.html` (providers and the full chain minus the microphone).
+
+```bash
+npm test             # node --test — the whole suite, no browser
+npm run typecheck    # tsc --noEmit, strict, over web/ and test/
+```
+
+## Security
+
+**Your API keys are stored in plaintext in the browser's `localStorage`** on
+the device you configure — this is a bring-your-own-key app with no server and
+no proxy, so the keys have nowhere else to live. Anything with access to that
+browser profile can read them.
+
+A hosted copy of this page carries the trust problem inherent to every BYOK web
+app: you type your keys into a page someone else serves, and whoever serves it
+could ship a version that sends them somewhere. That cannot be fixed
+technically. The mitigation is that this project is open source and deploys as
+a folder of static files — read the code, then serve it yourself (`npx wrangler
+pages deploy web`, or any static host) and use your own copy.
 
 ## Deploy to Cloudflare Pages
 
