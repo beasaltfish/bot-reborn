@@ -52,14 +52,6 @@ function bin8(n) {
   return `0b${n.toString(2).padStart(8, '0')}`;
 }
 
-// buildStream() 声明返回裸 `Uint8Array`，在当前 lib.d.ts 下默认解析为
-// `Uint8Array<ArrayBufferLike>`；write() 的形参类型是更精确的
-// `Uint8Array<ArrayBuffer>`（它确实总是 ArrayBuffer 背书，不是
-// SharedArrayBuffer）。两处类型标注不完全对齐，写一个类型断言把这道缝对上，
-// 而不是去改已经过审的 ftdi.js。
-/** @param {Uint8Array} bytes @returns {Uint8Array<ArrayBuffer>} */
-const asArrayBufferBacked = (bytes) => /** @type {Uint8Array<ArrayBuffer>} */ (bytes);
-
 /** 拿到已连接的 Ftdi，没连接就报状态并返回 null——调用方直接 `if (!dev) return;`。
  *  @returns {Ftdi | null} */
 function requireFtdi() {
@@ -197,22 +189,30 @@ for (const button of document.querySelectorAll('[data-pins]')) {
 
     const pins = Number(btn.dataset.pins);
     log(`--- ${bin8(pins)} 保持 600 ms ---`);
-    // 一次 transferOut，停止字节已经在同一个 buffer 里——spec §4.2。
-    await dev.write(asArrayBufferBacked(dev.buildStream(pins, 600)));
+    try {
+      // 一次 transferOut，停止字节已经在同一个 buffer 里——spec §4.2。
+      await dev.write(dev.buildStream(pins, 600));
 
-    // 注意时机：3000 字节在 1200 波特下要跑十几秒，但这里只写了 600 ms，
-    // 在标定波特率下这段很快就放完了，读回时引脚可能已经自然回落到 0x00。
-    // 那不是「芯片没在驱动」，只是片段已经结束——下面单独把这种情况标注出来，
-    // 避免把正常收尾误判成 MISMATCH。
-    const readback = await dev.readPins();
-    if ((readback & PIN_MASK) !== (pins & PIN_MASK)) {
-      log(`=> MISMATCH：写了 ${bin8(pins)}，读到 ${bin8(readback)}。`);
-      log('   芯片没在按要求驱动引脚——是 bitbang 模式或波特率的问题，不是接线问题。');
-      if (readback === 0x00) {
-        log('   （读到 0x00 也可能只是 600 ms 的字节已经放完了，属正常——不代表芯片没驱动过。）');
+      // 注意时机：3000 字节在 1200 波特下要跑十几秒，但这里只写了 600 ms，
+      // 在标定波特率下这段很快就放完了，读回时引脚可能已经自然回落到 0x00——
+      // 这种情况标「有歧义」而不是直接判 MISMATCH，因为它常常只是正常收尾。
+      // 但一颗真的卡在低电平的芯片同样会读到 0x00，所以不能因此整个跳过日志，
+      // 只是不能在证据不足时就下 MISMATCH 的结论。
+      const readback = await dev.readPins();
+      if ((readback & PIN_MASK) === (pins & PIN_MASK)) {
+        log('=> 芯片确实在按要求驱动引脚。车不动的话，问题在下游：接线、驱动芯片、或驱动电源。');
+      } else if (readback === 0x00) {
+        log(`=> ⚠️ AMBIGUOUS：写了 ${bin8(pins)}，读到 0x00。`);
+        log('   600 ms 的片段在标定波特率下可能已经自然放完，这不一定是故障；');
+        log('   但引脚卡死在低电平也会读到同样的 0x00——光看这一个数分不清，要结合车的实际反应判断。');
+      } else {
+        log(`=> MISMATCH：写了 ${bin8(pins)}，读到 ${bin8(readback)}。`);
+        log('   芯片没在按要求驱动引脚——是 bitbang 模式或波特率的问题，不是接线问题。');
       }
-    } else {
-      log('=> 芯片确实在按要求驱动引脚。车不动的话，问题在下游：接线、驱动芯片、或驱动电源。');
+    } catch (err) {
+      const e = /** @type {Error} */ (err);
+      log(`!! ${e.name}: ${e.message}`);
+      setStatus(`写入失败：${e.message}`);
     }
   });
 }
@@ -233,10 +233,16 @@ el('byteRateBtn').addEventListener('click', async () => {
   const theory = (BYTE_RATE_TEST_BYTES * 8) / BENCH_BAUD; // 秒，按 8 bit/字节
   log(`写 ${BYTE_RATE_TEST_BYTES} 字节 @ ${BENCH_BAUD} baud，理论 ${theory.toFixed(1)} s`);
   log('现在掐秒表——从电机开始转到停下。同时量车走了多远。');
-  const t0 = performance.now();
-  await dev.write(stream);
-  log(`transferOut 返回耗时 ${(performance.now() - t0).toFixed(0)} ms`);
-  log('（这个数是 URB 提交的耗时，不是电机转的时间——秒表才是。）');
+  try {
+    const t0 = performance.now();
+    await dev.write(stream);
+    log(`transferOut 返回耗时 ${(performance.now() - t0).toFixed(0)} ms`);
+    log('（这个数是 URB 提交的耗时，不是电机转的时间——秒表才是。）');
+  } catch (err) {
+    const e = /** @type {Error} */ (err);
+    log(`!! ${e.name}: ${e.message}`);
+    setStatus(`写入失败：${e.message}`);
+  }
 });
 
 el('computeBtn').addEventListener('click', () => {
@@ -273,8 +279,14 @@ for (const button of document.querySelectorAll('[data-pulse]')) {
     if (!dev) return;
 
     const ms = Number(btn.dataset.pulse);
-    await dev.write(asArrayBufferBacked(dev.buildStream(0x10, ms)));
-    log(`⑧ 脉冲 ${ms} ms——车动了吗？（要连试 10 次都动才算数）`);
+    try {
+      await dev.write(dev.buildStream(0x10, ms));
+      log(`⑧ 脉冲 ${ms} ms——车动了吗？（要连试 10 次都动才算数）`);
+    } catch (err) {
+      const e = /** @type {Error} */ (err);
+      log(`!! ${e.name}: ${e.message}`);
+      setStatus(`写入失败：${e.message}`);
+    }
   });
 }
 
@@ -312,7 +324,13 @@ el('scanAllBtn').addEventListener('click', async () => {
 el('readPinsBtn').addEventListener('click', async () => {
   const dev = requireFtdi();
   if (!dev) return;
-  await logPinState(dev);
+  try {
+    await logPinState(dev);
+  } catch (err) {
+    const e = /** @type {Error} */ (err);
+    log(`!! ${e.name}: ${e.message}`);
+    setStatus(`读引脚失败：${e.message}`);
+  }
 });
 
 el('listGrantedBtn').addEventListener('click', async () => {

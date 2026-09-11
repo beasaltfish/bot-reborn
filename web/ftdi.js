@@ -156,7 +156,7 @@ export class Ftdi {
    *
    * @param {number} pinByte
    * @param {number} ms
-   * @returns {Uint8Array}
+   * @returns {Uint8Array<ArrayBuffer>}
    */
   buildStream(pinByte, ms) {
     const count = Math.max(1, Math.round(ms * this.#bytesPerMs));
