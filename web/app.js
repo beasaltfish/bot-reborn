@@ -3,10 +3,10 @@ const FTDI_VID = 0x0403;
 const FT232H_PID = 0x6014;
 
 // FTDI vendor requests
-const SIO_SET_BITMODE = 0x0b;
+const SIO_SET_BITMODE = 0x0b; // 1011
 const SIO_READ_PINS = 0x0c;
 const BITMODE_ASYNC_BITBANG = 0x01;
-const PIN_MASK = 0x30; // D4 + D5 as outputs
+const PIN_MASK = 0x30; // D4 + D5 as outputs 00110000
 const PORT_A = 1;
 
 const statusEl = document.getElementById('status');
