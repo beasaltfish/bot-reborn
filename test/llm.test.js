@@ -85,6 +85,33 @@ test('chat(): malformed arguments give args=null rather than throwing', async ()
   assert.equal(result.toolCalls[0].rawArguments, '{"steps":[');
 });
 
+test('chat(): a call with no id still gets one (spec §6.4 pairing)', async () => {
+  // `id` is required by the OpenAI schema, but backends do omit it. Passing
+  // `undefined` through would put `tool_call_id: undefined` into the history
+  // and hard-fail the NEXT request on the unpaired call — the failure
+  // test/brain.test.js exists to prevent, one turn later and far from here.
+  const { fetchImpl } = respond({
+    role: 'assistant', content: null,
+    tool_calls: [
+      { type: 'function', function: { name: 'stop', arguments: '{}' } },
+      { type: 'function', function: { name: 'cruise', arguments: '{}' } },
+    ],
+  });
+  const result = await new OpenAiCompatLlm(CFG, { fetch: fetchImpl }).chat([], []);
+  const ids = result.toolCalls.map((c) => c.id);
+  assert.ok(ids.every((id) => typeof id === 'string' && id.length > 0));
+  assert.equal(new Set(ids).size, 2, 'two calls in one turn must not share an id');
+});
+
+test('chat(): an id the backend DID send is never rewritten', async () => {
+  const { fetchImpl } = respond({
+    role: 'assistant', content: null,
+    tool_calls: [{ id: 'call_abc', type: 'function', function: { name: 'stop', arguments: '{}' } }],
+  });
+  const result = await new OpenAiCompatLlm(CFG, { fetch: fetchImpl }).chat([], []);
+  assert.equal(result.toolCalls[0].id, 'call_abc');
+});
+
 test('chat(): rawMessage is returned untouched, for the history (spec §6.4)', async () => {
   const message = {
     role: 'assistant', content: null,

@@ -61,8 +61,8 @@ export class OpenAiCompatLlm {
   }
 }
 
-/** @param {any} call @returns {ParsedToolCall} */
-function toParsedCall(call) {
+/** @param {any} call @param {number} index @returns {ParsedToolCall} */
+function toParsedCall(call, index) {
   const rawArguments = call.function?.arguments ?? '';
   let args = null;
   try {
@@ -70,5 +70,14 @@ function toParsedCall(call) {
   } catch {
     // Leave args null; brain.js drops this call. Throwing would lose the turn.
   }
-  return { id: call.id, name: call.function?.name ?? '', args, rawArguments };
+  // A backend that omits `id` would otherwise put `tool_call_id: undefined`
+  // into the history, and the NEXT request fails hard on the unpaired call —
+  // exactly the pairing failure test/brain.test.js exists to prevent. Any
+  // stable string will do; the API only ever matches it against itself.
+  return {
+    id: call.id ?? `call_${index}`,
+    name: call.function?.name ?? '',
+    args,
+    rawArguments,
+  };
 }
