@@ -11,6 +11,10 @@ spike/
 # sherpa-onnx models and WASM: large, fetched by script, not vendored
 web/models/
 
+# Connectivity-test fixture audio: each person's own voice, recorded locally
+# per web/fixtures/README.md, never someone else's sample.
+web/fixtures/*.wav
+
 # Personal design notes and specs (Chinese, single-author working documents)
 docs/design-notes/
 docs/superpowers/

@@ -56,7 +56,8 @@ button.primary {
   opacity: 0.8;
 }
 
-#log {
+#log,
+#turnLog {
   margin-top: 12px;
   padding: 10px;
   min-height: 120px;
@@ -70,4 +71,63 @@ button.primary {
   white-space: pre-wrap;
   word-break: break-all;
   opacity: 0.9;
+}
+
+/* --- setup.html: config form, connectivity tests, typed drive --------- */
+
+form fieldset {
+  text-align: left;
+  margin-bottom: 12px;
+  border-radius: 4px;
+}
+
+form label {
+  display: block;
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+form label input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 4px;
+  padding: 8px;
+  font-size: 14px;
+}
+
+#tests {
+  text-align: left;
+  padding-left: 22px;
+}
+
+#tests li {
+  margin-bottom: 18px;
+}
+
+.result {
+  font-weight: bold;
+  margin-left: 8px;
+}
+
+.result.ok { color: #2e7d32; }
+.result.error { color: #c62828; }
+.result.pending { opacity: 0.6; }
+
+button.danger {
+  background: #c62828;
+  color: #fff;
+  border: none;
+}
+
+#textForm {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+#textForm input {
+  flex: 1;
+  padding: 10px;
+  font-size: 16px;
 }

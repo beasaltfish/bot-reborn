@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>连通性测试 — 语音机器人</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <h1>连通性测试</h1>
+  <p class="hint">
+    填三层配置 → 四项连通性测试 → 打字驱动整条链路。麦克风那半（STT 的
+    采集端）在下一个 plan，这里跳过麦克风，直接把文本喂给 brain.js。
+  </p>
+
+  <hr>
+  <h2>配置</h2>
+  <form id="cfgForm">
+    <fieldset>
+      <legend>STT</legend>
+      <label>baseURL <input name="stt.baseURL" placeholder="https://api.groq.com/openai/v1" autocomplete="off"></label>
+      <label>apiKey <input name="stt.apiKey" type="password" autocomplete="off"></label>
+      <label>model <input name="stt.model" placeholder="whisper-large-v3-turbo" autocomplete="off"></label>
+    </fieldset>
+    <fieldset>
+      <legend>LLM</legend>
+      <label>baseURL <input name="llm.baseURL" placeholder="https://api.deepseek.com/v1" autocomplete="off"></label>
+      <label>apiKey <input name="llm.apiKey" type="password" autocomplete="off"></label>
+      <label>model <input name="llm.model" placeholder="deepseek-v4-flash" autocomplete="off"></label>
+    </fieldset>
+    <fieldset>
+      <legend>TTS</legend>
+      <label>baseURL <input name="tts.baseURL" autocomplete="off"></label>
+      <label>apiKey <input name="tts.apiKey" type="password" autocomplete="off"></label>
+      <label>model <input name="tts.model" autocomplete="off"></label>
+      <label>voice <input name="tts.voice" autocomplete="off"></label>
+    </fieldset>
+    <button type="submit" class="primary">保存</button>
+  </form>
+  <p id="cfgStatus" class="hint"></p>
+
+  <hr>
+  <h2>USB</h2>
+  <p class="hint">连通性测试里的「测 USB」和下面的打字驱动都要先连上车。</p>
+  <button id="connectBtn">连接 FT232H</button>
+  <p id="usbStatus" class="hint">状态：未连接</p>
+
+  <hr>
+  <h2>连通性测试</h2>
+  <p class="hint">每一项都刻意测最难的情形 —— 见 spec §9.3。</p>
+  <ol id="tests">
+    <li>
+      <button data-test="stt">测 STT</button>
+      <span id="sttResult" class="result"></span>
+      <p class="hint">
+        读 <code>fixtures/zh.wav</code>、<code>fixtures/en.wav</code>、
+        <code>fixtures/mixed.wav</code> 三段固定音频：中文、英文、
+        <b>中英混说</b>。三段都要显示转写结果。文件缺失时这里会显示
+        <code>fixtures/README.md</code> 的录制说明，而不是悄悄跳过。
+      </p>
+    </li>
+    <li>
+      <button data-test="llm">测 LLM</button>
+      <span id="llmResult" class="result"></span>
+      <p class="hint">既要能回话，<b>也要能调工具</b> —— 这是两件事，分开验证。</p>
+    </li>
+    <li>
+      <button data-test="tts">测 TTS</button>
+      <span id="ttsResult" class="result"></span>
+      <p class="hint">合成「『往前走』的英文是 go forward」，<b>两种语言都要听得清</b>。</p>
+    </li>
+    <li>
+      <button data-test="usb">测 USB</button>
+      <span id="usbResult" class="result"></span>
+      <p class="hint">前进 200 ms，车动一下。</p>
+    </li>
+  </ol>
+
+  <hr>
+  <h2>打字驱动</h2>
+  <p class="hint">
+    跳过麦克风，直接把文本喂给 brain.js。这就是 v1 全链路，只少了 STT 那一段。
+    先点上面的「连接 FT232H」。
+  </p>
+  <form id="textForm">
+    <input id="textInput" placeholder="往前开两秒，顺便讲个笑话" autocomplete="off">
+    <button type="submit">发送</button>
+  </form>
+  <button id="stopBtn" class="danger">急停</button>
+  <pre id="turnLog"></pre>
+</main>
+<script type="module" src="setup.js"></script>
+</body>
+</html>
