@@ -62,6 +62,20 @@ function harness({ bytesPerMs = 0.5 } = {}) {
 }
 
 /**
+ * A promise the test settles by hand — the same technique as
+ * test/brain.test.js's `deferred()`, and for the same reason: a fake that
+ * settles immediately cannot tell "A completed before B was submitted" from
+ * "A was called before B was called".
+ * @returns {{ promise: Promise<void>, resolve: (value?: any) => void }}
+ */
+function deferred() {
+  /** @type {(value?: any) => void} */
+  let resolve = () => {};
+  const promise = new Promise((res) => { resolve = res; });
+  return { promise, resolve };
+}
+
+/**
  * A fake that models the CHIP instead of the call log.
  *
  * `now` advances only when the executor sleeps; `drainUntil` is when the chip
@@ -224,19 +238,31 @@ test('cruise(): renews forever until something bumps the generation', async () =
     'the renewal loop must be dead after stop()');
 });
 
-test('stop(): purgeTx completes BEFORE the 0x00 write (spec §4.4)', async () => {
+test('stop(): purgeTx COMPLETES before the 0x00 write is submitted (spec §4.4)', async () => {
+  // The previous version of this test compared indices in the call log, which
+  // a concurrent `const a = purgeTx(); const b = write(); await a; await b;`
+  // satisfies just as well — both fakes log synchronously on call, so the log
+  // comes out identical and the whole suite stayed green. That is not an
+  // academic distinction: purgeTx is a CONTROL transfer and the 0x00 is BULK,
+  // different pipes with no ordering guarantee, so concurrent submission lets
+  // the purge discard the very stop byte it was meant to precede.
+  //
+  // Holding the purge open on a gate is what makes "completes before" testable.
   const h = harness();
   const ex = h.make();
-  await ex.stop();
+  const gate = deferred();
+  h.ftdi.purgeTx = () => { h.log.push({ op: 'purgeTx' }); return gate.promise; };
 
-  const ops = h.log.map((e) => e.op);
-  const purge = ops.indexOf('purgeTx');
-  const write = ops.indexOf('write');
-  assert.ok(purge !== -1 && write !== -1);
-  assert.ok(purge < write,
-    'purgeTx is a CONTROL transfer and the 0x00 is a BULK transfer — different ' +
-    'pipes, so the browser does not order them for us. They must be awaited in order.');
-  assert.deepEqual(h.log[write], { op: 'write', pin: 0x00, length: 1, tail: 0x00 });
+  const stopped = ex.stop();
+  await h.flush();
+  assert.deepEqual(h.log.map((e) => e.op), ['purgeTx'],
+    'nothing may be handed to the bulk endpoint while the purge is still pending');
+
+  gate.resolve();
+  await stopped;
+
+  assert.deepEqual(h.log.map((e) => e.op), ['purgeTx', 'write']);
+  assert.deepEqual(h.log[1], { op: 'write', pin: 0x00, length: 1, tail: 0x00 });
 });
 
 test('stop(): bumps the generation synchronously, before any await', () => {
