@@ -1,0 +1,103 @@
+// TTS over the OpenAI-compatible /v1/audio/speech endpoint.
+//
+// The provider plays the audio itself (spec §8.1), through WebAudio rather
+// than <audio>, for three reasons (§7.1):
+//   1. a 10 ms fade-out on cancel, so barge-in does not pop      ← used in v1
+//   2. an AnalyserNode to read the output level                  ← used by §7.3
+//   3. createMediaStreamDestination() for the future loopback path ← v1 leaves
+//      the seam and does not use it (§7.2)
+
+const FADE_MS = 10;
+
+export class WebAudioTts {
+  #cfg;
+  #fetch;
+  #ctx;
+  #gain;
+  #analyser;
+  /** @type {AudioBufferSourceNode | null} */ #source = null;
+  /** @type {(() => void) | null} */ #finish = null;
+
+  /**
+   * @param {{ baseURL: string, apiKey: string, model: string, voice: string }} cfg
+   * @param {{ audioContext?: AudioContext, loopback?: boolean, fetch?: typeof fetch }} [opts]
+   */
+  constructor(cfg, opts = {}) {
+    if (opts.loopback) {
+      // Spec §7.2: `ttsPath` keeps three legal values but v1 never produces
+      // 'loopback'. Shipping an untested fallback path is a liability; the
+      // seam is here so adding it later is an edit inside this file.
+      throw new Error('the loopback path is not implemented in v1 (spec §7.2)');
+    }
+    this.#cfg = cfg;
+    this.#fetch = opts.fetch ?? globalThis.fetch.bind(globalThis);
+    this.#ctx = opts.audioContext ?? new AudioContext();
+    this.#gain = this.#ctx.createGain();
+    this.#analyser = this.#ctx.createAnalyser();
+    this.#gain.connect(this.#analyser);
+    this.#analyser.connect(this.#ctx.destination);
+  }
+
+  get analyser() { return this.#analyser; }
+
+  /**
+   * Resolves when playback finishes, or immediately when cancelled.
+   * @param {string} text
+   * @returns {Promise<void>}
+   */
+  async speak(text) {
+    this.cancel();
+
+    const response = await this.#fetch(`${this.#cfg.baseURL}/audio/speech`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.#cfg.apiKey}`,
+      },
+      // Spec §8.2: /v1/audio/speech takes only a plain-text `input`. That is
+      // the price of provider portability — no phoneme markup, no voice
+      // cloning. And `voice` is a stored config value, never computed from the
+      // text: spec §11.1 fixes ONE multilingual voice and does no CJK sniffing,
+      // because the sentence that matters most is the mixed one.
+      body: JSON.stringify({ model: this.#cfg.model, voice: this.#cfg.voice, input: text }),
+    });
+    if (!response.ok) {
+      throw new Error(`TTS request failed: ${response.status} ${response.statusText}`);
+    }
+
+    const buffer = await this.#ctx.decodeAudioData(await response.arrayBuffer());
+    if (this.#ctx.state === 'suspended') await this.#ctx.resume();
+
+    return new Promise((resolve) => {
+      const source = this.#ctx.createBufferSource();
+      source.buffer = buffer;
+      this.#gain.gain.setValueAtTime(1, this.#ctx.currentTime);
+      source.connect(this.#gain);
+      source.onended = () => { if (this.#source === source) this.#clear(); resolve(); };
+      this.#source = source;
+      this.#finish = resolve;
+      source.start();
+    });
+  }
+
+  /** Fade out over FADE_MS and stop. Safe to call when nothing is playing. */
+  cancel() {
+    const source = this.#source;
+    if (!source) return;
+    const now = this.#ctx.currentTime;
+    // A hard stop() pops; ramping the gain down first is the whole reason this
+    // is WebAudio and not <audio>.
+    this.#gain.gain.cancelScheduledValues(now);
+    this.#gain.gain.setValueAtTime(this.#gain.gain.value, now);
+    this.#gain.gain.linearRampToValueAtTime(0, now + FADE_MS / 1000);
+    source.stop(now + FADE_MS / 1000);
+    const finish = this.#finish;
+    this.#clear();
+    finish?.();
+  }
+
+  #clear() {
+    this.#source = null;
+    this.#finish = null;
+  }
+}
