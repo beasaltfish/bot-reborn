@@ -14,11 +14,17 @@ export const LEAD_MS = 300;
  * Shortest action the executor will emit.
  *
  * PLACEHOLDER pending calibration item ⑧ (spec §12) — this is the *motor's*
- * static-friction threshold, not yet measured. It is also an INVARIANT, not a
- * policy (spec §6.6): the renewal loop's `sleep(slice - LEAD_MS)` goes negative
- * below LEAD_MS, so this bound and LEAD_MS are coupled and cannot be changed
- * independently. If ⑧ measures a threshold above 300, raise this AND re-check
- * LEAD_MS together.
+ * static-friction threshold, not yet measured. If ⑧ measures a threshold above
+ * 300, raise this.
+ *
+ * It is NOT coupled to LEAD_MS, whatever spec §6.6 says. That claim rested on
+ * `sleep(slice - LEAD_MS)` going negative below LEAD_MS, and it was only ever
+ * true of the *first* slice: the slicer emits the remainder as the last slice,
+ * so any total in (MAX_COAST_MS, MAX_COAST_MS + LEAD_MS) — move(1200), say —
+ * produced a sub-LEAD_MS final slice however high this floor was. The renewal
+ * loop below now waits on the tracked queue and clamps at zero, which is what
+ * actually removes the negative sleep. Raising or lowering this bound cannot
+ * reintroduce it.
  */
 export const MIN_DURATION_MS = 300;
 
@@ -54,6 +60,18 @@ export class Executor {
   #onError;
   #gen = 0;
   #connected = true;
+
+  /**
+   * Milliseconds of pin data handed to the chip that it has not clocked out
+   * yet — the write-ahead the renewal loop is carrying.
+   *
+   * This is per-executor, not per-`#renew` call, deliberately: a multi-step
+   * `move` re-enters `#renew` once per step, and per-call state would let the
+   * write-ahead re-accumulate at every step boundary. It is only ever reset
+   * where the queue is genuinely gone: after `stop()`'s purge, and in
+   * `#fail()`.
+   */
+  #queuedMs = 0;
 
   /**
    * @param {Ftdi} ftdi
@@ -107,6 +125,10 @@ export class Executor {
     this.#gen++;
     return (async () => {
       await this.#ftdi.purgeTx();
+      // The purge threw away everything the chip had queued, so the write-ahead
+      // accounting starts from nothing again. (The 0x00 below is a single byte,
+      // not a slice — it is not worth accounting for.)
+      this.#queuedMs = 0;
       await this.#ftdi.write(new Uint8Array([0x00]));
     })().catch((err) => this.#fail(err));
   }
@@ -128,8 +150,26 @@ export class Executor {
         this.#fail(/** @type {Error} */ (err));
         return;
       }
+      this.#queuedMs += slice;
       if (remaining !== null) remaining -= slice;
-      await this.#sleep(slice - LEAD_MS);
+
+      // Renew LEAD_MS before the QUEUE runs dry — not LEAD_MS before the slice
+      // we just wrote would have finished on its own. Those two coincide only
+      // on the first slice; from the second, the queue already carries a
+      // LEAD_MS head start, and sleeping `slice - LEAD_MS` hands the chip
+      // another LEAD_MS of write-ahead every single slice, forever. That is the
+      // defect in spec §4.3's pseudocode: it makes MAX_COAST_MS — the one
+      // safety parameter — stop bounding how far the car travels with nobody in
+      // control, and it lets a bulk URB already in flight land *behind*
+      // stop()'s purge and re-inject drive bytes.
+      //
+      // Waiting the whole queue down to LEAD_MS instead keeps the write-ahead
+      // at MAX_COAST_MS + LEAD_MS whatever happens. Math.max(0, …) covers the
+      // final slice of a total like 1200 ms, whose 200 ms remainder is smaller
+      // than LEAD_MS and must not sleep a negative amount.
+      const wait = Math.max(0, this.#queuedMs - LEAD_MS);
+      this.#queuedMs -= wait;
+      await this.#sleep(wait);
     }
   }
 
@@ -140,6 +180,7 @@ export class Executor {
    */
   #fail(err) {
     this.#gen++;
+    this.#queuedMs = 0;
     this.#connected = false;
     this.#onError(err);
   }

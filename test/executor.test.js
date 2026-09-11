@@ -61,6 +61,58 @@ function harness({ bytesPerMs = 0.5 } = {}) {
   };
 }
 
+/**
+ * A fake that models the CHIP instead of the call log.
+ *
+ * `now` advances only when the executor sleeps; `drainUntil` is when the chip
+ * would finish clocking out everything it has been handed. The gap between
+ * them is the write-ahead — how long the car keeps driving with nobody in
+ * control — which is exactly the quantity MAX_COAST_MS claims to bound and the
+ * one no call-log assertion can see.
+ *
+ * @param {{ bytesPerMs?: number }} [opts]
+ */
+function chipHarness({ bytesPerMs = 0.5 } = {}) {
+  let now = 0;
+  let drainUntil = 0;
+  /** @type {number[]} */ const backlogs = [];
+  /** @type {number[]} */ const sleeps = [];
+  /** @type {(() => void) | null} */ let onWrite = null;
+
+  /** @type {any} */
+  const ftdi = {
+    bytesPerMs,
+    /** @param {number} pinByte @param {number} ms */
+    buildStream(pinByte, ms) {
+      const n = Math.max(1, Math.round(ms * bytesPerMs));
+      const s = new Uint8Array(n + 1);
+      s.fill(pinByte, 0, n);
+      return s;
+    },
+    /** @param {any} bytes */
+    async write(bytes) {
+      // Recover the duration the way the chip sees it: from the bytes, minus
+      // the trailing stop byte.
+      const ms = (bytes.length - 1) / bytesPerMs;
+      drainUntil = Math.max(drainUntil, now) + ms;
+      backlogs.push(drainUntil - now);
+      onWrite?.();
+    },
+    async purgeTx() { drainUntil = now; },
+  };
+
+  /** @param {number} ms */
+  const sleep = async (ms) => { sleeps.push(ms); now += ms; };
+
+  return {
+    ftdi, sleep, backlogs, sleeps,
+    /** @param {() => void} fn */
+    setOnWrite(fn) { onWrite = fn; },
+    /** @param {{ sleep?: (ms: number) => Promise<void> }} [opts] */
+    make(opts = {}) { return new Executor(ftdi, { sleep, ...opts }); },
+  };
+}
+
 test('pinsFor(): combines drive and steer by bitwise or (spec §3.2)', () => {
   assert.equal(DRIVE_BITS.forward, 0x10);
   assert.equal(DRIVE_BITS.backward, 0x20);
@@ -88,46 +140,65 @@ test('move(): a short step is one write whose stream ends in the stop byte', asy
   await h.flush();
 
   assert.deepEqual(h.log[0], { op: 'write', pin: 0x10, length: 301, tail: 0x00 });
+  // The queue was empty, so it now holds 600 ms and we wait it down to LEAD_MS.
+  // The first slice is the ONE case where that equals `slice - LEAD_MS`.
   assert.deepEqual(h.log[1], { op: 'sleep', ms: 600 - LEAD_MS });
   await h.tick();
   await done;
 });
 
-test('move(): a long step is sliced at MAX_COAST_MS and renewed LEAD_MS early', async () => {
+test('move(): a long step is sliced at MAX_COAST_MS and renewed before the QUEUE drains', async () => {
   const h = harness();
   const ex = h.make();
   const done = ex.move([{ drive: 'forward', steer: 'straight', duration_ms: 2500 }]);
   await h.flush();
 
-  // slice 1
+  // Every wait leaves exactly LEAD_MS of write-ahead in the chip — that is what
+  // "renew LEAD_MS early" means, and it is NOT `slice - LEAD_MS` after the
+  // first slice: from then on the queue already carries that head start, and
+  // sleeping `slice - LEAD_MS` would add another LEAD_MS every slice, forever.
+
+  // slice 1: queue was empty → 1000 queued, wait it down to LEAD_MS
   assert.equal(h.log[0].op, 'write');
   assert.equal(h.log[1].ms, MAX_COAST_MS - LEAD_MS);
   await h.tick();
-  // slice 2
+  // slice 2: LEAD_MS was still queued → 1300 queued, so the wait is a full slice
   assert.equal(h.log[2].op, 'write');
-  assert.equal(h.log[3].ms, MAX_COAST_MS - LEAD_MS);
+  assert.equal(h.log[3].ms, MAX_COAST_MS);
   await h.tick();
-  // slice 3: the 500 ms remainder
+  // slice 3: the 500 ms remainder on top of LEAD_MS → 800 queued, wait 500
   assert.equal(h.log[4].op, 'write');
   assert.equal(h.log[4].length, Math.round(500 * 0.5) + 1);
-  assert.equal(h.log[5].ms, 500 - LEAD_MS);
+  assert.equal(h.log[5].ms, 500);
   await h.tick();
   await done;
 
   assert.equal(h.log.filter((e) => e.op === 'write').length, 3);
+  // Total sleep = total motion: the loop keeps pace with the car instead of
+  // running ahead of it.
+  assert.equal(h.log.filter((e) => e.op === 'sleep').reduce((a, e) => a + e.ms, 0),
+    2500 - LEAD_MS);
 });
 
-test('a step at the MIN_DURATION_MS floor never sleeps a negative amount', async () => {
-  // This is the invariant of spec §6.6: the lower bound is coupled to LEAD_MS
-  // precisely so that `slice - LEAD_MS` cannot go negative.
-  assert.equal(MIN_DURATION_MS, LEAD_MS);
-  const h = harness();
-  const ex = h.make();
-  const done = ex.move([{ drive: 'forward', steer: 'straight', duration_ms: MIN_DURATION_MS }]);
-  await h.flush();
-  assert.equal(h.log[1].ms, 0);
-  await h.tick();
-  await done;
+test('no step duration ever sleeps a negative amount', async () => {
+  // The old version of this test only exercised the MIN_DURATION_MS floor,
+  // where the sleep is 0 — its assertion could not observe the property its
+  // name claimed. The durations that actually went negative were the ones just
+  // above MAX_COAST_MS: the slicer emits the remainder as the final slice, and
+  // that remainder lands anywhere in [1, LEAD_MS).
+  for (const duration of [MIN_DURATION_MS, 1200, MAX_COAST_MS + 1,
+    MAX_COAST_MS + LEAD_MS - 1, 2 * MAX_COAST_MS + 1]) {
+    const h = harness();
+    const ex = h.make();
+    const done = ex.move([{ drive: 'forward', steer: 'straight', duration_ms: duration }]);
+    await h.flush();
+    for (let i = 0; i < 8; i++) await h.tick();
+    await done;
+
+    const sleeps = h.log.filter((e) => e.op === 'sleep').map((e) => e.ms);
+    assert.ok(sleeps.every((ms) => ms >= 0),
+      `move(${duration}) slept a negative amount: ${JSON.stringify(sleeps)}`);
+  }
 });
 
 test('cruise(): renews forever until something bumps the generation', async () => {
@@ -138,7 +209,9 @@ test('cruise(): renews forever until something bumps the generation', async () =
 
   for (let i = 0; i < 3; i++) {
     assert.equal(h.log[i * 2].op, 'write');
-    assert.equal(h.log[i * 2 + 1].ms, MAX_COAST_MS - LEAD_MS);
+    // First wait drains an empty-queue slice; every later one keeps the
+    // write-ahead pinned at LEAD_MS instead of growing it.
+    assert.equal(h.log[i * 2 + 1].ms, i === 0 ? MAX_COAST_MS - LEAD_MS : MAX_COAST_MS);
     await h.tick();
   }
   assert.equal(h.log.filter((e) => e.op === 'write').length, 4);
@@ -233,4 +306,63 @@ test('commands are refused once disconnected', async () => {
   const before = h.log.length;
   await ex.move([{ drive: 'forward', steer: 'straight', duration_ms: 600 }]);
   assert.equal(h.log.length, before, 'a disconnected executor must not touch the bus');
+});
+
+// --- The write-ahead invariant (spec §4.3) ---------------------------------
+//
+// MAX_COAST_MS is described as the only safety parameter: how far the car may
+// travel with nobody in control. That is a claim about the CHIP's queue, not
+// about any number in the call log, and it held for one slice and then drifted
+// by LEAD_MS per slice, forever, without a single test noticing. These two
+// pin the real quantity.
+
+test('cruising never queues more than MAX_COAST_MS + LEAD_MS ahead of real time', async () => {
+  const h = chipHarness();
+  const ex = h.make();
+  // 60 slices ≈ a minute of cruising. The defect grew by LEAD_MS per slice, so
+  // this would have reached 18 s of write-ahead — roughly 27 m of car.
+  // (`stopping` guards against re-entry: stop()'s own 0x00 is a write too.)
+  let stopping = false;
+  h.setOnWrite(() => {
+    if (stopping || h.backlogs.length < 60) return;
+    stopping = true;
+    ex.stop();
+  });
+  await ex.cruise('forward', 'straight');
+
+  assert.ok(h.backlogs.length >= 60, 'the loop must actually have run');
+  const worst = Math.max(...h.backlogs);
+  assert.ok(worst <= MAX_COAST_MS + LEAD_MS,
+    `write-ahead reached ${worst} ms, above the MAX_COAST_MS + LEAD_MS = ` +
+    `${MAX_COAST_MS + LEAD_MS} bound — MAX_COAST_MS no longer bounds anything`);
+});
+
+test('a multi-step move does not re-accumulate write-ahead at each step boundary', async () => {
+  // #renew is entered once per step, so per-call queue state would reset here
+  // and let the backlog climb again — hence the per-executor field.
+  const h = chipHarness();
+  const ex = h.make();
+  await ex.move(Array.from({ length: 8 }, (/** @type {any} */ _, i) => ({
+    drive: i % 2 ? 'backward' : 'forward', steer: 'straight', duration_ms: 900,
+  })));
+
+  const worst = Math.max(...h.backlogs);
+  assert.ok(worst <= MAX_COAST_MS + LEAD_MS,
+    `write-ahead reached ${worst} ms across the queue, above ${MAX_COAST_MS + LEAD_MS}`);
+});
+
+test('stop() clears the write-ahead accounting, so the next command starts clean', async () => {
+  const h = chipHarness();
+  const ex = h.make();
+  await ex.move([{ drive: 'forward', steer: 'straight', duration_ms: 3000 }]);
+  await ex.stop();
+  h.backlogs.length = 0;
+  h.sleeps.length = 0;
+
+  const done = ex.move([{ drive: 'forward', steer: 'straight', duration_ms: 600 }]);
+  await done;
+  // Had stop() left the pre-purge write-ahead on the books, this would wait for
+  // bytes the purge already threw away, and the car would stutter.
+  assert.deepEqual(h.sleeps, [600 - LEAD_MS]);
+  assert.deepEqual(h.backlogs, [600]);
 });
