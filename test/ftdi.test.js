@@ -62,6 +62,7 @@ function fakeDevice() {
   return {
     calls,
     opened: false,
+    pinValue: 0x00,
     configuration: { configurationValue: 1 },
     configurations: [{
       configurationValue: 1,
@@ -87,9 +88,10 @@ function fakeDevice() {
       calls.push({ op: 'control', request: setup.request, value: setup.value, index: setup.index });
       return { status: 'ok', bytesWritten: 0 };
     },
-    async controlTransferIn() {
-      calls.push({ op: 'controlIn' });
-      return { status: 'ok', data: new DataView(new Uint8Array([0x00]).buffer) };
+    /** @param {any} setup */
+    async controlTransferIn(setup) {
+      calls.push({ op: 'controlIn', request: setup.request, value: setup.value, index: setup.index });
+      return { status: 'ok', data: new DataView(new Uint8Array([this.pinValue]).buffer) };
     },
     /** @param {number} ep @param {any} data */
     async transferOut(ep, data) {
@@ -165,4 +167,26 @@ test('write() throws on a stalled transfer instead of resolving quietly', async 
   const ftdi = await Ftdi.open(fakeUsb(dev), { baudRate: 1200 });
   dev.transferOut = async () => ({ status: 'stall', bytesWritten: 0 });
   await assert.rejects(() => ftdi.write(new Uint8Array([0x10])), /stall/);
+});
+
+test('readPins(): issues SIO_READ_PINS on port A and decodes the returned byte', async () => {
+  const dev = fakeDevice();
+  const ftdi = await Ftdi.open(fakeUsb(dev), { baudRate: 1200 });
+  dev.calls.length = 0;
+  dev.pinValue = 0xf0; // D4-D7 all high, D0-D3 low
+
+  const value = await ftdi.readPins();
+
+  assert.equal(value, 0xf0);
+  const readIn = dev.calls.find((c) => c.op === 'controlIn');
+  assert.ok(readIn, 'expected a controlTransferIn call');
+  assert.equal(readIn.request, 0x0c); // SIO_READ_PINS_REQUEST
+  assert.equal(readIn.index, 1);      // PORT_A
+});
+
+test('readPins(): throws instead of returning undefined when the transfer fails', async () => {
+  const dev = fakeDevice();
+  const ftdi = await Ftdi.open(fakeUsb(dev), { baudRate: 1200 });
+  dev.controlTransferIn = async () => ({ status: 'stall', data: new DataView(new ArrayBuffer(1)) });
+  await assert.rejects(() => ftdi.readPins(), /stall/);
 });

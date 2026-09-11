@@ -26,6 +26,11 @@ const PORT_A = 1;
 // a 3-bit fraction, and the fraction is NOT stored as a plain number: it is
 // stored through this permutation table. This mirrors libftdi's
 // ftdi_convert_baudrate() — the numbers below are not free parameters.
+//
+// Caveat: this covers only the 12 MHz-base path. Real libftdi switches to a
+// different clock path below roughly 732 baud; this project never asks for
+// anything that slow (the calibration rate is 1200), so that branch is not
+// implemented here.
 
 const H_CLK = 120_000_000;
 const H_CLK_DIV = 10;

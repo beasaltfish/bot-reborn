@@ -1,46 +1,19 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FT232H WebUSB Console</title>
+  <title>语音机器人</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <main>
-    <h1>FT232H WebUSB Console</h1>
-
-    <button id="connectBtn" class="primary">1. Connect Device</button>
-
-    <hr>
-
-    <div class="controls">
-      <button data-d4="1" data-d5="0">Forward (D4=1, D5=0)</button>
-      <button data-d4="0" data-d5="1">Reverse (D4=0, D5=1)</button>
-      <button data-d4="0" data-d5="0">Stop (D4=0, D5=0)</button>
-    </div>
-
-    <p id="status">Status: Not connected</p>
-
-    <hr>
-
-    <section class="diagnostics">
-      <h2>Diagnostics</h2>
-      <p class="hint">
-        If the picker's Connect button stays greyed out, use
-        <b>Scan ALL USB devices</b>. It opens the same picker with no vendor
-        filter, so every device the phone can see is listed.
-      </p>
-      <div class="controls">
-        <button id="scanAllBtn">Scan ALL USB devices</button>
-        <button id="readPinsBtn">Read pins</button>
-        <button id="listGrantedBtn">List granted devices</button>
-        <button id="copyLogBtn">Copy log</button>
-      </div>
-      <pre id="log"></pre>
-    </section>
+    <h1>语音机器人</h1>
+    <p>v1 还在实现中。目前有两个页面：</p>
+    <ul>
+      <li><a href="bench.html">标定台</a> —— 硬件接线、极性、字节速率、起动阈值</li>
+      <li><a href="setup.html">连通性测试</a> —— 三层 provider 与打字驱动的整条链路</li>
+    </ul>
   </main>
-
-  <script src="app.js"></script>
 </body>
 </html>
