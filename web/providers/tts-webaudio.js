@@ -19,6 +19,18 @@ export class WebAudioTts {
   /** @type {(() => void) | null} */ #finish = null;
 
   /**
+   * Which speak() owns the output right now.
+   *
+   * `#source` alone cannot answer that: between the fetch and `source.start()`
+   * there is no source at all, and §7.1 says that window is 1–2 s of silence
+   * for a long reply. The same counter the executor uses for the same class of
+   * problem (spec §4.5) — bumped by cancel() and by every speak() — makes that
+   * window cancellable and makes two overlapping speak() calls resolve to the
+   * later one instead of both playing.
+   */
+  #epoch = 0;
+
+  /**
    * @param {{ baseURL: string, apiKey: string, model: string, voice: string }} cfg
    * @param {{ audioContext?: AudioContext, loopback?: boolean, fetch?: typeof fetch }} [opts]
    */
@@ -47,6 +59,7 @@ export class WebAudioTts {
    */
   async speak(text) {
     this.cancel();
+    const epoch = ++this.#epoch;
 
     const response = await this.#fetch(`${this.#cfg.baseURL}/audio/speech`, {
       method: 'POST',
@@ -61,12 +74,18 @@ export class WebAudioTts {
       // because the sentence that matters most is the mixed one.
       body: JSON.stringify({ model: this.#cfg.model, voice: this.#cfg.voice, input: text }),
     });
+    // Cancelled (or superseded) while the request was in flight: drop it on the
+    // floor. Not even the HTTP error is worth raising — nobody is waiting for
+    // this audio any more.
+    if (epoch !== this.#epoch) return;
     if (!response.ok) {
       throw new Error(`TTS request failed: ${response.status} ${response.statusText}`);
     }
 
     const buffer = await this.#ctx.decodeAudioData(await response.arrayBuffer());
+    if (epoch !== this.#epoch) return;
     if (this.#ctx.state === 'suspended') await this.#ctx.resume();
+    if (epoch !== this.#epoch) return;
 
     return new Promise((resolve) => {
       const source = this.#ctx.createBufferSource();
@@ -82,6 +101,11 @@ export class WebAudioTts {
 
   /** Fade out over FADE_MS and stop. Safe to call when nothing is playing. */
   cancel() {
+    // Bump BEFORE the early return: a speak() that is still fetching or
+    // decoding has no #source yet, and returning here made cancel() a silent
+    // no-op for the whole 1–2 s window — the reply arrived a beat later,
+    // unstoppable.
+    this.#epoch++;
     const source = this.#source;
     if (!source) return;
     const now = this.#ctx.currentTime;
