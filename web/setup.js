@@ -362,8 +362,8 @@ function ensureBrain(exec) {
   const cfg = readForm();
   brain = new Brain({
     llm: new OpenAiCompatLlm(cfg.llm),
-    executor: exec,
-    tts: new WebAudioTts(cfg.tts, { audioContext: audioContext() }),
+    executor: logged(exec),
+    tts: loggedTts(new WebAudioTts(cfg.tts, { audioContext: audioContext() })),
     // Real earcons are earcon.js, which belongs to the second plan (spec
     // §5.6). Here they are log lines: this page tests the chain, not the
     // sound design.
@@ -372,6 +372,49 @@ function ensureBrain(exec) {
   });
   brainExecutor = exec;
   return brain;
+}
+
+// --- What the model actually did, in the log ------------------------------
+//
+// Calibration ⑨ (spec §12) asks the human to count, over 20 real turns, how
+// many replies are 纯复述、零信息量 — pure restatement, zero information — and
+// to decide from that whether §6.3 should go back to discarding `content`.
+// With only `♪ done` in the log there is nothing to count. The two things ⑨
+// needs are the dispatched actions and the spoken sentence, so both go through
+// a thin decorator on the way to Brain. Brain itself learns nothing about the
+// DOM from this: it still sees an executor and a tts.
+
+/** @param {Executor} exec */
+function logged(exec) {
+  return {
+    get connected() { return exec.connected; },
+    /** @param {Array<{ drive: string, steer: string, duration_ms: number }>} steps */
+    move(steps) {
+      logTurn(`→ move ${steps.map((s) => `${s.drive}+${s.steer} ${s.duration_ms}ms`).join(' → ')}`);
+      return exec.move(steps);
+    },
+    /** @param {string} drive @param {string} steer */
+    cruise(drive, steer) {
+      logTurn(`→ cruise ${drive}+${steer}`);
+      return exec.cruise(drive, steer);
+    },
+    stop() {
+      logTurn('→ stop');
+      return exec.stop();
+    },
+  };
+}
+
+/** @param {WebAudioTts} tts */
+function loggedTts(tts) {
+  return {
+    /** @param {string} text */
+    speak(text) {
+      logTurn(`♫ 「${text}」`);
+      return tts.speak(text);
+    },
+    cancel() { tts.cancel(); },
+  };
 }
 
 const turnLogEl = el('turnLog');
