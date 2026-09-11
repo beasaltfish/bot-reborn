@@ -105,10 +105,20 @@ form label input {
   margin-bottom: 18px;
 }
 
+/* Multi-line on purpose, and on the SUCCESS path too: the STT test joins its
+   three transcripts with "\n" and three separately legible transcripts is the
+   whole point of spec §9.3's three fixtures. The missing-fixture error embeds
+   fixtures/README.md, which is a whole document. Collapsed to one line, both
+   are unreadable. */
 .result {
+  display: block;
+  margin-top: 8px;
   font-weight: bold;
-  margin-left: 8px;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
 }
+
+.result:empty { display: none; }
 
 .result.ok { color: #2e7d32; }
 .result.error { color: #c62828; }
