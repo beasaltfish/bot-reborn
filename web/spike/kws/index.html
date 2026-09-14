@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KWS spike（抛弃代码）</title>
+<link rel="stylesheet" href="../../style.css">
+<style>
+  textarea { width: 100%; box-sizing: border-box; padding: 8px;
+             font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
+  .stat { display: flex; justify-content: space-between; gap: 12px;
+          padding: 6px 0; border-bottom: 1px solid rgba(128,128,128,.3);
+          font-variant-numeric: tabular-nums; text-align: left; }
+  .stat b { flex: none; opacity: .7; font-weight: normal; }
+  .row { display: flex; gap: 10px; }
+  .row label { flex: 1; }
+  .stat span { text-align: right; }
+</style>
+</head>
+<body>
+<main>
+  <h1>KWS spike</h1>
+  <p class="hint">
+    <b>一次性验证代码，不进 <code>web/</code> 的产品路径</b>（但留在仓库里，这一页已经被重开过两次）。只回答规格项 ⑤ 的一个问题：sherpa-onnx KWS 在这台
+    手机上常驻，扛不扛得住。要的是四个数——下载体积、每帧耗时/帧长、30 分钟耗电、
+    息屏 30 分钟后是否还在跑。
+  </p>
+  <p id="boot">正在加载模型……</p>
+
+  <hr>
+  <h2>关键词</h2>
+  <p class="hint">
+    每行一条：token 序列 + <code>@标签</code>，可选 <code>:boost</code> 与
+    <code>#阈值</code>（逐词阈值，正是规格 §5.5 要的那个不对称）。这个模型用
+    <b>ARPAbet 音素 + 带调拼音</b>，不是 BPE——写错的 token 会让 wasm 直接 abort，
+    所以点「开始」前先在本地对 tokens.txt 校验一遍。
+  </p>
+  <textarea id="keywords" rows="5" spellcheck="false">HH EY1 S T IY1 V AH0 N @hey_steven
+h ēi s ī t í w én @hey_steven_zh
+AO1 L S T AA1 P #0.15 @all_stop
+ào s ī t ā p ǔ #0.15 @all_stop_zh</textarea>
+  <label>全局阈值 keywordsThreshold
+    <input id="threshold" type="number" step="0.05" value="0.25" inputmode="decimal"></label>
+  <label>全局 boost keywordsScore
+    <input id="score" type="number" step="0.5" value="1.0" inputmode="decimal"></label>
+
+  <hr>
+  <h2>保活音（路二实验）</h2>
+  <p class="hint">
+    安卓不准后台应用用麦克风——这就是每次息屏约 60 秒后音频钟和已喂<b>一起</b>停掉的
+    原因。而<b>正在播放声音</b>的标签页会让 Chrome 挂住一个媒体会话，从而仍算前台，
+    麦克风也就保得住。这里同时上两种播放：一个 <code>&lt;audio&gt;</code> 循环
+    （Chrome 的媒体通知挂在它身上，且不随采集用的 AudioContext 一起被挂起）和一个
+    挂在采集 context 上的振荡器。60 Hz、−40 dBFS：远高于 Chrome 判静音的门槛
+    （约 −60 dBFS，所以标签页算「有声」），又远低于手机喇叭能发出的频段
+    （300 Hz 以下基本发不出来），所以屋里听不见，麦克风也收不到。
+    <b>不勾选就是对照组</b>，行为和你刚测的那轮完全一致。
+  </p>
+  <label><input id="keepAlive" type="checkbox"> 开启保活音（勾了再点「开始」）</label>
+  <div class="row">
+    <label>波形
+      <select id="kaWave">
+        <option value="breath" selected>呼吸声（220 Hz，4 秒一个起伏）</option>
+        <option value="hum">60 Hz 低频嗡（第一版，原样）</option>
+        <option value="high">18 kHz 高频（成人多半听不见）</option>
+      </select>
+    </label>
+    <label>音量 dBFS
+      <input id="kaDb" type="number" step="1" value="-40" inputmode="numeric"></label>
+  </div>
+  <label><input id="kaOnlyHidden" type="checkbox" checked> 只在黑屏时播（亮屏时静音）</label>
+  <p class="hint">
+    下面几个按钮<b>只放声音</b>，不启动麦克风、不加载模型，也<b>和上面那个勾选框无关</b>。
+    按设计，当前设置在正常距离下就该听不见——<b>要贴着耳朵听</b>。先点「−20 dBFS」
+    确认喇叭确实在出声，再回来听当前设置。
+  </p>
+  <div class="controls">
+    <button id="kaAudition">试听 &lt;audio&gt;（当前设置）</button>
+    <button id="kaAuditionOsc">试听振荡器（当前设置）</button>
+    <button id="kaAuditionLoud">试听 −20 dBFS（确认能出声）</button>
+    <button id="kaAuditionStop">停止试听</button>
+  </div>
+  <div class="stat"><b>试听状态</b><span id="kaAudState">—</span></div>
+  <p class="hint">
+    <b>验沙沙声是不是功放的锅</b>：把音量填 <code>-58</code>（刚好高过系统判静音的
+    约 −60 dBFS 门槛）再听。要是沙沙一点没变，那就跟我们放什么无关，是功放一通电
+    自己在响，换任何波形都去不掉。<br>
+    <b>18 kHz 那档只有 <code>&lt;audio&gt;</code> 一半在响</b>：采集用的 context 跑在
+    16 kHz，按采样定理它最高只能表示 8 kHz，18 kHz 的振荡器会折回成 2 kHz 的啸叫——
+    所以那一档会跳过振荡器，日志里会说明。
+  </p>
+  <audio id="ka" loop playsinline preload="auto"></audio>
+
+  <hr>
+  <div class="controls">
+    <button id="start" class="primary" disabled>开始（授权麦克风并常驻 KWS）</button>
+    <button id="stop" disabled>停止</button>
+  </div>
+
+  <hr>
+  <h2>读数</h2>
+  <div class="stat"><b>已运行</b><span id="elapsed">—</span></div>
+  <div class="stat"><b>是否被冻结</b><span id="alive">—</span></div>
+  <div class="stat"><b>每帧耗时</b><span id="cost">—</span></div>
+  <div class="stat"><b>命中次数</b><span id="hits">0</span></div>
+  <div class="stat"><b>主线程积压</b><span id="lag">—</span></div>
+  <div class="stat"><b>电量</b><span id="battery">—</span></div>
+  <div class="stat"><b>保活音</b><span id="kaState">—</span></div>
+  <p class="hint">
+    息屏之后页面不会重绘，但计数照常在音频回调里累加——回来按「停止」读最终值即可。
+    读数每 2 秒也写一份进 localStorage，页面被杀掉也还在。
+  </p>
+
+  <hr>
+  <div class="controls"><button id="copy">复制日志</button></div>
+  <pre id="log"></pre>
+</main>
+<script defer src="main.js"></script>
+</body>
+</html>

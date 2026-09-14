@@ -6,7 +6,10 @@
 # a toolchain is added later)
 node_modules/
 dist/
-spike/
+# `spike/` was ignored here on the assumption these pages get deleted once they
+# have answered their question. They are kept instead: ⑤ and ⑥ were each
+# reopened by a later finding, and a probe that is already calibrated against
+# this phone is worth more than the shelf space.
 
 # sherpa-onnx models and WASM: large, fetched by script, not vendored
 web/models/
