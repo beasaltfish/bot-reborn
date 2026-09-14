@@ -1,8 +1,10 @@
 # Hardware notes
 
-Source of truth for the pin model: spec §3.1–§3.2
-(`docs/superpowers/specs/2026-09-07-voice-robot-design.md`). If this file and
-the spec ever disagree, the spec wins and this file is the bug.
+Source of truth for the pin model: spec §3.1–§3.2. The spec is a private
+working document and is not published, so the `§` references throughout this
+file point at something you cannot open — they are kept because they are how
+the two documents are held in sync. If this file and the spec ever disagree,
+the spec wins and this file is the bug.
 
 ## Device
 

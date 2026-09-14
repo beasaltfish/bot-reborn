@@ -6,7 +6,11 @@ brain is gone. Pins `D4`–`D7` (pin mask `0xF0`) carry the two motor-driver
 inputs and the two steering-coil inputs — see [`docs/hardware.md`](docs/hardware.md),
 and read the D6/D7 soldering warning there before wiring anything.
 
-Design spec: `docs/superpowers/specs/2026-09-07-voice-robot-design.md`.
+The design spec is a private working document and is not in this repo, so the
+`§` references in `docs/hardware.md` point at something you cannot open. That
+file is the published record: everything in it was measured on the actual
+hardware.
+
 v1 is still being implemented — the microphone half (wake word, VAD, session
 state machine) is not here yet. What ships today is the hardware layer, the
 executor, the three providers and the brain, driven from two bring-up pages.
@@ -20,8 +24,7 @@ executor, the three providers and the brain, driven from two bring-up pages.
 ├── tsconfig.json       # JSDoc types checked with tsc --checkJs, strict
 ├── wrangler.jsonc      # Cloudflare Pages project config
 ├── docs/
-│   ├── hardware.md     # pin map, wiring, calibration results, USB drivers
-│   └── superpowers/    # the design spec and the implementation plan
+│   └── hardware.md     # pin map, wiring, calibration results, measurements
 ├── test/               # node:test, no browser needed
 └── web/                # Pages output directory (deployed as-is)
     ├── index.html      # links to the two bring-up pages below
@@ -33,6 +36,7 @@ executor, the three providers and the brain, driven from two bring-up pages.
     ├── strings.js      # UI copy and fixed spoken lines (en / zh)
     ├── providers/      # STT / LLM / TTS, all OpenAI-compatible endpoints
     ├── fixtures/       # your own STT test audio (not in git — see its README)
+    ├── spike/          # bring-up probes: KWS cost, the audio path, barge-in
     └── style.css
 ```
 

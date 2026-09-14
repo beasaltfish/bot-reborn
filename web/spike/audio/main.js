@@ -45,7 +45,7 @@ function log(msg) {
 
 // --------------------------------------------------------------- config
 
-// Read-only on purpose. This is throwaway code sharing a storage key with the
+// Read-only on purpose. This is probe code sharing a storage key with the
 // real settings page; writing to it could damage a working setup.
 function loadConfig() {
   try { return JSON.parse(localStorage.getItem('voicebot.config') || '{}'); }
