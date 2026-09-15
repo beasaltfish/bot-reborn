@@ -1,10 +1,11 @@
 // Connectivity-test page and typed end-to-end driver (task 12).
 //
-// entry file: allowed to touch document/localStorage/navigator at the top
-// level (spec §10's exception). localStorage access is confined to the two
-// functions below — loadConfig() and saveConfig() — nothing else in this
-// file, and no provider or brain.js, touches it.
+// entry file: allowed to touch document/navigator at the top level (spec §10's
+// exception). localStorage is not touched here at all any more — config.js is
+// the only module in the app that does, so that §8.2's schema has exactly one
+// definition instead of one per page.
 
+import { CONFIG_KEY, loadConfig, saveConfig } from './config.js';
 import { Ftdi } from './ftdi.js';
 import { Executor } from './executor.js';
 import { OpenAiCompatStt } from './providers/stt-openai-compat.js';
@@ -12,48 +13,13 @@ import { OpenAiCompatLlm } from './providers/llm-openai-compat.js';
 import { WebAudioTts } from './providers/tts-webaudio.js';
 import { Brain, TOOLS, buildSystemPrompt } from './brain.js';
 
-const CONFIG_KEY = 'voicebot.config';
-
 /**
- * @typedef {{ baseURL: string, apiKey: string, model: string }} ProviderCfg
- * @typedef {{ stt: ProviderCfg, llm: ProviderCfg, tts: ProviderCfg & { voice: string } }} Config
+ * @typedef {import('./config.js').Config} Config
+ * @typedef {import('./config.js').Layer} Layer
+ * The form only knows the three provider layers; the four preferences beside
+ * them (§8.2) are produced by voice and by §7.3's calibration, not typed in.
+ * @typedef {Pick<Config, 'stt' | 'llm' | 'tts'>} ProviderLayers
  */
-
-/** @returns {Config} */
-function emptyConfig() {
-  return {
-    stt: { baseURL: '', apiKey: '', model: '' },
-    llm: { baseURL: '', apiKey: '', model: '' },
-    tts: { baseURL: '', apiKey: '', model: '', voice: '' },
-  };
-}
-
-// --- The only two functions in this file (or anywhere in the app) that ----
-// --- touch localStorage. -----------------------------------------------
-
-/** @returns {Config} */
-function loadConfig() {
-  const empty = emptyConfig();
-  try {
-    const raw = localStorage.getItem(CONFIG_KEY);
-    if (!raw) return empty;
-    const parsed = JSON.parse(raw);
-    // Merge over the empty defaults so a config saved before a field existed
-    // (or a partially-filled form) never produces `undefined` inputs.
-    return {
-      stt: { ...empty.stt, ...parsed.stt },
-      llm: { ...empty.llm, ...parsed.llm },
-      tts: { ...empty.tts, ...parsed.tts },
-    };
-  } catch {
-    return empty;
-  }
-}
-
-/** @param {Config} cfg */
-function saveConfig(cfg) {
-  localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
-}
 
 // --- Typed DOM helpers (Ruling P2: keep strict, no @ts-nocheck) -----------
 // Same convention as bench.js.
@@ -97,7 +63,7 @@ function testButton(name) {
 
 // --- Config form: read the live values, fill from a loaded config ---------
 
-/** @returns {Config} */
+/** @returns {ProviderLayers} */
 function readForm() {
   return {
     stt: {
@@ -119,7 +85,7 @@ function readForm() {
   };
 }
 
-/** @param {Config} cfg */
+/** @param {ProviderLayers} cfg */
 function fillForm(cfg) {
   namedInput('stt.baseURL').value = cfg.stt.baseURL;
   namedInput('stt.apiKey').value = cfg.stt.apiKey;
@@ -133,7 +99,7 @@ function fillForm(cfg) {
   namedInput('tts.voice').value = cfg.tts.voice;
 }
 
-/** @param {ProviderCfg} cfg @param {string} label */
+/** @param {Layer} cfg @param {string} label */
 function assertFilled(cfg, label) {
   if (!cfg.baseURL || !cfg.apiKey || !cfg.model) {
     throw new Error(`请先在上方「配置」里填写 ${label} 的 baseURL / apiKey / model`);
@@ -142,7 +108,12 @@ function assertFilled(cfg, label) {
 
 el('cfgForm').addEventListener('submit', (event) => {
   event.preventDefault();
-  saveConfig(readForm());
+  // Merge, never replace: this form only knows the three provider layers, and
+  // overwriting the stored config with it would drop lang / replyLang /
+  // bargeIn / ttsPath. A calibrated `bargeIn: false` silently reverting to the
+  // default is the exact failure config.js's `??` is there to prevent — it
+  // must not come back in through the save path instead.
+  saveConfig({ ...loadConfig(), ...readForm() });
   el('cfgStatus').textContent = `已保存到 localStorage（${CONFIG_KEY}）`;
 });
 
