@@ -45,40 +45,58 @@ export function encodeWav(pcm, sampleRate) {
   return buffer;
 }
 
+/** Spec §6.7: the same 15 s net as the other two providers. */
+const DEFAULT_TIMEOUT_MS = 15_000;
+
 export class OpenAiCompatStt {
   #cfg;
   #fetch;
+  #timeoutMs;
 
   /**
    * @param {{ baseURL: string, apiKey: string, model: string }} cfg
-   * @param {{ fetch?: typeof fetch }} [opts]
+   * @param {{ fetch?: typeof fetch, timeoutMs?: number }} [opts]
    */
   constructor(cfg, opts = {}) {
     this.#cfg = cfg;
     this.#fetch = opts.fetch ?? globalThis.fetch.bind(globalThis);
+    this.#timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   }
 
   /**
    * @param {Int16Array} pcm
    * @param {number} sampleRate
+   * @param {{ signal?: AbortSignal }} [opts]
    * @returns {Promise<string>}
    */
-  async transcribe(pcm, sampleRate) {
+  async transcribe(pcm, sampleRate, opts = {}) {
     const form = new FormData();
     form.append('file', new Blob([encodeWav(pcm, sampleRate)], { type: 'audio/wav' }), 'audio.wav');
     form.append('model', this.#cfg.model);
     form.append('prompt', BILINGUAL_PROMPT);
     // Deliberately no `language` — spec §11.1.
 
-    const response = await this.#fetch(`${this.#cfg.baseURL}/audio/transcriptions`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${this.#cfg.apiKey}` },
-      body: form,
-    });
-    if (!response.ok) {
-      throw new Error(`STT request failed: ${response.status} ${response.statusText}`);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.#timeoutMs);
+    // Either reason to give up must reach the request: the caller cancelling
+    // the turn (spec §8.1) or our own deadline (§6.7).
+    const signal = opts.signal
+      ? AbortSignal.any([opts.signal, controller.signal])
+      : controller.signal;
+    try {
+      const response = await this.#fetch(`${this.#cfg.baseURL}/audio/transcriptions`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${this.#cfg.apiKey}` },
+        body: form,
+        signal,
+      });
+      if (!response.ok) {
+        throw new Error(`STT request failed: ${response.status} ${response.statusText}`);
+      }
+      const json = await response.json();
+      return (json.text ?? '').trim();
+    } finally {
+      clearTimeout(timer);
     }
-    const json = await response.json();
-    return (json.text ?? '').trim();
   }
 }

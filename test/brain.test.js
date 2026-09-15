@@ -234,8 +234,8 @@ function brainHarness({ connected = true, reply, gateMotion = false } = {}) {
   const llm = {
     /** @type {any[]} */
     calls: [],
-    /** @param {any} messages @param {any} tools */
-    async chat(messages, tools) {
+    /** @param {any} messages @param {any} tools @param {any} _opts */
+    async chat(messages, tools, _opts) {
       this.calls.push({ messages: structuredClone(messages), tools });
       const r = typeof reply === 'function' ? reply(this.calls.length) : reply;
       if (r instanceof Error) throw r;
@@ -243,8 +243,8 @@ function brainHarness({ connected = true, reply, gateMotion = false } = {}) {
     },
   };
   const tts = {
-    /** @param {any} text */
-    async speak(text) { events.push({ op: 'speak', text }); },
+    /** @param {any} text @param {any} _opts */
+    async speak(text, _opts) { events.push({ op: 'speak', text }); },
   };
   const earcon = (/** @type {any} */ name) => events.push({ op: 'earcon', name });
   /** @type {{ lang: 'en' | 'zh', replyLang: 'en' | 'zh' | null, bargeIn: boolean }} */
@@ -517,4 +517,70 @@ test('handle: an empty transcript never reaches the LLM (spec §6.7)', async () 
   await h.brain.handle('   ');
   assert.equal(h.llm.calls.length, 0);
   assert.deepEqual(h.events, [{ op: 'earcon', name: 'huh' }]);
+});
+
+test('cancel(): an aborted turn ends silently, not as a failure (spec §8.1)', async () => {
+  // Two things at once, and they are the same thing: the LLM call has to
+  // receive a signal at all (without it §4.5's third use of the generation
+  // counter can only IGNORE a stale reply, never stop it), and the abort must
+  // not fall into the catch below — that one treats every throw as an API
+  // failure, so changing your mind would be answered with an error earcon and
+  // "接口失败" read aloud.
+  const h = brainHarness({ reply: say('too late') });
+  /** @param {any} messages @param {any} tools @param {any} opts */
+  h.llm.chat = (messages, tools, opts) => new Promise((_, reject) => {
+    opts.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+  });
+
+  const turn = h.brain.handle('往前走');
+  h.brain.cancel();
+  await turn;
+
+  assert.deepEqual(h.events, []);
+});
+
+test('cancel(): the reply already being spoken is cut off too', async () => {
+  // Barge-in (§5.3) and the stop button both land mid-reply, and the symptom
+  // the user actually notices is the robot still talking. WebAudioTts resolves
+  // rather than throws when its signal fires, so the turn just ends.
+  const h = brainHarness({ reply: say('一段很长的回答') });
+  /** @param {any} text @param {any} opts */
+  h.tts.speak = (text, opts) => new Promise(/** @param {any} resolve */ (resolve) => {
+    h.events.push({ op: 'speak', text });
+    opts?.signal?.addEventListener('abort', () => resolve());
+  });
+
+  const turn = h.brain.handle('说点什么');
+  await flushMicrotasks();
+  assert.deepEqual(h.events, [{ op: 'speak', text: '一段很长的回答' }]);
+
+  h.brain.cancel();
+  const outcome = await Promise.race([
+    turn.then(() => 'finished'),
+    new Promise((r) => setTimeout(() => r('still speaking'), 50)),
+  ]);
+  assert.equal(outcome, 'finished');
+});
+
+test('cancel(): the fixed lines are cancellable too, not just the LLM reply', async () => {
+  // A half-cancellable Brain is worse than an uncancellable one: the stop
+  // button works on most turns and then silently does not on the two that
+  // speak a fixed line (§6.5, §6.7). Spec §8.1 scopes the controller to the
+  // whole turn, so it has to exist before the first thing that can speak.
+  const h = brainHarness({ connected: false });
+  /** @param {any} text @param {any} opts */
+  h.tts.speak = (text, opts) => new Promise(/** @param {any} resolve */ (resolve) => {
+    h.events.push({ op: 'speak', text });
+    opts?.signal?.addEventListener('abort', () => resolve());
+  });
+
+  const turn = h.brain.handle('往前走');
+  await flushMicrotasks();
+  h.brain.cancel();
+
+  const outcome = await Promise.race([
+    turn.then(() => 'finished'),
+    new Promise((r) => setTimeout(() => r('still speaking'), 50)),
+  ]);
+  assert.equal(outcome, 'finished');
 });

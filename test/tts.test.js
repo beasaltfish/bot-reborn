@@ -171,3 +171,40 @@ test('the loopback path is refused rather than half-implemented (spec §7.2)', (
     () => new WebAudioTts(CFG, { audioContext: audio.ctx, loopback: true }),
     /loopback/);
 });
+
+test('speak(): a hung request aborts at timeoutMs', async () => {
+  // Spec §6.7: the same 15 s net as STT and LLM. A TTS that never returns
+  // freezes the turn in SPEAKING with nothing to recover it.
+  const { ctx } = fakeAudio();
+  /** @param {any} url @param {any} init */
+  const fetchImpl = (url, init) => new Promise((_, reject) => {
+    init.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+  });
+  const tts = new WebAudioTts(CFG, { audioContext: ctx, fetch: fetchImpl, timeoutMs: 20 });
+
+  await assert.rejects(() => tts.speak('hi'), (/** @type {any} */ err) => err.name === 'AbortError');
+});
+
+test("speak(): the caller's signal ends the reply quietly, like cancel()", async () => {
+  // A deliberate cancellation is not a failure. cancel() already resolves
+  // rather than throwing, and brain.js turns a rejection into an `error`
+  // earcon — which would mean the user pressing stop gets told something
+  // broke. The timeout above still throws, because that one IS a failure.
+  const { ctx, started } = fakeAudio();
+  /** @param {any} url @param {any} init */
+  const fetchImpl = (url, init) => new Promise((_, reject) => {
+    init.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+  });
+  const tts = new WebAudioTts(CFG, { audioContext: ctx, fetch: fetchImpl, timeoutMs: 60_000 });
+  const controller = new AbortController();
+
+  const speaking = tts.speak('hi', { signal: controller.signal });
+  controller.abort();
+
+  const outcome = await Promise.race([
+    speaking.then(() => 'resolved', (/** @type {any} */ err) => err.name),
+    new Promise((r) => setTimeout(() => r('still pending'), 50)),
+  ]);
+  assert.equal(outcome, 'resolved');
+  assert.deepEqual(started, [], 'nothing should have reached the speakers');
+});

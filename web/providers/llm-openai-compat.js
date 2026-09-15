@@ -29,11 +29,17 @@ export class OpenAiCompatLlm {
   /**
    * @param {object[]} messages
    * @param {object[]} tools
+   * @param {{ signal?: AbortSignal }} [opts]
    * @returns {Promise<{ text: string, toolCalls: ParsedToolCall[], rawMessage: object }>}
    */
-  async chat(messages, tools) {
+  async chat(messages, tools, opts = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.#timeoutMs);
+    // Two independent reasons to give up, and the request must honour either:
+    // the caller cancelling the turn (spec §8.1) and our own deadline (§6.7).
+    const signal = opts.signal
+      ? AbortSignal.any([opts.signal, controller.signal])
+      : controller.signal;
     try {
       const response = await this.#fetch(`${this.#cfg.baseURL}/chat/completions`, {
         method: 'POST',
@@ -42,7 +48,7 @@ export class OpenAiCompatLlm {
           Authorization: `Bearer ${this.#cfg.apiKey}`,
         },
         body: JSON.stringify({ model: this.#cfg.model, messages, tools }),
-        signal: controller.signal,
+        signal,
       });
       if (!response.ok) {
         throw new Error(`LLM request failed: ${response.status} ${response.statusText}`);

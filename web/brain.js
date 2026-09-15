@@ -210,13 +210,15 @@ function isValidStep(step) {
 
 export class Brain {
   #llm; #executor; #tts; #earcon; #config;
+  /** @type {AbortController | null} */
+  #turn = null;
   /** @type {object[]} */ #history = [];
 
   /**
    * @param {{
-   *   llm: { chat(messages: object[], tools: object[]): Promise<{ text: string, toolCalls: any[], rawMessage: object }> },
+   *   llm: { chat(messages: object[], tools: object[], opts?: { signal?: AbortSignal }): Promise<{ text: string, toolCalls: any[], rawMessage: object }> },
    *   executor: { connected: boolean, move(steps: Step[]): Promise<void>, cruise(d: string, s: string): Promise<void>, stop(): Promise<void> },
-   *   tts: { speak(text: string): Promise<void> },
+   *   tts: { speak(text: string, opts?: { signal?: AbortSignal }): Promise<void> },
    *   earcon: (name: string) => void,
    *   config: { lang: 'en' | 'zh', replyLang: 'zh' | 'en' | null, bargeIn: boolean },
    * }} deps
@@ -231,6 +233,13 @@ export class Brain {
 
   get history() { return this.#history; }
 
+  /**
+   * Spec §8.1: the session layer aborts the turn in flight. Three events do
+   * it — a wake word heard during THINKING, the user talking over the reply
+   * when `bargeIn` is on, and the emergency stop button (§4.1 layer 2).
+   */
+  cancel() { this.#turn?.abort(); }
+
   /** Spec §6.4: cleared when the session times out back to SLEEPING. */
   resetHistory() { this.#history = []; }
 
@@ -239,12 +248,19 @@ export class Brain {
     const text = userText.trim();
     if (text === '') { this.#earcon('huh'); return; }
 
+    // Scoped to the whole turn, not just the LLM call: the two fixed lines
+    // below speak before the model is ever reached, and a stop button that
+    // works on most turns but silently not on those two is worse than one
+    // that never works.
+    const turn = new AbortController();
+    this.#turn = turn;
+
     // Spec §6.5: intercepted here, before the LLM. The car's state never enters
     // the prompt — actions are short enough that it would be stale on arrival,
     // and it would tempt the model into things the hardware cannot do.
     if (!this.#executor.connected) {
       this.#earcon('error');
-      await this.#tts.speak(t(this.#config.lang, 'usbNotConnected'));
+      await this.#tts.speak(t(this.#config.lang, 'usbNotConnected'), { signal: turn.signal });
       return;
     }
 
@@ -255,10 +271,14 @@ export class Brain {
       reply = await this.#llm.chat(
         [{ role: 'system', content: buildSystemPrompt(this.#config) }, ...this.#history],
         TOOLS,
+        { signal: turn.signal },
       );
     } catch {
+      // Cancelling is not failing. Without this line the `error` earcon and
+      // "接口失败" would be the answer to the user changing their mind.
+      if (turn.signal.aborted) return;
       this.#earcon('error');
-      await this.#tts.speak(t(this.#config.lang, 'apiFailed'));
+      await this.#tts.speak(t(this.#config.lang, 'apiFailed'), { signal: turn.signal });
       return;
     }
 
@@ -289,7 +309,7 @@ export class Brain {
       this.#earcon('error');
     }
 
-    if (reply.text) await this.#tts.speak(reply.text);
+    if (reply.text) await this.#tts.speak(reply.text, { signal: turn.signal });
   }
 
   /**

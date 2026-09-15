@@ -90,3 +90,34 @@ test('transcribe(): an HTTP error throws with the status in the message', async 
   const stt = new OpenAiCompatStt(CFG, { fetch: fetchImpl });
   await assert.rejects(() => stt.transcribe(Int16Array.from([1]), 16000), /401/);
 });
+
+test('transcribe(): a hung request aborts at timeoutMs', async () => {
+  // Spec §6.7: all three providers need the same 15 s net. Without it the
+  // voice loop has no recovery path — STT just never comes back.
+  /** @param {any} url @param {any} init */
+  const fetchImpl = (url, init) => new Promise((_, reject) => {
+    init.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+  });
+  const stt = new OpenAiCompatStt(CFG, { fetch: fetchImpl, timeoutMs: 20 });
+  await assert.rejects(
+    () => stt.transcribe(Int16Array.from([1]), 16000),
+    (/** @type {any} */ err) => err.name === 'AbortError');
+});
+
+test("transcribe(): the caller's signal aborts a request still in flight", async () => {
+  /** @param {any} url @param {any} init */
+  const fetchImpl = (url, init) => new Promise((_, reject) => {
+    init.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+  });
+  const stt = new OpenAiCompatStt(CFG, { fetch: fetchImpl, timeoutMs: 60_000 });
+  const controller = new AbortController();
+
+  const job = stt.transcribe(Int16Array.from([1]), 16000, { signal: controller.signal });
+  controller.abort();
+
+  const outcome = await Promise.race([
+    job.then(() => 'resolved', (/** @type {any} */ err) => err.name),
+    new Promise((r) => setTimeout(() => r('still pending'), 50)),
+  ]);
+  assert.equal(outcome, 'AbortError');
+});

@@ -135,3 +135,24 @@ test('chat(): a hung request aborts at timeoutMs', async () => {
   const llm = new OpenAiCompatLlm(CFG, { fetch: fetchImpl, timeoutMs: 20 });
   await assert.rejects(() => llm.chat([], []), (err) => /** @type {any} */ (err).name === 'AbortError');
 });
+
+test("chat(): the caller's signal aborts a request still in flight", async () => {
+  // timeoutMs is far away on purpose: if this rejects, only the caller's
+  // signal can have done it. Spec §8.1 — without this seam §4.5's third use
+  // of the generation counter can only IGNORE a stale reply, not stop it.
+  /** @param {any} url @param {any} init */
+  const fetchImpl = (url, init) => new Promise((_, reject) => {
+    init.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+  });
+  const llm = new OpenAiCompatLlm(CFG, { fetch: fetchImpl, timeoutMs: 60_000 });
+  const controller = new AbortController();
+
+  const chat = llm.chat([], [], { signal: controller.signal });
+  controller.abort();
+
+  const outcome = await Promise.race([
+    chat.then(() => 'resolved', (/** @type {any} */ err) => err.name),
+    new Promise((r) => setTimeout(() => r('still pending'), 50)),
+  ]);
+  assert.equal(outcome, 'AbortError');
+});

@@ -9,6 +9,9 @@
 
 const FADE_MS = 10;
 
+/** Spec §6.7: the same 15 s net as the other two providers. */
+const DEFAULT_TIMEOUT_MS = 15_000;
+
 export class WebAudioTts {
   #cfg;
   #fetch;
@@ -29,10 +32,11 @@ export class WebAudioTts {
    * later one instead of both playing.
    */
   #epoch = 0;
+  #timeoutMs;
 
   /**
    * @param {{ baseURL: string, apiKey: string, model: string, voice: string }} cfg
-   * @param {{ audioContext?: AudioContext, loopback?: boolean, fetch?: typeof fetch }} [opts]
+   * @param {{ audioContext?: AudioContext, loopback?: boolean, fetch?: typeof fetch, timeoutMs?: number }} [opts]
    */
   constructor(cfg, opts = {}) {
     if (opts.loopback) {
@@ -43,6 +47,7 @@ export class WebAudioTts {
     }
     this.#cfg = cfg;
     this.#fetch = opts.fetch ?? globalThis.fetch.bind(globalThis);
+    this.#timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.#ctx = opts.audioContext ?? new AudioContext();
     this.#gain = this.#ctx.createGain();
     this.#analyser = this.#ctx.createAnalyser();
@@ -55,12 +60,40 @@ export class WebAudioTts {
   /**
    * Resolves when playback finishes, or immediately when cancelled.
    * @param {string} text
+   * @param {{ signal?: AbortSignal }} [opts]
    * @returns {Promise<void>}
    */
-  async speak(text) {
+  async speak(text, opts = {}) {
     this.cancel();
     const epoch = ++this.#epoch;
 
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.#timeoutMs);
+    const signal = opts.signal
+      ? AbortSignal.any([opts.signal, controller.signal])
+      : controller.signal;
+    try {
+      return await this.#send(text, epoch, signal);
+    } catch (err) {
+      // The caller cancelling the turn is not a failure: cancel() resolves
+      // too, and brain.js turns a rejection into an `error` earcon — telling
+      // the user something broke when they are the one who stopped it. Our
+      // own deadline (spec §6.7) still throws, which is why this asks whose
+      // signal fired instead of just matching on AbortError.
+      if (opts.signal?.aborted) return;
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /**
+   * @param {string} text
+   * @param {number} epoch
+   * @param {AbortSignal} signal
+   * @returns {Promise<void>}
+   */
+  async #send(text, epoch, signal) {
     const response = await this.#fetch(`${this.#cfg.baseURL}/audio/speech`, {
       method: 'POST',
       headers: {
@@ -73,6 +106,7 @@ export class WebAudioTts {
       // text: spec §11.1 fixes ONE multilingual voice and does no CJK sniffing,
       // because the sentence that matters most is the mixed one.
       body: JSON.stringify({ model: this.#cfg.model, voice: this.#cfg.voice, input: text }),
+      signal,
     });
     // Cancelled (or superseded) while the request was in flight: drop it on the
     // floor. Not even the HTTP error is worth raising — nobody is waiting for
