@@ -392,3 +392,43 @@ test('stop() clears the write-ahead accounting, so the next command starts clean
   assert.deepEqual(h.sleeps, [600 - LEAD_MS]);
   assert.deepEqual(h.backlogs, [600]);
 });
+
+test('a slice written by a preempted loop does not pollute the queue accounting', async () => {
+  // Neither harness above can reach this: both resolve write() immediately, so
+  // the preempted loop never gets to run its accounting line at all. This fake
+  // holds the FIRST write open and lets every later one through, which is
+  // exactly the shape of a bulk URB still in flight when stop() lands.
+  const stalled = deferred();
+  let writes = 0;
+  /** @type {number[]} */ const sleeps = [];
+  /** @type {any} */
+  const ftdi = {
+    bytesPerMs: 1,
+    /** @param {number} pin @param {number} ms */
+    buildStream(pin, ms) { return new Uint8Array(ms + 1); },
+    async write() { if (writes++ === 0) await stalled.promise; },
+    async purgeTx() {},
+  };
+  const ex = new Executor(ftdi, {
+    /** @param {number} ms */
+    sleep: (ms) => { sleeps.push(ms); return Promise.resolve(); },
+  });
+  const flush = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
+
+  const cruising = ex.cruise('forward', 'straight');
+  await flush();
+  assert.equal(writes, 1, 'the first slice should still be in flight');
+
+  await ex.stop();          // bumps the generation and zeroes the queue
+  stalled.resolve();        // the dead loop's write lands only now
+  await cruising;
+
+  sleeps.length = 0;
+  await ex.move([{ drive: 'forward', steer: 'straight', duration_ms: MAX_COAST_MS }]);
+
+  // A fresh full slice against an empty queue waits MAX_COAST_MS - LEAD_MS. If
+  // the dead loop got to credit its own slice first, this reads MAX_COAST_MS:
+  // conservative (it oversleeps, never overdrives) but the books are lying, and
+  // the car stutters at the start of the next command.
+  assert.deepEqual(sleeps, [MAX_COAST_MS - LEAD_MS]);
+});

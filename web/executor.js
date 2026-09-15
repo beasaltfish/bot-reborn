@@ -150,6 +150,13 @@ export class Executor {
         this.#fail(/** @type {Error} */ (err));
         return;
       }
+      // The write above is an await, so by the time it resolves this loop may
+      // already be dead — stop() bumps the generation and zeroes #queuedMs
+      // synchronously, and that can happen while the URB is in flight. Crediting
+      // this slice afterwards hands the NEXT action a queue it never had, and it
+      // oversleeps by exactly that much. The check at the top of the loop cannot
+      // catch it: the preemption happened after that check had already run.
+      if (gen !== this.#gen) return;
       this.#queuedMs += slice;
       if (remaining !== null) remaining -= slice;
 
