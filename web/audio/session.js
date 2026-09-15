@@ -6,6 +6,9 @@
 // only way this file can be tested at all (§10).
 
 import { classifyLabel, WAKE, STOP } from './keyword-lines.js';
+import { RATE } from './pipeline.js';
+import { toInt16 } from './pcm.js';
+import { t } from '../strings.js';
 
 /** Spec §5.2. Also, by construction, the longest the car can run: the clock
  *  ticks only in LISTENING, so a cruise ends "30 s after you last said
@@ -44,6 +47,8 @@ export class Session {
   /** @type {State} */ #state = 'SLEEPING';
   #lastVoiceAt = 0;
   #earconUntil = 0;
+  /** @type {AbortController | null} */ #ctrl = null;
+  #gen = 0;
 
   /**
    * @param {{
@@ -102,10 +107,6 @@ export class Session {
     this.#setState('LISTENING');
   }
 
-  /** TEMPORARY, removed in task 12 once a real turn can end. Tests need a way
-   *  back from CAPTURING without going through STT. */
-  backToListeningForTest() { this.#setState('LISTENING'); }
-
   // --- frame handlers, registered and removed by #reconcile ------------------
 
   #onKwsFrame = (/** @type {Float32Array} */ frame) => {
@@ -122,7 +123,16 @@ export class Session {
   #noteVoice() {
     if (!this.#vad.detected) return;
     this.#lastVoiceAt = this.#now();
-    if (this.#state === 'LISTENING') this.#setState('CAPTURING');
+    // The user talking over the reply ends the turn (§8.1). Only reachable with
+    // bargeIn on — §5.3 unsubscribes VAD during SPEAKING otherwise — so this
+    // cannot fire on the 丐版 path.
+    if (this.#state === 'SPEAKING') {
+      this.#abortTurn();
+      this.#tts.cancel();
+    }
+    if (this.#state === 'LISTENING' || this.#state === 'SPEAKING') {
+      this.#setState('CAPTURING');
+    }
   }
 
   #checkIdle() {
@@ -144,7 +154,98 @@ export class Session {
     this.#setState('SLEEPING');
   }
 
-  #onSegment(/** @type {Float32Array} */ _samples) { /* Task 12 */ }
+  /** @param {Float32Array} samples */
+  #onSegment(samples) {
+    // Only an idle session takes new input. §5.2 has no arrow back from
+    // THINKING or SPEAKING, and two turns racing would answer one instruction
+    // twice — with two sets of car actions. During SPEAKING with bargeIn on,
+    // #noteVoice has already ended the turn before the segment lands here, so
+    // this is not the path that swallows an interruption.
+    if (this.#state !== 'CAPTURING' && this.#state !== 'LISTENING') return;
+    void this.#turn(samples);
+  }
+
+  /** @param {Float32Array} samples */
+  async #turn(samples) {
+    const gen = ++this.#gen;
+    const ctrl = new AbortController();
+    this.#ctrl = ctrl;
+    this.#setState('THINKING');
+
+    let text;
+    try {
+      text = await this.#stt.transcribe(toInt16(samples), RATE, { signal: ctrl.signal });
+    } catch {
+      // Cancelling is not failing. Reporting a fault here would answer "the
+      // user changed their mind" with a failure report — the same distinction
+      // brain.js draws around chat().
+      if (gen !== this.#gen) return;
+      this.#playEarcon('error');
+      await this.#speakFixed('apiFailed');
+      return this.#endTurn(gen);
+    }
+    if (gen !== this.#gen) return;
+
+    // §6.7 row 1: an empty or garbled transcript never reaches the LLM.
+    if (!text.trim()) {
+      this.#playEarcon('huh');
+      return this.#endTurn(gen);
+    }
+
+    // Brain owns the rest of the turn: the LLM, the validator, the executor,
+    // the earcons and the reply. It speaks through this.speakingTts, which is
+    // what puts the session into SPEAKING for exactly the playback.
+    await this.#brain.handle(text);
+    this.#endTurn(gen);
+  }
+
+  /**
+   * §6.7: if the thing that failed IS the TTS, this line cannot be spoken. The
+   * `error` earcon has already played; do not retry — that is asking the path
+   * just proven dead to report that it is dead.
+   * @param {import('../strings.js').StringKey} key
+   */
+  async #speakFixed(key) {
+    await this.speakingTts.speak(t(this.#config.lang, key)).catch(() => {});
+  }
+
+  /** @param {number} gen */
+  #endTurn(gen) {
+    if (gen !== this.#gen) return;
+    this.#setState('LISTENING');
+  }
+
+  /**
+   * The tts brain.js must be constructed with. SPEAKING has to bracket exactly
+   * the playback — not the whole turn, or §5.3's bargeIn = false row would
+   * unsubscribe VAD for the LLM's thinking time as well.
+   */
+  get speakingTts() {
+    return {
+      /** @param {string} text @param {{ signal?: AbortSignal }} [opts] */
+      speak: async (text, opts) => {
+        // A cancelled turn can still have a continuation running inside it —
+        // brain.handle() resuming after cancel() and reaching its reply. It
+        // must not take the mouth, and it must not take the state machine
+        // with it. #ctrl is null exactly when the last turn was abandoned, so
+        // it, not #gen, is what says "no turn owns this". Reading #gen here
+        // would capture the generation the abort just moved TO, and the zombie
+        // would pass every check below.
+        if (this.#ctrl === null) return;
+        const gen = this.#gen;
+        this.#setState('SPEAKING');
+        try {
+          await this.#tts.speak(text, opts);
+        } finally {
+          // The generation check is the whole fix for the spike's second bug:
+          // an unconditional setState('LISTENING') here undoes the SLEEPING
+          // that `all stop` just set, one tick later and invisibly.
+          if (gen === this.#gen) this.#setState('LISTENING');
+        }
+      },
+      cancel: () => this.#tts.cancel(),
+    };
+  }
 
   /** @param {string} label */
   #onKeyword(label) {
@@ -191,11 +292,14 @@ export class Session {
     this.#setState('SLEEPING');
   }
 
-  /** Task 12 fills this in; the two words already have to be able to ask. */
-  #abortTurn() {}
-
-  /** TEMPORARY, removed in task 12 when speakingTts lands. */
-  enterSpeakingForTest() { this.#setState('SPEAKING'); }
+  /** §4.5's third use: not merely ignore a stale result — cancel the request
+   *  still in flight, and make sure nothing it returns can set a state. */
+  #abortTurn() {
+    this.#gen++;
+    this.#ctrl?.abort();
+    this.#ctrl = null;
+    this.#brain?.cancel();
+  }
 
   // --- plumbing --------------------------------------------------------------
 
