@@ -10,5 +10,5 @@
     "strict": true,
     "types": ["node", "w3c-web-usb"]
   },
-  "include": ["web/**/*.js", "test/**/*.js"]
+  "include": ["web/**/*.js", "web/**/*.d.ts", "test/**/*.js"]
 }
