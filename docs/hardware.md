@@ -325,9 +325,11 @@ Two things the JS side has to know:
   `window`, so a module script cannot see it. A plain `Float32Array` leftover
   buffer is simpler and avoids the trap entirely.
 - `vad.front()` returns the **whole speech segment including its beginning**,
-  because the detector buffers internally (`bufferSizeInSeconds: 30`). If that
-  holds on real speech it removes the need for spec §5.4's separate 500 ms
-  pre-roll ring buffer — worth confirming before that buffer gets built.
+  because the detector buffers internally (`bufferSizeInSeconds: 30`). Spec §5.4
+  was rewritten on 2026-09-15 to depend on this and the separate 500 ms pre-roll
+  ring buffer was dropped — but this still comes from the docs and from silence
+  runs, not from real speech. Confirming it (and picking the buffer size) is
+  calibration item ⑯.
 
 Dev-Mac cost, both engines in one module, 100 ms frames of silence:
 
