@@ -314,9 +314,30 @@ export class Brain {
     // the renewal loop died, and the car drove a second anyway: a hole in
     // §4.4's guarantee reachable from ordinary LLM output. Dropping the rest is
     // right rather than merely ordering them — a turn that says both "go" and
-    // "stop" is a turn whose only safe reading is "stop".
+    // "stop" is a turn whose only safe reading is "stop". It deliberately does
+    // not look at WHERE the stop sits: `[stop, move]` run in order is safe by
+    // itself, but "the user said stop and the model helpfully appended a move"
+    // has exactly that shape, and dropping one extra action costs less than
+    // moving after a stop.
+    //
+    // `cruise` then has to be the last action of the turn. Its renewal loop
+    // has no end condition — executor.cruise() only resolves once something
+    // else bumps the generation — so awaiting it strands everything behind it.
+    // The damage is not that those actions never run: it is that they run
+    // LATE. The next turn's action bumps the generation, the stranded cruise
+    // finally returns, and this loop resumes INSIDE that later turn, running a
+    // stale action that preempts the live one — say "right", drive left,
+    // because "left" was queued behind a cruise ten seconds ago. The
+    // generation counter cannot catch that; it guards the executor's own
+    // loops, not a for-loop here holding a previous turn's array.
     /** @type {Action[]} */
-    const ordered = actions.some((a) => a.kind === 'stop') ? [{ kind: 'stop' }] : actions;
+    let ordered;
+    if (actions.some((a) => a.kind === 'stop')) {
+      ordered = [{ kind: 'stop' }];
+    } else {
+      const cruiseAt = actions.findIndex((a) => a.kind === 'cruise');
+      ordered = cruiseAt === -1 ? actions : actions.slice(0, cruiseAt + 1);
+    }
 
     // Sequential inside, unawaited outside: each action still waits for the
     // previous one's motion to end (which is what restores the ordering the

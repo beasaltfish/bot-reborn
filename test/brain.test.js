@@ -372,6 +372,46 @@ test('handle: actions run one at a time, so the second cannot outrun the first',
     [{ op: 'cruise', drive: 'forward', steer: 'straight' }]);
 });
 
+test('handle: a cruise ends its turn — what follows is dropped, not deferred', async () => {
+  // executor.cruise() has no end condition of its own: it resolves only when
+  // something else bumps the generation. So an action awaited behind it is not
+  // merely delayed — it runs inside a LATER turn and preempts whatever is live
+  // then. Gating the cruise here and resolving it by hand is what that
+  // generation bump looks like from in here; the move must still never run.
+  // The default fake cruise returns immediately, which is exactly why this
+  // hole was invisible until the fake could hang (spec §6.2).
+  const h = brainHarness({ gateMotion: true, reply: say(null, [
+    { id: 'c1', name: 'cruise', args: { drive: 'forward', steer: 'straight' } },
+    { id: 'c2', name: 'move', args: { steps: [{ drive: 'forward', steer: 'left', duration_ms: 600 }] } },
+  ]) });
+
+  await h.brain.handle('一直往前开，然后往左挪一下');
+  await flushMicrotasks();
+  assert.deepEqual(h.events.filter((e) => e.op === 'cruise'),
+    [{ op: 'cruise', drive: 'forward', steer: 'straight' }]);
+  assert.deepEqual(h.events.filter((e) => e.op === 'move'), []);
+
+  h.motionGates[0].resolve();
+  await flushMicrotasks();
+  assert.deepEqual(h.events.filter((e) => e.op === 'move'), [],
+    'the move behind the cruise must be dropped, not deferred into a later turn');
+});
+
+test('handle: a stop anywhere in the turn is the whole turn, even last (spec §6.2)', async () => {
+  // Not just [move, stop]: [stop, move] is dropped too. Run in order that one
+  // is safe by itself, but it is the same shape as "the user said stop and the
+  // model appended a move", and that one must not reach the wire.
+  const h = brainHarness({ reply: say(null, [
+    { id: 'c1', name: 'stop', args: {} },
+    { id: 'c2', name: 'move', args: { steps: [{ drive: 'forward', steer: 'straight', duration_ms: 600 }] } },
+  ]) });
+
+  await h.brain.handle('停下，然后往前挪一点');
+  await flushMicrotasks();
+  assert.deepEqual(h.events.filter((e) => e.op === 'stop' || e.op === 'move'),
+    [{ op: 'stop' }]);
+});
+
 test('handle: content AND tool_calls both happen, action first (spec §6.3)', async () => {
   const h = brainHarness({ reply: say('好，我往前开两秒，然后给你讲个笑话。', [
     { id: 'c1', name: 'move', args: { steps: [{ drive: 'forward', steer: 'straight', duration_ms: 2000 }] } },
