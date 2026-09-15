@@ -11,8 +11,16 @@ dist/
 # reopened by a later finding, and a probe that is already calibrated against
 # this phone is worth more than the shelf space.
 
-# sherpa-onnx models and WASM: large, fetched by script, not vendored
-web/models/
+# web/models/ is deliberately VENDORED, not ignored — the comment that used to
+# sit here claimed the bundle was "fetched by script" and no such script has
+# ever existed. Upstream ships no prebuilt KWS wasm in any release (checked
+# v1.12.27 -> v1.13.8), and this build is patched on top of that anyway: the
+# VAD symbols are exported from wasm/kws/CMakeLists.txt so both engines live in
+# one binary. Reproducing it means emsdk 4.0.23 and a source build, not a
+# download — recipe in docs/hardware.md. 18 MB once; the model release and the
+# emsdk version are both pinned, so it changes about never. While it was
+# ignored, `git clone && wrangler pages deploy` shipped a site whose models 404
+# at runtime, with nothing failing at build time to say so.
 
 # Connectivity-test fixture audio: each person's own voice, recorded locally
 # per web/fixtures/README.md, never someone else's sample.
