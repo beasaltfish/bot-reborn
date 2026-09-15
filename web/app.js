@@ -1,7 +1,7 @@
 // Entry point: wiring only (spec §10). Every decision here is made somewhere
 // else; if a branch shows up in this file it belongs in session.js.
 
-import { loadConfig } from './config.js';
+import { loadConfig, saveConfig } from './config.js';
 import { t } from './strings.js';
 import { createUi } from './ui.js';
 import { Ftdi } from './ftdi.js';
@@ -97,6 +97,10 @@ async function start() {
       tts: session.speakingTts,
       earcon: session.earcon,
       config,
+      // §11.1: set by voice, invisible afterwards. If it is not written down
+      // here it is not sticky at all, and the settings page (part 3) would have
+      // nothing to show or reset.
+      onReplyLangChange: () => saveConfig(config),
     }));
     session.start();
 

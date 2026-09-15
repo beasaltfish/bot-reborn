@@ -209,7 +209,7 @@ function isValidStep(step) {
 // --- One turn --------------------------------------------------------------
 
 export class Brain {
-  #llm; #executor; #tts; #earcon; #config;
+  #llm; #executor; #tts; #earcon; #config; #onReplyLangChange;
   /** @type {AbortController | null} */
   #turn = null;
   /** @type {object[]} */ #history = [];
@@ -221,6 +221,7 @@ export class Brain {
    *   tts: { speak(text: string, opts?: { signal?: AbortSignal }): Promise<void> },
    *   earcon: (name: import('./audio/earcon.js').EarconName) => void,
    *   config: { lang: 'en' | 'zh', replyLang: 'zh' | 'en' | null, bargeIn: boolean },
+   *   onReplyLangChange?: (lang: 'en' | 'zh' | null) => void,
    * }} deps
    */
   constructor(deps) {
@@ -229,6 +230,7 @@ export class Brain {
     this.#tts = deps.tts;
     this.#earcon = deps.earcon;
     this.#config = deps.config;
+    this.#onReplyLangChange = deps.onReplyLangChange ?? (() => {});
   }
 
   get history() { return this.#history; }
@@ -295,7 +297,12 @@ export class Brain {
 
     if (replyLang !== null) {
       // 'auto' is the escape hatch: it means "no recorded preference", i.e. null.
-      this.#config.replyLang = replyLang === 'auto' ? null : replyLang;
+      const next = replyLang === 'auto' ? null : replyLang;
+      this.#config.replyLang = next;
+      // The caller owns persistence. Brain must not know that a config lives in
+      // localStorage — but it must also not be the reason a state §11.1 calls
+      // sticky quietly fails to stick.
+      this.#onReplyLangChange(next);
     }
 
     // Spec §6.3: actions and content are not mutually exclusive. Dispatch

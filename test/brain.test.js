@@ -249,8 +249,13 @@ function brainHarness({ connected = true, reply, gateMotion = false } = {}) {
   const earcon = (/** @type {any} */ name) => events.push({ op: 'earcon', name });
   /** @type {{ lang: 'en' | 'zh', replyLang: 'en' | 'zh' | null, bargeIn: boolean }} */
   const config = { lang: 'zh', replyLang: null, bargeIn: true };
-  return { events, executor, llm, tts, config, motionGates,
-    brain: new Brain({ llm, executor, tts, earcon, config }) };
+  /** @type {Array<'en' | 'zh' | null>} */
+  const langChanges = [];
+  return { events, executor, llm, tts, config, motionGates, langChanges,
+    brain: new Brain({
+      llm, executor, tts, earcon, config,
+      onReplyLangChange: (lang) => langChanges.push(lang),
+    }) };
 }
 
 /** @param {any} content @param {any[]} [tool_calls] */
@@ -583,4 +588,33 @@ test('cancel(): the fixed lines are cancellable too, not just the LLM reply', as
     new Promise((r) => setTimeout(() => r('still speaking'), 50)),
   ]);
   assert.equal(outcome, 'finished');
+});
+
+test('a recorded reply language is handed out, not just written into the object', async () => {
+  // Brain used to mutate the caller's config and stop there. That was fine
+  // while the config was a literal; it now comes from localStorage, and §11.1's
+  // whole argument is that this preference is sticky and invisible. A sticky
+  // state that dies on the next refresh is neither.
+  const h = brainHarness({ reply: say(null, [
+    { id: 'c1', name: 'set_reply_language', args: { lang: 'en' } },
+  ]) });
+  await h.brain.handle('from now on speak English');
+  assert.deepEqual(h.langChanges, ['en']);
+  assert.equal(h.config.replyLang, 'en');
+});
+
+test('"auto" is handed out as null — the same value the config stores', async () => {
+  const h = brainHarness({ reply: say(null, [
+    { id: 'c1', name: 'set_reply_language', args: { lang: 'auto' } },
+  ]) });
+  h.config.replyLang = 'zh';
+  await h.brain.handle('go back to following me');
+  assert.deepEqual(h.langChanges, [null]);
+  assert.equal(h.config.replyLang, null);
+});
+
+test('a turn that records nothing does not touch the stored preference', async () => {
+  const h = brainHarness({ reply: say('ok') });
+  await h.brain.handle('hello');
+  assert.deepEqual(h.langChanges, []);
 });
