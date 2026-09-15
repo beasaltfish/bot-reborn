@@ -633,8 +633,8 @@ keep-alive on.
 
 ### One log line to ignore
 
-`⚠️ 播放期间 VAD 切出了一段（5.02 s）——安静段，只可能是它自己` is a
-mislabel, not a contradiction. A VAD segment is only emitted 0.8 s after speech
+`⚠️ the VAD cut a segment during playback (5.02 s) — the quiet window, so it
+can only be itself` is a mislabel, not a contradiction. A VAD segment is only emitted 0.8 s after speech
 ends, so the user's `talk` utterance is popped once the script has moved on to
 `settle`, and the label is taken from the phase at pop time. The verdict itself
 counts per-frame, per-window, and is unaffected.

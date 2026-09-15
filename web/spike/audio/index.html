@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>音频链路 spike（探针）</title>
+<title>Audio-chain spike (probe)</title>
 <link rel="stylesheet" href="../../style.css">
 <style>
   textarea { width: 100%; box-sizing: border-box; padding: 8px;
@@ -34,24 +34,27 @@
 </head>
 <body>
 <main>
-  <h1>音频链路 spike</h1>
+  <h1>Audio-chain spike</h1>
   <p class="hint">
-    <b>一次性验证代码，不进 <code>web/</code> 的产品路径</b>（但留在仓库里）。<b>不接 LLM，不接车。</b>
-    一条 getUserMedia 同时喂 KWS 和 VAD，VAD 切出一句就送 STT，转写出来再让 TTS
-    念回去。目的是回答五个问题：VAD 合并构建可不可行、KWS+VAD 一起跑的 CPU、
-    真麦克风下的转写质量（⑩）、TTS 的中英混说（⑪）、以及打断能不能成立（§7.3）。
+    <b>Throwaway verification code, not on <code>web/</code>'s product path</b>
+    (but kept in the repo). <b>No LLM, no car.</b> One getUserMedia feeds both
+    KWS and VAD; a segment the VAD cuts goes to STT, and the transcript is read
+    back by TTS. It answers five questions: whether a combined VAD build works
+    at all, what KWS and VAD cost together, transcription quality on a real
+    phone mic (⑩), TTS on a code-switched sentence (⑪), and whether barge-in is
+    possible here at all (§7.3).
   </p>
-  <p id="boot">正在加载模型……</p>
+  <p id="boot">Loading the model…</p>
   <p id="cfgWarn" class="result error"></p>
 
   <hr>
   <div id="state">—</div>
   <div id="transcript"></div>
   <div class="controls" style="margin-top:12px">
-    <button id="start" class="primary" disabled>开始</button>
-    <button id="stop" disabled>停止</button>
-    <button id="say">让它念一段（单测 TTS）</button>
-    <button id="probe" class="primary" disabled>打断自检（跟着提示做）</button>
+    <button id="start" class="primary" disabled>Start</button>
+    <button id="stop" disabled>Stop</button>
+    <button id="say">Make it speak (TTS on its own)</button>
+    <button id="probe" class="primary" disabled>Barge-in self-test (follow the prompts)</button>
   </div>
   <div id="probeBar" hidden>
     <div id="probeCue"></div>
@@ -61,96 +64,111 @@
   </div>
 
   <hr>
-  <h2>打断与自触发（§7.3 的前提）</h2>
+  <h2>Barge-in and self-triggering (what §7.3 rests on)</h2>
   <p class="hint">
-    TTS 播放期间，管线照常喂 KWS 和 VAD，但<b>不按它们的结论行动</b>，只记账。
-    要判的是两件事，缺一不可：机器人自己的声音<b>不能</b>把 VAD 触发，而你的声音
-    <b>必须</b>还进得来。一个混在一起的窗口里有三种声源——没消干净的回声、你、
-    房间底噪——分不开这两件事：你照着提示插话，会被记成回声漏音；你闭嘴不说，
-    又会拿回声当成「信号进得来」判成通过。<b>所以自检是分段的，屏幕会告诉你什么
-    时候该说话。</b>下面这几行只跟彼此比才有意义，绝对 dB 值没用。
+    While TTS is playing, the pipeline keeps feeding KWS and VAD but
+    <b>does not act on what they conclude</b> — it only counts. Two things have
+    to hold, and neither on its own is enough: the robot's own voice must
+    <b>not</b> trigger the VAD, and your voice must <b>still</b> get through. A
+    single mixed window contains three sources — echo that survived the
+    canceller, you, and the room — and cannot separate those two questions:
+    talking over it as instructed scores as echo leaking in, and staying quiet
+    scores as a pass on the strength of echo alone. <b>So the self-test runs to
+    a script, and the screen tells you when to speak.</b> The rows below only
+    mean anything compared with each other; the absolute dB values are
+    useless.
   </p>
-  <div class="stat"><b>① 底噪（没 TTS，你安静）</b><span id="pFloor">—</span></div>
-  <div class="stat"><b>② 对照段（没 TTS，你念那句）</b><span id="pControl">—</span></div>
-  <div class="stat"><b>④ 安静段（它在念，你安静）</b><span id="pQuiet">—</span></div>
-  <div class="stat"><b>⑤ 说话段（它在念，你念那句）</b><span id="pTalk">—</span></div>
-  <div class="stat"><b>⑥ 收尾段（你又安静了）</b><span id="pSettle">—</span></div>
-  <div class="stat"><b>你的声音抬高了（⑤−④）</b><span id="pGain">—</span></div>
-  <div class="stat"><b>回声残余（④−①）</b><span id="pResidue">—</span></div>
-  <div class="stat"><b>判定</b><span id="aecVerdict" class="verdict">—</span></div>
+  <div class="stat"><b>① noise floor (no TTS, you silent)</b><span id="pFloor">—</span></div>
+  <div class="stat"><b>② control (no TTS, you read the line)</b><span id="pControl">—</span></div>
+  <div class="stat"><b>④ quiet (it is speaking, you silent)</b><span id="pQuiet">—</span></div>
+  <div class="stat"><b>⑤ talk (it is speaking, you read the line)</b><span id="pTalk">—</span></div>
+  <div class="stat"><b>⑥ settle (you are silent again)</b><span id="pSettle">—</span></div>
+  <div class="stat"><b>what your voice added (⑤−④)</b><span id="pGain">—</span></div>
+  <div class="stat"><b>echo residue (④−①)</b><span id="pResidue">—</span></div>
+  <div class="stat"><b>Verdict</b><span id="aecVerdict" class="verdict">—</span></div>
 
   <p class="hint" style="margin-top:14px">
-    电平只能说明你的声音<b>进不进得来</b>，说明不了进来的还<b>能不能听</b>——AEC
-    在消回声的时候通常会连人声一起削掉一截，削完 VAD 照样过阈值，但送进 STT 就开始
-    错字。所以同一句话念两遍，两遍都送 STT：② 是安静环境的对照组，⑤ 是它在旁边响的
-    时候。没有对照组的话，一个烂转写分不清是 AEC 削的，还是这只麦克风本来就烂。
+    A level says whether your voice <b>gets through</b>, not whether what got
+    through is <b>still intelligible</b>. Cancelling echo usually takes a bite
+    out of the speech along with it — enough for the VAD to still clear its
+    threshold while STT starts dropping characters. So the same sentence is read
+    twice and both readings go to STT: ② is the control, recorded in silence,
+    and ⑤ is the one with the robot talking next to you. Without the control, a
+    bad transcript cannot be told apart from a microphone that was simply bad to
+    begin with.
   </p>
-  <div class="stat"><b>念的那句（参考）</b><span id="pRef">—</span></div>
-  <div class="stat"><b>② 对照转写（没 TTS）</b><span id="pSttControl">—</span></div>
-  <div class="stat"><b>⑤ 播放中转写</b><span id="pSttTalk">—</span></div>
-  <div class="stat"><b>转写判定</b><span id="pSttVerdict" class="verdict">—</span></div>
+  <div class="stat"><b>the line you read (reference)</b><span id="pRef">—</span></div>
+  <div class="stat"><b>② control transcript (no TTS)</b><span id="pSttControl">—</span></div>
+  <div class="stat"><b>⑤ transcript over playback</b><span id="pSttTalk">—</span></div>
+  <div class="stat"><b>transcription verdict</b><span id="pSttVerdict" class="verdict">—</span></div>
 
   <p class="hint" style="margin-top:14px">
-    下面这组是整段会话的粗账，不分声源，看个趋势用；判定不看它们。
+    The group below is a rough tally over the whole session, with no attempt to
+    separate sources. Useful as a trend; the verdict does not read it.
   </p>
-  <div class="stat"><b>TTS 播放累计</b><span id="spkTime">—</span></div>
-  <div class="stat"><b>播放期间 VAD 响过的帧（不分声源）</b><span id="selfVad">—</span></div>
-  <div class="stat"><b>播放期间 KWS 命中</b><span id="selfKws">—</span></div>
-  <div class="stat"><b>输入电平 · 播放中</b><span id="lvlSpeak">—</span></div>
-  <div class="stat"><b>输入电平 · 平时</b><span id="lvlIdle">—</span></div>
+  <div class="stat"><b>total TTS playback</b><span id="spkTime">—</span></div>
+  <div class="stat"><b>VAD frames during playback (any source)</b><span id="selfVad">—</span></div>
+  <div class="stat"><b>KWS hits during playback</b><span id="selfKws">—</span></div>
+  <div class="stat"><b>input level · during playback</b><span id="lvlSpeak">—</span></div>
+  <div class="stat"><b>input level · otherwise</b><span id="lvlIdle">—</span></div>
 
   <hr>
-  <h2>开销</h2>
-  <div class="stat"><b>已运行</b><span id="elapsed">—</span></div>
-  <div class="stat"><b>是否被冻结</b><span id="alive">—</span></div>
-  <div class="stat"><b>KWS 每帧</b><span id="kwsCost">—</span></div>
-  <div class="stat"><b>VAD 每帧</b><span id="vadCost">—</span></div>
-  <div class="stat"><b>合计 CPU</b><span id="totalCost">—</span></div>
-  <div class="stat"><b>唤醒 / 转写 次数</b><span id="counts">0 / 0</span></div>
-  <div class="stat"><b>电量</b><span id="battery">—</span></div>
+  <h2>Cost</h2>
+  <div class="stat"><b>Elapsed</b><span id="elapsed">—</span></div>
+  <div class="stat"><b>Frozen?</b><span id="alive">—</span></div>
+  <div class="stat"><b>KWS per frame</b><span id="kwsCost">—</span></div>
+  <div class="stat"><b>VAD per frame</b><span id="vadCost">—</span></div>
+  <div class="stat"><b>Total CPU</b><span id="totalCost">—</span></div>
+  <div class="stat"><b>wakes / transcripts</b><span id="counts">0 / 0</span></div>
+  <div class="stat"><b>Battery</b><span id="battery">—</span></div>
 
   <hr>
-  <h2>保活音（量它把底噪抬高多少）</h2>
+  <h2>Keep-alive sound (measuring how far it lifts the noise floor)</h2>
   <p class="hint">
-    <code>spike/kws/</code> 证明了：黑屏时播一段极轻的声音，麦克风就保得住，三只钟
-    全走满。代价是功放一直通电，<b>屋里的底噪会被抬高</b>——而底噪正是打断判定里
-    ① 那一行，上次量到 −75.5 dB，是在<b>没有保活音</b>的条件下。<br>
-    在这里把保活音打开，再跑一次「打断自检」，对比 ① 和 ④ 两行，就知道保活音吃掉了
-    多少余量。这一页只播声音，不做保活（自检全程屏幕亮着，不需要）。
+    <code>spike/kws/</code> established that playing something very quiet while
+    the screen is off keeps the microphone, with all three clocks running to the
+    end. The price is an amplifier that never powers down, which <b>lifts the
+    noise floor of the room</b> — and the noise floor is row ① of the barge-in
+    verdict, last measured at −75.5 dB <b>without</b> any keep-alive.<br>
+    Turn the keep-alive on here, run the barge-in self-test again, and compare
+    rows ① and ④ to see how much headroom it ate. This page only plays the
+    sound; it does not do the keeping-alive (the self-test runs with the screen
+    on throughout, so nothing needs keeping alive).
   </p>
-  <label><input id="keepAlive" type="checkbox"> 开启保活音</label>
+  <label><input id="keepAlive" type="checkbox"> Enable the keep-alive sound</label>
   <div class="row">
-    <label>波形
+    <label>Waveform
       <select id="kaWave">
-        <option value="breath" selected>呼吸声（220 Hz，4 秒起伏）</option>
-        <option value="hum">60 Hz 低频嗡</option>
-        <option value="high">18 kHz 高频</option>
+        <option value="breath" selected>breathing (220 Hz, a swell every 4 s)</option>
+        <option value="hum">60 Hz hum</option>
+        <option value="high">18 kHz</option>
       </select>
     </label>
-    <label>音量 dBFS
+    <label>Level, dBFS
       <input id="kaDb" type="number" step="1" value="-40" inputmode="numeric"></label>
   </div>
   <audio id="ka" loop playsinline preload="auto"></audio>
 
   <hr>
-  <h2>参数</h2>
-  <p class="hint">关键词每行一条，点开始前会先对 tokens.txt 校验（写错会让 wasm 直接 abort）。</p>
+  <h2>Parameters</h2>
+  <p class="hint">One keyword per line. They are validated against tokens.txt before Start — a wrong token aborts the wasm module outright.</p>
   <textarea id="keywords" rows="4" spellcheck="false">HH EY1 S T IY1 V AH0 N @hey_steven
 h ēi s ī t í w én @hey_steven_zh
 AO1 L S T AA1 P #0.15 @all_stop
 ào s ī t ā p ǔ #0.15 @all_stop_zh</textarea>
   <div class="row">
-    <label>VAD 阈值<input id="vadThreshold" type="number" step="0.05" value="0.5" inputmode="decimal"></label>
-    <label>静默结束 s<input id="minSilence" type="number" step="0.1" value="0.8" inputmode="decimal"></label>
-    <label>最短语音 s<input id="minSpeech" type="number" step="0.05" value="0.25" inputmode="decimal"></label>
+    <label>VAD threshold<input id="vadThreshold" type="number" step="0.05" value="0.5" inputmode="decimal"></label>
+    <label>end-of-speech silence, s<input id="minSilence" type="number" step="0.1" value="0.8" inputmode="decimal"></label>
+    <label>min speech, s<input id="minSpeech" type="number" step="0.05" value="0.25" inputmode="decimal"></label>
   </div>
   <p class="hint">
-    静默 0.8 s 是 spec §5.2 的值（sherpa 默认 0.5）。最短语音 0.25 s 对应 §5.4
-    说的「VAD 要连续听到约 300 ms 才判定」。
+    0.8 s of silence is spec §5.2's value (sherpa defaults to 0.5). The 0.25 s
+    minimum matches §5.4's "the VAD needs about 300 ms of continuous speech
+    before it decides".
   </p>
 
   <hr>
-  <div class="controls"><button id="copy">复制日志</button></div>
+  <div class="controls"><button id="copy">Copy the log</button></div>
   <pre id="log"></pre>
 </main>
 <script type="module" src="main.js"></script>

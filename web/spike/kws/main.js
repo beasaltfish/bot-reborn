@@ -34,7 +34,7 @@ async function loadTokens() {
   const text = await (await fetch(MODELS + 'tokens.txt')).text();
   TOKENS = new Set(
       text.split('\n').map((l) => l.split(' ')[0]).filter(Boolean));
-  log(`tokens.txt: ${TOKENS.size} 个 token`);
+  log(`tokens.txt: ${TOKENS.size} tokens`);
 }
 
 function checkKeywords(text) {
@@ -175,9 +175,9 @@ let kaOsc = null, kaLfo = null, kaGain = null, kaMute = null;
 let kaOn = false, kaWave = 'hum', kaDb = -40, kaOnlyHidden = false;
 
 function kaDescribe() {
-  if (!kaOn) return '未开启（对照组）';
-  const names = { hum: '60 Hz 嗡', breath: '呼吸声', high: '18 kHz' };
-  return `${names[kaWave]} / ${kaDb} dBFS` + (kaOnlyHidden ? ' / 只在黑屏时播' : '');
+  if (!kaOn) return 'off (control run)';
+  const names = { hum: '60 Hz hum', breath: 'breathing', high: '18 kHz' };
+  return `${names[kaWave]} / ${kaDb} dBFS` + (kaOnlyHidden ? ' / only while the screen is off' : '');
 }
 
 /**
@@ -193,26 +193,26 @@ function startKeepAliveElement() {
   kaDb = Number($('kaDb').value);
   kaOnlyHidden = $('kaOnlyHidden').checked;
   $('kaState').textContent = kaDescribe();
-  if (!kaOn) { log('保活音：关（对照组）'); return; }
+  if (!kaOn) { log('keep-alive: off (control run)'); return; }
 
   const el = $('ka');
   if (el.src) URL.revokeObjectURL(el.src);
   el.src = keepAliveWavUrl(kaWave, dbToAmp(kaDb));
   el.volume = 1;   // the quietness lives in the samples, not here
   el.play().then(() => {
-    log(`🔈 保活音已播放：${kaDescribe()}`);
+    log(`🔈 keep-alive playing: ${kaDescribe()}`);
     if (kaOnlyHidden && document.visibilityState === 'visible') kaSetPlaying(false);
   }).catch((err) => {
-    $('kaState').textContent = '❌ 播放失败：' + err.message;
-    log('❌ 保活音播放失败：' + err.message + '（这轮不算保活组）');
+    $('kaState').textContent = '❌ playback failed: ' + err.message;
+    log('❌ keep-alive playback failed: ' + err.message + ' (this run does not count as a keep-alive run)');
   });
   if (navigator.mediaSession) {
     try {
       navigator.mediaSession.metadata = new MediaMetadata({
-        title: 'KWS 保活音', artist: 'bot-reborn spike',
+        title: 'KWS keep-alive', artist: 'bot-reborn spike',
       });
       navigator.mediaSession.playbackState = 'playing';
-    } catch (err) { log('MediaSession 设置失败：' + err.message); }
+    } catch (err) { log('MediaSession setup failed: ' + err.message); }
   }
 }
 
@@ -223,8 +223,8 @@ function startKeepAliveOsc() {
   // A carrier above the context's Nyquist frequency does not go silent, it
   // folds back down into an audible whistle — worse than not playing it.
   if (w.carrier * 2 >= ctx.sampleRate) {
-    log(`振荡器跳过：${w.carrier} Hz 高过 ${ctx.sampleRate} Hz context 的上限，` +
-        '会折回成啸叫。这一档只有 <audio> 在响');
+    log(`oscillator skipped: ${w.carrier} Hz is above what a ${ctx.sampleRate} Hz ` +
+        'context can represent and would alias into a squeal. Only <audio> is sounding here');
     return;
   }
   const amp = dbToAmp(kaDb);
@@ -247,7 +247,7 @@ function startKeepAliveOsc() {
   kaOsc.connect(kaGain).connect(kaMute).connect(ctx.destination);
   kaOsc.start();
   if (kaOnlyHidden && document.visibilityState === 'visible') kaSetPlaying(false);
-  log(`振荡器已挂上采集 context（${w.carrier} Hz）`);
+  log(`oscillator attached to the capture context (${w.carrier} Hz)`);
 }
 
 /** Both halves at once: the element carries the media session, the oscillator
@@ -256,7 +256,7 @@ function kaSetPlaying(on) {
   if (!kaOn) return;
   const el = $('ka');
   if (on) {
-    el.play().catch((err) => log('❌ 黑屏后恢复保活音失败：' + err.message));
+    el.play().catch((err) => log('❌ could not resume the keep-alive after the screen went off: ' + err.message));
   } else {
     el.pause();
   }
@@ -293,13 +293,13 @@ const st = {
 
 async function initBattery() {
   if (!navigator.getBattery) {
-    $('battery').textContent = '不可用（自己看设置里的电量）';
+    $('battery').textContent = 'unavailable (read the battery level in Settings yourself)';
     return;
   }
   const b = await navigator.getBattery();
   st.batt = b;
   st.battStart = b.level;
-  log(`电量起点 ${fmt(b.level * 100, 0)}%${b.charging ? '（充电中！耗电这项作废）' : ''}`);
+  log(`battery starts at ${fmt(b.level * 100, 0)}%${b.charging ? ' (CHARGING — the drain figure is void)' : ''}`);
 }
 
 function render() {
@@ -310,22 +310,22 @@ function render() {
   const avg = st.frames ? st.costSum / st.frames : 0;
 
   $('elapsed').textContent =
-      `${fmt(wall, 0)} s 墙钟 / ${fmt(audio, 0)} s 音频钟 / ${fmt(fed, 0)} s 已喂给 KWS`;
+      `${fmt(wall, 0)} s wall / ${fmt(audio, 0)} s audio clock / ${fmt(fed, 0)} s fed to KWS`;
   $('alive').textContent = fed >= wall - 5
-      ? '✅ 音频没断过'
-      : `⚠️ 少了 ${fmt(wall - fed, 0)} s（音频钟 ${fmt(wall - audio, 0)} s）`;
+      ? '✅ audio never dropped out'
+      : `⚠️ ${fmt(wall - fed, 0)} s missing (audio clock ${fmt(wall - audio, 0)} s)`;
   $('cost').textContent =
-      `均 ${fmt(avg, 2)} ms / 峰 ${fmt(st.costMax, 2)} ms，帧长 ${st.frameMs} ms ` +
-      `→ 占 CPU ${fmt(avg / st.frameMs * 100, 1)}%（超时帧 ${st.slow}）`;
+      `mean ${fmt(avg, 2)} ms / peak ${fmt(st.costMax, 2)} ms, frame ${st.frameMs} ms ` +
+      `→ ${fmt(avg / st.frameMs * 100, 1)}% of one core (frames over budget: ${st.slow})`;
   $('hits').textContent = String(st.hits);
   $('lag').textContent =
-      `最大积压 ${fmt(st.maxLag, 2)} s，>2 s 的投递断档 ${st.gaps} 次`;
+      `worst backlog ${fmt(st.maxLag, 2)} s, delivery gaps over 2 s: ${st.gaps}`;
   $('kaState').textContent = kaDescribe();
   if (st.batt) {
     const drop = (st.battStart - st.batt.level) * 100;
     $('battery').textContent =
-        `${fmt(st.batt.level * 100, 0)}%（掉了 ${fmt(drop, 0)}%）` +
-        (st.batt.charging ? ' — 充电中，这数没用' : '');
+        `${fmt(st.batt.level * 100, 0)}% (down ${fmt(drop, 0)}%)` +
+        (st.batt.charging ? ' — charging, so this number is useless' : '');
   }
   // Survives a reload, and is readable after the phone has been face-down for
   // half an hour with the screen off and nothing repainting.
@@ -361,7 +361,7 @@ function downsample(input, from) {
 function onFrame(e) {
   if (e.data.hello) {
     st.frameMs = Math.round(e.data.size / e.data.sampleRate * 1000);
-    log(`worklet: ${e.data.sampleRate} Hz，帧 ${e.data.size} 样本 = ${st.frameMs} ms`);
+    log(`worklet: ${e.data.sampleRate} Hz, frame ${e.data.size} samples = ${st.frameMs} ms`);
     return;
   }
   if (!st.running) return;
@@ -369,7 +369,7 @@ function onFrame(e) {
   const now = Date.now();
   if (st.lastRecv && now - st.lastRecv > 2000) {
     st.gaps++;
-    log(`⚠️ 投递断档 ${fmt((now - st.lastRecv) / 1000, 1)} s`);
+    log(`⚠️ delivery gap of ${fmt((now - st.lastRecv) / 1000, 1)} s`);
   }
   st.lastRecv = now;
   st.maxLag = Math.max(st.maxLag, ctx.currentTime - e.data.tEnd);
@@ -382,7 +382,7 @@ function onFrame(e) {
     const r = kws.getResult(stream);
     if (r.keyword.length > 0) {
       st.hits++;
-      log(`🎯 命中 #${st.hits}: ${JSON.stringify(r)}`);
+      log(`🎯 hit #${st.hits}: ${JSON.stringify(r)}`);
       kws.reset(stream);  // required right after a hit
     }
   }
@@ -395,13 +395,13 @@ function onFrame(e) {
 }
 
 async function requestWakeLock() {
-  if (!navigator.wakeLock) { log('没有 Wake Lock API'); return; }
+  if (!navigator.wakeLock) { log('no Wake Lock API here'); return; }
   try {
     wakeLock = await navigator.wakeLock.request('screen');
-    log('Wake Lock 已获取');
-    wakeLock.addEventListener('release', () => log('Wake Lock 被释放'));
+    log('Wake Lock acquired');
+    wakeLock.addEventListener('release', () => log('Wake Lock was released'));
   } catch (err) {
-    log('Wake Lock 失败: ' + err.message);
+    log('Wake Lock failed: ' + err.message);
   }
 }
 
@@ -420,7 +420,7 @@ document.addEventListener('visibilitychange', () => {
 async function start() {
   const bad = checkKeywords($('keywords').value);
   if (bad.length) {
-    log(`❌ 这些 token 不在 tokens.txt 里，会让 wasm 直接 abort：${bad.join(' ')}`);
+    log(`❌ these tokens are not in tokens.txt and would abort the wasm module outright: ${bad.join(' ')}`);
     return;
   }
 
@@ -429,7 +429,7 @@ async function start() {
   startKeepAliveElement();
   // The permission prompt can sit there for a while, and until it is answered
   // the page has nothing to show — which looks exactly like a dead button.
-  log('请求麦克风权限…（等下面的系统弹窗，点「允许」）');
+  log('requesting microphone permission… (wait for the system prompt below and allow it)');
   try {
     micStream = await navigator.mediaDevices.getUserMedia({
       // Copied from spec §5.1 on purpose: the cost we want is the cost under
@@ -443,13 +443,13 @@ async function start() {
       ctx = new AudioContext();
     }
     if (ctx.sampleRate !== TARGET_RATE) {
-      log(`⚠️ 拿不到 16 kHz，实际 ${ctx.sampleRate} Hz，在主线程降采样`);
+      log(`⚠️ could not get 16 kHz; actual rate is ${ctx.sampleRate} Hz, resampling on the main thread`);
     }
     await ctx.audioWorklet.addModule('capture-worklet.js');
 
     kws = createSpotter();
     stream = kws.createStream();
-    log('spotter 已创建');
+    log('spotter created');
 
     node = new AudioWorkletNode(ctx, 'capture');
     node.port.onmessage = onFrame;
@@ -470,7 +470,7 @@ async function start() {
     st.lastRecv = 0;
     await requestWakeLock();
     await initBattery();
-    log('▶︎ 开始。息屏放 30 分钟，回来按「停止」再读数。');
+    log('▶︎ started. Lock the screen for 30 minutes, come back, press Stop, then read the figures.');
     $('stop').disabled = false;
   } catch (err) {
     log('❌ ' + err.message);
@@ -487,7 +487,7 @@ function stop() {
   wakeLock?.release();
   wakeLock = null;
   render();
-  log('■ 停止。四个数在上面；把它们抄进 docs/hardware.md。');
+  log('■ stopped. The four figures are above; copy them into docs/hardware.md.');
   $('stop').disabled = true;
   $('start').disabled = false;
 }
@@ -505,9 +505,9 @@ $('stop').onclick = stop;
 // media session, the system stopping it) explains a failed run that would
 // otherwise look like the keep-alive simply not working.
 $('ka').addEventListener('pause', () => {
-  if (kaOn) log('⚠️ 保活音被暂停了 —— 系统或别的应用抢走了播放');
+  if (kaOn) log('⚠️ the keep-alive got paused — the system or another app took playback away');
 });
-$('ka').addEventListener('error', () => log('❌ 保活音出错'));
+$('ka').addEventListener('error', () => log('❌ keep-alive errored'));
 // Comparing three waveforms by ear should not cost three microphone grants and
 // three model loads. These play sound and nothing else.
 //
@@ -535,8 +535,8 @@ function auditionElement(db) {
   el.src = keepAliveWavUrl(wave, dbToAmp(db));
   el.volume = 1;
   el.play()
-      .then(() => audState(`▶ <audio> 在放：${wave} / ${db} dBFS —— 贴耳朵听`))
-      .catch((err) => audState('❌ <audio> 播放失败：' + err.message));
+      .then(() => audState(`▶ <audio> playing: ${wave} / ${db} dBFS — put your ear to the speaker`))
+      .catch((err) => audState('❌ <audio> playback failed: ' + err.message));
 }
 
 function auditionOsc(db) {
@@ -565,13 +565,13 @@ function auditionOsc(db) {
   }
   audOsc.connect(g).connect(audCtx.destination);
   audOsc.start();
-  audState(`▶ 振荡器在放：${wave} / ${db} dBFS（context ${audCtx.sampleRate} Hz）`);
+  audState(`▶ oscillator playing: ${wave} / ${db} dBFS (context ${audCtx.sampleRate} Hz)`);
 }
 
 $('kaAudition').onclick = () => auditionElement(Number($('kaDb').value));
 $('kaAuditionOsc').onclick = () => auditionOsc(Number($('kaDb').value));
 $('kaAuditionLoud').onclick = () => auditionElement(-20);
-$('kaAuditionStop').onclick = () => { stopAudition(); audState('■ 停止试听'); };
+$('kaAuditionStop').onclick = () => { stopAudition(); audState('■ audition stopped'); };
 $('copy').onclick = () => navigator.clipboard.writeText(
     $('log').textContent + '\n\n' + localStorage.getItem('kws-spike'));
 
@@ -588,12 +588,12 @@ $('copy').onclick = () => navigator.clipboard.writeText(
     if (r.name.includes('/models/kws/')) bytes += r.transferSize || 0;
   }
   $('boot').textContent =
-      `加载完毕：${fmt(dt / 1000, 1)} s，实传 ${fmt(bytes / 1048576, 2)} MB` +
-      (bytes === 0 ? '（命中缓存，看第一次的数）' : '');
+      `loaded in ${fmt(dt / 1000, 1)} s, ${fmt(bytes / 1048576, 2)} MB actually transferred` +
+      (bytes === 0 ? ' (cache hit — the first run is the number that counts)' : '');
   log($('boot').textContent);
 
   const prev = localStorage.getItem('kws-spike');
-  if (prev) log('上次的读数: ' + prev);
+  if (prev) log('previous readings: ' + prev);
 
   $('start').disabled = false;
 })().catch((err) => {

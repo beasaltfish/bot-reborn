@@ -23,6 +23,11 @@ const $ = (id) => document.getElementById(id);
 
 // Long on purpose: the probe needs ~23 s of continuous speech to walk its five
 // windows, and a passage that runs out mid-window aborts the run.
+//
+// Chinese with English spliced into it, also on purpose, and not an oversight
+// left over from translating this file: waiting item ⑪ is about how each TTS
+// provider handles code-switching, and a monolingual passage would never ask
+// the question. Same for READ_LINE below.
 const SCRIPT_TEXT =
     '好的，我先往前走一点。「往前走」的英文是 go forward，走慢一点就是 ' +
     'go forward slowly。你可以试着跟我说一遍，不用着急，说错了我们再来一次。' +
@@ -180,8 +185,8 @@ function startKeepAlive() {
   if (el.src) URL.revokeObjectURL(el.src);
   el.src = keepAliveWavUrl($('kaWave').value, dbToAmp(db));
   el.volume = 1;
-  el.play().then(() => log(`🔈 保活音：${$('kaWave').value} / ${db} dBFS`))
-      .catch((err) => log('❌ 保活音播放失败：' + err.message));
+  el.play().then(() => log(`🔈 keep-alive: ${$('kaWave').value} / ${db} dBFS`))
+      .catch((err) => log('❌ keep-alive playback failed: ' + err.message));
 }
 
 // --------------------------------------------------------- state machine
@@ -248,12 +253,12 @@ function rms(f32) {
 const READ_LINE = '往前走三米，然后 turn left，停在红色的箱子旁边';
 
 const PHASES = {
-  floor:   { ms: 2500, cue: '① 先别出声', sub: '测房间底噪，2.5 秒' },
-  control: { ms: 8000, cue: '② 照着下面那句念一遍', sub: '没有 TTS —— 这是转写的对照组', read: true },
-  warmup:  { ms: 1500, cue: '③ 它开始念了，继续别出声', sub: 'AEC 收敛期，这段丢掉' },
-  quiet:   { ms: 8000, cue: '④ 保持安静，让它自己念', sub: '这段量的是它的回声漏了多少' },
-  talk:    { ms: 8000, cue: '⑤ 再念一遍那句，压着它念', sub: '同一句话，这次它在旁边响', read: true },
-  settle:  { ms: 3000, cue: '⑥ 停，再安静一下', sub: '确认电平掉回去' },
+  floor:   { ms: 2500, cue: '① stay silent', sub: 'measuring the room, 2.5 s' },
+  control: { ms: 8000, cue: '② read the line below, once', sub: 'no TTS — this is the transcription control', read: true },
+  warmup:  { ms: 1500, cue: '③ it has started speaking; stay silent', sub: 'the AEC is converging; this window is discarded' },
+  quiet:   { ms: 8000, cue: '④ stay quiet and let it talk', sub: 'this measures how much of its echo leaks in' },
+  talk:    { ms: 8000, cue: '⑤ read the line again, over the top of it', sub: 'same sentence, this time with it sounding next to you', read: true },
+  settle:  { ms: 3000, cue: '⑥ stop, and be quiet again', sub: 'confirming the level falls back' },
 };
 const SCRIPT = ['warmup', 'quiet', 'talk', 'settle'];
 
@@ -356,14 +361,14 @@ async function hold(p, requireAudio) {
   let silentMs = 0;
   while (Date.now() < end) {
     await sleep(100);
-    if (probe.aborted) throw new Error('中途被停掉了');
+    if (probe.aborted) throw new Error('stopped part-way through');
     showCue(PHASES[p].cue, PHASES[p].sub, Math.ceil((end - Date.now()) / 1000),
             PHASES[p].read);
     if (!requireAudio) continue;
     silentMs = ttsOutLevel() > OUT_ON ? 0 : silentMs + 100;
     // Running out of speech mid-window is not a result, it is a broken run:
     // the rest of the window would be measuring silence and reading as a pass.
-    if (silentMs > 1000) throw new Error(`「${PHASES[p].cue}」还没走完，它就念完了——把念的那段加长`);
+    if (silentMs > 1000) throw new Error(`it ran out of passage before “${PHASES[p].cue}” finished — lengthen what it reads`);
   }
 }
 
@@ -377,7 +382,7 @@ async function waitForAudio(timeoutMs) {
 }
 
 async function runProbe() {
-  if (!st.running) { log('先点「开始」，麦克风得先跑起来'); return; }
+  if (!st.running) { log('press Start first — the microphone has to be running'); return; }
   if (probe.active) return;
 
   probe.active = true;
@@ -387,7 +392,7 @@ async function runProbe() {
   probe.rec = { control: [], talk: [] };
   for (const p of Object.keys(PHASES)) probe.bins[p] = newBin();
   $('probe').disabled = true;
-  log('── 打断自检开始，跟着屏幕上的提示做');
+  log('── barge-in self-test starting; follow the prompts on screen');
   // VAD is only fed outside SLEEPING (§5.3), and the floor window has to be
   // measured with it running — otherwise `floor.vad === 0` means "asleep", not
   // "you were quiet", and the guard that invalidates a noisy run never fires.
@@ -401,15 +406,15 @@ async function runProbe() {
     // speak() sets `speaking` immediately but the audio is 1–2 s of fetch and
     // decode away, so the phase stays `control`: nothing is playing yet, and
     // a fixed delay here would eat into `quiet` instead.
-    showCue('③ 等它开口……', 'TTS 正在取音频', null);
+    showCue('③ waiting for it to start…', 'TTS is fetching the audio', null);
     playing = speak(SCRIPT_TEXT);
-    if (!await waitForAudio(15000)) throw new Error('等了 15 s，TTS 一直没出声');
+    if (!await waitForAudio(15000)) throw new Error('waited 15 s and TTS never made a sound');
     for (const p of SCRIPT) await hold(p, true);
     tts?.cancel();
     await transcribeProbe();
     probe.result = judgeProbe();
   } catch (err) {
-    probe.result = { ok: false, text: `自检中断：${err.message}` };
+    probe.result = { ok: false, text: `self-test aborted: ${err.message}` };
     log('❌ ' + probe.result.text);
   } finally {
     tts?.cancel();
@@ -428,18 +433,18 @@ async function runProbe() {
  * "AEC damaged it" from "this room and this mic are just hard".
  */
 async function transcribeProbe() {
-  showCue('⑦ 转写中……', '把刚才两段送 STT，别关页面', null);
+  showCue('⑦ transcribing…', 'sending both recordings to STT — do not close the page', null);
   const out = { ref: READ_LINE };
   for (const k of ['control', 'talk']) {
     const pcm = joinFrames(probe.rec[k]);
-    if (!pcm.length) { out[k] = '（没录到音频）'; continue; }
+    if (!pcm.length) { out[k] = '(nothing was recorded)'; continue; }
     try {
       const t0 = performance.now();
       out[k] = (await stt.transcribe(toInt16(pcm), RATE)).trim();
-      log(`📝 ${k === 'control' ? '对照' : '播放中'}转写 ` +
+      log(`📝 ${k === 'control' ? 'control' : 'over playback'} transcript ` +
           `${fmt(performance.now() - t0, 0)} ms：${out[k]}`);
     } catch (err) {
-      out[k] = `（STT 失败：${err.message}）`;
+      out[k] = `(STT failed: ${err.message})`;
       log('❌ ' + out[k]);
     }
   }
@@ -457,19 +462,19 @@ function sttVerdict() {
   const x = probe.stt;
   if (!x || x.cerControl == null || x.cerTalk == null) return '—';
   const gap = x.cerTalk - x.cerControl;
-  const both = `对照 ${pct(x.cerControl)} → 播放中 ${pct(x.cerTalk)}`;
+  const both = `control ${pct(x.cerControl)} → over playback ${pct(x.cerTalk)}`;
   if (x.cerControl > 0.3) {
-    return `⚠️ ${both}：对照组本身就错这么多，是这只麦克风／这间屋子的底子问题，` +
-           '先解决它，这轮说明不了 AEC';
+    return `⚠️ ${both}: the control is already this wrong, which is a problem with this microphone or this room. ` +
+           'Fix that first; this run says nothing about the AEC';
   }
   if (gap > 0.2) {
-    return `⚠️ ${both}（涨了 ${fmt(gap * 100, 0)} 点）：VAD 抓得到，但送进 STT 已经不可用——` +
-           '打断之后的第一句会听错，实际得等 TTS 停了再收音';
+    return `⚠️ ${both} (up by ${fmt(gap * 100, 0)} points): the VAD catches it, but what reaches STT is unusable — ` +
+           'the first sentence after an interruption will be misheard, so capture has to wait for TTS to stop';
   }
   if (gap > 0.05) {
-    return `${both}（涨了 ${fmt(gap * 100, 0)} 点）：有劣化但还能用，留意打断后第一句`;
+    return `${both} (up by ${fmt(gap * 100, 0)} points): degraded but usable — keep an eye on the first sentence after an interruption`;
   }
-  return `✅ ${both}：播放期间的转写没被 AEC 削坏，打断后直接收音是可行的`;
+  return `✅ ${both}: transcription during playback survives the AEC, so capturing straight after an interruption is viable`;
 }
 
 /**
@@ -479,7 +484,7 @@ function sttVerdict() {
 function judgeProbe() {
   const b = probe.bins;
   if (b.quiet.frames < 30 || b.talk.frames < 30) {
-    return { ok: false, text: '样本不足，重来一次' };
+    return { ok: false, text: 'not enough samples — run it again' };
   }
   const floorDb = dbOf(avgOf(b.floor));
   const quietDb = dbOf(avgOf(b.quiet));
@@ -495,27 +500,27 @@ function judgeProbe() {
 
   if (b.floor.vad > 0) {
     return { ok: false, gain, residue, residuePeak,
-      text: `⚠️ 底噪段 VAD 就响了 ${b.floor.vad} 帧——你没安静，或者房间太吵。这轮不算数` };
+      text: `⚠️ the VAD fired on ${b.floor.vad} frames during the noise-floor window — either you were not silent or the room is too loud. This run does not count` };
   }
   if (b.quiet.vad > 0) {
     return { ok: false, gain, residue, residuePeak,
-      text: `⚠️ 安静段 VAD 响了 ${b.quiet.vad} 帧（回声残余 ${plus(residue)}）——` +
-            'AEC 没把机器人自己消干净，VAD 会被自己的声音触发。' +
-            'bargeIn 必须为 false，打断只能走关键词（§6.8 的禁用词就变成强制的）' };
+      text: `⚠️ the VAD fired on ${b.quiet.vad} frames while it was speaking and you were not (echo residue ${plus(residue)}) — ` +
+            'the AEC is not removing the robot from its own input, so the VAD triggers on its own voice. ' +
+            'bargeIn has to be false and interruption can only go through the keyword, which makes §6.8\'s forbidden words mandatory' };
   }
   if (b.quiet.max < DEAD && b.talk.max < DEAD) {
     return { ok: false, gain, residue, residuePeak,
-      text: `⛔ 播放期间麦克风几乎没有信号（峰值 ${dbs(b.talk.max)}）——你的声音也被一起压掉了，连关键词打断都不成立` };
+      text: `⛔ almost no signal reached the mic during playback (peak ${dbs(b.talk.max)}) — your voice is being suppressed along with the echo, so even keyword interruption does not hold` };
   }
   if (gain < GAIN_MIN) {
     return { ok: false, gain, residue, residuePeak,
-      text: `⛔ 你说话时电平只涨了 ${plus(gain)}（要 ≥ ${GAIN_MIN} dB）——` +
-            '播放期间麦克风被压住了，人声进不来。bargeIn = false' };
+      text: `⛔ your voice only lifted the level by ${plus(gain)} (it needs ≥ ${GAIN_MIN} dB) — ` +
+            'the mic is being held down during playback and speech cannot get in. bargeIn = false' };
   }
   if (b.talk.vad === 0) {
     return { ok: false, gain, residue, residuePeak,
-      text: `⚠️ 电平涨了 ${plus(gain)}，VAD 却一帧没抓到——信号进得来，` +
-            '是 AEC 把人声削得不像语音、或者 VAD 阈值太紧。先调阈值再测，别急着判 bargeIn = false' };
+      text: `⚠️ the level rose by ${plus(gain)} and yet the VAD caught nothing — the signal does get in, ` +
+            'so either the AEC shaved the speech into something that no longer looks like speech, or the VAD threshold is too tight. Tune the threshold and re-run before concluding bargeIn = false' };
   }
   // A flat mean has two readings and the analyser cannot tell them apart — it
   // sees the digital signal, not the speaker. Either the phone was too quiet to
@@ -524,13 +529,13 @@ function judgeProbe() {
   // still spike above the room floor, the speaker was audible and AEC earned it.
   const caveat = residue >= 3 ? ''
       : residuePeak >= 6
-        ? `（均值被压到比底噪还低，但峰值高 ${plus(residuePeak)}——` +
-          'AEC 稳态压得狠、起音瞬态有漏，正常）'
-        : `（注意：均值 ${plus(residue)}、峰值 ${plus(residuePeak)}，喇叭的声音几乎没进麦克风——` +
-          '确认手机是正常播放音量，音量太小的话这轮等于没考 AEC）';
+        ? ` (the mean was pushed below the noise floor while the peak is ${plus(residuePeak)} above it — ` +
+          'the AEC clamps hard in steady state and leaks on attack transients, which is normal)'
+        : ` (note: mean ${plus(residue)}, peak ${plus(residuePeak)} — almost nothing from the speaker reached the mic. ` +
+          'Check the phone is at a normal playback volume; too quiet and this run never tested the AEC at all)';
   return { ok: true, gain, residue, residuePeak,
-    text: `✅ 安静段 VAD 零命中（回声残余 ${plus(residue)}），说话段 ${plus(gain)} 且 VAD 抓到 ` +
-          `${b.talk.vad} 帧 → bargeIn = true 成立${caveat}` };
+    text: `✅ zero VAD hits while only it was speaking (echo residue ${plus(residue)}); your voice added ${plus(gain)} and the VAD caught ` +
+          `${b.talk.vad} frames → bargeIn = true holds${caveat}` };
 }
 
 function render() {
@@ -540,16 +545,16 @@ function render() {
   const kws = st.frames ? st.kwsSum / st.frames : 0;
   const vad = st.frames ? st.vadSum / st.frames : 0;
 
-  $('elapsed').textContent = `${fmt(wall, 0)} s 墙钟 / ${fmt(fed, 0)} s 已喂`;
+  $('elapsed').textContent = `${fmt(wall, 0)} s wall / ${fmt(fed, 0)} s fed`;
   $('alive').textContent = fed >= wall - 5
-      ? '✅ 音频没断过' : `⚠️ 少了 ${fmt(wall - fed, 0)} s`;
-  $('kwsCost').textContent = `均 ${fmt(kws, 2)} ms / 峰 ${fmt(st.kwsMax, 1)} ms`;
-  $('vadCost').textContent = `均 ${fmt(vad, 2)} ms / 峰 ${fmt(st.vadMax, 1)} ms`;
+      ? '✅ audio never dropped out' : `⚠️ ${fmt(wall - fed, 0)} s missing`;
+  $('kwsCost').textContent = `mean ${fmt(kws, 2)} ms / peak ${fmt(st.kwsMax, 1)} ms`;
+  $('vadCost').textContent = `mean ${fmt(vad, 2)} ms / peak ${fmt(st.vadMax, 1)} ms`;
   $('totalCost').textContent =
       `${fmt(kws + vad, 2)} ms / ${st.frameMs} ms = ${fmt((kws + vad) / st.frameMs * 100, 1)}%`;
   $('counts').textContent = `${st.wakes} / ${st.transcripts}`;
 
-  $('spkTime').textContent = `${fmt(st.speakMs / 1000, 1)} s（${st.speakFrames} 帧）`;
+  $('spkTime').textContent = `${fmt(st.speakMs / 1000, 1)} s (${st.speakFrames} frames)`;
   $('selfVad').textContent = String(st.selfVad);
   $('selfKws').textContent = String(st.selfKws);
 
@@ -558,8 +563,8 @@ function render() {
   // same. -60 dB is effectively nothing; normal speech lands around -30..-15.
   const spkAvg = st.speakFrames ? st.rmsSpeakSum / st.speakFrames : 0;
   const idleAvg = st.idleFrames ? st.rmsIdleSum / st.idleFrames : 0;
-  $('lvlSpeak').textContent = `均 ${dbs(spkAvg)} / 峰 ${dbs(st.rmsSpeakMax)}`;
-  $('lvlIdle').textContent = `均 ${dbs(idleAvg)} / 峰 ${dbs(st.rmsIdleMax)}`;
+  $('lvlSpeak').textContent = `mean ${dbs(spkAvg)} / peak ${dbs(st.rmsSpeakMax)}`;
+  $('lvlIdle').textContent = `mean ${dbs(idleAvg)} / peak ${dbs(st.rmsIdleMax)}`;
 
   // The guided probe. These rows are only comparable to each other, which is
   // the whole point — the absolute dBFS of a phone mic means nothing on its
@@ -569,33 +574,33 @@ function render() {
     const x = b[k];
     $(id).textContent = !x || !x.frames
         ? '—'
-        : `均 ${dbs(avgOf(x))} / 峰 ${dbs(x.max)}${tail ? ` · ${tail(x)}` : ''}`;
+        : `mean ${dbs(avgOf(x))} / peak ${dbs(x.max)}${tail ? ` · ${tail(x)}` : ''}`;
   };
-  const vk = (x) => `VAD ${x.vad} 帧 / KWS ${x.kws}`;
-  row('pFloor', 'floor', (x) => `VAD ${x.vad} 帧`);
+  const vk = (x) => `VAD ${x.vad} frames / KWS ${x.kws}`;
+  row('pFloor', 'floor', (x) => `VAD ${x.vad} frames`);
   row('pControl', 'control', vk);
   row('pQuiet', 'quiet', vk);
   row('pTalk', 'talk', vk);
   row('pSettle', 'settle', vk);
   const plus = (v) => `${v >= 0 ? '+' : ''}${fmt(v, 1)} dB`;
   $('pGain').textContent = probe.result?.gain == null ? '—'
-      : `${plus(probe.result.gain)}（要 ≥ ${GAIN_MIN} dB）`;
+      : `${plus(probe.result.gain)} (needs ≥ ${GAIN_MIN} dB)`;
   $('pResidue').textContent = probe.result?.residue == null ? '—'
-      : `均 ${plus(probe.result.residue)} / 峰 ${plus(probe.result.residuePeak)} 高于底噪`;
+      : `mean ${plus(probe.result.residue)} / peak ${plus(probe.result.residuePeak)} above the noise floor`;
 
   $('pRef').textContent = READ_LINE;
   $('pSttControl').textContent = probe.stt?.control ?? '—';
   $('pSttTalk').textContent = probe.stt?.talk ?? '—';
-  $('pSttVerdict').textContent = probe.active ? '自检进行中……' : sttVerdict();
+  $('pSttVerdict').textContent = probe.active ? 'self-test running…' : sttVerdict();
   // `bargeIn = true` (spec §5.3) needs both halves: the robot must not reach
   // VAD as speech, AND a human must still get through. One window could show
   // at most one of those, and could not tell which one it was showing.
-  $('aecVerdict').textContent = probe.active ? '自检进行中……'
-      : probe.result?.text ?? '还没做过自检（点上面的「打断自检」）';
+  $('aecVerdict').textContent = probe.active ? 'self-test running…'
+      : probe.result?.text ?? 'no self-test has been run yet (press “Barge-in self-test” above)';
 
   if (st.batt) {
     $('battery').textContent =
-        `${fmt(st.batt.level * 100, 0)}%（掉了 ${fmt((st.battStart - st.batt.level) * 100, 0)}%）`;
+        `${fmt(st.batt.level * 100, 0)}% (down ${fmt((st.battStart - st.batt.level) * 100, 0)}%)`;
   }
   localStorage.setItem('audio-spike', JSON.stringify({
     wall, fed, kws, vad, frameMs: st.frameMs, wakes: st.wakes,
@@ -642,7 +647,7 @@ function toInt16(f32) {
 function onFrame(e) {
   if (e.data.hello) {
     st.frameMs = Math.round(e.data.size / e.data.sampleRate * 1000);
-    log(`worklet: ${e.data.sampleRate} Hz，帧 ${st.frameMs} ms`);
+    log(`worklet: ${e.data.sampleRate} Hz, frame ${st.frameMs} ms`);
     return;
   }
   if (!st.running) return;
@@ -710,10 +715,10 @@ function onFrame(e) {
         // Which voice this was is exactly what a single window cannot tell you.
         // Inside the probe the script does know, because it told you when to
         // talk; outside it, say so instead of guessing.
-        const who = !probe.active ? '声源不明（它自己，还是你）'
-            : probe.phase === 'talk' ? '说话段，应该是你——这正是打断要的'
-            : '安静段，只可能是它自己';
-        log(`⚠️ 播放期间 VAD 切出了一段（${fmt(seg.samples.length / RATE, 2)} s）——${who}`);
+        const who = !probe.active ? 'source unknown (itself, or you)'
+            : probe.phase === 'talk' ? 'the talk window, so it should be you — which is exactly what barge-in needs'
+            : 'the quiet window, so it can only be itself';
+        log(`⚠️ the VAD cut a segment during playback (${fmt(seg.samples.length / RATE, 2)} s) — ${who}`);
       } else {
         onSegment(seg);
       }
@@ -741,14 +746,14 @@ function onKeyword(word) {
       if (b) b.kws++;
       // Cancelling here would end the window early and leave the rest of the
       // probe measuring silence. Count the hit, keep the script running.
-      log(`🎯 播放期间 KWS 命中 ${word} —— 自检进行中，这次不掐 TTS`);
+      log(`🎯 KWS hit ${word} during playback — the self-test is running, so TTS is not cut this time`);
       return;
     }
-    log(`🎯 播放期间 KWS 命中 ${word} —— 掐掉 TTS（这就是丐版的打断）`);
+    log(`🎯 KWS hit ${word} during playback — cutting TTS (this is interruption on the bargeIn = false path)`);
     tts.cancel();
     return;
   }
-  log(`🎯 KWS 命中 ${word}`);
+  log(`🎯 KWS hit ${word}`);
   if (word.startsWith('all_stop')) { setState('SLEEPING'); return; }
   st.wakes++;
   lastVoiceAt = Date.now();
@@ -759,12 +764,12 @@ function onKeyword(word) {
 
 async function onSegment(seg) {
   const secs = seg.samples.length / RATE;
-  log(`🎙 VAD 切出 ${fmt(secs, 2)} s`);
+  log(`🎙 VAD cut ${fmt(secs, 2)} s`);
   if (state === 'SLEEPING') return;
   // Mid-probe this would run STT and then speak the transcript back, and that
   // playback would land on top of the probe's own. The segment is still
   // counted (in onFrame); it just must not start a turn.
-  if (probe.active) { log('（自检进行中，这段不送 STT）'); return; }
+  if (probe.active) { log('(self-test running — this segment does not go to STT)'); return; }
   setState('THINKING');
   try {
     const t0 = performance.now();
@@ -805,8 +810,8 @@ async function requestWakeLock() {
   if (!navigator.wakeLock) return;
   try {
     wakeLock = await navigator.wakeLock.request('screen');
-    wakeLock.addEventListener('release', () => log('Wake Lock 被释放'));
-  } catch (err) { log('Wake Lock 失败: ' + err.message); }
+    wakeLock.addEventListener('release', () => log('Wake Lock was released'));
+  } catch (err) { log('Wake Lock failed: ' + err.message); }
 }
 
 document.addEventListener('visibilitychange', () => {
@@ -816,25 +821,25 @@ document.addEventListener('visibilitychange', () => {
 
 async function start() {
   const bad = checkKeywords($('keywords').value);
-  if (bad.length) { log(`❌ 不在 tokens.txt 里的 token：${bad.join(' ')}`); return; }
+  if (bad.length) { log(`❌ tokens that are not in tokens.txt: ${bad.join(' ')}`); return; }
 
   $('start').disabled = true;
   startKeepAlive();   // before any await: the autoplay gesture is spent by one
-  log('请求麦克风权限…（等系统弹窗，点「允许」）');
+  log('requesting microphone permission… (wait for the system prompt and allow it)');
   try {
     micStream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, autoGainControl: false, noiseSuppression: false },
     });
     try { ctx = new AudioContext({ sampleRate: RATE }); }
     catch { ctx = new AudioContext(); }
-    if (ctx.sampleRate !== RATE) log(`⚠️ 实际 ${ctx.sampleRate} Hz，不是 16 kHz`);
+    if (ctx.sampleRate !== RATE) log(`⚠️ actual rate is ${ctx.sampleRate} Hz, not 16 kHz`);
     await ctx.audioWorklet.addModule('capture-worklet.js');
 
     kws = createSpotter();
     kwsStream = kws.createStream();
     vad = createVoiceDetector();
     pending = new Float32Array(0);
-    log('KWS + VAD 都已创建（同一个 wasm 模块）');
+    log('KWS and VAD both created (out of the same wasm module)');
 
     node = new AudioWorkletNode(ctx, 'capture');
     node.port.onmessage = onFrame;
@@ -856,7 +861,7 @@ async function start() {
       st.batt = await navigator.getBattery();
       st.battStart = st.batt.level;
     }
-    log('▶︎ 开始。喊 hey steven 唤醒，然后说一句话。');
+    log('▶︎ started. Say “hey steven” to wake it, then say something.');
     $('stop').disabled = false;
     $('probe').disabled = false;
   } catch (err) {
@@ -877,7 +882,7 @@ function stop() {
   wakeLock = null;
   setState('SLEEPING');
   render();
-  log('■ 停止。');
+  log('■ stopped.');
   $('stop').disabled = true;
   $('start').disabled = false;
   $('probe').disabled = true;
@@ -900,7 +905,7 @@ setInterval(render, 2000);
   if (!cfg.tts?.baseURL || !cfg.tts?.apiKey || !cfg.tts?.model) missing.push('TTS');
   if (missing.length) {
     $('cfgWarn').textContent =
-        `${missing.join(' 和 ')} 还没配置。先去 setup.html 填好并保存，这个页面只读同一份配置。`;
+        `${missing.join(' and ')} are not configured. Fill them in on setup.html and save; this page only reads the same config.`;
   }
   stt = new OpenAiCompatStt(cfg.stt ?? {});
   tts = new WebAudioTts(cfg.tts ?? {});
@@ -914,8 +919,8 @@ setInterval(render, 2000);
     if (r.name.includes('/models/kws/')) bytes += r.transferSize || 0;
   }
   $('boot').textContent =
-      `加载完毕：${fmt(dt / 1000, 1)} s，实传 ${fmt(bytes / 1048576, 2)} MB` +
-      (bytes === 0 ? '（命中缓存）' : '');
+      `loaded in ${fmt(dt / 1000, 1)} s, ${fmt(bytes / 1048576, 2)} MB actually transferred` +
+      (bytes === 0 ? ' (cache hit)' : '');
   log($('boot').textContent);
   $('start').disabled = false;
 })().catch((err) => {
