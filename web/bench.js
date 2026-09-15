@@ -1,20 +1,24 @@
-// 标定台 — bring-up 台面板，为 spec §12 的 ①②⑧ 服务。
+// The calibration bench — the bring-up panel for spec §12's ①②⑧.
 //
-// 这是 web/app.js（D4/D5，一次写一个字节）的替身：那套模型做不到「写 3000
-// 个字节然后掐秒表」，这里换成 Ftdi.buildStream() 一次性交出整个缓冲区。
-// 这个页面不是一次性 demo —— bytesPerMs 会随硬件改动重新标定，所以它常驻仓库。
+// It stands in for web/app.js (D4/D5, one byte at a time), whose model cannot
+// express "write 3000 bytes and then start a stopwatch". Here Ftdi.buildStream()
+// hands the whole buffer over in one go instead.
 //
-// entry file：允许在顶层触碰 document/navigator（spec §10 的例外）。
+// This page is not a throwaway demo: bytesPerMs gets re-calibrated whenever the
+// hardware changes, so it lives in the repo permanently.
+//
+// An entry file: allowed to touch document/navigator at the top level (spec
+// §10's exception).
 
 import { Ftdi, encodeBaudRate, PIN_MASK, FTDI_VID, FT232H_PID } from './ftdi.js';
 
-const BENCH_BAUD = 1200; // spec §12 ② 指定的标定波特率
+const BENCH_BAUD = 1200; // the calibration baud rate spec §12 ② specifies
 const BYTE_RATE_TEST_BYTES = 3000;
 
 /** @type {Ftdi | null} */
 let ftdi = null;
 
-// --- 带类型的 DOM 取值 helper（Ruling P2：保持 strict，不用 @ts-nocheck）-----
+// --- Typed DOM helpers (Ruling P2: stay strict, no @ts-nocheck) -------------
 
 const el = (/** @type {string} */ id) =>
   /** @type {HTMLElement} */ (document.getElementById(id));
@@ -25,13 +29,14 @@ const inputEl = (/** @type {string} */ id) =>
 const statusEl = el('status');
 const logEl = el('log');
 
-/** 日志的真实内容存在这个字符串里；`logEl.textContent` 的类型是
- *  `string | null`，用它做读-改-写会在 strict 模式下报错，所以只往上写。 */
+/** The log's real content lives in this string. `logEl.textContent` is typed
+ *  `string | null`, so a read-modify-write through it does not survive strict
+ *  mode — this only ever writes to the element. */
 let logText = '';
 
 /** @param {string} text */
 function setStatus(text) {
-  statusEl.textContent = `状态：${text}`;
+  statusEl.textContent = `Status: ${text}`;
 }
 
 /** @param {string} text */
@@ -52,17 +57,19 @@ function bin8(n) {
   return `0b${n.toString(2).padStart(8, '0')}`;
 }
 
-/** 拿到已连接的 Ftdi，没连接就报状态并返回 null——调用方直接 `if (!dev) return;`。
+/** The connected Ftdi, or null with the status set — callers just write
+ *  `if (!dev) return;`.
  *  @returns {Ftdi | null} */
 function requireFtdi() {
   if (!ftdi) {
-    setStatus('先连接设备');
+    setStatus('connect the device first');
     return null;
   }
   return ftdi;
 }
 
-// --- 从 app.js 搬过来的诊断能力（逐字搬运，只把引脚宽度从 D4/D5 扩到 D4-D7）---
+// --- Diagnostics lifted from app.js (verbatim, except the pin width grew
+// --- from D4/D5 to D4-D7) ---------------------------------------------------
 
 /** @param {USBDevice} d */
 function describeDevice(d) {
@@ -92,9 +99,11 @@ function describeDevice(d) {
   return lines.join('\n');
 }
 
-// 纯诊断用：Ftdi.open() 内部会自己再发现一次 bulk OUT 端点（那份才是协议层
-// 真正用来写数据的）。这里重复一次同样的查找，只是为了在连接时把端点号打到
-// 日志里，方便排查「板子接上了但端点不对」这类问题。
+// Diagnostics only. Ftdi.open() discovers the bulk OUT endpoint again on its
+// own, and that is the one the protocol layer actually writes through. This
+// repeats the same search purely so the endpoint number reaches the log at
+// connect time, for the "board is attached but the endpoint is wrong" class of
+// problem.
 /** @param {USBDevice} d @returns {number | null} */
 function findBulkOutEndpoint(d) {
   for (const config of d.configurations) {
@@ -126,66 +135,71 @@ function reportEnvironment() {
 
   if (!navigator.usb) {
     log('');
-    log('!! navigator.usb 缺失。WebUSB 需要 Chromium 内核浏览器');
-    log('   （Chrome / Edge）。Firefox、Safari、iOS 都不支持。');
-    setStatus('此浏览器不支持 WebUSB');
+    log('!! navigator.usb is missing. WebUSB needs a Chromium-based browser');
+    log('   (Chrome / Edge). Firefox, Safari and iOS do not support it.');
+    setStatus('this browser has no WebUSB');
   }
   log('');
 }
 
-// --- 连接 --------------------------------------------------------------------
+// --- Connect -----------------------------------------------------------------
 
 el('connectBtn').addEventListener('click', async () => {
   const usb = navigator.usb;
   if (!usb) {
-    setStatus('此浏览器不支持 WebUSB');
+    setStatus('this browser has no WebUSB');
     return;
   }
 
   try {
-    log(`请求匹配 ${hex(FTDI_VID)}:${hex(FT232H_PID)} 的设备 ...`);
+    log(`requesting a device matching ${hex(FTDI_VID)}:${hex(FT232H_PID)} ...`);
     const device = await usb.requestDevice({
       filters: [{ vendorId: FTDI_VID, productId: FT232H_PID }],
     });
 
-    log('设备已选择：');
+    log('device selected:');
     log(describeDevice(device));
 
     const endpoint = findBulkOutEndpoint(device);
-    log(`bulk OUT 端点（诊断用）：${endpoint === null ? '未找到' : endpoint}`);
+    log(`bulk OUT endpoint (diagnostic): ${endpoint === null ? 'not found' : endpoint}`);
 
     const opened = await Ftdi.open(usb, { baudRate: BENCH_BAUD, device });
     opened.onDisconnect = (err) => {
       ftdi = null;
-      log(`!! 设备已断开：${err.message}`);
-      setStatus('已断开');
+      log(`!! device disconnected: ${err.message}`);
+      setStatus('disconnected');
     };
     ftdi = opened;
 
-    // encodeBaudRate 的 actualBaud 是分频器实际能落到的波特率，不一定精确等于
-    // 请求值；② 的「理论耗时」是按 BENCH_BAUD 算的，两者差多少这里先摆出来，
-    // 免得后面 ms/字节算出来偏差却不知道是不是分频器的锅。
+    // encodeBaudRate's actualBaud is the rate the divisor can actually land on,
+    // which need not equal the requested one. ②'s "theoretical duration" is
+    // computed from BENCH_BAUD, so the gap between the two is printed here —
+    // otherwise a later ms/byte figure comes out skewed with no way to tell
+    // whether the divisor is to blame.
     const { actualBaud } = encodeBaudRate(BENCH_BAUD);
-    log(`已连接，波特率 ${BENCH_BAUD} baud（异步 bitbang，D4-D7 输出），` +
-      `分频器实际波特率 ${actualBaud}，bytesPerMs=${opened.bytesPerMs}`);
-    log('进入 bitbang 模式后的引脚状态：');
+    log(`connected at ${BENCH_BAUD} baud (async bitbang, D4-D7 as outputs), ` +
+      `divisor lands on ${actualBaud}, bytesPerMs=${opened.bytesPerMs}`);
+    log('pin state after entering bitbang mode:');
     await logPinState(opened);
 
-    setStatus('已连接 FT232H');
+    setStatus('FT232H connected');
   } catch (err) {
     const e = /** @type {Error} */ (err);
     log(`!! ${e.name}: ${e.message}`);
-    setStatus(`连接失败：${e.message}`);
+    setStatus(`connect failed: ${e.message}`);
   }
 });
 
-// --- 急停（spec §4.1 第 2 层）-------------------------------------------------
+// --- Emergency stop (spec §4.1 layer 2) --------------------------------------
 //
-// 这个页面不经过 Executor，所以没有 generation counter 可以抢占——它本来也不
-// 需要：这里没有续期循环在跑，危险全部来自「已经交给芯片、还没放完」的那堆
-// 字节。所以急停就是 spec §4.4 的第 2、3 步，顺序同样不可变：先 purgeTx 丢掉
-// FIFO 里排队的字节，再写一个 0x00 把引脚拉低。反过来的话 0x00 会被 purge
-// 一起丢掉。② 的 3000 字节要跑 20 秒，没有这个按钮就只能拔线。
+// This page does not go through the Executor, so there is no generation counter
+// to preempt — and none is needed: no renewal loop is running here, and the
+// entire danger is the pile of bytes already handed to the chip and not yet
+// played out. So the emergency stop is just steps 2 and 3 of spec §4.4, in the
+// same non-negotiable order: purgeTx throws away what is queued in the FIFO,
+// then a single 0x00 pulls the pins low. The other way round, the purge takes
+// the 0x00 with it. ②'s 3000 bytes run for 20 seconds; without this button the
+// only recourse is unplugging the cable.
 
 el('stopBtn').addEventListener('click', async () => {
   const dev = requireFtdi();
@@ -193,15 +207,15 @@ el('stopBtn').addEventListener('click', async () => {
   try {
     await dev.purgeTx();
     await dev.write(new Uint8Array([0x00]));
-    log('■ 急停：purgeTx 丢掉 FIFO 里排队的字节，再写 0x00 拉低引脚');
+    log('■ emergency stop: purgeTx dropped the queued bytes, then 0x00 pulled the pins low');
   } catch (err) {
     const e = /** @type {Error} */ (err);
-    log(`!! 急停失败 ${e.name}: ${e.message} —— 拔线`);
-    setStatus(`急停失败：${e.message}`);
+    log(`!! emergency stop failed ${e.name}: ${e.message} — unplug the cable`);
+    setStatus(`emergency stop failed: ${e.message}`);
   }
 });
 
-// --- ① 六种引脚组合：判断 A/B 侧对应左/右 -----------------------------------
+// --- ① the six pin combinations: which of side A / B is left --------------
 
 for (const button of document.querySelectorAll('[data-pins]')) {
   const btn = /** @type {HTMLElement} */ (button);
@@ -210,60 +224,64 @@ for (const button of document.querySelectorAll('[data-pins]')) {
     if (!dev) return;
 
     const pins = Number(btn.dataset.pins);
-    log(`--- ${bin8(pins)} 保持 600 ms ---`);
+    log(`--- ${bin8(pins)} held for 600 ms ---`);
     try {
-      // 一次 transferOut，停止字节已经在同一个 buffer 里——spec §4.2。
+      // One transferOut, stop byte already inside the same buffer — spec §4.2.
       await dev.write(dev.buildStream(pins, 600));
 
-      // 注意时机：3000 字节在 1200 波特下要跑十几秒，但这里只写了 600 ms，
-      // 在标定波特率下这段很快就放完了，读回时引脚可能已经自然回落到 0x00——
-      // 这种情况标「有歧义」而不是直接判 MISMATCH，因为它常常只是正常收尾。
-      // 但一颗真的卡在低电平的芯片同样会读到 0x00，所以不能因此整个跳过日志，
-      // 只是不能在证据不足时就下 MISMATCH 的结论。
+      // Mind the timing. 3000 bytes at 1200 baud run for a dozen seconds, but
+      // this writes only 600 ms, which drains quickly at the calibration rate —
+      // so by read-back time the pins may already have fallen to 0x00 on their
+      // own. That case is reported as ambiguous rather than as a MISMATCH,
+      // because it is usually just a normal ending. A chip genuinely stuck low
+      // reads back the same 0x00 though, which is why the log is not skipped
+      // altogether: the conclusion is what has to be withheld, not the
+      // evidence.
       const readback = await dev.readPins();
       if ((readback & PIN_MASK) === (pins & PIN_MASK)) {
-        log('=> 芯片确实在按要求驱动引脚。车不动的话，问题在下游：接线、驱动芯片、或驱动电源。');
+        log('=> the chip really is driving the pins as asked. If the car does not move, the fault is downstream: wiring, driver chip, or driver supply.');
       } else if (readback === 0x00) {
-        log(`=> ⚠️ AMBIGUOUS：写了 ${bin8(pins)}，读到 0x00。`);
-        log('   600 ms 的片段在标定波特率下可能已经自然放完，这不一定是故障；');
-        log('   但引脚卡死在低电平也会读到同样的 0x00——光看这一个数分不清，要结合车的实际反应判断。');
+        log(`=> ⚠️ AMBIGUOUS: wrote ${bin8(pins)}, read back 0x00.`);
+        log('   A 600 ms slice can have drained on its own at this baud rate, which is not a fault;');
+        log('   but pins stuck low read back the same 0x00. This number alone cannot separate the two — watch what the car did.');
       } else {
-        log(`=> MISMATCH：写了 ${bin8(pins)}，读到 ${bin8(readback)}。`);
-        log('   芯片没在按要求驱动引脚——是 bitbang 模式或波特率的问题，不是接线问题。');
+        log(`=> MISMATCH: wrote ${bin8(pins)}, read back ${bin8(readback)}.`);
+        log('   The chip is not driving the pins as asked — a bitbang-mode or baud-rate problem, not a wiring one.');
       }
     } catch (err) {
       const e = /** @type {Error} */ (err);
       log(`!! ${e.name}: ${e.message}`);
-      setStatus(`写入失败：${e.message}`);
+      setStatus(`write failed: ${e.message}`);
     }
   });
 }
 
-// --- ② 字节速率与车速实验 -----------------------------------------------------
+// --- ② the byte-rate and road-speed experiment -------------------------------
 
 el('byteRateBtn').addEventListener('click', async () => {
   const dev = requireFtdi();
   if (!dev) return;
 
-  // spec §12 ② 明确要求这个实验用一个精确的 3000 字节缓冲区，而不是
-  // buildStream() 按 bytesPerMs 估算出来的字节数——这里就是在测 bytesPerMs
-  // 本身，用估算值反而会让实验测量自己的假设。
+  // Spec §12 ② asks for an exact 3000-byte buffer here, not the byte count
+  // buildStream() would estimate from bytesPerMs — bytesPerMs is the thing
+  // being measured, and feeding the estimate back in would make the experiment
+  // measure its own assumption.
   const stream = new Uint8Array(BYTE_RATE_TEST_BYTES + 1);
   stream.fill(0x10, 0, BYTE_RATE_TEST_BYTES);
   stream[BYTE_RATE_TEST_BYTES] = 0x00;
 
-  const theory = (BYTE_RATE_TEST_BYTES * 8) / BENCH_BAUD; // 秒，按 8 bit/字节
-  log(`写 ${BYTE_RATE_TEST_BYTES} 字节 @ ${BENCH_BAUD} baud，理论 ${theory.toFixed(1)} s`);
-  log('现在掐秒表——从电机开始转到停下。同时量车走了多远。');
+  const theory = (BYTE_RATE_TEST_BYTES * 8) / BENCH_BAUD; // seconds, at 8 bit/byte
+  log(`writing ${BYTE_RATE_TEST_BYTES} bytes @ ${BENCH_BAUD} baud, theory says ${theory.toFixed(1)} s`);
+  log('start the stopwatch now — from the motor starting to the motor stopping. Measure how far the car went, too.');
   try {
     const t0 = performance.now();
     await dev.write(stream);
-    log(`transferOut 返回耗时 ${(performance.now() - t0).toFixed(0)} ms`);
-    log('（这个数是 URB 提交的耗时，不是电机转的时间——秒表才是。）');
+    log(`transferOut returned after ${(performance.now() - t0).toFixed(0)} ms`);
+    log('(that number is how long submitting the URB took, not how long the motor ran — the stopwatch is.)');
   } catch (err) {
     const e = /** @type {Error} */ (err);
     log(`!! ${e.name}: ${e.message}`);
-    setStatus(`写入失败：${e.message}`);
+    setStatus(`write failed: ${e.message}`);
   }
 });
 
@@ -275,24 +293,24 @@ el('computeBtn').addEventListener('click', () => {
   const theory = (BYTE_RATE_TEST_BYTES * 8) / BENCH_BAUD;
   const msPerByte = (seconds * 1000) / BYTE_RATE_TEST_BYTES;
   const out = [
-    `实测 ${seconds} s / 理论 ${theory.toFixed(1)} s = 倍率 ${(seconds / theory).toFixed(3)}`,
-    `每字节 ${msPerByte.toFixed(3)} ms  →  bytesPerMs = ${(1 / msPerByte).toFixed(4)}`,
+    `measured ${seconds} s / theory ${theory.toFixed(1)} s = ratio ${(seconds / theory).toFixed(3)}`,
+    `${msPerByte.toFixed(3)} ms per byte  →  bytesPerMs = ${(1 / msPerByte).toFixed(4)}`,
     msPerByte >= 2 && msPerByte <= 5
-      ? '✅ 落在 spec §12 ② 的目标区间 2–5 ms/字节'
-      : '⚠️ 不在 2–5 ms/字节的目标区间——波特率或分频器编码可能不对，先别往下走',
+      ? '✅ inside spec §12 2\'s target band of 2-5 ms/byte'
+      : '⚠️ outside the 2-5 ms/byte target band — the baud rate or the divisor encoding is probably wrong; do not go further yet',
   ];
   if (metres) {
     const speed = metres / seconds;
-    out.push(`车速 ${speed.toFixed(2)} m/s  →  MAX_COAST_MS=1000 时余程 ${speed.toFixed(2)} m`);
+    out.push(`road speed ${speed.toFixed(2)} m/s  →  at MAX_COAST_MS=1000 the coast is ${speed.toFixed(2)} m`);
     out.push(Math.abs(speed - 1.5) < 0.7
-      ? '✅ 与 spec §4.3「约 1.5 米」相符'
-      : '⚠️ 与 spec §4.3「约 1.5 米」差得多——MAX_COAST_MS 要复核');
+      ? '✅ agrees with spec §4.3, "about 1.5 m"'
+      : '⚠️ far from spec §4.3\'s "about 1.5 m" — MAX_COAST_MS needs re-checking');
   }
   el('byteRateResult').textContent = out.join('\n');
   log(out.join('\n'));
 });
 
-// --- ⑧ 电机起动阈值 -----------------------------------------------------------
+// --- ⑧ the motor's starting threshold ----------------------------------------
 
 for (const button of document.querySelectorAll('[data-pulse]')) {
   const btn = /** @type {HTMLElement} */ (button);
@@ -303,42 +321,43 @@ for (const button of document.querySelectorAll('[data-pulse]')) {
     const ms = Number(btn.dataset.pulse);
     try {
       await dev.write(dev.buildStream(0x10, ms));
-      log(`⑧ 脉冲 ${ms} ms——车动了吗？（要连试 10 次都动才算数）`);
+      log(`⑧ pulse of ${ms} ms — did the car move? (it only counts if all 10 tries do)`);
     } catch (err) {
       const e = /** @type {Error} */ (err);
       log(`!! ${e.name}: ${e.message}`);
-      setStatus(`写入失败：${e.message}`);
+      setStatus(`write failed: ${e.message}`);
     }
   });
 }
 
-// --- 诊断 ---------------------------------------------------------------------
+// --- Diagnostics -------------------------------------------------------------
 
-// 空 filter = 列出浏览器能看到的全部 USB 设备。用来判断板子是否枚举成功、
-// 以及在哪个 VID:PID 下枚举——如果 picker 一直是灰的，先看这里。
+// An empty filter lists every USB device the browser can see. It answers
+// whether the board enumerated at all, and under which VID:PID — the first
+// thing to check when the picker stays empty.
 el('scanAllBtn').addEventListener('click', async () => {
   const usb = navigator.usb;
   if (!usb) return;
 
   try {
-    log('打开无 filter 的 picker（列出全部设备）...');
+    log('opening an unfiltered picker (every device) ...');
     const found = await usb.requestDevice({ filters: [] });
-    log('设备已选择：');
+    log('device selected:');
     log(describeDevice(found));
 
     if (found.vendorId === FTDI_VID && found.productId === FT232H_PID) {
-      log('=> 匹配 FT232H 的 filter；picker 本应列出它。');
+      log('=> matches the FT232H filter; the picker should have listed it.');
     } else {
-      log(`=> 不匹配 ${hex(FTDI_VID)}:${hex(FT232H_PID)} 的 filter。`);
-      log('   这就是为什么设备没出现——需要更新 filter。');
+      log(`=> does not match the ${hex(FTDI_VID)}:${hex(FT232H_PID)} filter.`);
+      log('   That is why it never appeared — the filter needs updating.');
     }
   } catch (err) {
     const e = /** @type {Error} */ (err);
     log(`!! ${e.name}: ${e.message}`);
     if (e.name === 'NotFoundError') {
-      log('   NotFoundError = picker 被关掉、什么都没选。');
-      log('   如果列表本身是空的，说明手机根本没枚举到这块板子');
-      log('   （OTG 供电 / 数据线 / Android 权限的问题）。');
+      log('   NotFoundError = the picker was dismissed without choosing anything.');
+      log('   If the list itself was empty, the phone never enumerated the board at all');
+      log('   (an OTG power, cable, or Android permission problem).');
     }
   }
 });
@@ -351,7 +370,7 @@ el('readPinsBtn').addEventListener('click', async () => {
   } catch (err) {
     const e = /** @type {Error} */ (err);
     log(`!! ${e.name}: ${e.message}`);
-    setStatus(`读引脚失败：${e.message}`);
+    setStatus(`reading the pins failed: ${e.message}`);
   }
 });
 
@@ -360,16 +379,16 @@ el('listGrantedBtn').addEventListener('click', async () => {
   if (!usb) return;
 
   const devices = await usb.getDevices();
-  log(`此前已授权的设备：${devices.length}`);
+  log(`previously granted devices: ${devices.length}`);
   for (const d of devices) log(describeDevice(d));
 });
 
 el('copyLogBtn').addEventListener('click', async () => {
   try {
     await navigator.clipboard.writeText(logText);
-    setStatus('日志已复制到剪贴板');
+    setStatus('log copied to the clipboard');
   } catch {
-    setStatus('复制失败——请手动选中日志文本');
+    setStatus('copy failed — select the log text by hand');
   }
 });
 

@@ -102,7 +102,7 @@ function fillForm(cfg) {
 /** @param {Layer} cfg @param {string} label */
 function assertFilled(cfg, label) {
   if (!cfg.baseURL || !cfg.apiKey || !cfg.model) {
-    throw new Error(`请先在上方「配置」里填写 ${label} 的 baseURL / apiKey / model`);
+    throw new Error(`fill in ${label}'s baseURL / apiKey / model under Configuration above first`);
   }
 }
 
@@ -114,7 +114,7 @@ el('cfgForm').addEventListener('submit', (event) => {
   // default is the exact failure config.js's `??` is there to prevent — it
   // must not come back in through the save path instead.
   saveConfig({ ...loadConfig(), ...readForm() });
-  el('cfgStatus').textContent = `已保存到 localStorage（${CONFIG_KEY}）`;
+  el('cfgStatus').textContent = `saved to localStorage (${CONFIG_KEY})`;
 });
 
 fillForm(loadConfig());
@@ -132,19 +132,19 @@ let executor = null;
 
 /** @param {string} text */
 function setUsbStatus(text) {
-  el('usbStatus').textContent = `状态：${text}`;
+  el('usbStatus').textContent = `Status: ${text}`;
 }
 
 /** @returns {Ftdi} */
 function requireFtdi() {
-  if (!ftdi) throw new Error('请先点击上方「连接 FT232H」');
+  if (!ftdi) throw new Error('press “Connect the FT232H” above first');
   return ftdi;
 }
 
 el('connectBtn').addEventListener('click', async () => {
   const usb = navigator.usb;
   if (!usb) {
-    setUsbStatus('此浏览器不支持 WebUSB（需要 Chromium 内核：Chrome / Edge）');
+    setUsbStatus('this browser has no WebUSB (needs a Chromium engine: Chrome / Edge)');
     return;
   }
   try {
@@ -158,11 +158,11 @@ el('connectBtn').addEventListener('click', async () => {
         logTurn(`!! executor: ${err.message}`);
       },
     });
-    setUsbStatus('已连接');
-    logTurn('USB 已连接');
+    setUsbStatus('connected');
+    logTurn('USB connected');
   } catch (err) {
     const e = /** @type {Error} */ (err);
-    setUsbStatus(`连接失败：${e.message}`);
+    setUsbStatus(`connect failed: ${e.message}`);
   }
 });
 
@@ -173,9 +173,9 @@ el('connectBtn').addEventListener('click', async () => {
 // fixtures are what they are.
 
 const STT_FIXTURES = /** @type {const} */ ([
-  { path: 'fixtures/zh.wav', label: '中文' },
-  { path: 'fixtures/en.wav', label: '英文' },
-  { path: 'fixtures/mixed.wav', label: '中英混说' },
+  { path: 'fixtures/zh.wav', label: 'Chinese' },
+  { path: 'fixtures/en.wav', label: 'English' },
+  { path: 'fixtures/mixed.wav', label: 'mixed in one sentence' },
 ]);
 
 async function fixtureReadme() {
@@ -185,7 +185,7 @@ async function fixtureReadme() {
   } catch {
     // fall through to the generic message below
   }
-  return '（未能读取 fixtures/README.md，请直接打开仓库里的 web/fixtures/README.md。）';
+  return '(could not read fixtures/README.md — open web/fixtures/README.md in the repo instead.)';
 }
 
 /** @param {AudioBuffer} buffer @returns {{ pcm: Int16Array, sampleRate: number }} */
@@ -216,12 +216,12 @@ async function testStt(stt) {
     const contentType = response.headers.get('content-type') ?? '';
     if (!response.ok || contentType.includes('text/html')) {
       const readme = await fixtureReadme();
-      throw new Error(`找不到 ${fixture.path}，不能静默跳过这段测试。\n\n${readme}`);
+      throw new Error(`${fixture.path} is missing, and this test must not be skipped silently.\n\n${readme}`);
     }
     const audioBuffer = await ctx.decodeAudioData(await response.arrayBuffer());
     const { pcm, sampleRate } = toInt16Pcm(audioBuffer);
     const text = await stt.transcribe(pcm, sampleRate);
-    lines.push(`${fixture.label}: ${text || '（空）'}`);
+    lines.push(`${fixture.label}: ${text || '(empty)'}`);
   }
   return lines.join('\n');
 }
@@ -234,28 +234,28 @@ async function testStt(stt) {
 async function testLlm(llm) {
   const chat = await llm.chat(
     [{ role: 'user', content: 'Reply with exactly: ok' }], TOOLS);
-  if (!chat.text) throw new Error('模型没有返回文本');
+  if (!chat.text) throw new Error('the model returned no text');
 
   const tool = await llm.chat(
     [{ role: 'system', content: buildSystemPrompt({ replyLang: null, bargeIn: true }) },
       { role: 'user', content: 'go forward for one second' }], TOOLS);
   if (tool.toolCalls.length === 0) {
-    throw new Error('模型能聊天但没有调工具 —— 这个 provider 的 tool calling 不可用');
+    throw new Error('the model can chat but did not call a tool — tool calling is unusable on this provider');
   }
-  return `文本 ✅「${chat.text}」 · 工具 ✅ ${tool.toolCalls[0].name}`;
+  return `text ✅ “${chat.text}” · tool ✅ ${tool.toolCalls[0].name}`;
 }
 
 /** @param {WebAudioTts} tts @returns {Promise<string>} */
 async function testTts(tts) {
   const text = '「往前走」的英文是 go forward';
   await tts.speak(text);
-  return `已播放「${text}」—— 两种语言都听清了吗？（这是人耳判断，不是程序判断）`;
+  return `played 「${text}」 — were both languages intelligible? (your ears decide this one, not the code)`;
 }
 
 /** @param {Ftdi} dev @returns {Promise<string>} */
 async function testUsb(dev) {
   await dev.write(dev.buildStream(0x10, 200));
-  return '已发出 200 ms 前进 —— 车动了吗？';
+  return 'sent 200 ms of forward — did the car move?';
 }
 
 /** @param {HTMLElement} target @param {string} text @param {'ok' | 'error' | 'pending'} state */
@@ -279,7 +279,7 @@ async function performTest(name) {
       // TTS is the one layer with a fourth required field (spec §8.2) —
       // assertFilled only checks the three ProviderCfg fields, so voice
       // needs its own check or an empty one would reach the API silently.
-      if (!cfg.tts.voice) throw new Error('请先在上方「配置」里填写 TTS 的 voice');
+      if (!cfg.tts.voice) throw new Error('fill in the TTS voice under Configuration above first');
       return testTts(new WebAudioTts(cfg.tts, { audioContext: audioContext() }));
     case 'usb':
       return testUsb(requireFtdi());
@@ -293,7 +293,7 @@ async function runConnectivityTest(name) {
   const button = testButton(name);
   const resultEl = el(`${name}Result`);
   button.disabled = true;
-  setResult(resultEl, '测试中…', 'pending');
+  setResult(resultEl, 'testing…', 'pending');
   try {
     const message = await performTest(name);
     setResult(resultEl, message, 'ok');
@@ -348,7 +348,7 @@ function ensureBrain(exec) {
 // --- What the model actually did, in the log ------------------------------
 //
 // Calibration ⑨ (spec §12) asks the human to count, over 20 real turns, how
-// many replies are 纯复述、零信息量 — pure restatement, zero information — and
+// many replies are pure restatement carrying zero information, and
 // to decide from that whether §6.3 should go back to discarding `content`.
 // With only `♪ done` in the log there is nothing to count. The two things ⑨
 // needs are the dispatched actions and the spoken sentence, so both go through
@@ -408,7 +408,7 @@ el('textForm').addEventListener('submit', async (event) => {
   logTurn(`> ${text}`);
 
   if (!executor) {
-    logTurn('!! 请先连接 USB');
+    logTurn('!! connect USB first');
     return;
   }
 
@@ -431,9 +431,9 @@ el('textForm').addEventListener('submit', async (event) => {
 
 el('stopBtn').addEventListener('click', () => {
   if (!executor) {
-    logTurn('■ 急停：还没连接 USB，没有车可停');
+    logTurn('■ emergency stop: USB is not connected, so there is no car to stop');
     return;
   }
   executor.stop(); // sync gen++ happens before this returns
-  logTurn('■ 急停');
+  logTurn('■ emergency stop');
 });

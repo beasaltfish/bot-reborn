@@ -2,12 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { encodeBaudRate, PIN_MASK } from '../web/ftdi.js';
 
-// FT232H 的分频器基准是 120 MHz / 10 = 12 MHz，且必须关掉 divide-by-5。
-// 关掉的方式是给 encoded divisor 或上 0x20000，它最终体现为 wIndex 的高字节 0x02。
-// 所以 index 恒为 0x0201（0x0200 = /5 off，0x01 = port A），value 才是分频值。
+// The FT232H's divisor runs off 120 MHz / 10 = 12 MHz, and the divide-by-5
+// prescaler has to be switched off. Switching it off means OR-ing 0x20000 into
+// the encoded divisor, which surfaces as 0x02 in the high byte of wIndex. So
+// index is always 0x0201 (0x0200 = /5 off, 0x01 = port A) and only value
+// carries the divisor.
 
 test('encodeBaudRate: 1200 baud (the rate used by calibration item 2)', () => {
-  // 12_000_000 / 1200 = 10000，整除，无小数部分
+  // 12_000_000 / 1200 = 10000 exactly — no fractional part
   assert.deepEqual(encodeBaudRate(1200), {
     value: 10000,          // 0x2710
     index: 0x0201,
@@ -33,7 +35,7 @@ test('encodeBaudRate: the three special divisors at the top of the range', () =>
 test('encodeBaudRate: a rate needing the fractional divisor keeps index stable', () => {
   const r = encodeBaudRate(115200);
   assert.equal(r.index, 0x0201);
-  // 12_000_000 / 115200 = 104.1666… → 分数部分落在 frac_code 的某一档
+  // 12_000_000 / 115200 = 104.1666… → the fraction lands on one of frac_code's steps
   assert.ok(Math.abs(r.actualBaud - 115200) / 115200 < 0.03,
     `actualBaud ${r.actualBaud} should be within 3% of 115200`);
 });

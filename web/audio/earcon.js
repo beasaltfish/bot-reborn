@@ -21,13 +21,13 @@ export const SHAPES = {
   // every gated millisecond is a millisecond of 「往」 that never reaches the
   // VAD's ring. That is the same head §5.5 refused to throw away by clearing
   // the buffer; it must not be thrown away through the gate instead.
-  wake: [{ f: 660, to: 660, ms: 40 }, { f: 880, to: 880, ms: 40 }],   // 叮—咚
-  done: [{ f: 880, to: 880, ms: 80 }],                                // 嘀
+  wake: [{ f: 660, to: 660, ms: 40 }, { f: 880, to: 880, ms: 40 }],   // ding — dong
+  done: [{ f: 880, to: 880, ms: 80 }],                                // blip
   // The next three play when nobody is expected to be speaking, so they can
   // afford to be legible.
-  sleep: [{ f: 660, to: 330, ms: 200 }],                              // 下沉
-  huh: [{ f: 440, to: 660, ms: 120 }],                                // 嗯？
-  error: [{ f: 220, to: 220, ms: 110 }, { f: 185, to: 185, ms: 120 }], // 低沉双音
+  sleep: [{ f: 660, to: 330, ms: 200 }],                              // falling
+  huh: [{ f: 440, to: 660, ms: 120 }],                                // huh?
+  error: [{ f: 220, to: 220, ms: 110 }, { f: 185, to: 185, ms: 120 }], // low two-tone
 };
 
 /** @param {EarconName} name @returns {number} total milliseconds */

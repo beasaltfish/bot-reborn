@@ -29,13 +29,14 @@ coil. That is why there are four output pins and not two.
 
 ## ⚠️ Before you solder D6/D7
 
-> **D6/D7 必须焊到 U5 的输入脚，不能直接接线圈——会烧 FT232H 引脚。**
-> 找输入脚：SOT-23-6 六个脚里排除 VCC、GND、L1+、L1-，剩下两个。
+> **D6/D7 must go to U5's *input* pins, never straight to the coil — driving
+> the coil directly will destroy the FT232H pins.** To find the inputs on the
+> SOT-23-6 package, rule out VCC, GND, L1+ and L1−; the remaining two are the
+> inputs.
 
-(In English: D6/D7 must go to U5's *input* pins, never straight to the coil —
-driving the coil directly will destroy the FT232H pins. To find the inputs on
-the SOT-23-6 package, rule out VCC, GND, L1+ and L1−; the remaining two are
-the inputs.)
+(同一句中文，因为这是站在烙铁前要看的一句：**D6/D7 必须焊到 U5 的输入脚，
+不能直接接线圈——会烧 FT232H 引脚。** 找输入脚：SOT-23-6 六个脚里排除 VCC、
+GND、L1+、L1-，剩下两个。)
 
 ## Wiring
 

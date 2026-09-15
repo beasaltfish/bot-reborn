@@ -1,54 +1,57 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>标定台 — FT232H</title>
+<title>Calibration bench — FT232H</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <main>
-  <h1>标定台</h1>
-  <button id="connectBtn" class="primary">1. 连接 FT232H</button>
-  <p id="status">状态：未连接</p>
+  <h1>Calibration bench</h1>
+  <button id="connectBtn" class="primary">1. Connect the FT232H</button>
+  <p id="status">Status: not connected</p>
 
-  <!-- spec §4.1 第 2 层。② 一次交出 20 秒的前进字节，没有这个按钮就只能拔线。
-       它同时是 §4.4 里 purgeTx 的现场演示：车应该立刻停，不是 20 秒后才停。 -->
+  <!-- Spec §4.1 layer 2. ② hands over 20 seconds of forward bytes in one go,
+       and without this button the only recourse is unplugging the cable. It
+       doubles as a live demonstration of §4.4's purgeTx: the car should stop
+       at once, not 20 seconds later. -->
   <div class="stopbar">
-    <button id="stopBtn" class="danger">■ 急停（purge + 拉低引脚）</button>
+    <button id="stopBtn" class="danger">■ Emergency stop (purge + pull pins low)</button>
   </div>
 
   <hr>
-  <h2>① 极性：A 侧是左还是右</h2>
-  <p class="hint">每个按钮把对应引脚拉高 600 ms。看轮子往哪边偏，把结论写进 docs/hardware.md。</p>
+  <h2>① Polarity: is side A left or right?</h2>
+  <p class="hint">Each button holds its pins high for 600 ms. Watch which way the wheels turn, and write the answer into docs/hardware.md.</p>
   <div class="controls">
-    <button data-pins="0x50">forward + A 侧 (0x50)</button>
-    <button data-pins="0x90">forward + B 侧 (0x90)</button>
-    <button data-pins="0x10">forward 直行 (0x10)</button>
-    <button data-pins="0x20">backward 直行 (0x20)</button>
-    <button data-pins="0x60">backward + A 侧 (0x60)</button>
-    <button data-pins="0xa0">backward + B 侧 (0xa0)</button>
+    <button data-pins="0x50">forward + side A (0x50)</button>
+    <button data-pins="0x90">forward + side B (0x90)</button>
+    <button data-pins="0x10">forward, straight (0x10)</button>
+    <button data-pins="0x20">backward, straight (0x20)</button>
+    <button data-pins="0x60">backward + side A (0x60)</button>
+    <button data-pins="0xa0">backward + side B (0xa0)</button>
   </div>
 
   <hr>
-  <h2>② 字节速率与车速</h2>
+  <h2>② Byte rate and road speed</h2>
   <p class="hint">
-    波特率设 1200，写 3000 个 forward 字节 + 1 个停止字节，一次交出。
-    掐秒表量电机转了多久；同时量车走了多远。
-    <b>车要跑出台面就按上面的「急停」</b> —— 这 20 秒里 JS 什么都没在做，
-    唯一能中断它的就是那个按钮。
+    At 1200 baud, write 3000 forward bytes plus one stop byte, all in one go.
+    Time the motor with a stopwatch; measure how far the car travelled.
+    <b>If the car is about to leave the bench, hit “Emergency stop” above</b> —
+    for those 20 seconds JS is doing nothing at all, and that button is the only
+    thing that can interrupt it.
   </p>
   <div class="controls">
-    <button id="byteRateBtn">写 3000 字节（≈ 理论 20 s）</button>
+    <button id="byteRateBtn">Write 3000 bytes (≈ 20 s in theory)</button>
   </div>
-  <label>实测秒数 <input id="measuredSeconds" type="number" step="0.1" inputmode="decimal"></label>
-  <label>实测米数 <input id="measuredMetres" type="number" step="0.1" inputmode="decimal"></label>
-  <button id="computeBtn">算出 ms/字节 与 m/s</button>
+  <label>Measured seconds <input id="measuredSeconds" type="number" step="0.1" inputmode="decimal"></label>
+  <label>Measured metres <input id="measuredMetres" type="number" step="0.1" inputmode="decimal"></label>
+  <button id="computeBtn">Compute ms/byte and m/s</button>
   <p id="byteRateResult"></p>
 
   <hr>
-  <h2>⑧ 电机起动阈值</h2>
-  <p class="hint">从 100 ms 起每次加 50 ms，各试 10 次，取次次都动的最小值。</p>
+  <h2>⑧ The motor's starting threshold</h2>
+  <p class="hint">Start at 100 ms and add 50 ms each round, ten tries each. The answer is the smallest pulse that moves the car every single time.</p>
   <div class="controls">
     <button data-pulse="100">100 ms</button>
     <button data-pulse="150">150 ms</button>
@@ -60,12 +63,12 @@
   </div>
 
   <hr>
-  <h2>诊断</h2>
+  <h2>Diagnostics</h2>
   <div class="controls">
-    <button id="scanAllBtn">扫描全部 USB 设备</button>
-    <button id="readPinsBtn">读引脚</button>
-    <button id="listGrantedBtn">列出已授权设备</button>
-    <button id="copyLogBtn">复制日志</button>
+    <button id="scanAllBtn">Scan every USB device</button>
+    <button id="readPinsBtn">Read the pins</button>
+    <button id="listGrantedBtn">List granted devices</button>
+    <button id="copyLogBtn">Copy the log</button>
   </div>
   <pre id="log"></pre>
 </main>

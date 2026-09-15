@@ -1,21 +1,23 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>连通性测试 — 语音机器人</title>
+<title>Connectivity test — voice robot</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <main>
-  <h1>连通性测试</h1>
+  <h1>Connectivity test</h1>
   <p class="hint">
-    填三层配置 → 四项连通性测试 → 打字驱动整条链路。麦克风那半（STT 的
-    采集端）在下一个 plan，这里跳过麦克风，直接把文本喂给 brain.js。
+    Fill in the three provider layers, run the four connectivity tests, then
+    drive the whole chain by typing. This page deliberately leaves the
+    microphone out and feeds text straight to brain.js — for the voice loop,
+    see <a href="index.html">the robot itself</a>.
   </p>
 
   <hr>
-  <h2>配置</h2>
+  <h2>Configuration</h2>
   <form id="cfgForm">
     <fieldset>
       <legend>STT</legend>
@@ -36,58 +38,60 @@
       <label>model <input name="tts.model" autocomplete="off"></label>
       <label>voice <input name="tts.voice" autocomplete="off"></label>
     </fieldset>
-    <button type="submit" class="primary">保存</button>
+    <button type="submit" class="primary">Save</button>
   </form>
   <p id="cfgStatus" class="hint"></p>
 
   <hr>
   <h2>USB</h2>
-  <p class="hint">连通性测试里的「测 USB」和下面的打字驱动都要先连上车。</p>
-  <button id="connectBtn">连接 FT232H</button>
-  <p id="usbStatus" class="hint">状态：未连接</p>
+  <p class="hint">Both the USB connectivity test and the typed driver below need the car connected first.</p>
+  <button id="connectBtn">Connect the FT232H</button>
+  <p id="usbStatus" class="hint">Status: not connected</p>
 
   <hr>
-  <h2>连通性测试</h2>
-  <p class="hint">每一项都刻意测最难的情形 —— 见 spec §9.3。</p>
+  <h2>Connectivity tests</h2>
+  <p class="hint">Every one of these tests the hardest case on purpose — see spec §9.3.</p>
   <ol id="tests">
     <li>
-      <button data-test="stt">测 STT</button>
+      <button data-test="stt">Test STT</button>
       <span id="sttResult" class="result"></span>
       <p class="hint">
-        读 <code>fixtures/zh.wav</code>、<code>fixtures/en.wav</code>、
-        <code>fixtures/mixed.wav</code> 三段固定音频：中文、英文、
-        <b>中英混说</b>。三段都要显示转写结果。文件缺失时这里会显示
-        <code>fixtures/README.md</code> 的录制说明，而不是悄悄跳过。
+        Reads three fixed clips — <code>fixtures/zh.wav</code>,
+        <code>fixtures/en.wav</code> and <code>fixtures/mixed.wav</code>:
+        Chinese, English, and <b>the two mixed inside one sentence</b>. All three
+        must come back with a transcript. When a file is missing you get
+        <code>fixtures/README.md</code>'s recording instructions rather than a
+        silent skip.
       </p>
     </li>
     <li>
-      <button data-test="llm">测 LLM</button>
+      <button data-test="llm">Test LLM</button>
       <span id="llmResult" class="result"></span>
-      <p class="hint">既要能回话，<b>也要能调工具</b> —— 这是两件事，分开验证。</p>
+      <p class="hint">It has to answer <b>and</b> to call a tool. Those are two different things, verified separately.</p>
     </li>
     <li>
-      <button data-test="tts">测 TTS</button>
+      <button data-test="tts">Test TTS</button>
       <span id="ttsResult" class="result"></span>
-      <p class="hint">合成「『往前走』的英文是 go forward」，<b>两种语言都要听得清</b>。</p>
+      <p class="hint">Synthesises 「『往前走』的英文是 go forward」. <b>Both languages have to be intelligible.</b></p>
     </li>
     <li>
-      <button data-test="usb">测 USB</button>
+      <button data-test="usb">Test USB</button>
       <span id="usbResult" class="result"></span>
-      <p class="hint">前进 200 ms，车动一下。</p>
+      <p class="hint">200 ms forward; the car twitches.</p>
     </li>
   </ol>
 
   <hr>
-  <h2>打字驱动</h2>
+  <h2>Typed driver</h2>
   <p class="hint">
-    跳过麦克风，直接把文本喂给 brain.js。这就是 v1 全链路，只少了 STT 那一段。
-    先点上面的「连接 FT232H」。
+    Skips the microphone and feeds text straight to brain.js — the whole v1
+    chain except for STT. Connect the FT232H above first.
   </p>
   <form id="textForm">
-    <input id="textInput" placeholder="往前开两秒，顺便讲个笑话" autocomplete="off">
-    <button type="submit">发送</button>
+    <input id="textInput" placeholder="drive forward for two seconds, and tell me a joke" autocomplete="off">
+    <button type="submit">Send</button>
   </form>
-  <button id="stopBtn" class="danger">急停</button>
+  <button id="stopBtn" class="danger">Emergency stop</button>
   <pre id="turnLog"></pre>
 </main>
 <script type="module" src="setup.js"></script>

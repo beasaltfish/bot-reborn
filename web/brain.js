@@ -277,7 +277,7 @@ export class Brain {
       );
     } catch {
       // Cancelling is not failing. Without this line the `error` earcon and
-      // "接口失败" would be the answer to the user changing their mind.
+      // the apiFailed line would be the answer to the user changing their mind.
       if (turn.signal.aborted) return;
       this.#earcon('error');
       await this.#tts.speak(t(this.#config.lang, 'apiFailed'), { signal: turn.signal });

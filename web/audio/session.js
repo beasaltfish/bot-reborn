@@ -125,7 +125,7 @@ export class Session {
     this.#lastVoiceAt = this.#now();
     // The user talking over the reply ends the turn (§8.1). Only reachable with
     // bargeIn on — §5.3 unsubscribes VAD during SPEAKING otherwise — so this
-    // cannot fire on the 丐版 path.
+    // cannot fire on the bargeIn = false path.
     if (this.#state === 'SPEAKING') {
       this.#abortTurn();
       this.#tts.cancel();

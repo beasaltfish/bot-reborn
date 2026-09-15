@@ -72,6 +72,8 @@ test('speak(): plays the decoded buffer and resolves when it ends', async () => 
     fetch: /** @type {any} */ (async () => okResponse()),
   });
 
+  // Non-ASCII on purpose: the text travels through a JSON body, and this is
+  // the only place that path is exercised at all.
   const playing = tts.speak('你好');
   await Promise.resolve();
   await Promise.resolve();
@@ -92,7 +94,7 @@ test('cancel(): silences a reply that is still being fetched (spec §7.1)', asyn
     fetch: /** @type {any} */ (() => gate.promise),
   });
 
-  const speaking = tts.speak('一段很长的回答');
+  const speaking = tts.speak('a long reply');
   await Promise.resolve();
   tts.cancel();                     // nothing is playing yet — and never should
   gate.resolve(okResponse());
@@ -110,7 +112,7 @@ test('cancel(): silences a reply that is still being decoded', async () => {
     fetch: /** @type {any} */ (async () => okResponse()),
   });
 
-  const speaking = tts.speak('一段很长的回答');
+  const speaking = tts.speak('a long reply');
   for (let i = 0; i < 4; i++) await Promise.resolve();
   tts.cancel();
   gate.resolve({ duration: 1 });
@@ -132,9 +134,9 @@ test('speak(): a second call supersedes one still in flight, instead of overlapp
     }),
   });
 
-  const first = tts.speak('第一句');
+  const first = tts.speak('the first sentence');
   await Promise.resolve();
-  const second = tts.speak('第二句');
+  const second = tts.speak('the second sentence');
   await Promise.resolve();
   assert.equal(gates.length, 2);
 

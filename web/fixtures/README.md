@@ -1,19 +1,24 @@
-# 连通性测试用的固定音频
+# Fixed audio for the connectivity test
 
-`setup.html` 的 STT 测试要三段 16 kHz 单声道 WAV，各 2–4 秒，放在这个目录下：
+`setup.html`'s STT test wants three 16 kHz mono WAV files of 2–4 seconds each,
+in this directory:
 
-| 文件 | 内容 | 测什么 |
+| File | Contents | What it tests |
 |---|---|---|
-| `zh.wav` | 「往前开两秒然后左转」 | 中文短指令 |
-| `en.wav` | "keep going forward until I say stop" | 英文长句 |
-| `mixed.wav` | 「这个 sentence 里的 transition word 用得对吗」 | **句中 code-switching** |
+| `zh.wav` | 「往前开两秒然后左转」 | a short Chinese command |
+| `en.wav` | "keep going forward until I say stop" | a long English sentence |
+| `mixed.wav` | 「这个 sentence 里的 transition word 用得对吗」 | **code-switching mid-sentence** |
 
-第三段是重点。§9.3：随便一句中文都能让测试通过，而 code-switching 的能力
-完全没被验证 —— 而它正是学语言场景下最常见的输入形态。
+The third one is the point. Per §9.3, any old Chinese sentence will pass the
+test while leaving code-switching entirely unverified — and code-switching is
+the most common shape of input in the language-learning case this project is
+partly for.
 
-录制：手机录音 → `ffmpeg -i in.m4a -ar 16000 -ac 1 -c:a pcm_s16le zh.wav`
+Recording: record on the phone, then
+`ffmpeg -i in.m4a -ar 16000 -ac 1 -c:a pcm_s16le zh.wav`
 
-这三个 `.wav` 不进仓库（见 `.gitignore` 里的 `web/fixtures/*.wav`）——它们是
-各人的口音，别人的样本测不出你的问题。`setup.html` 会用相对路径
-`fixtures/zh.wav` 等去 fetch 这三个文件；哪个文件不在，STT 测试就会在结果里
-显示这份说明，而不是悄悄跳过那一段。
+These three `.wav` files stay out of the repo (see `web/fixtures/*.wav` in
+`.gitignore`) — they are your own accent, and somebody else's samples cannot
+find your problem. `setup.html` fetches them by relative path
+(`fixtures/zh.wav` and so on); when one is missing, the STT test shows this
+file in its result instead of quietly skipping that clip.

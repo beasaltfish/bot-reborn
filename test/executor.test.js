@@ -132,7 +132,7 @@ test('pinsFor(): combines drive and steer by bitwise or (spec §3.2)', () => {
   assert.equal(DRIVE_BITS.backward, 0x20);
   assert.equal(STEER_BITS.straight, 0x00);
   assert.equal(pinsFor('forward', 'straight'), 0x10);
-  // A 侧 = 0x40, B 侧 = 0x80; which one is "left" comes from item ① and lives
+  // Side A = 0x40, side B = 0x80; which one is "left" comes from item ① and lives
   // in STEER_BITS, so assert on the *set* rather than on a guessed direction.
   assert.deepEqual(
     [STEER_BITS.left, STEER_BITS.right].sort((a, b) => a - b),
