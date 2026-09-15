@@ -26,13 +26,17 @@ export function harness(over = {}) {
     /** @param {string} n */
     unsubscribe(n) { this.subs.delete(n); },
   };
-  const kws = { /** @type {string[]} */ hits: [], accept: () => kws.hits.splice(0) };
+  // Declared outside the literals: a JSDoc type on a property inside an object
+  // literal does not take, and both of these infer as never[] without it.
+  /** @type {string[]} */ const hits = [];
+  /** @type {Float32Array[]} */ const segments = [];
+  const kws = { hits, accept: () => hits.splice(0) };
   const vad = {
     detected: false,
-    /** @type {Float32Array[]} */ segments: [],
+    segments,
     cleared: 0,
     accept: rec('vad.accept'),
-    drain: () => vad.segments.splice(0),
+    drain: () => segments.splice(0),
     clear() { vad.cleared++; },
   };
   const deps = {
@@ -177,4 +181,93 @@ test('an earcon unsubscribes the whole pipeline and puts it back', () => {
   assert.deepEqual(h.names(), []);  // gated
   h.tick(80);
   assert.deepEqual(h.names(), ['kws', 'vad']);
+});
+
+// --- §5.5, the two words ---------------------------------------------------
+
+test('the wake word does NOT clear the VAD buffer', () => {
+  // Said in one breath — "hey steven 往前走" — KWS reports tens to hundreds of
+  // ms after `steven` ends, by which time 「往」 is already in the buffer.
+  // Clearing throws it away and STT hears 「前走」. That failure makes no sound;
+  // it just looks like STT being bad.
+  const h = harness();
+  h.session.start();
+  h.kws.hits.push('hey_steven');
+  h.feed('kws');
+  assert.equal(h.session.state, 'LISTENING');
+  assert.equal(h.vad.cleared, 0);
+});
+
+test('the stop word DOES discard what is in hand', () => {
+  // Opposite meaning, opposite cleanup: "stop now, never mind the rest".
+  const h = harness();
+  h.session.start();
+  h.wake();
+  h.kws.hits.push('all_stop');
+  h.feed('kws');
+  assert.ok(h.vad.cleared > 0);
+  assert.equal(h.session.state, 'SLEEPING');
+  assert.equal(h.took('executor.stop'), 1);
+});
+
+test('both spellings of each word behave identically (§11.2)', () => {
+  // The _zh lines are the same word spelled for a different mouth, not a
+  // second keyword.
+  const a = harness();
+  a.session.start();
+  a.kws.hits.push('hey_steven_zh');
+  a.feed('kws');
+  assert.equal(a.session.state, 'LISTENING');
+
+  const b = harness();
+  b.session.start();
+  b.wake();
+  b.kws.hits.push('all_stop_zh');
+  b.feed('kws');
+  assert.equal(b.session.state, 'SLEEPING');
+  assert.equal(b.took('executor.stop'), 1);
+});
+
+test('a label no keyword file produces is ignored, not guessed at', () => {
+  const h = harness();
+  h.session.start();
+  h.kws.hits.push('LIGHT_UP');
+  h.feed('kws');
+  assert.equal(h.session.state, 'SLEEPING');
+});
+
+test('a stop word heard DURING playback stops the car, not just the mouth', () => {
+  // The defect spec §5.5 names: the natural way to write "a keyword during
+  // playback cuts the TTS" puts both words in one branch, and the car keeps
+  // going. It is a safety defect, and the spike still has it.
+  const h = harness();
+  h.session.start();
+  h.wake();
+  h.session.enterSpeakingForTest();
+  h.kws.hits.push('all_stop');
+  h.feed('kws');
+  assert.ok(h.took('tts.cancel') > 0, 'the mouth is shut');
+  assert.equal(h.took('executor.stop'), 1, 'AND the car is stopped');
+  assert.equal(h.session.state, 'SLEEPING');
+});
+
+test('a wake word heard during playback is only an interruption', () => {
+  const h = harness();
+  h.session.start();
+  h.wake();
+  h.session.enterSpeakingForTest();
+  h.kws.hits.push('hey_steven');
+  h.feed('kws');
+  assert.ok(h.took('tts.cancel') > 0);
+  assert.equal(h.took('executor.stop'), 0, 'the car is not part of this');
+  assert.equal(h.session.state, 'LISTENING');
+});
+
+test('the emergency button and the stop word take the same path (§4.1)', () => {
+  const h = harness();
+  h.session.start();
+  h.wake();
+  h.session.onEmergencyStop();
+  assert.equal(h.took('executor.stop'), 1);
+  assert.equal(h.session.state, 'SLEEPING');
 });

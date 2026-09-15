@@ -5,6 +5,8 @@
 // of those APIs exist in node:test, and pushing the logic out of them is the
 // only way this file can be tested at all (§10).
 
+import { classifyLabel, WAKE, STOP } from './keyword-lines.js';
+
 /** Spec §5.2. Also, by construction, the longest the car can run: the clock
  *  ticks only in LISTENING, so a cruise ends "30 s after you last said
  *  anything", not 30 s after it started. */
@@ -143,7 +145,57 @@ export class Session {
   }
 
   #onSegment(/** @type {Float32Array} */ _samples) { /* Task 12 */ }
-  #onKeyword(/** @type {string} */ _label) { /* Task 11 */ }
+
+  /** @param {string} label */
+  #onKeyword(label) {
+    const kind = classifyLabel(label);
+    // A label no shipped keyword file produces means somebody renamed one.
+    // Guessing at it is how a stop word quietly becomes a no-op.
+    if (kind === STOP) return this.onEmergencyStop();
+    if (kind === WAKE) return this.#onWake();
+  }
+
+  /**
+   * Spec §5.5. The wake word means "I am about to say a command", so the half
+   * sentence behind it is the message and the VAD buffer is NOT cleared. During
+   * playback it is the poor man's barge-in: it shuts the robot up and does
+   * nothing else. It must not share a branch with the stop word.
+   */
+  #onWake() {
+    const interrupting = this.#state === 'SPEAKING' || this.#state === 'THINKING';
+    this.#abortTurn();
+    this.#tts.cancel();
+    // No earcon when interrupting: the user is already talking, and §5.6's gate
+    // would drop exactly the frames carrying what they are saying.
+    if (!interrupting) this.#playEarcon('wake');
+    this.#setState('LISTENING');
+  }
+
+  /**
+   * Spec §4.1 layer 1 and layer 2 both arrive here. The order is not
+   * negotiable: stop the car FIRST, without going through any intermediate
+   * layer, then let the state machine tidy itself. If the machine is wedged on
+   * an await the car has already stopped; if the tidying throws, the car has
+   * still stopped. "The button works" and "the state is consistent" are two
+   * different things, and the first one wins.
+   */
+  onEmergencyStop() {
+    this.#executor.stop();
+    this.#abortTurn();
+    this.#tts.cancel();
+    // The opposite of the wake word: "stop now, never mind the rest" — whatever
+    // is in hand is not wanted (§5.5).
+    this.#vad.clear();
+    this.#brain?.resetHistory();
+    this.#playEarcon('sleep');
+    this.#setState('SLEEPING');
+  }
+
+  /** Task 12 fills this in; the two words already have to be able to ask. */
+  #abortTurn() {}
+
+  /** TEMPORARY, removed in task 12 when speakingTts lands. */
+  enterSpeakingForTest() { this.#setState('SPEAKING'); }
 
   // --- plumbing --------------------------------------------------------------
 
