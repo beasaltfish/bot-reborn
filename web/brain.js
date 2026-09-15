@@ -219,7 +219,7 @@ export class Brain {
    *   llm: { chat(messages: object[], tools: object[], opts?: { signal?: AbortSignal }): Promise<{ text: string, toolCalls: any[], rawMessage: object }> },
    *   executor: { connected: boolean, move(steps: Step[]): Promise<void>, cruise(d: string, s: string): Promise<void>, stop(): Promise<void> },
    *   tts: { speak(text: string, opts?: { signal?: AbortSignal }): Promise<void> },
-   *   earcon: (name: string) => void,
+   *   earcon: (name: import('./audio/earcon.js').EarconName) => void,
    *   config: { lang: 'en' | 'zh', replyLang: 'zh' | 'en' | null, bargeIn: boolean },
    * }} deps
    */

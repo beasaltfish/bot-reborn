@@ -8,12 +8,33 @@
 </head>
 <body>
   <main>
-    <h1>语音机器人</h1>
-    <p>v1 还在实现中。目前有两个页面：</p>
-    <ul>
-      <li><a href="bench.html">标定台</a> —— 硬件接线、极性、字节速率、起动阈值</li>
-      <li><a href="setup.html">连通性测试</a> —— 三层 provider 与打字驱动的整条链路</li>
-    </ul>
+    <h1 id="title">语音机器人</h1>
+
+    <!-- spec §4.1 第 2 层。第 1 层自称不是安全机制，第 3 层被动要等超时，第 0 层
+         只在 JS 已经死了之后才有意义 —— 所以只要 JS 还活着但在做错事，这个按钮
+         就是人唯一能主动叫停的手段。车一旦能被语音驱动，它就必须同时存在。
+         sticky，和标定台同一个形状：车要跑出去的那一刻，按钮必须在眼睛已经在的
+         地方。 -->
+    <div class="stopbar">
+      <button id="estop" class="danger" disabled>急停</button>
+    </div>
+
+    <p class="controls">
+      <button id="start">开始听</button>
+      <button id="stop" disabled>停止听</button>
+      <span id="state" class="state">休眠</span>
+    </p>
+
+    <p id="notice" class="notice" hidden></p>
+    <p id="transcript" class="transcript"></p>
+    <pre id="log" class="log"></pre>
+
+    <hr>
+    <p>
+      <a href="setup.html">连通性测试</a> ·
+      <a href="bench.html">标定台</a>
+    </p>
   </main>
+  <script type="module" src="app.js"></script>
 </body>
 </html>

@@ -60,7 +60,9 @@ export class AudioPipeline {
   /** Frames actually handed to subscribers. §5.8 compares this to the wall. */
   get fedFrames() { return this.#fed; }
   get startedAt() { return this.#startedAt; }
-  get audioContext() { return this.#ctx; }
+  /** Always set by the time start() resolves — the cast says so rather than
+   *  making every caller re-check something that cannot be null. */
+  get audioContext() { return /** @type {AudioContext} */ (this.#ctx); }
 
   stop() {
     this.#node?.disconnect();

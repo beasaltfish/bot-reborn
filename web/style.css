@@ -152,3 +152,36 @@ button.danger {
   padding: 10px;
   font-size: 16px;
 }
+
+/* The voice page's emergency stop (spec §4.1 layer 2). Bigger than the bench's:
+   there, the reader is sitting at a table watching a calibration run; here the
+   phone is strapped to a moving car and the person is chasing it. */
+#estop {
+  width: 100%;
+  min-height: 4.5rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  border-radius: 12px;
+}
+
+#estop:disabled { background: #999; }
+
+.state { margin-left: 12px; opacity: 0.7; }
+
+.notice {
+  padding: 12px;
+  text-align: left;
+  background: #fff6d8;
+  color: #000;
+  border-radius: 8px;
+}
+
+.transcript { min-height: 1.5em; font-size: 1.1rem; }
+
+.log {
+  max-height: 40vh;
+  overflow: auto;
+  text-align: left;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+}
