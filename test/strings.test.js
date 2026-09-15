@@ -33,5 +33,30 @@ test('en and zh define exactly the same keys', () => {
 
 test('t() falls back to the key rather than rendering undefined', () => {
   assert.equal(t('zh', 'usbNotConnected'), STRINGS.zh.usbNotConnected);
-  assert.equal(t('zh', 'noSuchKey'), 'noSuchKey');
+  // The cast is the point: reaching this fallback now takes deliberate effort,
+  // because an ordinary misspelling no longer typechecks.
+  assert.equal(t('zh', /** @type {any} */ ('noSuchKey')), 'noSuchKey');
+});
+
+test('every string the UI needs exists in both languages', () => {
+  const needed = /** @type {(keyof typeof STRINGS.en)[]} */ ([
+    'usbNotConnected', 'didNotCatch', 'apiFailed', 'deviceDisconnected',
+    'sessionTimedOut',
+    'appTitle', 'start', 'stopBtn', 'emergencyStop', 'booting', 'micDenied',
+    'keywordsInvalid', 'screenOffMissed', 'usbNotPaired',
+    'stSleeping', 'stListening', 'stCapturing', 'stThinking', 'stSpeaking',
+  ]);
+  for (const key of needed) {
+    for (const lang of /** @type {const} */ (['en', 'zh'])) {
+      assert.ok(STRINGS[lang][key], `STRINGS.${lang}.${key} is missing`);
+    }
+  }
+});
+
+test('the screen-off notice says what to do, not just what went wrong', () => {
+  // Spec §5.8: it is shown when the user comes back to a phone that stopped
+  // listening. It has to carry the recovery, because the recovery is the whole
+  // reason this is a notice and not a log line.
+  assert.match(STRINGS.zh.screenOffMissed, /锁屏|屏幕/);
+  assert.match(STRINGS.en.screenOffMissed, /screen/i);
 });

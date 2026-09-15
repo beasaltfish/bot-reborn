@@ -11,15 +11,37 @@ export const KEYWORDS = /** @type {const} */ (['hey steven', 'all stop']);
 /**
  * NOTE: every value here may be read aloud by TTS, bypassing the LLM. None of
  * them may contain a keyword — see spec §6.8 and test/strings.test.js.
- * @type {{ en: Record<string, string>, zh: Record<string, string> }}
+ *
+ * Deliberately NOT annotated as Record<string, string>: that annotation would
+ * widen the key type back to `string` and quietly undo StringKey below, whose
+ * whole job is to make a misspelled key a compile error instead of something
+ * TTS reads out loud.
  */
 export const STRINGS = {
   en: {
+    // --- Fixed TTS lines: spoken aloud, bypassing the LLM (§6.8) -----------
     usbNotConnected: 'The car is not plugged in yet.',
     didNotCatch: 'Sorry, I did not catch that.',
     apiFailed: 'I could not reach the server.',
     deviceDisconnected: 'The car came unplugged. I have braked.',
     sessionTimedOut: 'Going to sleep.',
+    // --- On-screen copy: never spoken -------------------------------------
+    appTitle: 'Voice robot',
+    start: 'Start listening',
+    stopBtn: 'Stop listening',
+    emergencyStop: 'EMERGENCY STOP',
+    booting: 'Loading the wake-word model…',
+    micDenied: 'Microphone access was refused. Nothing can be heard without it.',
+    keywordsInvalid: 'A keyword uses a token this model does not know: ',
+    usbNotPaired: 'This phone has never been paired with the car. '
+      + 'Open the connectivity test once to pair it.',
+    screenOffMissed: 'Your phone could not hear me while the screen was off. '
+      + 'Keep the screen on if you want me listening.',
+    stSleeping: 'asleep',
+    stListening: 'listening',
+    stCapturing: 'hearing you',
+    stThinking: 'thinking',
+    stSpeaking: 'speaking',
   },
   zh: {
     usbNotConnected: '小车还没连上。',
@@ -27,12 +49,30 @@ export const STRINGS = {
     apiFailed: '连不上服务器。',
     deviceDisconnected: '小车断开了，我已经刹住。',
     sessionTimedOut: '我先休息了。',
+    appTitle: '语音机器人',
+    start: '开始听',
+    stopBtn: '停止听',
+    emergencyStop: '急停',
+    booting: '正在加载唤醒词模型…',
+    micDenied: '麦克风被拒绝了。没有它什么都听不见。',
+    keywordsInvalid: '关键词里有这个模型不认识的 token：',
+    usbNotPaired: '这台手机还没和小车配过对。先去连通性测试页连一次。',
+    screenOffMissed: '你的手机黑屏之后听不见我。想让我一直听着，就别锁屏。',
+    stSleeping: '休眠',
+    stListening: '在听',
+    stCapturing: '听你说',
+    stThinking: '在想',
+    stSpeaking: '在说',
   },
 };
 
+/** @typedef {keyof typeof STRINGS.en} StringKey */
+
 /**
  * @param {'en' | 'zh'} lang
- * @param {string} key
+ * @param {StringKey} key a misspelling is a typecheck error now; the runtime
+ *   fallback below guards `lang`, which comes from storage, not `key`, which
+ *   comes from source.
  * @returns {string}
  */
 export function t(lang, key) {
