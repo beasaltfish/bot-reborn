@@ -10,6 +10,29 @@
 export const RATE = 16000;
 export const FRAME_MS = 100;
 
+/**
+ * autoGainControl off: it would ride the level of a quiet room up and make the
+ * noise floor §5.8 cares about meaningless. noiseSuppression off: it eats the
+ * same consonant onsets the wake word is made of. Neither is a parameter —
+ * they are what makes the numbers mean anything.
+ *
+ * echoCancellation IS a parameter, because waiting item ⑥ measures it: the
+ * audio bench's acoustics panel runs the barge-in self-test with it both on
+ * and off. The default is the product value.
+ *
+ * @param {{ echoCancellation?: boolean }} [opts]
+ * @returns {MediaStreamConstraints}
+ */
+export function micConstraints(opts = {}) {
+  return {
+    audio: {
+      echoCancellation: opts.echoCancellation ?? true,
+      autoGainControl: false,
+      noiseSuppression: false,
+    },
+  };
+}
+
 export class AudioPipeline {
   /** @type {Map<string, (frame: Float32Array) => void>} */ #subs = new Map();
   #fed = 0;
@@ -18,15 +41,10 @@ export class AudioPipeline {
   /** @type {AudioWorkletNode | null} */ #node = null;
   /** @type {MediaStream | null} */ #stream = null;
 
-  /** @param {{ onRate?: (hz: number) => void }} [opts] */
+  /** @param {{ onRate?: (hz: number) => void, echoCancellation?: boolean }} [opts] */
   static async start(opts = {}) {
     const p = new AudioPipeline();
-    // autoGainControl off: it would ride the level of a quiet room up and make
-    // the noise floor §5.8 cares about meaningless. noiseSuppression off: it
-    // eats the same consonant onsets the wake word is made of.
-    p.#stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, autoGainControl: false, noiseSuppression: false },
-    });
+    p.#stream = await navigator.mediaDevices.getUserMedia(micConstraints(opts));
     const ctx = makeContext();
     p.#ctx = ctx;
     await ctx.audioWorklet.addModule(new URL('./capture-worklet.js', import.meta.url));
