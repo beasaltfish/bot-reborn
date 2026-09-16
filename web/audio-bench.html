@@ -67,6 +67,37 @@
   <hr>
   <section id="panel-residency">
     <h2>Residency — ⑤ ⑫ ⑭ ⑮</h2>
+    <p class="hint">
+      One resident run, four readings. <b>The three clocks are ⑫'s verdict:</b>
+      the wall clock always runs, and if the audio clock and the fed count stop
+      TOGETHER then the capture path was closed — not the main thread frozen.
+      That is what ⑤'s three reproductions (59 / 60 / 65 s) separated.
+    </p>
+    <p class="hint">
+      ⑫: set the keep-alive above to <code>only while the screen is off</code>,
+      run for 5 minutes with the screen off, and compare against
+      <code>always</code>. ⑭: <code>KWS + VAD</code> with the keep-alive on.
+      ⑮: the same run, 30 minutes, <b>no cable and no adb</b>.
+    </p>
+    <label>Engines
+      <select id="resEngines">
+        <option value="kws">KWS only (⑤ measured 8.55 ms/frame this way)</option>
+        <option value="both" selected>KWS + VAD (⑭)</option>
+      </select>
+    </label>
+    <div class="controls">
+      <button id="resRun" disabled>Run</button>
+      <button id="resStop" disabled>Stop</button>
+    </div>
+    <div class="stat"><b>Wall clock</b><span id="resWall">—</span></div>
+    <div class="stat"><b>Audio clock</b><span id="resAudio">—</span></div>
+    <div class="stat"><b>Fed (frames × 100 ms)</b><span id="resFed">—</span></div>
+    <div class="stat"><b>Behind?</b><span id="resBehind">—</span></div>
+    <div class="stat"><b>KWS per frame</b><span id="resKws">—</span></div>
+    <div class="stat"><b>VAD per frame</b><span id="resVad">—</span></div>
+    <div class="stat"><b>Total per frame</b><span id="resTotal">—</span></div>
+    <div class="stat"><b>Keyword hits</b><span id="resHits">0</span></div>
+    <div class="stat"><b>Battery</b><span id="resBattery">—</span></div>
   </section>
 
   <hr>

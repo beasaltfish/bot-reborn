@@ -28,6 +28,26 @@ export function dbs(amplitude) {
   return amplitude > 0 ? `${fmt(dbOf(amplitude), 0)} dB` : '−∞';
 }
 
+/**
+ * A running count / mean / max. Every per-frame cost and every window level on
+ * this page goes through one.
+ *
+ * `mean` returns 0 when empty rather than NaN: "no frames yet" is the normal
+ * state before Run is pressed, and NaN would sit in the stat row looking like
+ * a fault.
+ */
+export function createMeter() {
+  let count = 0, sum = 0, max = 0;
+  return {
+    /** @param {number} v */
+    add(v) { count++; sum += v; if (v > max) max = v; },
+    get count() { return count; },
+    get mean() { return count ? sum / count : 0; },
+    get max() { return max; },
+    reset() { count = 0; sum = 0; max = 0; },
+  };
+}
+
 // --- DOM ------------------------------------------------------------------
 
 const $ = (/** @type {string} */ id) =>
