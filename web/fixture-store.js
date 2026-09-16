@@ -56,3 +56,32 @@ export function recordedAt(response) {
   const date = new Date(header);
   return Number.isNaN(date.getTime()) ? null : date;
 }
+
+/**
+ * Every stored key under a prefix, as the relative paths they were saved with.
+ *
+ * setup.html does not need this — its three fixtures are a fixed list in
+ * STT_FIXTURES. The audio bench does: its calibration samples are however many
+ * you recorded, under `calib/`, and ⑯'s whole method is replaying that set
+ * against one parameter after another.
+ *
+ * @param {string} prefix e.g. 'calib/'
+ * @returns {Promise<string[]>} sorted, so the list does not reshuffle per call
+ */
+export async function listFixtures(prefix) {
+  const cache = await open();
+  if (!cache) return [];
+  const keys = await cache.keys();
+  const base = new URL(prefix, location.href).href;
+  return keys
+    .map((req) => req.url)
+    .filter((url) => url.startsWith(base))
+    .map((url) => prefix + url.slice(base.length))
+    .sort();
+}
+
+/** @param {string} path */
+export async function deleteFixture(path) {
+  const cache = await open();
+  await cache?.delete(path);
+}
