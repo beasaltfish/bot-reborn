@@ -242,3 +242,12 @@ section[id^="panel-"].idle { opacity: .55; }
   font-size: 20px; line-height: 1.4; margin-top: 8px;
   padding: 8px; border-radius: 4px; background: rgba(128, 128, 128, .2);
 }
+
+/* Knob rows: two to a line on a phone, one when there is no room. */
+.row { display: flex; flex-wrap: wrap; gap: 10px; }
+.row label { flex: 1 1 40%; font-size: 14px; text-align: left; }
+.row label input { width: 100%; box-sizing: border-box; padding: 8px; }
+
+#rcSamples { text-align: left; padding-left: 22px; }
+#rcSamples li { margin-bottom: 12px; }
+#rcSamples .controls { justify-content: flex-start; }

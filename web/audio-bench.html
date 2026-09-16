@@ -140,6 +140,66 @@
   <hr>
   <section id="panel-recognition">
     <h2>Recognition — ⑦ ⑩ ⑯</h2>
+    <p class="hint">
+      <b>⑯ is the one item here that can overturn product code.</b> §5.4 hands
+      the pre-roll to sherpa's own CircularBuffer on the strength of docs and a
+      silent test; if <code>vad.front()</code> loses the head of a real
+      sentence, the 500 ms hand-rolled ring goes back in.
+    </p>
+    <p class="hint">
+      Say twenty short commands that <b>start with a consonant</b>
+      (「往前走」「把灯关了」) and check the first character survives in the
+      transcript. <b>At least five of them as the run-on form
+      「hey steven 往前走」</b> — that one presses on two things at once: §5.5
+      not clearing the VAD, and §5.6's earcon gate, which is why
+      <code>wake</code> was squeezed to 80 ms.
+    </p>
+    <p class="hint">
+      <b>⑦</b>: turn the motor on above, then shout each keyword 20 times and
+      count misses; then talk Chinese at it and count <code>all stop</code>
+      false triggers. <b>⑩</b>: record the three sample classes below and
+      replay them. <b>⑯</b>: record once, then sweep bufferSeconds 30 → 15 →
+      10 → 5 over the same recordings, and finally record one clip longer than
+      the buffer and see what comes out.
+    </p>
+
+    <div class="row">
+      <label>KWS threshold<input id="rcKwsThreshold" type="number" step="0.05" value="0.25" inputmode="decimal"></label>
+      <label>KWS score<input id="rcKwsScore" type="number" step="0.5" value="1" inputmode="decimal"></label>
+    </div>
+    <div class="row">
+      <label>VAD threshold<input id="rcVadThreshold" type="number" step="0.05" value="0.5" inputmode="decimal"></label>
+      <label>min silence, s<input id="rcMinSilence" type="number" step="0.1" value="0.8" inputmode="decimal"></label>
+    </div>
+    <div class="row">
+      <label>min speech, s<input id="rcMinSpeech" type="number" step="0.05" value="0.25" inputmode="decimal"></label>
+      <label>bufferSeconds<input id="rcBufferSeconds" type="number" step="1" value="30" inputmode="numeric"></label>
+    </div>
+
+    <h3>Live</h3>
+    <div class="controls">
+      <button id="rcRun" disabled>Run</button>
+      <button id="rcStop" disabled>Stop</button>
+      <button id="rcReset">Reset the counters</button>
+    </div>
+    <div class="stat"><b>Keyword hits</b><span id="rcHits">0</span></div>
+    <div class="stat"><b>Segments cut</b><span id="rcSegs">0</span></div>
+    <div class="stat"><b>Last segment</b><span id="rcLastSeg">—</span></div>
+    <div class="stat"><b>Last transcript</b><span id="rcLastText">—</span></div>
+
+    <h3>Samples</h3>
+    <p class="hint">
+      Recorded into this browser under <code>calib/</code>, never into the
+      repo. <b>One recording, every sweep</b>: comparing bufferSeconds across
+      twenty freshly-spoken sentences would be comparing different inputs
+      against different parameters.
+    </p>
+    <div class="controls">
+      <input id="rcSampleName" placeholder="kws-01" autocomplete="off">
+      <button id="rcRecord" disabled>● Record</button>
+      <button id="rcReplayAll" disabled>Replay all at the settings above</button>
+    </div>
+    <ol id="rcSamples"></ol>
   </section>
 
   <hr>
