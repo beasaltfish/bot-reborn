@@ -7,9 +7,14 @@
 node_modules/
 dist/
 # `spike/` was ignored here on the assumption these pages get deleted once they
-# have answered their question. They are kept instead: ⑤ and ⑥ were each
-# reopened by a later finding, and a probe that is already calibrated against
-# this phone is worth more than the shelf space.
+# have answered their question. That assumption was wrong twice over, and the
+# second correction removed the directory: ⑤ and ⑥ were each reopened by a
+# later finding, and then it turned out that EVERY answer they hold — CPU,
+# battery, AEC, transcription quality — is an answer about one phone in one
+# room, and expires when either changes. The apparatus had to stay; what it
+# did not have to be was a second copy of the engines. It lives in
+# web/audio-bench.html now, driving web/audio/'s own modules, which is what
+# makes a reading worth taking back to them.
 
 # web/models/ is deliberately VENDORED, not ignored — the comment that used to
 # sit here claimed the bundle was "fetched by script" and no such script has

@@ -16,7 +16,9 @@ utterance, STT and an LLM turn it into car actions and a spoken reply, and a
 local emergency stop word can interrupt any of it. What is **not** built yet is
 the settings page, the first-run wizard and the barge-in calibration (spec §7.3)
 — for now the providers are configured on `setup.html`. Five hardware
-calibration figures are also still unmeasured; `docs/hardware.md` marks them.
+calibration figures are also still unmeasured, and so is most of the audio
+side; `docs/hardware.md` marks both, and `audio-bench.html` is where the audio
+ones get measured.
 
 ## Project layout
 
@@ -51,10 +53,11 @@ calibration figures are also still unmeasured; `docs/hardware.md` marks them.
     ├── keywords/       # the two keyword files (ARPAbet + pinyin)
     ├── models/         # the vendored sherpa-onnx KWS+VAD wasm bundle
     ├── providers/      # STT / LLM / TTS, all OpenAI-compatible endpoints
-    ├── bench.html/.js  # calibration bench: polarity, byte rate, start threshold
+    ├── bench.html/.js  # hardware bench: polarity, byte rate, start threshold
+    ├── audio-bench.html, audio-bench/
+    │                   # audio bench: residency, acoustics, recognition, providers
     ├── setup.html/.js  # provider config, four connectivity tests, typed drive
     ├── fixtures/       # your own STT test audio (not in git — see its README)
-    ├── spike/          # bring-up probes: KWS cost, the audio path, barge-in
     └── style.css
 ```
 
