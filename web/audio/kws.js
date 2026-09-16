@@ -7,9 +7,13 @@ const RATE = 16000;
  * @param {{ Module: any, createKws: Function }} sherpa
  * @param {string} keywordLines validated by keyword-lines.js FIRST — an unknown
  *   token aborts the whole wasm module (docs/hardware.md).
+ * @param {{ score?: number, threshold?: number }} [opts] the audio bench sweeps
+ *   these for waiting item ⑦ (missed detections with the motor running, and
+ *   false triggers under Chinese speech). Not for the product to tune: the
+ *   defaults below are the product values.
  * @returns {{ accept(frame: Float32Array): string[] }}
  */
-export function createSpotter(sherpa, keywordLines) {
+export function createSpotter(sherpa, keywordLines, opts = {}) {
   // createKws()'s own defaults name encoder-epoch-12 (fp32), and this bundle
   // contains epoch-13 int8 and nothing else, so the config is never optional.
   const kws = sherpa.createKws(sherpa.Module, {
@@ -27,7 +31,9 @@ export function createSpotter(sherpa, keywordLines) {
     // The conservative global default belongs to the wake word; the stop word
     // overrides it per line with `#0.15`, so §5.5's asymmetry lives in the
     // keyword file rather than here.
-    keywordsScore: 1.0, keywordsThreshold: 0.25,
+    // `??`, never `||`: 0 is a legitimate sweep value for ⑦.
+    keywordsScore: opts.score ?? 1.0,
+    keywordsThreshold: opts.threshold ?? 0.25,
     keywords: keywordLines,
   });
   const stream = kws.createStream();
