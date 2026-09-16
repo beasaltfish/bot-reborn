@@ -96,9 +96,15 @@ export const DEFAULT_BYTES_PER_MS = 1200 / 8 / 1000; // 0.15 — theory only, un
 const DEFAULT_BAUD_RATE = 1200;
 
 export class Ftdi {
-  /** @type {USBDevice | null} */ #device = null;
-  /** @type {number} */ #endpoint = 0;
-  /** @type {number} */ #bytesPerMs = DEFAULT_BYTES_PER_MS;
+  /** @type {USBDevice | null} */
+  #device = null;
+
+  /** @type {number} */
+  #endpoint = 0;
+
+  /** @type {number} */
+  #bytesPerMs = DEFAULT_BYTES_PER_MS;
+
   /** @type {((reason: Error) => void) | null} */
   onDisconnect = null;
 
