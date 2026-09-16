@@ -645,3 +645,33 @@ counts per-frame, per-window, and is unaffected.
 count in both languages on purpose, and nothing on the page can score it. It
 needs someone to listen and say whether the English inside the Chinese sounds
 like speech or like assembly.
+
+## What expires when the phone changes
+
+Every figure in this file was measured on one phone, in one room, by one
+person. Most of them are about that combination rather than about the code, so
+swapping any part of it retires them. There is no way to tell from a number
+whether it still holds; this table is the substitute.
+
+Re-run all of these on `audio-bench.html`. The hardware items above them
+(D6/D7 polarity, byte rate, the motor's starting threshold) expire on a change
+of *car*, not of phone, and are measured on `bench.html`.
+
+| Reading | Why it expires | Panel |
+|---|---|---|
+| KWS cost per frame | CPU, thermal ceiling, how the browser schedules the worklet | Residency |
+| Battery drain | battery size and the OS's own power policy | Residency |
+| Screen-off survival, and whether the keep-alive tone rescues it | android version and Chrome's autoplay policy, both of which have changed this behaviour before | Residency |
+| The barge-in verdict (`bargeIn`, `ttsPath`) | the phone's echo canceller is the thing under test | Acoustics |
+| Noise floor, with and without the keep-alive | the room, and the phone's own amplifier | Acoustics |
+| Keyword miss rate and false triggers | the microphone, and the speaker's accent | Recognition |
+| Whether `vad.front()` keeps the head of a sentence | the mic's onset response — and it decides whether §5.4's ring comes back | Recognition |
+| Transcription quality without a locked `language` | the provider and its model version, which move without notice | Recognition |
+| TTS on a code-switched line | same | Providers |
+| How often a tool call's `content` is pure restatement | the LLM and its version | Providers |
+
+What does **not** expire, because it is a fact about the code or the build
+rather than about the device: that the VAD and KWS can share one wasm module
+(the binary is vendored in `web/models/`), that keywords are spelled in ARPAbet
+and toned pinyin rather than BPE, and that an unknown token aborts the module
+via `SHERPA_ONNX_EXIT(-1)` instead of failing quietly.
