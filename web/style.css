@@ -251,3 +251,11 @@ section[id^="panel-"].idle { opacity: .55; }
 #rcSamples { text-align: left; padding-left: 22px; }
 #rcSamples li { margin-bottom: 12px; }
 #rcSamples .controls { justify-content: flex-start; }
+
+#pvTurnLog {
+  margin-top: 12px; padding: 10px; min-height: 120px; max-height: 45vh;
+  overflow: auto; border: 1px solid currentColor; border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px; line-height: 1.45; white-space: pre-wrap;
+  word-break: break-all; text-align: left; opacity: .9;
+}

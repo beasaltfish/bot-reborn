@@ -205,6 +205,41 @@
   <hr>
   <section id="panel-providers">
     <h2>Providers — ⑨ ⑪</h2>
+
+    <h3>⑨ — twenty turns, with what the model said in full</h3>
+    <p class="hint">
+      Talk to it twenty times and count how many replies are pure restatement
+      carrying zero information. High enough to be annoying and §6.3 goes back
+      to discarding <code>content</code> — one <code>if</code>. The log below
+      shows the transcript, the model's sentence and every dispatched action,
+      because with only <code>♪ done</code> there is nothing to count.
+    </p>
+    <p class="hint">
+      Needs the FT232H connected above (the car is what the tool calls drive).
+    </p>
+    <div class="controls">
+      <button id="pvRun" disabled>Start the voice loop</button>
+      <button id="pvStop" disabled>Stop</button>
+    </div>
+    <div class="stat"><b>State</b><span id="pvState">—</span></div>
+    <pre id="pvTurnLog"></pre>
+
+    <h3>⑪ — the same code-switched line, one provider at a time</h3>
+    <p class="hint">
+      <b>This is the item that can overturn a choice rather than a constant</b>
+      (§8.3's default TTS). setup.html's TTS test only ever tries the one you
+      have configured; ⑪ is the comparison. Nothing here is saved — fill it in,
+      listen, change it, listen again.
+    </p>
+    <p class="say">「『往前走』的英文是 go forward」</p>
+    <label>baseURL<input id="pvTtsBase" autocomplete="off"></label>
+    <label>apiKey<input id="pvTtsKey" type="password" autocomplete="off"></label>
+    <label>model<input id="pvTtsModel" autocomplete="off"></label>
+    <label>voice<input id="pvTtsVoice" autocomplete="off"></label>
+    <div class="controls">
+      <button id="pvSpeak">Speak it</button>
+    </div>
+    <p id="pvSpeakResult" class="result"></p>
   </section>
 
   <hr>

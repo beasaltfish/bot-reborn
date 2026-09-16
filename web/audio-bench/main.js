@@ -13,6 +13,7 @@ import { createKnobs } from './knobs.js';
 import { createResidency } from './residency.js';
 import { createAcoustics } from './acoustics.js';
 import { createRecognition } from './recognition.js';
+import { createProviders } from './providers.js';
 
 const $ = (/** @type {string} */ id) =>
   /** @type {HTMLElement} */ (document.getElementById(id));
@@ -30,7 +31,9 @@ const knobs = createKnobs({ log });
  * what it uses; a panel never reaches for a global.
  * @type {Array<{ name: string, start(ctx: BenchContext): void, stop(): void }>}
  */
-const PANELS = [createResidency(), createAcoustics(), createRecognition()];
+const PANELS = [
+  createResidency(), createAcoustics(), createRecognition(), createProviders(),
+];
 
 /**
  * @typedef {{
