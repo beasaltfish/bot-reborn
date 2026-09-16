@@ -9,12 +9,14 @@ import { AudioPipeline } from '../audio/pipeline.js';
 import { loadSherpa } from '../audio/sherpa.js';
 import { unknownTokens } from '../audio/keyword-lines.js';
 import { createLog, setStat, setDisabled } from './readout.js';
+import { createKnobs } from './knobs.js';
 
 const $ = (/** @type {string} */ id) =>
   /** @type {HTMLElement} */ (document.getElementById(id));
 
 const log = createLog($('log'));
 const config = loadConfig();
+const knobs = createKnobs({ log });
 
 /** @type {import('../audio/sherpa.js').Sherpa | null} */ let sherpa = null;
 /** @type {string} */ let keywords = '';
@@ -34,6 +36,8 @@ const PANELS = [];
  *   keywords: string,
  *   config: import('../config.js').Config,
  *   log: (msg: string) => void,
+ *   exclusion: ReturnType<typeof import('./knobs.js').createExclusion>,
+ *   knobs: ReturnType<typeof import('./knobs.js').createKnobs>,
  * }} BenchContext
  */
 
@@ -78,7 +82,10 @@ $('start').addEventListener('click', async () => {
     });
     log(`▶︎ microphone open, echoCancellation ${echoCancellation ? 'on' : 'off'}`);
     /** @type {BenchContext} */
-    const ctx = { pipeline, sherpa, keywords, config, log };
+    const ctx = {
+      pipeline, sherpa, keywords, config, log,
+      exclusion: knobs.exclusion, knobs,
+    };
     for (const panel of PANELS) panel.start(ctx);
     setDisabled('stop', false);
   } catch (err) {
