@@ -103,6 +103,38 @@
   <hr>
   <section id="panel-acoustics">
     <h2>Acoustics — ⑥ ⑬</h2>
+    <p class="hint">
+      One window cannot separate three sources — the robot's echo that AEC
+      missed, your voice, and the room — so this runs to a script and the page
+      says the lines. Only the comparison between windows means anything:
+      <code>quiet − floor</code> is the echo residue, <code>talk − quiet</code>
+      is the only positive evidence that barge-in can work here.
+    </p>
+    <p class="hint">
+      <b>⑥</b>: run it once with echoCancellation on and once with it off (the
+      checkbox is above, and changing it needs a stop/start).
+      <b>⑬</b>: set the keep-alive to <code>always</code> and read row ① —
+      the baseline without it is −75.5 dBFS.
+    </p>
+    <div class="controls">
+      <button id="acRun" class="primary" disabled>Barge-in self-test (follow the prompts)</button>
+      <button id="acStop" disabled>Abort</button>
+    </div>
+    <div id="acBar" hidden>
+      <div id="acCue"></div>
+      <div id="acSub"></div>
+      <div id="acCount"></div>
+      <div id="acLine" hidden></div>
+    </div>
+    <div class="stat"><b>① floor (no TTS, you silent)</b><span id="acFloor">—</span></div>
+    <div class="stat"><b>② control (no TTS, you read)</b><span id="acControl">—</span></div>
+    <div class="stat"><b>④ quiet (it speaks, you silent)</b><span id="acQuiet">—</span></div>
+    <div class="stat"><b>⑤ talk (it speaks, you read)</b><span id="acTalk">—</span></div>
+    <div class="stat"><b>⑥ settle (you are silent again)</b><span id="acSettle">—</span></div>
+    <div class="stat"><b>② control transcript</b><span id="acSttControl">—</span></div>
+    <div class="stat"><b>⑤ transcript over playback</b><span id="acSttTalk">—</span></div>
+    <div class="stat"><b>transcription verdict</b><span id="acSttVerdict" class="verdict">—</span></div>
+    <div class="stat"><b>Verdict</b><span id="acVerdict" class="verdict">—</span></div>
   </section>
 
   <hr>

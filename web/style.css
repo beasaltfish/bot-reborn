@@ -226,3 +226,19 @@ section[id^="panel-"] h2 { text-align: center; }
 section[id^="panel-"].idle { opacity: .55; }
 
 .verdict { font-weight: bold; }
+
+/* Read at arm's length while you are talking over the phone's own speaker. */
+#acBar {
+  border: 2px solid currentColor;
+  border-radius: 6px;
+  padding: 14px 12px;
+  margin: 12px 0;
+  text-align: center;
+}
+#acCue { font-size: 24px; font-weight: bold; line-height: 1.3; }
+#acSub { opacity: .7; font-size: 14px; margin-top: 4px; }
+#acCount { font-size: 40px; font-weight: bold; font-variant-numeric: tabular-nums; margin-top: 6px; }
+#acLine {
+  font-size: 20px; line-height: 1.4; margin-top: 8px;
+  padding: 8px; border-radius: 4px; background: rgba(128, 128, 128, .2);
+}
