@@ -12,6 +12,10 @@ import { OpenAiCompatStt } from './providers/stt-openai-compat.js';
 import { OpenAiCompatLlm } from './providers/llm-openai-compat.js';
 import { WebAudioTts } from './providers/tts-webaudio.js';
 import { Brain, TOOLS, buildSystemPrompt } from './brain.js';
+import { AudioPipeline, RATE } from './audio/pipeline.js';
+import { joinFrames, toInt16 } from './audio/pcm.js';
+import { encodeWav } from './audio/wav.js';
+import { matchFixture, saveFixture, recordedAt } from './fixture-store.js';
 
 /**
  * @typedef {import('./config.js').Config} Config
@@ -172,20 +176,39 @@ el('connectBtn').addEventListener('click', async () => {
 // tells you nothing. See web/fixtures/README.md for why the three STT
 // fixtures are what they are.
 
+// `say` is what the recorder puts on screen, so the three sentences have one
+// definition rather than one here and one in fixtures/README.md. They are not
+// UI text and are never translated: they are the audio under test, and the
+// third one only tests code-switching while it stays exactly this shape.
 const STT_FIXTURES = /** @type {const} */ ([
-  { path: 'fixtures/zh.wav', label: 'Chinese' },
-  { path: 'fixtures/en.wav', label: 'English' },
-  { path: 'fixtures/mixed.wav', label: 'mixed in one sentence' },
+  { path: 'fixtures/zh.wav', label: 'Chinese', say: '往前开两秒然后左转' },
+  { path: 'fixtures/en.wav', label: 'English', say: 'keep going forward until I say stop' },
+  { path: 'fixtures/mixed.wav', label: 'mixed in one sentence', say: '这个 sentence 里的 transition word 用得对吗' },
 ]);
 
-async function fixtureReadme() {
-  try {
-    const response = await fetch('fixtures/README.md');
-    if (response.ok) return await response.text();
-  } catch {
-    // fall through to the generic message below
-  }
-  return '(could not read fixtures/README.md — open web/fixtures/README.md in the repo instead.)';
+/**
+ * The one place a fixture is read, whether it was recorded on this page or
+ * dropped into web/fixtures/ with ffmpeg. Both arrive as a Response carrying
+ * audio/wav (that is why fixture-store.js is a Cache and not a database), so
+ * the test and the recorder's status line share a single code path instead of
+ * each deciding for itself what "present" means.
+ * @param {string} path
+ * @returns {Promise<{ response: Response, source: 'recording' | 'file' } | null>}
+ */
+async function loadFixture(path) {
+  const recorded = await matchFixture(path);
+  if (recorded) return { response: recorded, source: 'recording' };
+
+  const response = await fetch(path);
+  // Cloudflare Pages (wrangler pages dev included) does not 404 a missing
+  // static path — it falls back to serving index.html with status 200.
+  // response.ok alone would call that "found" and hand decodeAudioData an
+  // HTML page, which fails with a cryptic decode error instead of ever
+  // saying the clip is missing. The content-type gives it away: a real .wav
+  // is never served as text/html.
+  const contentType = response.headers.get('content-type') ?? '';
+  if (!response.ok || contentType.includes('text/html')) return null;
+  return { response, source: 'file' };
 }
 
 /** @param {AudioBuffer} buffer @returns {{ pcm: Int16Array, sampleRate: number }} */
@@ -206,19 +229,13 @@ async function testStt(stt) {
   const ctx = audioContext();
   const lines = [];
   for (const fixture of STT_FIXTURES) {
-    const response = await fetch(fixture.path);
-    // Cloudflare Pages (wrangler pages dev included) does not 404 a missing
-    // static path — it falls back to serving index.html with status 200.
-    // response.ok alone would call that "found" and hand decodeAudioData an
-    // HTML page, which fails with a cryptic decode error instead of ever
-    // showing the README instructions. The content-type gives it away: a
-    // real .wav is never served as text/html.
-    const contentType = response.headers.get('content-type') ?? '';
-    if (!response.ok || contentType.includes('text/html')) {
-      const readme = await fixtureReadme();
-      throw new Error(`${fixture.path} is missing, and this test must not be skipped silently.\n\n${readme}`);
+    const found = await loadFixture(fixture.path);
+    if (!found) {
+      throw new Error(
+        `${fixture.path} has not been recorded, and this test must not be skipped silently.\n\n`
+        + `Record 「${fixture.say}」 under Fixtures above.`);
     }
-    const audioBuffer = await ctx.decodeAudioData(await response.arrayBuffer());
+    const audioBuffer = await ctx.decodeAudioData(await found.response.arrayBuffer());
     const { pcm, sampleRate } = toInt16Pcm(audioBuffer);
     const text = await stt.transcribe(pcm, sampleRate);
     lines.push(`${fixture.label}: ${text || '(empty)'}`);
@@ -311,6 +328,187 @@ for (const button of document.querySelectorAll('[data-test]')) {
   if (!name) continue;
   btn.addEventListener('click', () => { runConnectivityTest(name); });
 }
+
+// --- Recording the fixtures (spec §9.3) ------------------------------------
+//
+// The three clips have to be in your own voice (web/fixtures/README.md), and
+// on a phone there is no repo to drop a file into and no ffmpeg to make one —
+// so the page that needs them is the only place that can collect them. The
+// rows are built from STT_FIXTURES rather than written into setup.html so
+// that "which clips exist" has one definition.
+//
+// Recording sits above the tests and the tests gain no side effect from it: a
+// clip that was never recorded still fails the STT test loudly, it just points
+// at this section now instead of at a command line.
+
+/** A forgotten Stop should cost a re-record, not a ten-minute clip. */
+const RECORD_CAP_MS = 15000;
+const RECORDER_SUB = 'setup-fixture-recorder';
+
+/** @type {Promise<AudioPipeline> | null} */
+let micPipeline = null;
+
+/**
+ * Started on the first Record click and then held for the life of the page.
+ * §5.3: capture is turned on and off by subscribing, not by stopping the
+ * track — stopping it would spend a permission prompt on every single clip.
+ * A failed start is not cached, or a denied permission would be permanent
+ * until reload even after the user grants it.
+ */
+function microphone() {
+  if (!micPipeline) {
+    micPipeline = AudioPipeline.start().catch((err) => { micPipeline = null; throw err; });
+  }
+  return micPipeline;
+}
+
+/** @typedef {{ status: HTMLElement, record: HTMLButtonElement, play: HTMLButtonElement }} FixtureRow */
+
+/** @type {Map<string, FixtureRow>} */
+const fixtureRows = new Map();
+
+/** @type {{ path: string, finish: () => void } | null} */
+let recording = null;
+
+/** @param {string} label @returns {HTMLButtonElement} */
+function rowButton(label) {
+  const button = document.createElement('button');
+  button.textContent = label;
+  return button;
+}
+
+for (const fixture of STT_FIXTURES) {
+  const item = document.createElement('li');
+
+  const say = document.createElement('p');
+  say.className = 'say';
+  // Not a label but the material: lang="" keeps a browser from picking a font
+  // per the page's lang="en" and rendering the Chinese in it.
+  say.lang = fixture.path === 'fixtures/en.wav' ? 'en' : 'zh';
+  say.textContent = fixture.say;
+
+  const controls = document.createElement('div');
+  controls.className = 'controls';
+  const record = rowButton('Record');
+  const play = rowButton('Play');
+  play.disabled = true;
+  controls.append(record, play);
+
+  const status = document.createElement('span');
+  status.className = 'result';
+
+  item.append(say, controls, status);
+  el('fixtures').append(item);
+  fixtureRows.set(fixture.path, { status, record, play });
+
+  record.addEventListener('click', () => { toggleRecording(fixture.path); });
+  play.addEventListener('click', () => { playFixture(fixture.path); });
+}
+
+/** @param {string} path */
+async function refreshFixtureRow(path) {
+  const row = fixtureRows.get(path);
+  if (!row) return;
+  const found = await loadFixture(path);
+  row.play.disabled = !found;
+  if (!found) {
+    setResult(row.status, 'not recorded yet', 'pending');
+    return;
+  }
+  if (found.source === 'file') {
+    // Already on disk via ffmpeg. Saying so beats "not recorded", which would
+    // be a lie the STT test then contradicts by passing.
+    setResult(row.status, `${path} on disk`, 'ok');
+    return;
+  }
+  const when = recordedAt(found.response);
+  // The date is here because a recorded fixture is a moving baseline in a way
+  // a committed file is not: comparing two models is only meaningful while
+  // both heard the same take, and this is what makes "same take" visible.
+  setResult(row.status, `recorded ${when ? when.toLocaleString() : 'earlier'}`, 'ok');
+}
+
+/** @param {string} path */
+async function toggleRecording(path) {
+  // Any Record button stops the take in progress — a second concurrent
+  // subscriber would interleave two clips into both files.
+  if (recording) { recording.finish(); return; }
+
+  const row = fixtureRows.get(path);
+  const fixture = STT_FIXTURES.find((f) => f.path === path);
+  if (!row || !fixture) return;
+
+  setResult(row.status, 'starting the microphone…', 'pending');
+  /** @type {AudioPipeline} */
+  let pipeline;
+  try {
+    pipeline = await microphone();
+  } catch (err) {
+    setResult(row.status, `❌ ${/** @type {Error} */ (err).message}`, 'error');
+    return;
+  }
+
+  /** @type {Float32Array[]} */
+  const frames = [];
+  const startedAt = Date.now();
+  row.record.textContent = 'Stop';
+  for (const [other, r] of fixtureRows) if (other !== path) r.record.disabled = true;
+
+  await new Promise((resolve) => {
+    const cap = setTimeout(finish, RECORD_CAP_MS);
+    function finish() {
+      clearTimeout(cap);
+      pipeline.unsubscribe(RECORDER_SUB);
+      recording = null;
+      resolve(undefined);
+    }
+    recording = { path, finish };
+    pipeline.subscribe(RECORDER_SUB, (frame) => {
+      frames.push(frame);
+      const seconds = (Date.now() - startedAt) / 1000;
+      setResult(row.status, `recording… ${seconds.toFixed(1)} s — click Stop when the sentence is finished`, 'pending');
+    });
+  });
+
+  row.record.textContent = 'Record';
+  for (const r of fixtureRows.values()) r.record.disabled = false;
+
+  if (frames.length === 0) {
+    // Not the same failure as a short clip: the mic was open and delivered
+    // nothing, which a saved 44-byte file would hide behind an empty
+    // transcript later.
+    setResult(row.status, '❌ the microphone delivered no audio — nothing was saved', 'error');
+    return;
+  }
+
+  try {
+    await saveFixture(path, encodeWav(toInt16(joinFrames(frames)), RATE));
+  } catch (err) {
+    setResult(row.status, `❌ ${/** @type {Error} */ (err).message}`, 'error');
+    return;
+  }
+  await refreshFixtureRow(path);
+}
+
+/**
+ * Listening back is not a convenience. A clip where the sentence got clipped,
+ * or where the two languages in `mixed.wav` fell either side of a pause, still
+ * transcribes into something plausible — so the STT test goes green while the
+ * case §9.3 cares about was never in the audio at all. Only your ears catch it.
+ * @param {string} path
+ */
+async function playFixture(path) {
+  const row = fixtureRows.get(path);
+  const found = await loadFixture(path);
+  if (!row || !found) return;
+  const ctx = audioContext();
+  const source = ctx.createBufferSource();
+  source.buffer = await ctx.decodeAudioData(await found.response.arrayBuffer());
+  source.connect(ctx.destination);
+  source.start();
+}
+
+for (const fixture of STT_FIXTURES) refreshFixtureRow(fixture.path);
 
 // --- Typed drive: the full chain minus the microphone ----------------------
 

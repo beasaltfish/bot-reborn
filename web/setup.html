@@ -10,10 +10,11 @@
 <main>
   <h1>Connectivity test</h1>
   <p class="hint">
-    Fill in the three provider layers, run the four connectivity tests, then
-    drive the whole chain by typing. This page deliberately leaves the
-    microphone out and feeds text straight to brain.js — for the voice loop,
-    see <a href="index.html">the robot itself</a>.
+    Fill in the three provider layers, record the three STT fixtures, run the
+    four connectivity tests, then drive the whole chain by typing. The
+    microphone is used for the fixtures and for nothing else here — the typed
+    driver at the bottom feeds text straight to brain.js, and the voice loop
+    itself lives in <a href="index.html">the robot</a>.
   </p>
 
   <hr>
@@ -27,9 +28,9 @@
     </fieldset>
     <fieldset>
       <legend>LLM</legend>
-      <label>baseURL <input name="llm.baseURL" placeholder="https://api.deepseek.com/v1" autocomplete="off"></label>
+      <label>baseURL <input name="llm.baseURL" placeholder="https://api.deepseek.com" autocomplete="off"></label>
       <label>apiKey <input name="llm.apiKey" type="password" autocomplete="off"></label>
-      <label>model <input name="llm.model" placeholder="deepseek-v4-flash" autocomplete="off"></label>
+      <label>model <input name="llm.model" placeholder="deepseek-flash" autocomplete="off"></label>
     </fieldset>
     <fieldset>
       <legend>TTS</legend>
@@ -49,6 +50,21 @@
   <p id="usbStatus" class="hint">Status: not connected</p>
 
   <hr>
+  <h2>Fixtures</h2>
+  <p class="hint">
+    The STT test reads three fixed clips, and they have to be <b>your own
+    voice</b>: somebody else's accent cannot find your problem. Say each line
+    as written, then <b>listen back before trusting it</b> — a clip where the
+    sentence got cut off still transcribes into something plausible.
+    Recordings are kept in this browser, never in the repo, so clearing site
+    storage means recording them again. The microphone stays open from the
+    first Record until you leave the page. A <code>.wav</code> put into
+    <code>web/fixtures/</code> with ffmpeg is used when there is no recording —
+    see <code>web/fixtures/README.md</code>.
+  </p>
+  <ol id="fixtures"></ol>
+
+  <hr>
   <h2>Connectivity tests</h2>
   <p class="hint">Every one of these tests the hardest case on purpose — see spec §9.3.</p>
   <ol id="tests">
@@ -56,12 +72,10 @@
       <button data-test="stt">Test STT</button>
       <span id="sttResult" class="result"></span>
       <p class="hint">
-        Reads three fixed clips — <code>fixtures/zh.wav</code>,
-        <code>fixtures/en.wav</code> and <code>fixtures/mixed.wav</code>:
-        Chinese, English, and <b>the two mixed inside one sentence</b>. All three
-        must come back with a transcript. When a file is missing you get
-        <code>fixtures/README.md</code>'s recording instructions rather than a
-        silent skip.
+        Reads the three clips from Fixtures above: Chinese, English, and
+        <b>the two mixed inside one sentence</b>. All three must come back with
+        a transcript. A clip that was never recorded fails this test rather
+        than being skipped quietly.
       </p>
     </li>
     <li>

@@ -96,20 +96,36 @@ form label input {
   font-size: 14px;
 }
 
-#tests {
+#tests,
+#fixtures {
   text-align: left;
   padding-left: 22px;
 }
 
-#tests li {
+#tests li,
+#fixtures li {
   margin-bottom: 18px;
+}
+
+/* The sentence to read out. Bigger than the surrounding prose because it is
+   the one line on the page a person performs rather than reads, and a misread
+   word is a fixture that tests the wrong thing. */
+.say {
+  margin: 0 0 8px;
+  font-size: 18px;
+  line-height: 1.5;
+}
+
+/* .controls centres itself for the voice page's button row; inside a fixture
+   row it sits under a left-aligned sentence and has to line up with it. */
+#fixtures .controls {
+  justify-content: flex-start;
 }
 
 /* Multi-line on purpose, and on the SUCCESS path too: the STT test joins its
    three transcripts with "\n" and three separately legible transcripts is the
-   whole point of spec §9.3's three fixtures. The missing-fixture error embeds
-   fixtures/README.md, which is a whole document. Collapsed to one line, both
-   are unreadable. */
+   whole point of spec §9.3's three fixtures. Collapsed to one line they are
+   unreadable. Shared with the fixture rows above, whose status is one line. */
 .result {
   display: block;
   margin-top: 8px;
