@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  KEEPALIVE, BEHIND_FRAMES, expectedFrames, framesBehind, isBehind,
+  KEEPALIVE, BEHIND_FRAMES, expectedFrames, framesBehind, isBehind, shouldPlay,
 } from '../web/audio/keepalive.js';
 
 test('the sound is the shape §5.8 chose, not the one that failed', () => {
@@ -41,4 +41,21 @@ test('being ahead is never negative', () => {
 
 test('the threshold is the one number spec §5.8 states', () => {
   assert.equal(BEHIND_FRAMES, 5);
+});
+
+test('by default the tone follows §5.8: play when hidden, silent when not', () => {
+  assert.equal(shouldPlay(true), true);
+  assert.equal(shouldPlay(false), false);
+});
+
+test('always makes it play in both — the control group waiting item ⑫ needs', () => {
+  // ⑤ proved "play the whole time" keeps the microphone. ⑫ asks whether the
+  // gated version survives autoplay policy, and a comparison needs both arms.
+  assert.equal(shouldPlay(true, true), true);
+  assert.equal(shouldPlay(false, true), true);
+});
+
+test('always:false is the default, not a third state', () => {
+  assert.equal(shouldPlay(false, false), false);
+  assert.equal(shouldPlay(true, false), true);
 });

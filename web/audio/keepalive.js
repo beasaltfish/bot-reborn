@@ -64,21 +64,41 @@ export function keepAliveWavUrl() {
 }
 
 /**
+ * Spec §5.8's condition, on its own so it can be tested and so the bench can
+ * override it. `always` is the control arm of waiting item ⑫: ⑤ established
+ * that playing the whole time keeps the microphone, and ⑫ asks whether the
+ * gated version survives Chrome's autoplay policy. Comparing them needs both.
+ *
+ * @param {boolean} hidden `document.hidden`
+ * @param {boolean} [always]
+ */
+export function shouldPlay(hidden, always = false) {
+  return always || hidden;
+}
+
+/**
  * Spec §5.8: play when the page is not in the foreground, mute when it comes
- * back. One condition, and no user-facing switch — it is a mechanism, not a
+ * back. One condition, and no USER-facing switch — it is a mechanism, not a
  * preference. If it is loud enough to want turned off, the shape is wrong.
  *
- * @param {{ onLog?: (msg: string) => void }} [opts]
+ * `always` is not that switch: it exists for the audio bench, which measures
+ * this mechanism (⑫ ⑬ ⑭ ⑮) and needs the ungated arm to compare against. The
+ * product never passes it.
+ *
+ * @param {{ onLog?: (msg: string) => void, always?: boolean }} [opts]
  */
 export function createKeepAlive(opts = {}) {
   const log = opts.onLog ?? (() => {});
+  const always = opts.always ?? false;
   const el = new Audio();
   el.loop = true;
   el.src = keepAliveWavUrl();
   el.volume = 1;
 
   const sync = () => {
-    const done = document.hidden ? el.play() : Promise.resolve(el.pause());
+    const done = shouldPlay(document.hidden, always)
+      ? el.play()
+      : Promise.resolve(el.pause());
     Promise.resolve(done).catch((err) => log('keep-alive: ' + err.message));
   };
 
