@@ -25,12 +25,29 @@
   <p id="boot">Loading the model…</p>
   <p id="cfgWarn" class="result error"></p>
 
+  <label><input id="aec" type="checkbox" checked> echoCancellation on the microphone</label>
+  <p class="hint">
+    ⑥ measures what this does, and it is the one thing that has to be settled
+    <b>before</b> Start: changing it changes the getUserMedia constraints,
+    which means a new AudioContext, which means rebuilding the TTS and the
+    earcons hanging off it. So it locks while anything is running — stop,
+    change it, start again. ⑥ is two separate runs anyway.
+  </p>
+  <div class="controls">
+    <!-- disabled until the wasm has loaded: pressing Start before that would
+         hand the panels a null sherpa. main.js enables it. -->
+    <button id="start" class="primary" disabled>Start</button>
+    <button id="stop" disabled>Stop</button>
+  </div>
+
   <hr>
   <h2>Cross-cutting</h2>
   <p class="hint">
-    These two are <b>not</b> panels. They stay on across whichever panel is
-    running, because the measurements that need them are crossings: ⑬ ⑭ ⑮ are
-    each "keep-alive × some reading", and ⑦ is "KWS × motor noise".
+    These two are <b>not</b> panels, and they are set <b>after</b> Start:
+    unlike echoCancellation they can be changed mid-run, and they stay on
+    across whichever panel is running. That is the point — the measurements
+    that need them are crossings: ⑬ ⑭ ⑮ are each "keep-alive × some reading",
+    and ⑦ is "KWS × motor noise".
   </p>
   <label>Keep-alive tone
     <select id="kaMode">
@@ -48,21 +65,6 @@
     <button id="motorToggle" disabled>Make the car circle (noise for ⑦)</button>
   </div>
   <p id="usbStatus" class="hint">USB: not connected</p>
-
-  <hr>
-  <label><input id="aec" type="checkbox" checked> echoCancellation on the microphone</label>
-  <p class="hint">
-    ⑥ measures what this does. It can only be changed while nothing is
-    running: turning it changes the getUserMedia constraints, which means a new
-    AudioContext, which means rebuilding the TTS and the earcons hanging off
-    it. Stop, change it, start again — ⑥ is two separate runs anyway.
-  </p>
-  <div class="controls">
-    <!-- disabled until the wasm has loaded: pressing Start before that would
-         hand the panels a null sherpa. main.js enables it. -->
-    <button id="start" class="primary" disabled>Start</button>
-    <button id="stop" disabled>Stop</button>
-  </div>
 
   <hr>
   <section id="panel-residency">
