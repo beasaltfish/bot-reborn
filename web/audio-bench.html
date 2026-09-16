@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Audio bench</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <h1>Audio bench</h1>
+  <p class="hint">
+    The permanent instrument for every audio-side calibration spec §12 still
+    wants. <b>Not a throwaway probe</b>: ⑤ ⑥ ⑩ were each answered on one phone
+    and every one of those answers expires when the phone changes, so the
+    apparatus stays. Every engine here is the product's own module — the
+    numbers are only worth taking back to <code>web/audio/</code> if they were
+    measured on the code that runs there.
+  </p>
+  <p class="hint">
+    <b>Measuring anything about the background or the battery means no adb, no
+    cable and no charger.</b> A live debug connection stops android from
+    letting the phone sleep — that is how ⑤'s freeze result was contaminated.
+  </p>
+  <p id="boot">Loading the model…</p>
+  <p id="cfgWarn" class="result error"></p>
+
+  <hr>
+  <h2>Cross-cutting</h2>
+  <p class="hint">
+    These two are <b>not</b> panels. They stay on across whichever panel is
+    running, because the measurements that need them are crossings: ⑬ ⑭ ⑮ are
+    each "keep-alive × some reading", and ⑦ is "KWS × motor noise".
+  </p>
+  <label>Keep-alive tone
+    <select id="kaMode">
+      <option value="off" selected>off</option>
+      <option value="hidden">only while the screen is off (what ships)</option>
+      <option value="always">always (⑫'s control arm)</option>
+    </select>
+  </label>
+  <p class="hint">
+    ⑫ compares the middle against the last. ⑬ ⑭ ⑮ all want one of the two
+    playing arms on while another panel runs.
+  </p>
+  <div class="controls">
+    <button id="usbConnect">Connect the FT232H</button>
+    <button id="motorToggle" disabled>Make the car circle (noise for ⑦)</button>
+  </div>
+  <p id="usbStatus" class="hint">USB: not connected</p>
+
+  <hr>
+  <label><input id="aec" type="checkbox" checked> echoCancellation on the microphone</label>
+  <p class="hint">
+    ⑥ measures what this does. It can only be changed while nothing is
+    running: turning it changes the getUserMedia constraints, which means a new
+    AudioContext, which means rebuilding the TTS and the earcons hanging off
+    it. Stop, change it, start again — ⑥ is two separate runs anyway.
+  </p>
+  <div class="controls">
+    <!-- disabled until the wasm has loaded: pressing Start before that would
+         hand the panels a null sherpa. main.js enables it. -->
+    <button id="start" class="primary" disabled>Start</button>
+    <button id="stop" disabled>Stop</button>
+  </div>
+
+  <hr>
+  <section id="panel-residency">
+    <h2>Residency — ⑤ ⑫ ⑭ ⑮</h2>
+  </section>
+
+  <hr>
+  <section id="panel-acoustics">
+    <h2>Acoustics — ⑥ ⑬</h2>
+  </section>
+
+  <hr>
+  <section id="panel-recognition">
+    <h2>Recognition — ⑦ ⑩ ⑯</h2>
+  </section>
+
+  <hr>
+  <section id="panel-providers">
+    <h2>Providers — ⑨ ⑪</h2>
+  </section>
+
+  <hr>
+  <div class="controls"><button id="copyLog">Copy the log</button></div>
+  <pre id="log"></pre>
+</main>
+<script type="module" src="audio-bench/main.js"></script>
+</body>
+</html>

@@ -201,3 +201,28 @@ button.danger {
   font-size: 0.8rem;
   white-space: pre-wrap;
 }
+
+/* --- audio-bench.html: panels, knobs and stat rows -------------------- */
+
+/* Shared with the old spike pages' layout, which was legible at arm's length
+   while talking over the phone's own speaker — that is still the posture. */
+.stat {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(128, 128, 128, .3);
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+
+.stat b { flex: none; opacity: .7; font-weight: normal; }
+.stat span { text-align: right; }
+
+/* A panel that is not the running one dims rather than disappears: the point
+   of one page is that you can see what else is available without navigating. */
+section[id^="panel-"] { text-align: left; }
+section[id^="panel-"] h2 { text-align: center; }
+section[id^="panel-"].idle { opacity: .55; }
+
+.verdict { font-weight: bold; }
