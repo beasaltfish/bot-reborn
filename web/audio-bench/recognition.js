@@ -12,6 +12,8 @@
 
 import { createSpotter } from '../audio/kws.js';
 import { createVoiceDetector } from '../audio/vad.js';
+import { createEarcon, durationOf } from '../audio/earcon.js';
+import { classifyLabel, WAKE } from '../audio/keyword-lines.js';
 import { toInt16 } from '../audio/pcm.js';
 import { RATE, FRAME_MS } from '../audio/pipeline.js';
 import { OpenAiCompatStt } from '../providers/stt-openai-compat.js';
@@ -33,6 +35,7 @@ export function createRecognition() {
   /** @type {import('./main.js').BenchContext | null} */ let ctx = null;
   /** @type {OpenAiCompatStt | null} */ let stt = null;
   /** @type {ReturnType<typeof createRecorder> | null} */ let recorder = null;
+  /** @type {((name: 'wake') => number) | null} */ let earcon = null;
   let running = false;
   let hits = 0;
   let segs = 0;
@@ -49,6 +52,37 @@ export function createRecognition() {
     minSpeech: num('rcMinSpeech'),
     bufferSeconds: num('rcBufferSeconds'),
   });
+
+  /** @returns {'none' | 'gated' | 'ungated'} */
+  const wakeMode = () =>
+    /** @type {any} */ (/** @type {HTMLSelectElement} */ ($('rcWakeMode')).value);
+
+  /**
+   * What the shipped gate actually costs, reproduced exactly.
+   *
+   * §5.6 says the pipeline is gated for 80 ms, and frames arrive every 100 ms,
+   * so on the face of it the gate cannot cost a frame at all: it is over before
+   * the next one lands. It costs one anyway, and the reason is not in §5.6 —
+   * it is in pipeline.js's fan-out. reconcile() subscribes kws BEFORE vad, so
+   * kws runs first in `for (const fn of this.#subs.values())`, and a keyword
+   * hit unsubscribes vad synchronously from inside that loop. A Map iterator
+   * skips a key deleted before it reaches it, so the VAD never sees the frame
+   * the keyword was found in — the 100 ms carrying the end of "steven" and the
+   * attack of 「往」.
+   *
+   * That behaviour hangs entirely on the order of two lines in reconcile().
+   * Swap them and the gate costs nothing. Nothing tests it, in either file.
+   *
+   * @param {string[]} found labels this frame
+   * @returns {boolean} whether the VAD should be denied THIS frame
+   */
+  function gateThisFrame(found) {
+    const mode = wakeMode();
+    if (mode === 'none') return false;
+    if (!found.some((l) => classifyLabel(l) === WAKE)) return false;
+    earcon?.('wake');
+    return mode === 'gated';
+  }
 
   /** @param {Float32Array} seg @returns {Promise<string>} */
   async function transcribe(seg) {
@@ -88,9 +122,12 @@ export function createRecognition() {
         setStat('rcHits', String(hits));
         ctx?.log(`♦ keyword: ${found.join(', ')}`);
       }
-      // No gating and no clearing here. §5.3's subscription table and §5.5's
-      // "the wake word does not clear the buffer" are the product's policy;
-      // this panel is measuring what the detector does with everything.
+      // No CLEARING here — §5.5's "the wake word does not clear the buffer" is
+      // the product's policy and this panel measures what the detector does
+      // with everything. Gating is different: it is a knob, because ⑯ has to
+      // tell a head lost to the gate apart from one lost to the VAD's own
+      // latency, and those two want opposite fixes.
+      if (gateThisFrame(found)) return;
       vad.accept(frame);
       for (const seg of vad.drain()) void reportSegment(seg);
     });
@@ -100,7 +137,8 @@ export function createRecognition() {
     setDisabled('rcRecord', false);
     const o = vadOpts();
     ctx.log(`▶︎ recognition: KWS ${num('rcKwsThreshold')}/${num('rcKwsScore')}, `
-      + `VAD ${o.threshold}/${o.minSilence}/${o.minSpeech}, buffer ${o.bufferSeconds} s`);
+      + `VAD ${o.threshold}/${o.minSilence}/${o.minSpeech}, buffer ${o.bufferSeconds} s, `
+      + `wake earcon ${wakeMode()} (gate costs one 100 ms frame, not ${durationOf('wake')} ms)`);
   }
 
   function stopLive() {
@@ -178,8 +216,15 @@ export function createRecognition() {
         const spotter = createSpotter(ctx.sherpa, ctx.keywords, kwsOpts());
         let kwsHits = 0;
         /** @type {Float32Array[]} */ const cut = [];
+        const gate = wakeMode() === 'gated';
         for (const frame of sliceFrames(samples, FRAME_SAMPLES)) {
-          kwsHits += spotter.accept(frame).length;
+          const found = spotter.accept(frame);
+          kwsHits += found.length;
+          // The gate is reproduced, the sound is not: replay feeds stored
+          // samples straight in, so a tone played now would reach no
+          // microphone and change no reading. Dropping the hit frame is the
+          // whole of what the gate does to the VAD.
+          if (gate && found.some((l) => classifyLabel(l) === WAKE)) continue;
           vad.accept(frame);
           cut.push(...vad.drain());
         }
@@ -205,6 +250,7 @@ export function createRecognition() {
       ctx = c;
       stt = c.config.stt.baseURL ? new OpenAiCompatStt(c.config.stt) : null;
       recorder = createRecorder({ pipeline: c.pipeline, log: c.log });
+      earcon = createEarcon(c.pipeline.audioContext);
       setDisabled('rcRun', false);
       $('rcRun').addEventListener('click', runLive);
       $('rcStop').addEventListener('click', stopLive);
