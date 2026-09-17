@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { OpenAiCompatStt, encodeWav, BILINGUAL_PROMPT } from '../web/providers/stt-openai-compat.js';
+import {
+  OpenAiCompatStt, encodeWav, BILINGUAL_PROMPT, summariseSegments,
+} from '../web/providers/stt-openai-compat.js';
 
 const CFG = { baseURL: 'https://api.example.com/v1', apiKey: 'sk-test', model: 'whisper-large-v3-turbo' };
 
@@ -120,4 +122,69 @@ test("transcribe(): the caller's signal aborts a request still in flight", async
     new Promise((r) => setTimeout(() => r('still pending'), 50)),
   ]);
   assert.equal(outcome, 'AbortError');
+});
+
+// --- verbose_json: the second axis -----------------------------------------
+
+test('summariseSegments(): no segments at all reads as unknown, not as zero', () => {
+  // Groq is OpenAI-compatible, not OpenAI. If it answers verbose_json without
+  // a segments array, the honest reading is "this endpoint did not say", and a
+  // 0 would read as "definitely speech" — the most dangerous direction to
+  // guess in, since 0 is the value that lets everything through.
+  assert.deepEqual(summariseSegments(undefined), { noSpeech: null, logprob: null, parts: 0 });
+  assert.deepEqual(summariseSegments([]), { noSpeech: null, logprob: null, parts: 0 });
+});
+
+test('summariseSegments(): one segment reports its own numbers', () => {
+  const s = summariseSegments([{ no_speech_prob: 0.91, avg_logprob: -0.8 }]);
+  assert.deepEqual(s, { noSpeech: 0.91, logprob: -0.8, parts: 1 });
+});
+
+test('summariseSegments(): several segments report the worst of each', () => {
+  // Worst, not mean: the instrument exists to show the number a threshold
+  // would trip on. `parts` is on the line so that a reading driven by one bad
+  // slice of a long clip is visible as such rather than read as the whole.
+  const s = summariseSegments([
+    { no_speech_prob: 0.02, avg_logprob: -0.3 },
+    { no_speech_prob: 0.88, avg_logprob: -1.4 },
+    { no_speech_prob: 0.40, avg_logprob: -0.9 },
+  ]);
+  assert.deepEqual(s, { noSpeech: 0.88, logprob: -1.4, parts: 3 });
+});
+
+test('summariseSegments(): a segment missing the fields does not poison the rest', () => {
+  const s = summariseSegments([{ no_speech_prob: 0.5, avg_logprob: -0.5 }, { text: 'hi' }]);
+  assert.deepEqual(s, { noSpeech: 0.5, logprob: -0.5, parts: 2 });
+});
+
+test('transcribeDetailed(): asks for verbose_json, plain transcribe() does not', () => {
+  const verbose = captureFetch({ text: 'x', segments: [] });
+  void new OpenAiCompatStt(CFG, { fetch: verbose.fetchImpl })
+    .transcribeDetailed(Int16Array.from([1]), 16000);
+  const plain = captureFetch({ text: 'x' });
+  void new OpenAiCompatStt(CFG, { fetch: plain.fetchImpl })
+    .transcribe(Int16Array.from([1]), 16000);
+  return Promise.resolve().then(() => {
+    assert.equal(verbose.seen.form.get('response_format'), 'verbose_json');
+    assert.equal(plain.seen.form.get('response_format'), null);
+  });
+});
+
+test('transcribeDetailed(): hands back the text and both numbers', async () => {
+  const { fetchImpl } = captureFetch({
+    text: '  谢谢大家。 ',
+    segments: [{ no_speech_prob: 0.97, avg_logprob: -1.1 }],
+  });
+  const got = await new OpenAiCompatStt(CFG, { fetch: fetchImpl })
+    .transcribeDetailed(Int16Array.from([1, 2]), 16000);
+  assert.deepEqual(got, { text: '谢谢大家。', noSpeech: 0.97, logprob: -1.1, parts: 1 });
+});
+
+test('transcribeDetailed(): still sends the bilingual prompt', async () => {
+  // §11.1 is not suspended by asking for more fields back.
+  const { seen, fetchImpl } = captureFetch({ text: 'x', segments: [] });
+  await new OpenAiCompatStt(CFG, { fetch: fetchImpl })
+    .transcribeDetailed(Int16Array.from([1]), 16000);
+  assert.equal(seen.form.get('prompt'), BILINGUAL_PROMPT);
+  assert.equal(seen.form.get('language'), null);
 });
