@@ -4,6 +4,8 @@
 import { loadConfig, saveConfig } from './config.js';
 import { t } from './strings.js';
 import { createUi } from './ui.js';
+import { createSettings } from './settings.js';
+import { fabRung } from './steps.js';
 import { Ftdi , USB_FILTERS } from './ftdi.js';
 import { Executor } from './executor.js';
 import { Brain } from './brain.js';
@@ -44,7 +46,12 @@ warming.catch(() => {});
 // second); this line only has to reach it.
 ui.onFab((tone) => {
   if (tone === 'stop') return void session?.onEmergencyStop();
-  if (tone === 'wait') return void pair();
+  // Amber is whichever gating step is unfinished, so the rung decides, not the
+  // colour. Reading it back off steps.js keeps this in step with the list.
+  if (tone === 'wait') {
+    const rung = fabRung(lastDone, false);
+    return void (rung.step === 'car' ? pair() : settings.open());
+  }
   void start();
 });
 ui.onSleep(stop);
@@ -52,18 +59,51 @@ ui.onSleep(stop);
 /**
  * What the one button offers when nothing is running.
  *
+ * The rung comes from steps.js, which the settings list renders too, so the
+ * two cannot disagree about what is next (spec §6).
+ *
  * getDevices() answers from the persistent grant, so this survives reloads and
  * costs nothing. Asking it up front is the whole point: the product used to
  * download 19 MB, open the microphone, and only then discover the car had
  * never been paired — reporting it as a failure of the thing the user had just
  * asked for.
+ *
+ * @param {boolean} [running]
  */
-async function offerNextStep() {
-  const paired = (await navigator.usb.getDevices()).length > 0;
-  ui.needCar(!paired);
-  ui.fabFace(paired ? 'go' : 'wait', paired ? 'fabStart' : 'fabPair');
+async function offerNextStep(running = false) {
+  const done = {
+    keys: Boolean(config.llm.baseURL && config.stt.baseURL),
+    car: (await navigator.usb.getDevices()).length > 0,
+    // Measured, not its value: a car that turned out NOT to be reversed has
+    // been calibrated just as much as one that was.
+    steer: config.calibration.steerSwapped !== null,
+  };
+  ui.needCar(!done.car);
+  const rung = fabRung(done, running);
+  ui.fabFace(rung.tone, rung.key);
+  return done;
 }
 void offerNextStep();
+
+const settings = createSettings({
+  lang: config.lang,
+  done: () => lastDone,
+  openCar: (opts) => openCar(opts),
+  onCalibrated: (swapped) => {
+    config.calibration.steerSwapped = swapped;
+    saveConfig(config);
+    lastDone = { ...lastDone, steer: true };
+    step(`calibration: steerSwapped = ${swapped}`);
+  },
+  onChange: () => void refresh(),
+  log: ui.log,
+});
+
+/** The settings list reads this synchronously while it renders, and
+ *  getDevices() is a promise — so the answer is kept rather than re-asked. */
+let lastDone = { keys: false, car: false, steer: false };
+async function refresh() { lastDone = await offerNextStep(); settings.render(); }
+void refresh();
 
 /**
  * Pairing, from its own gesture.
@@ -73,13 +113,43 @@ void offerNextStep();
  * rather than something start() could do when it notices. Cancelling the
  * picker throws, and a person changing their mind is not a failure to report.
  */
+/**
+ * Open the car, and nothing else.
+ *
+ * Calibration has to move the car before the model or the microphone exist, so
+ * this cannot stay buried inside start(). getDevices() answers from the
+ * persistent grant; if it is empty, whoever called this has a bug, because the
+ * button does not offer anything that needs the car until it is paired.
+ *
+ * @param {{ raw?: boolean }} [opts] `raw` builds the executor with no
+ *   calibration applied, which is what calibrating it needs — measuring
+ *   through the setting under measurement only confirms what was set.
+ * @returns {Promise<{ ftdi: import('./ftdi.js').Ftdi, executor: Executor }>}
+ */
+async function openCar(opts = {}) {
+  const [device] = await navigator.usb.getDevices();
+  if (!device) throw new Error(t(config.lang, 'usbNotPaired'));
+  // ② if it has been measured; ftdi.js's theoretical 0.15 if it has not.
+  const ftdi = await Ftdi.open(navigator.usb, {
+    device,
+    ...(config.calibration.bytesPerMs === null
+      ? {} : { bytesPerMs: config.calibration.bytesPerMs }),
+  });
+  // Item one. Without it a car wired the other way drives mirror-image and
+  // nothing anywhere says so — it simply goes left when it was told right.
+  const executor = new Executor(ftdi, {
+    calibration: opts.raw ? {} : config.calibration,
+  });
+  return { ftdi, executor };
+}
+
 async function pair() {
   try {
     await navigator.usb.requestDevice({ filters: [...USB_FILTERS] });
   } catch {
     step('pairing cancelled');
   }
-  await offerNextStep();
+  await refresh();
 }
 
 /**
@@ -137,30 +207,13 @@ async function start() {
     // several awaits ago this one was spent. The grant is persistent (§9.2), so
     // pairing happens once, in the onboarding flow, and never here.
     step('… car');
-    const [device] = await navigator.usb.getDevices();
-    // Not thrown as a bare message: this is the one failure that names
-    // something the user has to go and do, so it travels with somewhere to go.
-    // §5's 「连上车」 rung folds this into the button itself in stage 2.
-    if (!device) throw Object.assign(new Error(t(config.lang, 'usbNotPaired')), {
-      go: { href: 'setup.html', label: t(config.lang, 'pairNow') },
-    });
-    // ② if it has been measured; ftdi.js's theoretical 0.15 if it has not.
-    const ftdi = await Ftdi.open(navigator.usb, {
-      device,
-      ...(config.calibration.bytesPerMs === null
-        ? {} : { bytesPerMs: config.calibration.bytesPerMs }),
-    });
+    const { ftdi, executor } = await openCar();
     step('✓ car');
-    const executor = new Executor(ftdi, {
-      // ① . Without it a car wired the other way drives mirror-image, and
-      // nothing anywhere says so — it just goes left when told right.
-      calibration: config.calibration,
-      onError: (err) => {
-        ui.log('USB: ' + err.message);
-        session?.onEmergencyStop();
-        tts.speak(t(config.lang, 'deviceDisconnected')).catch(() => {});
-      },
-    });
+    executor.onError = (err) => {
+      ui.log('USB: ' + err.message);
+      session?.onEmergencyStop();
+      tts.speak(t(config.lang, 'deviceDisconnected')).catch(() => {});
+    };
 
     session = new Session({
       pipeline,
@@ -218,7 +271,7 @@ function stop() {
   pipeline = null;
   keepAlive = null;
   ui.running(false);
-  void offerNextStep();
+  void refresh();
 }
 
 /** §5.7: the lock only covers "screen on, page in front". It cannot keep the

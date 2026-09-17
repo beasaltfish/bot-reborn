@@ -102,6 +102,15 @@ export class Executor {
     ftdi.onDisconnect = (err) => this.#fail(err);
   }
 
+  /**
+   * Settable after construction, because the two callers want different things
+   * from the same car. A session answers a disconnect by braking and saying so
+   * aloud; calibration, which opens the car before there is any voice chain to
+   * speak through, wants none of that.
+   * @param {(err: Error) => void} fn
+   */
+  set onError(fn) { this.#onError = fn; }
+
   get connected() { return this.#connected; }
 
   /** Exposed for tests and for asserting preemption; do not write to it. */

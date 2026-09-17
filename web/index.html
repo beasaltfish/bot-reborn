@@ -95,6 +95,16 @@
 
     <pre id="log" class="log" hidden></pre>
 
+    <!-- The sheet is its own backdrop: a click that lands on it rather than on
+         the panel inside is a click outside, and closes it. -->
+    <div id="sheet" class="sheet" hidden>
+      <div class="panel">
+        <ul id="sheetSteps" class="steps"></ul>
+        <div id="cal" class="cal" hidden></div>
+        <button id="sheetClose" class="quiet"></button>
+      </div>
+    </div>
+
   </main>
   <script type="module" src="app.js"></script>
 </body>
