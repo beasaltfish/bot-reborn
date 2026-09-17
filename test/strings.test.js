@@ -47,7 +47,7 @@ test('every string the UI needs exists in both languages', () => {
   const needed = /** @type {(keyof typeof STRINGS.en)[]} */ ([
     'usbNotConnected', 'didNotCatch', 'apiFailed', 'deviceDisconnected',
     'sessionTimedOut',
-    'fabStart', 'fabStop', 'sleepBtn', 'settings',
+    'fabStart', 'fabStop', 'sleepBtn', 'settings', 'sayThis',
     'emergencyStop', 'booting', 'micDenied',
     'keywordsInvalid', 'screenOffMissed', 'usbNotPaired',
     'stSleeping', 'stListening', 'stCapturing', 'stThinking', 'stSpeaking',

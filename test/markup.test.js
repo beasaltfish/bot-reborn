@@ -9,7 +9,7 @@ const hasId = (id) => new RegExp(`id=["']${id}["']`).test(html);
 // Every id ui.js reaches for. A typo here is a blank page at runtime with
 // nothing in the console but "null is not an object", and no test would catch
 // it — ui.js is DOM-bound and this project does not run a DOM in node.
-const REQUIRED = ['robot', 'bubble', 'fab', 'sleep', 'log', 'notice'];
+const REQUIRED = ['robot', 'bubble', 'fab', 'sleep', 'log', 'notice', 'hint'];
 
 test('index.html provides every element ui.js reaches for', () => {
   for (const id of REQUIRED) assert.ok(hasId(id), `index.html is missing #${id}`);

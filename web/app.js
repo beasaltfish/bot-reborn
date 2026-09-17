@@ -39,7 +39,9 @@ ui.onSleep(stop);
 
 async function start() {
   ui.running(true);
-  ui.notice('');
+  // The model is megabytes and the log is hidden now, so without this the
+  // screen simply stops for several seconds after the only button is pressed.
+  ui.notice(t(config.lang, 'booting'));
   try {
     // Before any await: autoplay needs the user gesture, and one await spends it.
     const ka = createKeepAlive({ onLog: ui.log });
@@ -112,6 +114,7 @@ async function start() {
     await armed;
     await requestWakeLock();
     watchForMissedFrames();
+    ui.notice('');
     ui.log('▶︎ hey steven');
   } catch (err) {
     const e = /** @type {Error} */ (err);

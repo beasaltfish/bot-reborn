@@ -29,7 +29,13 @@ export const STRINGS = {
     // The fab carries one word at a time and the screen has no other copy, so
     // these are short on purpose — §11 budgets the whole main screen at ten
     // words. None is ever spoken: the fab is a button, not a line.
-    fabStart: 'Wake it',
+    // NOT "wake it": this button opens the microphone. Whether the robot wakes
+    // is up to whoever says its name.
+    fabStart: 'Listen',
+    // Composed with KEYWORDS[0] at render time, never stored joined — a fixed
+    // line containing the wake word is a line TTS could read aloud, and the
+    // robot would answer itself. test/strings.test.js enforces that.
+    sayThis: 'Say',
     fabStop: 'STOP',
     sleepBtn: 'Let it sleep',
     settings: 'Settings',
@@ -55,7 +61,8 @@ export const STRINGS = {
     apiFailed: '连不上服务器。',
     deviceDisconnected: '小车断开了，我已经刹住。',
     sessionTimedOut: '我先休息了。',
-    fabStart: '叫醒它',
+    fabStart: '开始听',
+    sayThis: '说',
     fabStop: '停',
     sleepBtn: '让它睡觉',
     settings: '设置',

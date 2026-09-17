@@ -2,7 +2,7 @@
 // else (spec §10); the one table that used to live here — state to string key —
 // moved into robot.js, where it is tested.
 
-import { t } from './strings.js';
+import { t, KEYWORDS } from './strings.js';
 import { applyFace } from './robot.js';
 
 const $ = (/** @type {string} */ id) =>
@@ -40,6 +40,15 @@ export function createUi(lang) {
   const running = (on) => {
     sleep.disabled = !on;
     fabFace(on ? 'stop' : 'go', on ? 'fabStop' : 'fabStart');
+    // The microphone being open is not a session state — SLEEPING covers both
+    // "shut" and "waiting to hear its name" — so it rides on the element
+    // instead, and the stylesheet lights the antenna for the second one.
+    robot.dataset.live = String(on);
+    // Built here rather than stored joined: a STRINGS entry containing the wake
+    // word is a line TTS could read aloud, and the robot would answer itself.
+    const hint = $('hint');
+    hint.textContent = `${t(lang, 'sayThis')} 「${KEYWORDS[0]}」`;
+    hint.hidden = !on;
   };
 
   // Paint the resting face now, not on the caller's first running(false).

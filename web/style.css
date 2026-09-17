@@ -373,6 +373,16 @@ section[id^="panel-"].idle { opacity: .55; }
   .robot *, .robot::before { animation: none !important; }
 }
 
+/* Asleep with the microphone shut, and asleep listening for its name, are one
+   session state and two situations. KWS stays subscribed all through SLEEPING
+   (§5.3), so the second really is listening, and the antenna says so. */
+.robot[data-live="true"][data-face="SLEEPING"] .antenna { opacity: 1; }
+.robot[data-live="true"][data-face="SLEEPING"] .antenna-dot {
+  fill: var(--go); stroke: none;
+}
+
+.hint { margin: 0; font-size: 13px; opacity: .55; }
+
 /* --- the one button -------------------------------------------------- */
 
 .fab {
