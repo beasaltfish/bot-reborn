@@ -7,6 +7,7 @@
 // modules.
 
 import { parseTokens } from './keyword-lines.js';
+import { cachedBytes } from './model-cache.js';
 
 export const MODELS_BASE = './models/kws/';
 
@@ -19,6 +20,13 @@ const GLUE = [
   'sherpa-onnx-vad.js',
   'sherpa-onnx-wasm-kws-main.js',
 ];
+
+// The two that are worth keeping across visits: 12.8 MB and 6.1 MB against
+// 100 KB for all three glue files put together. These are also the only two
+// the engine offers a hook for, which is not a coincidence — they are the ones
+// it was expected people would want to supply themselves.
+const WASM = 'sherpa-onnx-wasm-kws-main.wasm';
+const DATA = 'sherpa-onnx-wasm-kws-main.data';
 
 /** @typedef {{ Module: any, createKws: Function, createVad: Function, tokens: Set<string> }} Sherpa */
 
@@ -73,6 +81,24 @@ async function begin(onStatus, opts) {
   if (!res.ok) throw new Error(`tokens.txt: ${res.status} ${res.statusText}`);
   const tokens = parseTokens(await res.text());
 
+  // §9.2: ask to stop being evictable before filling 19 MB of a best-effort
+  // bucket. Chrome decides heuristically and may say no — that is a known
+  // state, not a failure, so it is reported and nothing branches on it.
+  if (g.navigator?.storage?.persist) {
+    onStatus(await g.navigator.storage.persist() ? 'storage: persistent' : 'storage: best-effort');
+  }
+
+  // Both before any glue runs: the engine reads wasmBinary during startup and
+  // calls getPreloadedPackage synchronously, so there is no awaiting either of
+  // them later.
+  const big = async (/** @type {string} */ name) => cachedBytes(MODELS_BASE + name, {
+    onProgress: (got, total) => onStatus(
+      total ? `… ${name} ${Math.round((got / total) * 100)}%` : `… ${name} ${got >> 20} MB`,
+    ),
+  });
+  const [wasmBinary, dataPackage] = await Promise.all([big(WASM), big(DATA)]);
+  onStatus('✓ model bytes');
+
   /** Named so the timeout can say where it stopped, not merely that it did. */
   let at = 'tokens.txt';
   await new Promise((resolve, reject) => {
@@ -84,6 +110,12 @@ async function begin(onStatus, opts) {
     const fail = (e) => { clearTimeout(timer); reject(e); };
     g.Module = {
       locateFile: (/** @type {string} */ p) => MODELS_BASE + p,
+      // Handed over rather than fetched. Both files are already in hand, and
+      // letting emscripten fetch them again would put the 19 MB back on the
+      // network every visit and leave the cache doing nothing.
+      wasmBinary,
+      getPreloadedPackage: (/** @type {string} */ name) =>
+        (name.endsWith(DATA) ? dataPackage : null),
       setStatus: onStatus,
       onRuntimeInitialized: () => { clearTimeout(timer); resolve(undefined); },
       onAbort: (/** @type {string} */ why) => fail(new Error('wasm abort: ' + why)),

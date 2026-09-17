@@ -22,6 +22,14 @@ import { Session } from './audio/session.js';
 const config = loadConfig();
 const ui = createUi(config.lang);
 
+// Start pulling the model down the moment the page opens. Nothing about
+// downloading needs a user gesture — only getUserMedia and the AudioContext do
+// — so making the first press wait for 19 MB was a choice, and the wrong one.
+// loadSherpa is a one-shot, so start() joins this attempt rather than making
+// another.
+const warming = loadSherpa((s) => s && step(s));
+warming.catch(() => {});
+
 /** @type {AudioPipeline | null} */ let pipeline = null;
 /** @type {{ stop(): void } | null} */ let keepAlive = null;
 /** @type {Session | null} */ let session = null;
@@ -64,7 +72,7 @@ async function start() {
     keepAlive = ka;
     const armed = ka.armFromGesture();
 
-    const sherpa = await loadSherpa((s) => s && step(s));
+    const sherpa = await warming;
     step('✓ model');
 
     // §5.5 / docs/hardware.md: an unknown token does not fail quietly — it
