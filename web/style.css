@@ -272,7 +272,10 @@ section[id^="panel-"].idle { opacity: .55; }
   --ink: currentColor;
 }
 
-.shell { margin: 0; }
+/* The shared stylesheet gives body 20px of padding for the bench and setup
+   pages. Here it is 40px added to a 100dvh child, which is exactly enough to
+   make the one screen that must not scroll, scroll. */
+.shell { margin: 0; padding: 0; }
 
 /* Single screen, never scrolls. dvh rather than vh: on a phone the URL bar
    collapses and vh would leave the fab under it. */

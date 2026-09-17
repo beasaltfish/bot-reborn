@@ -36,6 +36,18 @@ export function createUi(lang) {
     fab.disabled = false;
   };
 
+  /** @param {boolean} on */
+  const running = (on) => {
+    sleep.disabled = !on;
+    fabFace(on ? 'stop' : 'go', on ? 'fabStop' : 'fabStart');
+  };
+
+  // Paint the resting face now, not on the caller's first running(false).
+  // The fab ships from index.html with no text and disabled, and it is the
+  // only way into the app — so "somebody remembers to call this" is not a
+  // property this screen can depend on. It shipped grey and wordless once.
+  running(false);
+
   return {
     /** @param {string} msg */
     log(msg) {
@@ -65,12 +77,7 @@ export function createUi(lang) {
     notice(text) { $('notice').hidden = !text; $('notice').textContent = text; },
 
     fabFace,
-
-    /** @param {boolean} on */
-    running(on) {
-      sleep.disabled = !on;
-      fabFace(on ? 'stop' : 'go', on ? 'fabStop' : 'fabStart');
-    },
+    running,
 
     /**
      * The click carries the tone that was painted on the button when it was

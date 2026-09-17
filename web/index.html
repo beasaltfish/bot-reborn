@@ -10,8 +10,11 @@
   <main class="screen">
 
     <header class="topbar">
-      <button id="settings" class="icon" aria-label="Settings">⚙</button>
-      <span id="link" class="link"></span>
+      <!-- Both are stage 2's. They ship hidden rather than inert: a gear that
+           does not open anything reads as broken, and the first thing anybody
+           does with a new screen is press the thing in the corner. -->
+      <button id="settings" class="icon" aria-label="Settings" hidden>⚙</button>
+      <span id="link" class="link" hidden></span>
     </header>
 
     <section class="stage">
