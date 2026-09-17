@@ -32,7 +32,9 @@ export const STRINGS = {
     // NOT "wake it": this button opens the microphone. Whether the robot wakes
     // is up to whoever says its name.
     fabStart: 'Listen',
+    fabKeys: 'Set me up',
     fabPair: 'Plug me in',
+    fabSteer: 'Teach me left',
     // Composed with KEYWORDS[0] at render time, never stored joined — a fixed
     // line containing the wake word is a line TTS could read aloud, and the
     // robot would answer itself. test/strings.test.js enforces that.
@@ -63,7 +65,9 @@ export const STRINGS = {
     deviceDisconnected: '小车断开了，我已经刹住。',
     sessionTimedOut: '我先休息了。',
     fabStart: '开始听',
+    fabKeys: '先设置一下',
     fabPair: '给我插上',
+    fabSteer: '教我左右',
     sayThis: '说',
     fabStop: '停',
     sleepBtn: '让它睡觉',
