@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { rms, dbOf, fmt, dbs, createMeter } from '../web/audio-bench/readout.js';
+import {
+  rms, dbOf, fmt, dbs, createMeter, aboveFloor, DB_FLOOR_OFF,
+} from '../web/audio-bench/readout.js';
 
 test('rms of silence is zero', () => {
   assert.equal(rms(new Float32Array(160)), 0);
@@ -79,4 +81,33 @@ test('a zero sample counts as a sample', () => {
   m.add(0);
   assert.equal(m.count, 1);
   assert.equal(m.mean, 0);
+});
+
+// --- the STT floor ---------------------------------------------------------
+
+test('a segment above the floor is worth an STT call', () => {
+  assert.equal(aboveFloor(0.1, -40), true);   // −20 dB
+});
+
+test('a segment below the floor is not', () => {
+  assert.equal(aboveFloor(0.001, -40), false); // −60 dB
+});
+
+test('a segment exactly at the floor passes', () => {
+  // `>=`, not `>`: the floor is the level you decided was worth paying for,
+  // and a reading that lands on it is that level.
+  assert.equal(aboveFloor(0.01, -40), true);  // −40 dB
+});
+
+test('the default floor lets a bit-exact silent segment through', () => {
+  // This is the case you most want to SEE in the log, so the gate must not eat
+  // it until you have set a floor on purpose. It works only because dbOf
+  // clamps zero to −120 instead of −Infinity (see readout.js's header) — with
+  // −Infinity this comparison would be false and the gate would start life
+  // silently swallowing exactly the evidence it was built to expose.
+  assert.equal(aboveFloor(0, DB_FLOOR_OFF), true);
+});
+
+test('nothing is below the default floor', () => {
+  assert.equal(aboveFloor(1, DB_FLOOR_OFF), true);
 });

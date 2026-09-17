@@ -1,22 +1,12 @@
 // Shared readings and the page log.
 //
-// The four functions at the top are pure and tested: every panel's verdict is
-// built out of them, and one of them has a floor that matters. dbOf(0) returns
-// −120 rather than −Infinity because a silent window is the NORMAL case here —
-// the noise-floor window is supposed to be quiet — and −Infinity propagates
-// through every later subtraction until the whole row reads NaN.
+// rms / dbOf / aboveFloor moved to web/audio/level.js on 2026-09-17, when
+// session.js came to need them: a panel may import from the product, never the
+// other way round. They are re-exported here so every panel and every existing
+// test keeps one import site.
 
-/** @param {Float32Array} f32 */
-export function rms(f32) {
-  let sum = 0;
-  for (let i = 0; i < f32.length; i++) sum += f32[i] * f32[i];
-  return Math.sqrt(sum / f32.length);
-}
-
-/** @param {number} amplitude linear, 1 = full scale @returns {number} dBFS */
-export function dbOf(amplitude) {
-  return amplitude > 0 ? 20 * Math.log10(amplitude) : -120;
-}
+export { rms, dbOf, aboveFloor } from '../audio/level.js';
+import { dbOf } from '../audio/level.js';
 
 /** @param {number} n @param {number} [digits] */
 export function fmt(n, digits = 1) {
@@ -27,6 +17,13 @@ export function fmt(n, digits = 1) {
 export function dbs(amplitude) {
   return amplitude > 0 ? `${fmt(dbOf(amplitude), 0)} dB` : '−∞';
 }
+
+/** The bench floor that refuses nothing — dbOf's own clamp for zero, so even a
+ *  bit-exact silent segment passes it. The panel still ships at this value: the
+ *  product has a measured floor now, but the bench's job is to SHOW what the
+ *  VAD cut, and a gate that swallowed the silent case would hide the one
+ *  reading the level was added to expose. */
+export const DB_FLOOR_OFF = -120;
 
 /**
  * A running count / mean / max. Every per-frame cost and every window level on
