@@ -37,19 +37,33 @@ const ui = createUi(config.lang);
 ui.onFab((tone) => (tone === 'stop' ? session?.onEmergencyStop() : start()));
 ui.onSleep(stop);
 
+/**
+ * Boot progress goes to the screen, not only to the log.
+ *
+ * Starting takes several seconds — megabytes of wasm, a microphone prompt and
+ * a USB handshake — and the log is hidden on this page now. Without this the
+ * screen simply stops after the only button on it is pressed, and a start that
+ * hangs is indistinguishable from one that is merely slow. It cost a round of
+ * guessing to learn that the hard way.
+ *
+ * @param {string} msg
+ */
+function step(msg) {
+  ui.log(msg);
+  ui.notice(msg);
+}
+
 async function start() {
   ui.running(true);
-  // The model is megabytes and the log is hidden now, so without this the
-  // screen simply stops for several seconds after the only button is pressed.
-  ui.notice(t(config.lang, 'booting'));
+  step(t(config.lang, 'booting'));
   try {
     // Before any await: autoplay needs the user gesture, and one await spends it.
     const ka = createKeepAlive({ onLog: ui.log });
     keepAlive = ka;
     const armed = ka.armFromGesture();
 
-    ui.log(t(config.lang, 'booting'));
-    const sherpa = await loadSherpa((s) => s && ui.log(s));
+    const sherpa = await loadSherpa((s) => s && step(s));
+    step('✓ model');
 
     // §5.5 / docs/hardware.md: an unknown token does not fail quietly — it
     // calls SHERPA_ONNX_EXIT(-1) and aborts the whole wasm module, and the page
@@ -61,9 +75,11 @@ async function start() {
     const bad = unknownTokens(keywords, sherpa.tokens);
     if (bad.length) throw new Error(t(config.lang, 'keywordsInvalid') + bad.join(' '));
 
+    step('… microphone');
     pipeline = await AudioPipeline.start({
       onRate: (hz) => ui.log(`AudioContext ${hz} Hz`),
     });
+    step('✓ microphone');
     const earcon = createEarcon(pipeline.audioContext);
 
     const stt = new OpenAiCompatStt(config.stt);
@@ -73,9 +89,11 @@ async function start() {
     // getDevices(), not requestDevice(): the picker needs a user gesture and
     // several awaits ago this one was spent. The grant is persistent (§9.2), so
     // pairing happens once, in the onboarding flow, and never here.
+    step('… car');
     const [device] = await navigator.usb.getDevices();
     if (!device) throw new Error(t(config.lang, 'usbNotPaired'));
     const ftdi = await Ftdi.open(navigator.usb, { device });
+    step('✓ car');
     const executor = new Executor(ftdi, {
       onError: (err) => {
         ui.log('USB: ' + err.message);
@@ -112,6 +130,7 @@ async function start() {
     session.start();
 
     await armed;
+    step('… wake lock');
     await requestWakeLock();
     watchForMissedFrames();
     ui.notice('');
