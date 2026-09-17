@@ -219,6 +219,29 @@
       <b>Segments cut</b>; the floor decides who pays to look at one, not what
       the VAD did.
     </p>
+    <label>wiring
+      <select id="rcWiring">
+        <option value="both" selected>both engines, always — what ⑦ and ⑯ were measured on</option>
+        <option value="product">session.js's own — the VAD is deaf until you wake it</option>
+      </select>
+    </label>
+    <p class="hint">
+      <b>These two are not the same pipeline, and until now only the first one
+      existed here.</b> §5.3 leaves the VAD <b>unsubscribed through
+      SLEEPING</b>, so on the product's wake path the detector never hears the
+      keyword at all and picks up from whichever frame lands after the earcon
+      window shuts. 「hey steven 往前走」 said in one breath loses far more than
+      the single frame the gate drops — it loses everything up to roughly
+      100 ms past the hit, and 「往」 lives in there. Every ⑯ reading so far was
+      taken on <code>both</code>, which feeds the VAD from the start and so
+      cannot see this at all.
+      <code>product</code> imports <code>wantedSubscriptions</code> from
+      session.js rather than reimplementing it, registers the two subscriptions
+      in the same order, and so inherits the Map-iterator behaviour described
+      below instead of simulating it. It returns to SLEEPING after each
+      utterance, because saying the sentence twenty times means starting from
+      SLEEPING twenty times.
+    </p>
     <label>wake earcon
       <select id="rcWakeMode">
         <option value="none" selected>none — measures the VAD's own latency alone</option>

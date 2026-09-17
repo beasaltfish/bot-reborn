@@ -16,6 +16,7 @@ import { createEarcon, durationOf } from '../audio/earcon.js';
 import { classifyLabel, WAKE } from '../audio/keyword-lines.js';
 import { toInt16 } from '../audio/pcm.js';
 import { RATE, FRAME_MS } from '../audio/pipeline.js';
+import { wantedSubscriptions } from '../audio/session.js';
 import { OpenAiCompatStt } from '../providers/stt-openai-compat.js';
 import {
   rms, dbs, fmt, setStat, setDisabled, aboveFloor, DB_FLOOR_OFF,
@@ -42,6 +43,10 @@ export function createRecognition() {
   let hits = 0;
   let segs = 0;
   let skipped = 0;
+  /** Product wiring only. §5.2 has three more states; none is reachable here,
+   *  because no turn ever runs. @type {'SLEEPING' | 'LISTENING'} */
+  let state = 'SLEEPING';
+  let earconUntil = 0;
 
   // Read at construction time, every time: both engines take these in their
   // constructor, so a knob only takes effect on the next Run or Replay.
@@ -59,6 +64,18 @@ export function createRecognition() {
   /** @returns {'none' | 'gated' | 'ungated'} */
   const wakeMode = () =>
     /** @type {any} */ (/** @type {HTMLSelectElement} */ ($('rcWakeMode')).value);
+
+  /** @returns {'both' | 'product'} */
+  const wiring = () =>
+    /** @type {any} */ (/** @type {HTMLSelectElement} */ ($('rcWiring')).value);
+
+  /** @param {string[]} found */
+  function noteHits(found) {
+    if (!found.length) return;
+    hits += found.length;
+    setStat('rcHits', String(hits));
+    ctx?.log(`♦ keyword: ${found.join(', ')}`);
+  }
 
   /**
    * What the shipped gate actually costs, reproduced exactly.
@@ -150,21 +167,20 @@ export function createRecognition() {
     ctx?.log(`📝 ${head} / ${text}`);
   }
 
-  function runLive() {
-    if (!ctx || running) return;
-    if (!ctx.exclusion.claim(NAME)) {
-      ctx.log(`another panel (${ctx.exclusion.owner}) is running — stop it first`);
-      return;
-    }
-    const spotter = createSpotter(ctx.sherpa, ctx.keywords, kwsOpts());
-    const vad = createVoiceDetector(ctx.sherpa, vadOpts());
-    ctx.pipeline.subscribe(SUB, (frame) => {
+  /**
+   * The `both` wiring: one subscriber, both engines fed every frame, forever.
+   *
+   * This is what ⑯ and ⑦ were measured on, and it is NOT what the product
+   * does — see runProduct below. It stays because it answers a different
+   * question: what the two detectors do when neither is ever starved.
+   *
+   * @param {ReturnType<typeof createSpotter>} spotter
+   * @param {ReturnType<typeof createVoiceDetector>} vad
+   */
+  function runBoth(spotter, vad) {
+    ctx?.pipeline.subscribe(SUB, (frame) => {
       const found = spotter.accept(frame);
-      if (found.length) {
-        hits += found.length;
-        setStat('rcHits', String(hits));
-        ctx?.log(`♦ keyword: ${found.join(', ')}`);
-      }
+      noteHits(found);
       // No CLEARING here — §5.5's "the wake word does not clear the buffer" is
       // the product's policy and this panel measures what the detector does
       // with everything. Gating is different: it is a knob, because ⑯ has to
@@ -174,13 +190,110 @@ export function createRecognition() {
       vad.accept(frame);
       for (const seg of vad.drain()) void reportSegment(seg);
     });
+  }
+
+  /**
+   * The `product` wiring: what session.js actually does.
+   *
+   * The difference is not a detail. §5.3 leaves the VAD UNSUBSCRIBED through
+   * SLEEPING, so on the product's wake path the detector never hears the
+   * keyword at all, and picks up from whichever frame arrives after the earcon
+   * window closes. "hey steven 往前走" said in one breath therefore loses more
+   * than the one frame the `both` wiring's gate drops — it loses everything up
+   * to roughly 100 ms past the hit. Nothing had ever measured that, because
+   * nothing could: this panel fed the VAD every frame regardless of state.
+   *
+   * The policy itself is imported, never copied. wantedSubscriptions is the
+   * product's own function, and a second implementation here would drift the
+   * way web/spike/audio/ drifted before it was deleted.
+   *
+   * @param {ReturnType<typeof createSpotter>} spotter
+   * @param {ReturnType<typeof createVoiceDetector>} vad
+   */
+  function runProduct(spotter, vad) {
+    const KWS = `${SUB}-kws`;
+    const VAD = `${SUB}-vad`;
+    // Wall clock and setTimeout, mirroring session.js's own `now` and `after`
+    // rather than the AudioContext's clock: the gate's 80 ms is a wall-clock
+    // window there, and reproducing it on a different clock reproduces
+    // something else.
+    const now = () => performance.now();
+
+    /** @param {Float32Array} frame */
+    const onKws = (frame) => {
+      const found = spotter.accept(frame);
+      noteHits(found);
+      if (found.some((l) => classifyLabel(l) === WAKE)) wake();
+    };
+    /** @param {Float32Array} frame */
+    const onVad = (frame) => {
+      vad.accept(frame);
+      const cut = vad.drain();
+      for (const seg of cut) void reportSegment(seg);
+      // Back to SLEEPING after each utterance. The product would stay in
+      // LISTENING for §5.2's thirty seconds; this panel is for saying the same
+      // sentence twenty times, and every one of those has to start from the
+      // state the wake path actually begins in.
+      if (cut.length) sleep();
+    };
+
+    const reconcile = () => {
+      const want = wantedSubscriptions(state, true, now() < earconUntil);
+      // kws first, exactly as session.js's #reconcile registers them. The
+      // order is not cosmetic: a keyword hit unsubscribes the VAD from inside
+      // pipeline's fan-out loop, and a Map iterator skips a key deleted before
+      // it reaches it. Registering them the other way round would quietly
+      // measure a pipeline the product does not have.
+      gate(KWS, want.kws, onKws);
+      gate(VAD, want.vad, onVad);
+    };
+    /** @param {string} name @param {boolean} on @param {(f: Float32Array) => void} fn */
+    const gate = (name, on, fn) => {
+      if (on) ctx?.pipeline.subscribe(name, fn);
+      else ctx?.pipeline.unsubscribe(name);
+    };
+    const wake = () => {
+      const mode = wakeMode();
+      if (mode !== 'none') {
+        const ms = earcon?.('wake') ?? 0;
+        // session.js has no `ungated`: it gates for every earcon it plays.
+        // Keeping the tone while refusing the gate is this panel's own arm,
+        // and it is how ⑯ tells the two causes of a lost head apart.
+        if (mode === 'gated') earconUntil = now() + ms;
+      }
+      state = 'LISTENING';
+      reconcile();
+      if (now() < earconUntil) setTimeout(reconcile, earconUntil - now());
+    };
+    const sleep = () => {
+      state = 'SLEEPING';
+      reconcile();
+      ctx?.log('· back to SLEEPING — the next utterance needs the wake word again');
+    };
+
+    state = 'SLEEPING';
+    earconUntil = 0;
+    reconcile();
+  }
+
+  function runLive() {
+    if (!ctx || running) return;
+    if (!ctx.exclusion.claim(NAME)) {
+      ctx.log(`another panel (${ctx.exclusion.owner}) is running — stop it first`);
+      return;
+    }
+    const spotter = createSpotter(ctx.sherpa, ctx.keywords, kwsOpts());
+    const vad = createVoiceDetector(ctx.sherpa, vadOpts());
+    if (wiring() === 'product') runProduct(spotter, vad);
+    else runBoth(spotter, vad);
     running = true;
     setDisabled('rcRun', true);
     setDisabled('rcStop', false);
     setDisabled('rcRecord', false);
     const o = vadOpts();
     const floor = num('rcMinLevel');
-    ctx.log(`▶︎ recognition: KWS ${num('rcKwsThreshold')}/${num('rcKwsScore')}, `
+    ctx.log(`▶︎ recognition: ${wiring()} wiring, `
+      + `KWS ${num('rcKwsThreshold')}/${num('rcKwsScore')}, `
       + `VAD ${o.threshold}/${o.minSilence}/${o.minSpeech}, buffer ${o.bufferSeconds} s, `
       + `STT floor ${floor <= DB_FLOOR_OFF ? 'off' : `${fmt(floor, 0)} dB`}, `
       + `wake earcon ${wakeMode()} (gate costs one 100 ms frame, not ${durationOf('wake')} ms)`);
@@ -188,7 +301,11 @@ export function createRecognition() {
 
   function stopLive() {
     if (!ctx || !running) return;
+    // All three names: which two exist depends on the wiring, and unsubscribing
+    // one that was never registered is a Map.delete that finds nothing.
     ctx.pipeline.unsubscribe(SUB);
+    ctx.pipeline.unsubscribe(`${SUB}-kws`);
+    ctx.pipeline.unsubscribe(`${SUB}-vad`);
     ctx.exclusion.release(NAME);
     running = false;
     setDisabled('rcRun', false);
