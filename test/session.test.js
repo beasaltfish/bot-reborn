@@ -655,3 +655,35 @@ test('a null logprob is no opinion, not a low one', async () => {
   await settle();
   assert.deepEqual(brain.seen, ['往前走']);
 });
+
+test('the wake word is ignored while a sentence is being captured', async () => {
+  // Answering it there plays an earcon, and an earcon unsubscribes the pipeline
+  // for 80 ms — a hole in the middle of the command being recorded, bought for
+  // nothing, since the session is already listening.
+  const h = harness();
+  h.session.attach(fakeBrain(h.session, h.calls));
+  h.session.start();
+  h.wake();
+  h.vad.detected = true;
+  h.feed('vad');                       // LISTENING -> CAPTURING
+  assert.equal(h.session.state, 'CAPTURING');
+  const before = h.calls.filter((c) => c[0] === 'earcon').length;
+  h.kws.hits.push('hey_steven');
+  h.feed('kws');
+  assert.equal(h.calls.filter((c) => c[0] === 'earcon').length, before);
+  assert.equal(h.session.state, 'CAPTURING', 'the capture was not interrupted');
+});
+
+test('the stop word is still answered while capturing — it is the brake', async () => {
+  const h = harness();
+  h.session.attach(fakeBrain(h.session, h.calls));
+  h.session.start();
+  h.wake();
+  h.vad.detected = true;
+  h.feed('vad');
+  assert.equal(h.session.state, 'CAPTURING');
+  h.kws.hits.push('all_stop');
+  h.feed('kws');
+  assert.equal(h.took('executor.stop'), 1);
+  assert.equal(h.session.state, 'SLEEPING');
+});

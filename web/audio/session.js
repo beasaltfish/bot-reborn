@@ -311,6 +311,19 @@ export class Session {
     // A label no shipped keyword file produces means somebody renamed one.
     // Guessing at it is how a stop word quietly becomes a no-op.
     if (kind === STOP) return this.onEmergencyStop();
+    // The stop word is answered in every state, above: it is the brake, and the
+    // car can be rolling in all of them. The wake word is not, and CAPTURING is
+    // where answering it does harm. #onWake plays the `wake` earcon there
+    // (`interrupting` covers SPEAKING and THINKING, not this), and an earcon
+    // unsubscribes the whole pipeline for its 80 ms — punching a hole in the
+    // middle of the sentence the VAD is recording. There is nothing to gain in
+    // exchange: the session is already listening.
+    //
+    // This matters more the further ⑦ goes. The keyword sits at 31% misses and
+    // zero false triggers, which is a very conservative operating point, and
+    // spending that headroom means buying false wakes. This is what makes them
+    // safe to buy.
+    if (kind === WAKE && this.#state === 'CAPTURING') return;
     if (kind === WAKE) return this.#onWake();
   }
 
