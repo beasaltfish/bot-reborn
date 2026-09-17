@@ -61,6 +61,14 @@ export async function loadSherpa(onStatus = () => {}, opts = {}) {
       setStatus: onStatus,
       onRuntimeInitialized: () => { clearTimeout(timer); resolve(undefined); },
       onAbort: (/** @type {string} */ why) => fail(new Error('wasm abort: ' + why)),
+      // The engine's own count of what it is still waiting for. When the glue
+      // has loaded and nothing else ever happens, this is the only thing that
+      // says whether it is stuck on the 6 MB data package, the 12 MB wasm, or
+      // neither — the difference between a slow network and a broken URL.
+      monitorRunDependencies: (/** @type {number} */ left) => {
+        at = `the engine, ${left} dependenc${left === 1 ? 'y' : 'ies'} left`;
+        onStatus(`… ${left} left`);
+      },
       // Onto the status line as well as the console: on a phone the console is
       // not reachable, and this is where the engine says what went wrong.
       printErr: (/** @type {string} */ s) => { console.warn('[wasm]', s); onStatus('wasm: ' + s); },
