@@ -40,3 +40,4 @@ docs/superpowers/
 *.swp
 .idea/
 .vscode/
+.superpowers/
