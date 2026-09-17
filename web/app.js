@@ -137,8 +137,15 @@ async function start() {
     ui.log('▶︎ hey steven');
   } catch (err) {
     const e = /** @type {Error} */ (err);
-    ui.log('❌ ' + (e.name === 'NotAllowedError' ? t(config.lang, 'micDenied') : e.message));
+    const why = e.name === 'NotAllowedError' ? t(config.lang, 'micDenied') : e.message;
+    ui.log('❌ ' + why);
     stop();
+    // After stop(), which does not touch the notice: a failed start used to
+    // report itself only into a log this page hides, so pressing the one
+    // button looked like pressing nothing. A person then presses it again —
+    // and until loadSherpa became a one-shot, the second press wedged the
+    // engine permanently.
+    ui.notice('❌ ' + why);
   }
 }
 

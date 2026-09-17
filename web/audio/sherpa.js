@@ -40,7 +40,33 @@ const LOAD_TIMEOUT_MS = 90_000;
  * @param {{ timeoutMs?: number }} [opts]
  * @returns {Promise<Sherpa>}
  */
-export async function loadSherpa(onStatus = () => {}, opts = {}) {
+export function loadSherpa(onStatus = () => {}, opts = {}) {
+  // One injection per page, ever — success or failure.
+  //
+  // The glue files are classic scripts declaring top-level classes (Stream,
+  // CircularBuffer, ExitStatus). A second injection is an immediate
+  // "Identifier 'Stream' has already been declared", after which the engine
+  // never initialises and the page waits forever with the error only in a
+  // console no phone can show. Measured on a real phone on 2026-09-17, by
+  // pressing the one button twice — which is exactly what a person does when
+  // the first press appears to do nothing.
+  //
+  // A failed attempt is cached too, deliberately. The scripts are already in
+  // the document by then, so a retry cannot work; what it can do is hang. The
+  // honest answer is to keep failing, and to say that a reload is the way out.
+  attempt ??= begin(onStatus, opts);
+  return attempt;
+}
+
+/** @type {Promise<Sherpa> | null} */
+let attempt = null;
+
+/**
+ * @param {(status: string) => void} onStatus
+ * @param {{ timeoutMs?: number }} opts
+ * @returns {Promise<Sherpa>}
+ */
+async function begin(onStatus, opts) {
   const g = /** @type {any} */ (globalThis);
   onStatus('… tokens.txt');
   const res = await fetch(MODELS_BASE + 'tokens.txt');
@@ -51,7 +77,7 @@ export async function loadSherpa(onStatus = () => {}, opts = {}) {
   let at = 'tokens.txt';
   await new Promise((resolve, reject) => {
     const timer = setTimeout(
-      () => reject(new Error(`gave up after ${at}`)),
+      () => reject(new Error(`gave up after ${at} — reload the page to retry`)),
       opts.timeoutMs ?? LOAD_TIMEOUT_MS,
     );
     /** @param {Error} e */
