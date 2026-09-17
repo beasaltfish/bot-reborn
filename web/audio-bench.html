@@ -26,6 +26,34 @@
   <p id="cfgWarn" class="result error"></p>
 
   <label><input id="aec" type="checkbox" checked> echoCancellation on the microphone</label>
+  <label><input id="ns" type="checkbox" checked> noiseSuppression on the microphone</label>
+  <div class="controls">
+    <button id="nsToggle">Flip noiseSuppression on the live track (measure the gap)</button>
+  </div>
+  <p class="hint">
+    The checkbox above is read once, at Start. <b>This button changes the same
+    setting on the track that is already running</b>, and reports two things
+    the plan for it depends on: whether Chrome honours the request at all
+    (<code>applyConstraints</code> is allowed to resolve having done nothing),
+    and how many 100 ms frames went missing while it happened. The second
+    number is the one that matters: the state machine would flip this at the
+    SLEEPING → LISTENING edge, which is the instant the wake word fires, so a
+    hole there falls on 「往」 in "hey steven 往前走" — and §5.3 leaves the VAD
+    unsubscribed through SLEEPING, so there is no buffer behind it to soften
+    the loss. <b>gap 0</b> means the switch is free.
+  </p>
+  <p class="hint">
+    <b>noiseSuppression</b> was forbidden outright until 2026-09-17, and the
+    reason still stands: the suppressor eats the consonant onsets the wake word
+    is built from, and <code>HH EY1 S T IY1 V AH0 N</code> is nearly all onset.
+    It is here because AEC turned out to hand the VAD spurious bursts in
+    silence — −44 dB down to −96, against −40 and up for real speech — and five
+    minutes with AEC off produced none. The suppressor is the stage built to
+    absorb that residue. The product default has not moved; this asks whether
+    it should. The cost side is ⑦'s twenty shouts per keyword, and it cannot be
+    replayed from stored samples: a microphone constraint changes what gets
+    recorded, so there is no identical audio to A/B.
+  </p>
   <p class="hint">
     ⑥ measures what this does, and it is the one thing that has to be settled
     <b>before</b> Start: changing it changes the getUserMedia constraints,
@@ -177,6 +205,20 @@
       <label>min speech, s<input id="rcMinSpeech" type="number" step="0.05" value="0.25" inputmode="decimal"></label>
       <label>bufferSeconds<input id="rcBufferSeconds" type="number" step="1" value="30" inputmode="numeric"></label>
     </div>
+    <div class="row">
+      <label>STT floor, dBFS<input id="rcMinLevel" type="number" step="1" value="-120" inputmode="decimal"></label>
+    </div>
+    <p class="hint">
+      Every segment carries its level, and nothing under the
+      <b>STT floor</b> is sent to be transcribed. It ships at −120, which
+      refuses nothing, because the value that belongs here is a measurement
+      nobody has taken yet — run it open first and read the dB figures off the
+      log. Length cannot do this job: in one run 「回来」and「帮你」came out at
+      0.3 and 0.4 s while an empty room produced 0.4, 0.5, 0.6 — and 6.4, and
+      10.6. Skipped segments are still logged and still counted under
+      <b>Segments cut</b>; the floor decides who pays to look at one, not what
+      the VAD did.
+    </p>
     <label>wake earcon
       <select id="rcWakeMode">
         <option value="none" selected>none — measures the VAD's own latency alone</option>
@@ -208,6 +250,7 @@
     </div>
     <div class="stat"><b>Keyword hits</b><span id="rcHits">0</span></div>
     <div class="stat"><b>Segments cut</b><span id="rcSegs">0</span></div>
+    <div class="stat"><b>Under the floor</b><span id="rcSkipped">0</span></div>
     <div class="stat"><b>Last segment</b><span id="rcLastSeg">—</span></div>
     <div class="stat"><b>Last transcript</b><span id="rcLastText">—</span></div>
 

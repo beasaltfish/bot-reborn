@@ -17,7 +17,9 @@ import { classifyLabel, WAKE } from '../audio/keyword-lines.js';
 import { toInt16 } from '../audio/pcm.js';
 import { RATE, FRAME_MS } from '../audio/pipeline.js';
 import { OpenAiCompatStt } from '../providers/stt-openai-compat.js';
-import { fmt, setStat, setDisabled } from './readout.js';
+import {
+  rms, dbs, fmt, setStat, setDisabled, aboveFloor, DB_FLOOR_OFF,
+} from './readout.js';
 import {
   PREFIX, sliceFrames, createRecorder, loadSamples, listFixtures, deleteFixture,
 } from './samples.js';
@@ -39,6 +41,7 @@ export function createRecognition() {
   let running = false;
   let hits = 0;
   let segs = 0;
+  let skipped = 0;
 
   // Read at construction time, every time: both engines take these in their
   // constructor, so a knob only takes effect on the next Run or Replay.
@@ -84,27 +87,67 @@ export function createRecognition() {
     return mode === 'gated';
   }
 
-  /** @param {Float32Array} seg @returns {Promise<string>} */
+  /**
+   * The model's own two numbers ride along with the text, because the text on
+   * its own cannot say whether there was anything to transcribe: handed an
+   * empty room whisper answers 「谢谢大家」or continues its own prompt, and
+   * both read as a transcript. `nsp` is that opinion, and it is a different
+   * axis from the dB — one is measured off the audio, one is the model's.
+   *
+   * Nothing is filtered on it yet. This run is the one that finds out where
+   * the threshold belongs, which means the false positives have to keep coming
+   * through wearing their numbers.
+   *
+   * @param {Float32Array} seg
+   * @returns {Promise<string>} the transcript with its numbers, ready to log
+   */
   async function transcribe(seg) {
     if (!stt) return '(no STT configured)';
     try {
-      return (await stt.transcribe(toInt16(seg), RATE)).trim();
+      const r = await stt.transcribeDetailed(toInt16(seg), RATE);
+      const nsp = r.noSpeech === null ? 'nsp —' : `nsp ${fmt(r.noSpeech, 2)}`;
+      const lp = r.logprob === null ? '' : ` / lp ${fmt(r.logprob, 2)}`;
+      // `parts` only when there was more than one: whisper cut the clip up
+      // itself, and a worst-of reading taken from one slice of many is a
+      // different claim from one taken off the whole.
+      const parts = r.parts > 1 ? ` / ${r.parts} parts` : '';
+      return `${nsp}${lp}${parts} → ${r.text}`;
     } catch (err) {
       return `(STT failed: ${/** @type {Error} */ (err).message})`;
     }
   }
 
-  /** @param {Float32Array} seg */
+  /**
+   * The level is on the line because the transcript cannot be trusted to say
+   * whether there was anything to transcribe. Handed an empty room, whisper
+   * does not answer with silence — it answers with 「谢谢大家」or with this
+   * file's own BILINGUAL_PROMPT continued, both of which read as a transcript.
+   * A dB figure next to the duration is the one part of the line that comes
+   * from the audio rather than from the model.
+   *
+   * @param {Float32Array} seg
+   */
   async function reportSegment(seg) {
     segs++;
     const seconds = seg.length / RATE;
+    const level = rms(seg);
+    const head = `${fmt(seconds)} s / ${dbs(level)}`;
     setStat('rcSegs', String(segs));
-    setStat('rcLastSeg', `${fmt(seconds)} s`);
+    setStat('rcLastSeg', head);
+    const floor = num('rcMinLevel');
+    if (!aboveFloor(level, floor)) {
+      skipped++;
+      setStat('rcSkipped', String(skipped));
+      // Still logged, and still counted in rcSegs: what the VAD cut is the
+      // measurement. The floor only decides who gets paid to look at it.
+      ctx?.log(`▫ ${head} → under ${fmt(floor, 0)} dB, not sent`);
+      return;
+    }
     const text = await transcribe(seg);
     setStat('rcLastText', text);
     // The transcript goes into the log too: ⑯ is twenty sentences and the stat
-    // row only ever holds the last one.
-    ctx?.log(`📝 ${fmt(seconds)} s → ${text}`);
+    // row only ever holds the last one. transcribe() brings its own arrow.
+    ctx?.log(`📝 ${head} / ${text}`);
   }
 
   function runLive() {
@@ -136,8 +179,10 @@ export function createRecognition() {
     setDisabled('rcStop', false);
     setDisabled('rcRecord', false);
     const o = vadOpts();
+    const floor = num('rcMinLevel');
     ctx.log(`▶︎ recognition: KWS ${num('rcKwsThreshold')}/${num('rcKwsScore')}, `
       + `VAD ${o.threshold}/${o.minSilence}/${o.minSpeech}, buffer ${o.bufferSeconds} s, `
+      + `STT floor ${floor <= DB_FLOOR_OFF ? 'off' : `${fmt(floor, 0)} dB`}, `
       + `wake earcon ${wakeMode()} (gate costs one 100 ms frame, not ${durationOf('wake')} ms)`);
   }
 
@@ -229,7 +274,16 @@ export function createRecognition() {
           cut.push(...vad.drain());
         }
         const texts = [];
-        for (const seg of cut) texts.push(`${fmt(seg.length / RATE)}s "${await transcribe(seg)}"`);
+        for (const seg of cut) {
+          const level = rms(seg);
+          const head = `${fmt(seg.length / RATE)}s / ${dbs(level)}`;
+          // The floor applies here too, so the two paths agree on what counts
+          // as a segment worth transcribing. At the default it refuses nothing
+          // and a sweep reads exactly as it did before.
+          texts.push(aboveFloor(level, num('rcMinLevel'))
+            ? `${head} / ${await transcribe(seg)}`
+            : `${head} (under the floor, not sent)`);
+        }
         const summary = `${fmt(samples.length / RATE)} s in → `
           + `${cut.length} segment(s), ${kwsHits} keyword hit(s)\n`
           + (texts.length ? texts.join('\n') : '(the VAD cut nothing out of it)');
@@ -255,9 +309,10 @@ export function createRecognition() {
       $('rcRun').addEventListener('click', runLive);
       $('rcStop').addEventListener('click', stopLive);
       $('rcReset').addEventListener('click', () => {
-        hits = 0; segs = 0;
+        hits = 0; segs = 0; skipped = 0;
         setStat('rcHits', '0');
         setStat('rcSegs', '0');
+        setStat('rcSkipped', '0');
         setStat('rcLastSeg', '—');
         setStat('rcLastText', '—');
       });

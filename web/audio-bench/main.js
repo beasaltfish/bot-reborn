@@ -79,14 +79,19 @@ $('start').addEventListener('click', async () => {
   if (!sherpa) return;
   setDisabled('start', true);
   setDisabled('aec', true);
+  setDisabled('ns', true);
   try {
     const echoCancellation =
       /** @type {HTMLInputElement} */ ($('aec')).checked;
+    const noiseSuppression =
+      /** @type {HTMLInputElement} */ ($('ns')).checked;
     pipeline = await AudioPipeline.start({
       echoCancellation,
+      noiseSuppression,
       onRate: (hz) => log(`AudioContext ${hz} Hz`),
     });
-    log(`▶︎ microphone open, echoCancellation ${echoCancellation ? 'on' : 'off'}`);
+    log(`▶︎ microphone open, echoCancellation ${echoCancellation ? 'on' : 'off'}`
+      + `, noiseSuppression ${noiseSuppression ? 'on' : 'off'}`);
     /** @type {BenchContext} */
     const ctx = {
       pipeline, sherpa, keywords, config, log,
@@ -111,6 +116,27 @@ $('stop').addEventListener('click', () => {
   setDisabled('start', false);
   setDisabled('aec', false);
   log('■ stopped');
+});
+
+// Option B's one open question. The state machine wants noiseSuppression off
+// in SLEEPING (only KWS runs there, and the VAD is unsubscribed, so the AEC
+// bursts cannot reach anything) and on everywhere else — but it would switch
+// at the SLEEPING → LISTENING edge, which is the instant the wake word fires,
+// and a hole there lands on 「往」. Press this mid-run to find out what the
+// switch costs before any of it reaches session.js.
+$('nsToggle').addEventListener('click', async () => {
+  if (!pipeline) { log('start the microphone first'); return; }
+  const want = !(/** @type {HTMLInputElement} */ ($('ns')).checked);
+  setDisabled('nsToggle', true);
+  log(`⇄ asking the live track for noiseSuppression ${want ? 'on' : 'off'}…`);
+  const r = await pipeline.reprocess({ noiseSuppression: want });
+  /** @type {HTMLInputElement} */ ($('ns')).checked = Boolean(r.settings.noiseSuppression);
+  log(`⇄ ${r.took ? `took via the ${r.took} form` : 'DID NOT TAKE'}`
+    + `${r.error ? ` (last attempt refused: ${r.error})` : ''}`
+    + `, track now reports noiseSuppression `
+    + `${r.settings.noiseSuppression ? 'on' : 'off'}`
+    + `, gap ${r.gap} frame(s) over ${r.ms} ms`);
+  setDisabled('nsToggle', false);
 });
 
 $('copyLog').addEventListener('click', () => {
