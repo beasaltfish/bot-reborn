@@ -56,7 +56,8 @@ function harness({ bytesPerMs = 0.5 } = {}) {
     log, ftdi, flush,
     /** Let the executor past its current sleep, then run it to the next one. */
     async tick() { const r = pending; pending = null; r?.(); await flush(); },
-    /** @param {{ sleep?: (ms: number) => Promise<void>, onError?: (err: Error) => void }} [opts] */
+    /** @param {{ sleep?: (ms: number) => Promise<void>, onError?: (err: Error) => void,
+     *            calibration?: { steerSwapped?: boolean | null } }} [opts] */
     make(opts = {}) { return new Executor(ftdi, { sleep, ...opts }); },
   };
 }
@@ -431,4 +432,64 @@ test('a slice written by a preempted loop does not pollute the queue accounting'
   // conservative (it oversleeps, never overdrives) but the books are lying, and
   // the car stutters at the start of the next command.
   assert.deepEqual(sleeps, [MAX_COAST_MS - LEAD_MS]);
+});
+
+// --- calibration ① : which byte is left -----------------------------------
+
+test('pinsFor leaves the wiring alone by default', () => {
+  // The constants stay the source of truth. A config that has never been
+  // calibrated must produce byte-for-byte what the product produced before
+  // calibration existed.
+  assert.equal(pinsFor('forward', 'left'), DRIVE_BITS.forward | STEER_BITS.left);
+  assert.equal(pinsFor('forward', 'right'), DRIVE_BITS.forward | STEER_BITS.right);
+});
+
+test('pinsFor swaps left and right when ① says the car turns the wrong way', () => {
+  assert.equal(
+    pinsFor('forward', 'left', { steerSwapped: true }),
+    DRIVE_BITS.forward | STEER_BITS.right,
+  );
+  assert.equal(
+    pinsFor('forward', 'right', { steerSwapped: true }),
+    DRIVE_BITS.forward | STEER_BITS.left,
+  );
+});
+
+test('the swap touches steering and nothing else', () => {
+  // Straight has no side to be on, and the drive bits are a different coil.
+  // A swap that reached either of them would be a different car.
+  for (const drive of /** @type {const} */ (['forward', 'backward'])) {
+    assert.equal(
+      pinsFor(drive, 'straight', { steerSwapped: true }),
+      pinsFor(drive, 'straight'),
+    );
+    assert.equal(
+      pinsFor(drive, 'left', { steerSwapped: true }) & ~0xc0,
+      pinsFor(drive, 'left') & ~0xc0,
+      'the drive half moved',
+    );
+  }
+});
+
+test('a swapped executor puts the swapped byte on the wire', async () => {
+  // pinsFor being right is not the same as the Executor using it. The byte
+  // that reaches the chip is the only thing the car ever sees.
+  const h = harness();
+  const ex = h.make({ calibration: { steerSwapped: true } });
+  void ex.move([{ drive: 'forward', steer: 'left', duration_ms: MIN_DURATION_MS }]);
+  await h.flush();
+  const written = h.log.filter((e) => e.op === 'write').map((e) => e.pin);
+  assert.ok(
+    written.includes(DRIVE_BITS.forward | STEER_BITS.right),
+    `expected the right-hand byte on the wire, saw ${JSON.stringify(written)}`,
+  );
+});
+
+test('an uncalibrated executor puts the unswapped byte on the wire', async () => {
+  const h = harness();
+  const ex = h.make();
+  void ex.move([{ drive: 'forward', steer: 'left', duration_ms: MIN_DURATION_MS }]);
+  await h.flush();
+  const written = h.log.filter((e) => e.op === 'write').map((e) => e.pin);
+  assert.ok(written.includes(DRIVE_BITS.forward | STEER_BITS.left));
 });

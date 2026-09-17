@@ -32,21 +32,35 @@ export const MIN_DURATION_MS = 300;
 export const DRIVE_BITS = /** @type {const} */ ({ forward: 0x10, backward: 0x20 });
 
 /**
- * Spec §3.2. Which side of the steering coil is "left" comes from calibration
- * item ① — see docs/hardware.md. Swapping these two values is the entire fix
- * if the car turns the wrong way.
+ * Spec §3.2. Which side of the steering coil is "left" is calibration item ①
+ * — see docs/hardware.md. These stay the wiring's description and the default;
+ * a car that turns out to be wired the other way is recorded in the config as
+ * `calibration.steerSwapped`, not by editing this line.
+ *
+ * The config stores a boolean and never a byte. "Is it reversed" is the whole
+ * of what ① can answer, and putting 0x40 in storage would let a protocol
+ * detail leak into a settings file where nobody could check it.
  */
 export const STEER_BITS = /** @type {const} */ ({ left: 0x40, right: 0x80, straight: 0x00 });
+
+/** @typedef {{ steerSwapped?: boolean | null }} Calibration */
 
 /**
  * @param {string} drive
  * @param {string} steer
+ * @param {Calibration} [cal] calibration item one. `null` and `undefined` both
+ *   mean "never measured", which behaves exactly as the constants describe.
  * @returns {number}
  */
-export function pinsFor(drive, steer) {
+export function pinsFor(drive, steer, cal = {}) {
   const d = DRIVE_BITS[/** @type {keyof typeof DRIVE_BITS} */ (drive)];
   if (d === undefined) throw new RangeError(`unknown drive "${drive}"`);
-  const s = STEER_BITS[/** @type {keyof typeof STEER_BITS} */ (steer)];
+  // Swapped at the lookup, so `straight` — which has no side to be on — and
+  // the drive bits, which are a different coil, cannot be touched by it.
+  const side = cal.steerSwapped === true
+    ? { left: 'right', right: 'left', straight: 'straight' }[steer] ?? steer
+    : steer;
+  const s = STEER_BITS[/** @type {keyof typeof STEER_BITS} */ (side)];
   if (s === undefined) throw new RangeError(`unknown steer "${steer}"`);
   return d | s;
 }
@@ -73,12 +87,16 @@ export class Executor {
    */
   #queuedMs = 0;
 
+  /** @type {Calibration} */ #cal = {};
+
   /**
    * @param {Ftdi} ftdi
-   * @param {{ sleep?: (ms: number) => Promise<void>, onError?: (err: Error) => void }} [opts]
+   * @param {{ sleep?: (ms: number) => Promise<void>, onError?: (err: Error) => void,
+   *           calibration?: Calibration }} [opts]
    */
   constructor(ftdi, opts = {}) {
     this.#ftdi = ftdi;
+    this.#cal = opts.calibration ?? {};
     this.#sleep = opts.sleep ?? defaultSleep;
     this.#onError = opts.onError ?? (() => {});
     ftdi.onDisconnect = (err) => this.#fail(err);
@@ -97,7 +115,7 @@ export class Executor {
     const gen = ++this.#gen;
     for (const step of steps) {
       if (gen !== this.#gen) return;
-      await this.#renew(gen, pinsFor(step.drive, step.steer), step.duration_ms);
+      await this.#renew(gen, pinsFor(step.drive, step.steer, this.#cal), step.duration_ms);
       if (!this.#connected) return;
     }
   }
@@ -106,7 +124,7 @@ export class Executor {
   async cruise(drive, steer) {
     if (!this.#connected) return;
     const gen = ++this.#gen;
-    await this.#renew(gen, pinsFor(drive, steer), null);
+    await this.#renew(gen, pinsFor(drive, steer, this.#cal), null);
   }
 
   /**

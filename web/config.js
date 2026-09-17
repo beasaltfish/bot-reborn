@@ -42,6 +42,28 @@ export function defaultConfig(_navLang = globalThis.navigator?.language) {
     // different device may need §7.3's calibration to say otherwise.
     bargeIn: true,
     ttsPath: 'webaudio',
+
+    /**
+     * What has been measured about THIS car (spec §7 of the 2026-09-17 design;
+     * items ① and ② of the main spec's §12).
+     *
+     * `null` means "never measured" and the reader falls back to the constant
+     * in executor.js / ftdi.js, so an untouched config behaves byte for byte
+     * as the product did before any of this existed.
+     *
+     * Not `false`, which is a measurement — "I checked, it is not reversed".
+     * Defaulting to it would tick the checklist for a car nobody has touched,
+     * and ① is precisely the step that, skipped, makes the car turn the wrong
+     * way on its first drive.
+     *
+     * steerSwapped is a boolean and never a byte: "is it reversed" is all ①
+     * can answer, and 0x40 in a settings file is a protocol detail nobody
+     * reading it could check.
+     */
+    calibration: {
+      /** @type {boolean | null} */ steerSwapped: null,
+      /** @type {number | null} */ bytesPerMs: null,
+    },
   };
 }
 
@@ -65,6 +87,11 @@ export function loadConfig(storage = globalThis.localStorage) {
       replyLang: p.replyLang ?? d.replyLang,
       bargeIn: p.bargeIn ?? d.bargeIn,
       ttsPath: p.ttsPath ?? d.ttsPath,
+      // Spread over the default, so a config stored before this field existed
+      // loads as "never measured" rather than as undefined. Reading
+      // undefined.steerSwapped throws at startup, and the product would refuse
+      // to open over a field whose entire meaning is "nothing is known yet".
+      calibration: { ...d.calibration, ...p.calibration },
     };
   } catch {
     return d;
@@ -99,5 +126,11 @@ export function resetSticky(cfg) {
  *   replyLang: 'en' | 'zh' | null,
  *   bargeIn: boolean,
  *   ttsPath: 'webaudio' | 'loopback' | 'speechSynthesis',
+ *   calibration: Calibration,
  * }} Config
+ *
+ * @typedef {{
+ *   steerSwapped: boolean | null,
+ *   bytesPerMs: number | null,
+ * }} Calibration
  */

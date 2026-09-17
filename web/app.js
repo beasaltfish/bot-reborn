@@ -144,9 +144,17 @@ async function start() {
     if (!device) throw Object.assign(new Error(t(config.lang, 'usbNotPaired')), {
       go: { href: 'setup.html', label: t(config.lang, 'pairNow') },
     });
-    const ftdi = await Ftdi.open(navigator.usb, { device });
+    // ② if it has been measured; ftdi.js's theoretical 0.15 if it has not.
+    const ftdi = await Ftdi.open(navigator.usb, {
+      device,
+      ...(config.calibration.bytesPerMs === null
+        ? {} : { bytesPerMs: config.calibration.bytesPerMs }),
+    });
     step('✓ car');
     const executor = new Executor(ftdi, {
+      // ① . Without it a car wired the other way drives mirror-image, and
+      // nothing anywhere says so — it just goes left when told right.
+      calibration: config.calibration,
       onError: (err) => {
         ui.log('USB: ' + err.message);
         session?.onEmergencyStop();

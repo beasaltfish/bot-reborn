@@ -98,3 +98,34 @@ test('resetSticky clears exactly the two states the user cannot otherwise see', 
   assert.equal(reset.llm.apiKey, 'keep me');
   assert.equal(reset.lang, 'zh', 'lang is a visible setting, not sticky state');
 });
+
+// --- calibration ----------------------------------------------------------
+
+test('calibration starts as "never measured", which is null and not false', () => {
+  // false is a measurement result — "I checked, it is not reversed". Writing it
+  // as the default would make the checklist tick itself on a car nobody has
+  // touched, and the one step that stops the car driving the wrong way is
+  // exactly the step people skip.
+  const d = defaultConfig();
+  assert.equal(d.calibration.steerSwapped, null);
+  assert.equal(d.calibration.bytesPerMs, null);
+});
+
+test('calibration survives a save and load', () => {
+  const storage = fakeStorage();
+  const cfg = { ...defaultConfig() };
+  cfg.calibration = { steerSwapped: true, bytesPerMs: 0.42 };
+  saveConfig(cfg, storage);
+  assert.deepEqual(loadConfig(storage).calibration, { steerSwapped: true, bytesPerMs: 0.42 });
+});
+
+test('a config saved before calibration existed still loads', () => {
+  // Anybody who used this before today has a stored object with no calibration
+  // key at all. Reading undefined.steerSwapped would throw on startup and the
+  // product would not open — for a field whose whole meaning is "not measured".
+  const storage = fakeStorage();
+  const old = { ...defaultConfig() };
+  delete (/** @type {any} */ (old).calibration);
+  storage.setItem(CONFIG_KEY, JSON.stringify(old));
+  assert.deepEqual(loadConfig(storage).calibration, { steerSwapped: null, bytesPerMs: null });
+});
