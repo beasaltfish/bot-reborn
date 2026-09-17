@@ -56,6 +56,15 @@
           <circle class="ink" cx="33" cy="120" r="10"/>
           <circle class="ink" cx="87" cy="120" r="10"/>
 
+          <!-- Shown only when no car is paired. It moves rather than sits
+               still because "plug this in" is an instruction, and an
+               instruction reads faster as a gesture than as a label. -->
+          <g class="plug">
+            <rect x="-4" y="96" width="16" height="12" rx="2"/>
+            <line x1="12" y1="99" x2="30" y2="99"/>
+            <line x1="12" y1="105" x2="30" y2="105"/>
+          </g>
+
           <g class="wave">
             <path d="M12 48 q-5 10 0 20"/><path d="M5 42 q-7 16 0 32"/>
             <path d="M108 48 q5 10 0 20"/><path d="M115 42 q7 16 0 32"/>

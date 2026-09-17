@@ -4,6 +4,14 @@
 export const FTDI_VID = 0x0403;
 export const FT232H_PID = 0x6014;
 
+/** The one description of what the car looks like to WebUSB. Exported because
+ *  pairing and opening are two different moments — the picker needs a user
+ *  gesture and open() happens seconds later — and they must not drift into two
+ *  different filters, or the device a person picked is not the one we open. */
+export const USB_FILTERS = /** @type {const} */ ([
+  { vendorId: FTDI_VID, productId: FT232H_PID },
+]);
+
 /** D4–D7 are outputs (spec §3.1). */
 export const PIN_MASK = 0xf0;
 
@@ -114,9 +122,7 @@ export class Ftdi {
    */
   static async open(usb, opts = {}) {
     const ftdi = new Ftdi();
-    const device = opts.device ?? await usb.requestDevice({
-      filters: [{ vendorId: FTDI_VID, productId: FT232H_PID }],
-    });
+    const device = opts.device ?? await usb.requestDevice({ filters: [...USB_FILTERS] });
 
     await device.open();
     if (device.configuration === null) await device.selectConfiguration(1);

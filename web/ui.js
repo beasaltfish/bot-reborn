@@ -110,6 +110,14 @@ export function createUi(lang) {
     running,
 
     /**
+     * Whether the car has never been paired. Not a session state — SLEEPING
+     * already means "not doing anything" — so it rides on the element, the
+     * same way data-live does.
+     * @param {boolean} on
+     */
+    needCar(on) { robot.dataset.need = on ? 'car' : ''; },
+
+    /**
      * The click carries the tone that was painted on the button when it was
      * pressed, so the caller routes on what the user actually saw.
      *

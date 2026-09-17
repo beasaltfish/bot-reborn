@@ -4,7 +4,7 @@
 import { loadConfig, saveConfig } from './config.js';
 import { t } from './strings.js';
 import { createUi } from './ui.js';
-import { Ftdi } from './ftdi.js';
+import { Ftdi , USB_FILTERS } from './ftdi.js';
 import { Executor } from './executor.js';
 import { Brain } from './brain.js';
 import { OpenAiCompatStt } from './providers/stt-openai-compat.js';
@@ -42,8 +42,45 @@ warming.catch(() => {});
 // Layer 2 of §4.1 lives in the 'stop' branch. The order inside
 // onEmergencyStop() is the part that matters (car first, state machine
 // second); this line only has to reach it.
-ui.onFab((tone) => (tone === 'stop' ? session?.onEmergencyStop() : start()));
+ui.onFab((tone) => {
+  if (tone === 'stop') return void session?.onEmergencyStop();
+  if (tone === 'wait') return void pair();
+  void start();
+});
 ui.onSleep(stop);
+
+/**
+ * What the one button offers when nothing is running.
+ *
+ * getDevices() answers from the persistent grant, so this survives reloads and
+ * costs nothing. Asking it up front is the whole point: the product used to
+ * download 19 MB, open the microphone, and only then discover the car had
+ * never been paired — reporting it as a failure of the thing the user had just
+ * asked for.
+ */
+async function offerNextStep() {
+  const paired = (await navigator.usb.getDevices()).length > 0;
+  ui.needCar(!paired);
+  ui.fabFace(paired ? 'go' : 'wait', paired ? 'fabStart' : 'fabPair');
+}
+void offerNextStep();
+
+/**
+ * Pairing, from its own gesture.
+ *
+ * requestDevice() needs a user gesture and start() spends its own on several
+ * awaits long before it gets here, which is why this is a rung of its own
+ * rather than something start() could do when it notices. Cancelling the
+ * picker throws, and a person changing their mind is not a failure to report.
+ */
+async function pair() {
+  try {
+    await navigator.usb.requestDevice({ filters: [...USB_FILTERS] });
+  } catch {
+    step('pairing cancelled');
+  }
+  await offerNextStep();
+}
 
 /**
  * Boot progress is diagnostics, not copy.
@@ -173,6 +210,7 @@ function stop() {
   pipeline = null;
   keepAlive = null;
   ui.running(false);
+  void offerNextStep();
 }
 
 /** §5.7: the lock only covers "screen on, page in front". It cannot keep the

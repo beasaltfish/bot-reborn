@@ -383,6 +383,20 @@ section[id^="panel-"].idle { opacity: .55; }
 
 .hint { margin: 0; font-size: 13px; opacity: .55; }
 
+/* No car paired. Not a session state — SLEEPING already covers "not doing
+   anything" — so like data-live it rides on the element rather than becoming
+   a sixth face. */
+.robot .plug { display: none; }
+.robot[data-need="car"] .plug { display: block; }
+.robot .plug rect { fill: var(--wait); }
+.robot .plug line { stroke: var(--wait); stroke-width: 3; stroke-linecap: round; }
+.robot[data-need="car"] .plug { animation: robot-plug 1.8s ease-in-out infinite; }
+@keyframes robot-plug {
+  0%, 100% { transform: translateX(-10px); opacity: .35 }
+  55%      { transform: translateX(8px);   opacity: 1 }
+  70%      { transform: translateX(8px);   opacity: 1 }
+}
+
 /* --- the one button -------------------------------------------------- */
 
 .fab {
