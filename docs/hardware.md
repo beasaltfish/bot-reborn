@@ -716,6 +716,31 @@ removes the cause and neither of these is asked to be the only defence:
   It is a veto, never a licence: 「Don't go out.」for 「把灯关了」came back at
   −0.21, confidently wrong.
 
+### The run-on sentence is a to-do, not a required sample (2026-09-17)
+
+「hey steven 往前走」 said in one breath was going to be ⑯'s必测样本, because
+「往」 lands inside the 80 ms the `wake` earcon gates. It was downgraded: almost
+everybody wakes the robot and then speaks, with a pause. Run-on stays a goal,
+just not one worth a round of calibration to defend now. It comes back if real
+use shows it hurting.
+
+Two things for whoever returns to it.
+
+**The product loses much more than the gated frame.** §5.3 leaves the VAD
+unsubscribed all through SLEEPING, so on the wake path it never hears the
+keyword at all, and picks up from the first frame after the earcon window
+shuts — roughly 100 ms past the hit. 「往」 is in there. A pause of ~200 ms
+after the wake word is, in effect, a requirement.
+
+**Nothing on the bench could see that until 2026-09-17.** The recognition panel
+fed both engines from one subscriber, every frame, regardless of state, so its
+VAD always heard 「hey steven」 too. Every ⑯ reading to date — including "the
+head survives, §5.4's deleted pre-roll ring can stay deleted" — was taken on
+that wiring. The panel's `product` arm now imports `wantedSubscriptions` from
+session.js and registers the two subscriptions in the same order, so it
+inherits the real behaviour rather than approximating it. **⑯ has not been
+re-run on it.**
+
 ### Chrome will not change microphone processing after getUserMedia
 
 The first plan was to switch `noiseSuppression` per session state — off in
