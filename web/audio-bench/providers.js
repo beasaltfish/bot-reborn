@@ -97,10 +97,14 @@ export function createProviders() {
       vad: createVoiceDetector(ctx.sherpa),
       stt: {
         /** @param {Int16Array} pcm @param {number} rate @param {{ signal?: AbortSignal }} [o] */
-        async transcribe(pcm, rate, o) {
-          const text = await stt.transcribe(pcm, rate, o);
-          logTurn(`> ${text}`);
-          return text;
+        async transcribeDetailed(pcm, rate, o) {
+          const heard = await stt.transcribeDetailed(pcm, rate, o);
+          // The confidence is on the line because session.js now vetoes on it:
+          // a turn that ends in `huh` with a perfectly readable transcript in
+          // the log is otherwise indistinguishable from the STT failing.
+          const lp = heard.logprob === null ? '' : ` [lp ${heard.logprob.toFixed(2)}]`;
+          logTurn(`> ${heard.text}${lp}`);
+          return heard;
         },
       },
       tts,

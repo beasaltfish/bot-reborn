@@ -4,6 +4,16 @@ import { Session, wantedSubscriptions, IDLE_TO_SLEEP_MS } from '../web/audio/ses
 import { defaultConfig } from '../web/config.js';
 
 /**
+ * A segment or frame at the level real speech arrives at — −20 dBFS, the
+ * middle of the −20…−25 measured on 2026-09-17. session.js refuses anything
+ * under −40 now, so silence is a test case in its own right rather than the
+ * default filler it used to be.
+ *
+ * @param {number} n
+ */
+export const loud = (n) => new Float32Array(n).fill(0.1);
+
+/**
  * A whole robot made of fakes.
  *
  * Everything Session touches is injected, including both clocks. That is the
@@ -54,7 +64,7 @@ export function harness(over = {}) {
   };
   const deps = {
     pipeline, kws, vad, tts,
-    stt: { transcribe: async () => 'hello' },
+    stt: { transcribeDetailed: async () => ({ text: 'hello', logprob: null }) },
     executor: { stop: rec('executor.stop') },
     earcon: (/** @type {string} */ name) => { calls.push(['earcon', name]); return 80; },
     config: { ...defaultConfig('en') },
@@ -70,8 +80,10 @@ export function harness(over = {}) {
     tick(ms = 0) { now += ms; timers.splice(0).forEach((t) => t.fn()); },
     // Frames only reach a subscriber. That is the point of the gate, so the
     // harness must not route around it.
-    /** @param {string} name */
-    feed(name) { pipeline.subs.get(name)?.(new Float32Array(1600)); },
+    /** @param {string} name @param {number} [amplitude] */
+    feed(name, amplitude = 0.1) {
+      pipeline.subs.get(name)?.(new Float32Array(1600).fill(amplitude));
+    },
     names() { return [...pipeline.subs.keys()].sort(); },
     /** @param {string} name */
     took(name) { return calls.filter((c) => c[0] === name).length; },
@@ -179,7 +191,7 @@ test('a conversation that keeps going never times out', async () => {
   h.wake();
   for (let i = 0; i < 5; i++) {
     h.tick(IDLE_TO_SLEEP_MS - 1000);
-    h.vad.segments.push(new Float32Array(16));
+    h.vad.segments.push(loud(16));
     h.feed('vad');
     await settle();
     assert.equal(h.session.state, 'LISTENING', `turn ${i} should have come back`);
@@ -329,7 +341,7 @@ async function speakingSession() {
   h.session.start();
   h.wake();
   h.stallSpeak();
-  h.vad.segments.push(new Float32Array(16));
+  h.vad.segments.push(loud(16));
   h.feed('vad');
   await settle();
   brain.finish();
@@ -344,7 +356,7 @@ test('a segment runs STT and hands the text to the brain', async () => {
   h.session.attach(brain);
   h.session.start();
   h.wake();
-  h.vad.segments.push(new Float32Array(16000));
+  h.vad.segments.push(loud(16000));
   h.feed('vad');
   assert.equal(h.session.state, 'THINKING');
   await settle();
@@ -356,9 +368,9 @@ test('STT gets Int16 at 16 kHz, and a signal it can be cancelled with', async ()
   const h = harness({
     stt: {
       /** @param {Int16Array} pcm @param {number} rate @param {any} opts */
-      transcribe: async (pcm, rate, opts) => {
+      transcribeDetailed: async (pcm, rate, opts) => {
         seen = { pcm, rate, signal: opts?.signal };
-        return 'hi';
+        return { text: 'hi', logprob: null };
       },
     },
   });
@@ -375,12 +387,12 @@ test('STT gets Int16 at 16 kHz, and a signal it can be cancelled with', async ()
 });
 
 test('an empty transcript is a `huh` and never reaches the LLM (§6.7)', async () => {
-  const h = harness({ stt: { transcribe: async () => '   ' } });
+  const h = harness({ stt: { transcribeDetailed: async () => ({ text: '   ', logprob: null }) } });
   const brain = fakeBrain(h.session, h.calls);
   h.session.attach(brain);
   h.session.start();
   h.wake();
-  h.vad.segments.push(new Float32Array(16));
+  h.vad.segments.push(loud(16));
   h.feed('vad');
   await settle();
   assert.deepEqual(brain.seen, []);
@@ -390,12 +402,12 @@ test('an empty transcript is a `huh` and never reaches the LLM (§6.7)', async (
 
 test('a failed STT is an `error` plus the fixed line (§6.7)', async () => {
   const h = harness({
-    stt: { transcribe: async () => { throw new Error('502'); } },
+    stt: { transcribeDetailed: async () => { throw new Error('502'); } },
   });
   h.session.attach(fakeBrain(h.session, h.calls));
   h.session.start();
   h.wake();
-  h.vad.segments.push(new Float32Array(16));
+  h.vad.segments.push(loud(16));
   h.feed('vad');
   await settle();
   assert.ok(h.calls.some((c) => c[0] === 'earcon' && c[1] === 'error'));
@@ -406,13 +418,13 @@ test('a TTS that also fails does not get retried (§6.7)', async () => {
   // Retrying is asking the path just proven dead to report that it is dead.
   // One `error` earcon, and stop.
   const h = harness({
-    stt: { transcribe: async () => { throw new Error('502'); } },
+    stt: { transcribeDetailed: async () => { throw new Error('502'); } },
   });
   h.session.attach(fakeBrain(h.session, h.calls));
   h.session.start();
   h.wake();
   h.failSpeak('timeout');
-  h.vad.segments.push(new Float32Array(16));
+  h.vad.segments.push(loud(16));
   h.feed('vad');
   await settle();
   assert.equal(h.took('tts.speak'), 1, 'exactly one attempt, never a retry');
@@ -425,7 +437,7 @@ test('SPEAKING brackets exactly the playback, not the whole turn', async () => {
   h.session.attach(brain);
   h.session.start();
   h.wake();
-  h.vad.segments.push(new Float32Array(16));
+  h.vad.segments.push(loud(16));
   h.feed('vad');
   await settle();
   assert.equal(h.session.state, 'THINKING', 'the LLM is not the mouth');
@@ -444,7 +456,7 @@ test('a stop word mid-reply leaves the session ASLEEP, not listening', async () 
   h.session.start();
   h.wake();
   h.stallSpeak();
-  h.vad.segments.push(new Float32Array(16));
+  h.vad.segments.push(loud(16));
   h.feed('vad');
   await settle();
   brain.finish();                       // the brain reaches speakingTts.speak()
@@ -463,7 +475,7 @@ test('a wake word during THINKING cancels the turn in flight (§8.1)', async () 
   h.session.attach(brain);
   h.session.start();
   h.wake();
-  h.vad.segments.push(new Float32Array(16));
+  h.vad.segments.push(loud(16));
   h.feed('vad');
   await settle();
   h.kws.hits.push('hey_steven');
@@ -482,7 +494,7 @@ test('a cancelled turn never gets to speak its reply', async () => {
   h.session.attach(brain);
   h.session.start();
   h.wake();
-  h.vad.segments.push(new Float32Array(16));
+  h.vad.segments.push(loud(16));
   h.feed('vad');
   await settle();
   h.kws.hits.push('hey_steven');
@@ -500,7 +512,7 @@ test('a cancelled turn cannot drag a newer one back to LISTENING', async () => {
   h.session.attach(brain);
   h.session.start();
   h.wake();
-  h.vad.segments.push(new Float32Array(16));
+  h.vad.segments.push(loud(16));
   h.feed('vad');
   await settle();
   h.kws.hits.push('hey_steven');
@@ -520,11 +532,126 @@ test('a segment arriving mid-turn does not start a second one', async () => {
   h.session.attach(brain);
   h.session.start();
   h.wake();
-  h.vad.segments.push(new Float32Array(16));
+  h.vad.segments.push(loud(16));
   h.feed('vad');
   await settle();
-  h.vad.segments.push(new Float32Array(16));
+  h.vad.segments.push(loud(16));
   h.feed('vad');
   await settle();
   assert.equal(brain.seen.length, 1);
+});
+
+// --- the two floors ---------------------------------------------------------
+
+test('a segment under the level floor never becomes a turn', async () => {
+  // The VAD cutting a segment is not evidence anybody spoke. Chrome's residual
+  // echo suppressor hands it low-level bursts in a silent room and silero
+  // reads them as speech; letting one through costs a hallucinated transcript
+  // driving the car, which is the expensive direction to be wrong in.
+  /** @type {number} */ let asked = 0;
+  const h = harness({
+    stt: {
+      transcribeDetailed: async () => { asked++; return { text: 'go', logprob: null }; },
+    },
+  });
+  const brain = fakeBrain(h.session, h.calls);
+  h.session.attach(brain);
+  h.session.start();
+  h.wake();
+  h.vad.segments.push(new Float32Array(16).fill(0.001));  // −60 dBFS
+  h.feed('vad');
+  await settle();
+  assert.equal(asked, 0, 'the STT was never called');
+  assert.deepEqual(brain.seen, []);
+});
+
+test('refusing a quiet segment says nothing — no earcon answers nobody', async () => {
+  const h = harness();
+  h.session.attach(fakeBrain(h.session, h.calls));
+  h.session.start();
+  h.wake();
+  const before = h.calls.filter((c) => c[0] === 'earcon').length;
+  h.vad.segments.push(new Float32Array(16).fill(0.001));
+  h.feed('vad');
+  await settle();
+  assert.equal(h.calls.filter((c) => c[0] === 'earcon').length, before);
+});
+
+test('a quiet frame does not keep the session awake', async () => {
+  // The failure this prevents is silent and permanent: one burst a minute
+  // resets §5.2's clock forever, the car never reaches SLEEPING, and nothing
+  // in any log says so.
+  const h = harness();
+  h.session.attach(fakeBrain(h.session, h.calls));
+  h.session.start();
+  h.wake();
+  h.vad.detected = true;
+  h.tick(IDLE_TO_SLEEP_MS - 1);
+  h.feed('vad', 0.001);            // a burst, not a voice
+  h.tick(2);
+  h.feed('vad', 0.001);
+  assert.equal(h.session.state, 'SLEEPING');
+});
+
+test('a loud frame does keep it awake — the floor is not a mute button', async () => {
+  const h = harness();
+  h.session.attach(fakeBrain(h.session, h.calls));
+  h.session.start();
+  h.wake();
+  h.vad.detected = true;
+  h.tick(IDLE_TO_SLEEP_MS - 1);
+  h.feed('vad');                   // −20 dBFS: somebody is there
+  h.tick(2);
+  h.feed('vad');
+  assert.notEqual(h.session.state, 'SLEEPING');
+});
+
+// --- the logprob veto -------------------------------------------------------
+
+test('a transcript the model was unsure of is a `huh`, not an instruction', async () => {
+  // 「我以来」for 「倒回来」came back at −1.18 on a −25 dB segment: a good
+  // input level and fluent nonsense. Level cannot catch this one.
+  const h = harness({
+    stt: { transcribeDetailed: async () => ({ text: '我以来', logprob: -1.18 }) },
+  });
+  const brain = fakeBrain(h.session, h.calls);
+  h.session.attach(brain);
+  h.session.start();
+  h.wake();
+  h.vad.segments.push(loud(16));
+  h.feed('vad');
+  await settle();
+  assert.deepEqual(brain.seen, []);
+  assert.ok(h.calls.some((c) => c[0] === 'earcon' && c[1] === 'huh'));
+  assert.equal(h.session.state, 'LISTENING');
+});
+
+test('a confident transcript goes through', async () => {
+  const h = harness({
+    stt: { transcribeDetailed: async () => ({ text: '往前走', logprob: -0.35 }) },
+  });
+  const brain = fakeBrain(h.session, h.calls);
+  h.session.attach(brain);
+  h.session.start();
+  h.wake();
+  h.vad.segments.push(loud(16));
+  h.feed('vad');
+  await settle();
+  assert.deepEqual(brain.seen, ['往前走']);
+});
+
+test('a null logprob is no opinion, not a low one', async () => {
+  // Groq is OpenAI-compatible, not OpenAI. An endpoint that does not report
+  // confidence must not thereby mute the car.
+  const h = harness({
+    stt: { transcribeDetailed: async () => ({ text: '往前走', logprob: null }) },
+  });
+  const brain = fakeBrain(h.session, h.calls);
+  h.session.attach(brain);
+  h.session.start();
+  h.wake();
+  h.vad.segments.push(loud(16));
+  h.feed('vad');
+  await settle();
+  assert.deepEqual(brain.seen, ['往前走']);
 });

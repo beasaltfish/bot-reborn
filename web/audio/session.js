@@ -8,12 +8,50 @@
 import { classifyLabel, WAKE, STOP } from './keyword-lines.js';
 import { RATE } from './pipeline.js';
 import { toInt16 } from './pcm.js';
+import { rms, aboveFloor } from './level.js';
 import { t } from '../strings.js';
 
 /** Spec §5.2. Also, by construction, the longest the car can run: the clock
  *  ticks only in LISTENING, so a cruise ends "30 s after you last said
  *  anything", not 30 s after it started. */
 export const IDLE_TO_SLEEP_MS = 30000;
+
+/**
+ * A VAD segment quieter than this never becomes a turn, and a frame quieter
+ * than this never counts as the user still being there.
+ *
+ * The VAD cutting a segment is not evidence that anybody spoke. Measured on
+ * 2026-09-17, one phone, one room, echoCancellation on: real speech landed at
+ * −20…−25 dBFS, and the bursts Chrome's residual echo suppressor lets through
+ * in a silent room landed at −44…−96 — thirteen of them across two runs. −40
+ * sits 4 dB above the loudest burst and 15 dB below the quietest speech.
+ *
+ * Deliberately biased towards refusing: a real command thrown away costs the
+ * user a repeat, a burst let through costs a hallucinated transcript driving
+ * the car. Duration cannot do this job — the same runs put 「回来」at 0.4 s and
+ * bursts at 0.4 s, 6.4 s and 10.6 s.
+ */
+export const SPEECH_FLOOR_DB = -40;
+
+/**
+ * A transcript the model was this unsure of is treated as not heard.
+ *
+ * A SECOND axis, catching a different failure: SPEECH_FLOOR_DB refuses quiet
+ * noise, this refuses loud nonsense. 「谢谢大家」at −21 dB, 「我以来」for
+ * 「倒回来」, 「请我一下来」for 「停下来」, and the STT prompt echoed back
+ * verbatim all arrived at −20…−25 dB — a perfectly good input level — and all
+ * sat below −1.
+ *
+ * Across the seventeen readings taken on 2026-09-17 this threw away seven and
+ * lost no correct transcript. It is not a sufficient check: 「Don't go out.」
+ * for 「把灯关了」came back at −0.21, confidently wrong. A veto, never a
+ * licence — above the floor means only that this axis has no objection.
+ *
+ * `no_speech_prob` would have been the natural instrument. It reported 0.00
+ * for every one of those readings, including a −92 dB segment: no information
+ * on this endpoint, so nothing is built on it.
+ */
+export const LOGPROB_FLOOR = -1;
 
 /** @typedef {'SLEEPING'|'LISTENING'|'CAPTURING'|'THINKING'|'SPEAKING'} State */
 /** @typedef {import('./earcon.js').EarconName} EarconName */
@@ -57,8 +95,9 @@ export class Session {
    *   kws: { accept(frame: Float32Array): string[] },
    *   vad: { accept(frame: Float32Array): void, readonly detected: boolean,
    *          drain(): Float32Array[], clear(): void },
-   *   stt: { transcribe(pcm: Int16Array, rate: number,
-   *                     opts?: { signal?: AbortSignal }): Promise<string> },
+   *   stt: { transcribeDetailed(pcm: Int16Array, rate: number,
+   *                     opts?: { signal?: AbortSignal }):
+   *            Promise<{ text: string, logprob: number | null }> },
    *   tts: { speak(text: string, opts?: { signal?: AbortSignal }): Promise<void>,
    *          cancel(): void },
    *   executor: { stop(): Promise<void> | void },
@@ -115,13 +154,20 @@ export class Session {
 
   #onVadFrame = (/** @type {Float32Array} */ frame) => {
     this.#vad.accept(frame);
-    this.#noteVoice();
+    this.#noteVoice(frame);
     for (const seg of this.#vad.drain()) this.#onSegment(seg);
     this.#checkIdle();
   };
 
-  #noteVoice() {
+  /** @param {Float32Array} frame */
+  #noteVoice(frame) {
     if (!this.#vad.detected) return;
+    // §5.2's thirty seconds measures "it was ready and you said nothing", and
+    // the VAD reporting `detected` is not the same as somebody having spoken.
+    // One spurious burst a minute resets this clock forever, and the car then
+    // never reaches SLEEPING — the timer simply never expires, with nothing in
+    // any log to show for it.
+    if (!aboveFloor(rms(frame), SPEECH_FLOOR_DB)) return;
     this.#lastVoiceAt = this.#now();
     // The user talking over the reply ends the turn (§8.1). Only reachable with
     // bargeIn on — §5.3 unsubscribes VAD during SPEAKING otherwise — so this
@@ -162,6 +208,10 @@ export class Session {
     // #noteVoice has already ended the turn before the segment lands here, so
     // this is not the path that swallows an interruption.
     if (this.#state !== 'CAPTURING' && this.#state !== 'LISTENING') return;
+    // Nothing quiet enough to be a burst gets to spend money, let alone reach
+    // the executor. Silent on purpose — no earcon, because answering this
+    // would be answering nobody.
+    if (!aboveFloor(rms(samples), SPEECH_FLOOR_DB)) return;
     void this.#turn(samples);
   }
 
@@ -172,9 +222,11 @@ export class Session {
     this.#ctrl = ctrl;
     this.#setState('THINKING');
 
-    let text;
+    let heard;
     try {
-      text = await this.#stt.transcribe(toInt16(samples), RATE, { signal: ctrl.signal });
+      heard = await this.#stt.transcribeDetailed(
+        toInt16(samples), RATE, { signal: ctrl.signal },
+      );
     } catch {
       // Cancelling is not failing. Reporting a fault here would answer "the
       // user changed their mind" with a failure report — the same distinction
@@ -186,8 +238,14 @@ export class Session {
     }
     if (gen !== this.#gen) return;
 
-    // §6.7 row 1: an empty or garbled transcript never reaches the LLM.
-    if (!text.trim()) {
+    // §6.7 row 1: an empty or garbled transcript never reaches the LLM. Empty
+    // is the easy half; the other half arrives as fluent Chinese that simply is
+    // not what was said, and the model's own confidence is the only thing on
+    // hand that tells the two apart — see LOGPROB_FLOOR. A null logprob means
+    // the endpoint did not say, which is not the same as a low one.
+    const text = heard.text.trim();
+    const unsure = heard.logprob !== null && heard.logprob < LOGPROB_FLOOR;
+    if (!text || unsure) {
       this.#playEarcon('huh');
       return this.#endTurn(gen);
     }
