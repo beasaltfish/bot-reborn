@@ -10,10 +10,12 @@
   <main class="screen">
 
     <header class="topbar">
-      <!-- Both are stage 2's. They ship hidden rather than inert: a gear that
-           does not open anything reads as broken, and the first thing anybody
-           does with a new screen is press the thing in the corner. -->
-      <button id="settings" class="icon" aria-label="Settings" hidden>⚙</button>
+      <!-- Stage 2 turns this into the settings sheet with the checklist in it.
+           Until then it goes to the page that already does the one thing the
+           product cannot start without — pairing the car — because a gear that
+           opens nothing reads as broken, and a hidden gear leaves no way in at
+           all except knowing the URL. -->
+      <a id="settings" class="icon" href="setup.html" aria-label="Settings">⚙</a>
       <span id="link" class="link" hidden></span>
     </header>
 

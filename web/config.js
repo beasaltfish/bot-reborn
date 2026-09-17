@@ -16,18 +16,26 @@ export const CONFIG_KEY = 'voicebot.config';
 export const STICKY = /** @type {const} */ (['ttsPath', 'replyLang']);
 
 /**
- * @param {string} [navLang] defaults to the browser's language; passed in so
- *   this is testable, since node has no navigator.language.
+ * @param {string} [_navLang] ignored since 2026-09-17; kept so the signature
+ *   and its tests survive until a language switcher exists to justify reading
+ *   it again.
  * @returns {Config}
  */
-export function defaultConfig(navLang = globalThis.navigator?.language) {
+export function defaultConfig(_navLang = globalThis.navigator?.language) {
   return {
     stt: { baseURL: '', apiKey: '', model: '' },
     llm: { baseURL: '', apiKey: '', model: '' },
     tts: { baseURL: '', apiKey: '', model: '', voice: '' },
-    // Spec §11.3: no third language. Anything that is not Chinese gets the
-    // product default, which is English.
-    lang: String(navLang ?? '').startsWith('zh') ? 'zh' : 'en',
+    // English, always, as of 2026-09-17. This is an open-source project and the
+    // default has to be the language its readers share; a Chinese phone landing
+    // on a Chinese UI made the source's default and the running default two
+    // different things, and only one of them is what anybody sees.
+    //
+    // The zh table stays. It is a locale, not dead code — spec §11.3 still
+    // rules out a third language, and the switcher that selects this comes
+    // with i18n proper. Until then nothing selects it, which is the point:
+    // shipping a switcher is a decision, inferring one from the handset is not.
+    lang: 'en',
     // null, NOT lang — see §11.1. "No preference recorded" is the default.
     replyLang: null,
     // Not guesses: waiting item ⑥ measured both on this phone (§8.2). A

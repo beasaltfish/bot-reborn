@@ -25,9 +25,14 @@ test('defaults are the ones spec §8.2 fixed', () => {
   assert.equal(d.ttsPath, 'webaudio');
 });
 
-test('lang is inferred from the browser language, and only zh is special', () => {
-  assert.equal(defaultConfig('zh-CN').lang, 'zh');
-  assert.equal(defaultConfig('zh').lang, 'zh');
+test('lang is English whatever the handset says', () => {
+  // Inferred from navigator.language until 2026-09-17. It was changed because
+  // this is an open-source project: the default has to be the language its
+  // readers share, and inferring one from the phone made the source's default
+  // and the running default two different things. The zh table is still there
+  // and still complete; the switcher that reaches it arrives with i18n.
+  assert.equal(defaultConfig('zh-CN').lang, 'en');
+  assert.equal(defaultConfig('zh').lang, 'en');
   assert.equal(defaultConfig('fr-FR').lang, 'en');
   assert.equal(defaultConfig(undefined).lang, 'en');
 });
@@ -71,7 +76,7 @@ test('unreadable storage yields defaults rather than throwing', () => {
 test('save then load round-trips every field', () => {
   const storage = fakeStorage();
   /** @type {import('../web/config.js').Config} */
-  const cfg = { ...defaultConfig('zh'), replyLang: 'en', bargeIn: false };
+  const cfg = { ...defaultConfig(), lang: 'zh', replyLang: 'en', bargeIn: false };
   cfg.tts.voice = 'alloy';
   saveConfig(cfg, storage);
   assert.deepEqual(loadConfig(storage), cfg);
@@ -80,7 +85,12 @@ test('save then load round-trips every field', () => {
 test('resetSticky clears exactly the two states the user cannot otherwise see', () => {
   assert.deepEqual([...STICKY], ['ttsPath', 'replyLang']);
   /** @type {import('../web/config.js').Config} */
-  const cfg = { ...defaultConfig('zh'), replyLang: 'en', ttsPath: 'speechSynthesis' };
+  // lang set explicitly, not asked of defaultConfig: since 2026-09-17 that
+  // returns 'en' whatever it is handed, and asserting the reset kept 'en' when
+  // 'en' is also the default would pass without testing anything.
+  const cfg = {
+    ...defaultConfig(), lang: 'zh', replyLang: 'en', ttsPath: 'speechSynthesis',
+  };
   cfg.llm.apiKey = 'keep me';
   const reset = resetSticky(cfg);
   assert.equal(reset.replyLang, null);
