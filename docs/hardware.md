@@ -646,6 +646,103 @@ count in both languages on purpose, and nothing on the page can score it. It
 needs someone to listen and say whether the English inside the Chinese sounds
 like speech or like assembly.
 
+## AEC feeds the VAD in a silent room (2026-09-17)
+
+**Symptom.** `recognition` running, nobody speaking, and transcripts kept
+arriving — one to two a minute, forever, each one a paid STT call. Every one of
+them was a transcript of nothing: whisper handed an empty room answers with
+「谢谢大家」or 「请不吝点赞 订阅 转发 打赏支持明镜与点点栏目」, both of which are
+end-card boilerplate memorised from its training set, or it continues the
+`prompt` we sent and returns that as the transcript. `stt-openai-compat.js`
+warns about the last one in a comment above `BILINGUAL_PROMPT`; six of these
+runs' transcripts are variants of that exact sentence.
+
+None of that is visible from the text alone, which is why the segment's level
+went onto the log line. The numbers separated immediately:
+
+| | dBFS, RMS over the whole segment |
+|---|---|
+| real speech | **−20 … −25** (6 readings) |
+| spurious segments | **−44, −51, −61, −63, −70, −71, −73, −74, −78, −80, −83, −92, −96** |
+
+**−96 dBFS is the 16-bit quantisation floor.** A room does not measure that; a
+room with the gain left alone sits around −55. The microphone was delivering
+almost literal zeros, punctuated by bursts, and silero was reading the bursts as
+speech — it scores spectral shape, not loudness, and the bursts are the room's
+own residue passed through a per-band gain, so they have shape.
+
+**The cause is echoCancellation.** Five minutes with it off produced none at
+all. Chrome's AEC is not a subtractor: after the linear filter comes a
+decision-driven residual suppressor that clamps hard whenever it believes there
+is no near-end speech, and it goes on re-converging even with nothing playing.
+Every time its estimate shifts it lets a burst through. It is tuned for the ear
+at the far end of a call, and nobody optimised it for "a neural VAD must not
+misread the silence".
+
+Three things follow, and the first two are about the product, not the bench:
+
+- **§5.2's idle timer never expires.** `#noteVoice()` refreshes `lastVoiceAt`
+  on any frame where the VAD reports `detected`. One burst a minute is enough:
+  the car never reaches SLEEPING, silently, with nothing in any log.
+- **A hallucinated transcript reaches the executor.** `#onSegment()` → `#turn`
+  → STT → LLM → car, with nothing in between asking whether there was a voice.
+  One of these runs produced 「回来」out of an empty room; that is one of the
+  five commands.
+- **`no_speech_prob` cannot be used to catch it.** It read **0.00 on every
+  reading**, including the −92 dB one. `verbose_json` returns the field on this
+  endpoint and the field carries no information. `avg_logprob` does carry some
+  — see below — but not about whether anyone spoke.
+
+**noiseSuppression fixes the cause and costs the wake word.** With it on, 2.4
+minutes of silence produced nothing, and speech still measured −21…−24, so the
+suppressor is not simply turning the gain down. It is also exactly what
+`pipeline.js` said it would be: the keyword got harder to hit, which is what the
+rule forbidding it was protecting. It was turned on anyway on 2026-09-17 —
+the cost lands on a phoneme-matching spotter that is due to be replaced by a
+model trained on the phrase, and the benefit has nothing else queued to deliver
+it. The reasoning is written out at `micConstraints()`.
+
+**Two floors went into `session.js` regardless**, because the suppressor
+removes the cause and neither of these is asked to be the only defence:
+
+- `SPEECH_FLOOR_DB = -40` — 4 dB above the loudest burst, 15 dB below the
+  quietest speech. Biased towards refusing: a command thrown away costs a
+  repeat, a burst let through drives the car. **Duration cannot do this job** —
+  the same runs put 「回来」at 0.4 s and bursts at 0.4 s, 6.4 s and 10.6 s.
+- `LOGPROB_FLOOR = -1` — a second axis, catching the other failure. 「谢谢大家」
+  at −21 dB, 「我以来」for 「倒回来」, 「请我一下来」for 「停下来」and the prompt
+  echoed back all arrived at a perfectly good input level and all sat below −1.
+  Across seventeen readings it discarded seven and lost no correct transcript.
+  It is a veto, never a licence: 「Don't go out.」for 「把灯关了」came back at
+  −0.21, confidently wrong.
+
+### Chrome will not change microphone processing after getUserMedia
+
+The first plan was to switch `noiseSuppression` per session state — off in
+SLEEPING, where only KWS is subscribed and the VAD cannot see a burst anyway,
+on everywhere else. It would have cost nothing and kept the wake word intact.
+
+**It is not possible in the browser.** Measured four times each way:
+
+| Form | What happened |
+|---|---|
+| `applyConstraints({ noiseSuppression: true })` | resolves, no error, `getSettings()` unmoved — an `ideal` constraint, which the spec lets an implementation ignore **silently** |
+| `applyConstraints({ noiseSuppression: { exact: true } })` | rejects with **`Cannot satisfy constraints`** |
+
+So it is *cannot*, not *will not*, and the same is presumed to hold for
+`echoCancellation`. The frame counter showed `gap 0` across all of it, which
+proves nothing: nothing was ever switched.
+
+**The general rule this leaves: the microphone's processing is fixed at
+`getUserMedia` and any design that wants to change it at runtime has to reopen
+the microphone.** At the SLEEPING → LISTENING edge that is unaffordable — it is
+the instant the wake word fires.
+
+Note that the ideal form is a silent failure of exactly the shape this project
+keeps meeting: it returns success and does nothing. Wiring it into `session.js`
+on the strength of the resolved promise would have shipped a no-op, and the car
+would have run with the suppressor on permanently with nothing to show it.
+
 ## What expires when the phone changes
 
 Every figure in this file was measured on one phone, in one room, by one
@@ -665,6 +762,8 @@ of *car*, not of phone, and are measured on `bench.html`.
 | The barge-in verdict (`bargeIn`, `ttsPath`) | the phone's echo canceller is the thing under test | Acoustics |
 | Noise floor, with and without the keep-alive | the room, and the phone's own amplifier | Acoustics |
 | Keyword miss rate and false triggers | the microphone, and the speaker's accent | Recognition |
+| The level of a spurious AEC burst, and of real speech — i.e. where `SPEECH_FLOOR_DB` belongs | the phone's echo canceller and its microphone gain; the floor is a subtraction between two device-specific numbers | Recognition |
+| Whether `avg_logprob` still separates a garbled transcript from a good one — i.e. `LOGPROB_FLOOR` | the STT provider and its model version, which move without notice | Recognition |
 | Whether `vad.front()` keeps the head of a sentence | the mic's onset response — and it decides whether §5.4's ring comes back | Recognition |
 | Transcription quality without a locked `language` | the provider and its model version, which move without notice | Recognition |
 | TTS on a code-switched line | same | Providers |
@@ -675,3 +774,9 @@ rather than about the device: that the VAD and KWS can share one wasm module
 (the binary is vendored in `web/models/`), that keywords are spelled in ARPAbet
 and toned pinyin rather than BPE, and that an unknown token aborts the module
 via `SHERPA_ONNX_EXIT(-1)` instead of failing quietly.
+
+Half-way between the two: **Chrome refusing `applyConstraints` on a live audio
+track** is a fact about the browser, not about this phone, so it will not move
+when the device does — but it can move when Chrome does, and it fails silently
+in one of its two forms. Re-measure it with the button on `audio-bench.html`
+before building anything that depends on the answer.
