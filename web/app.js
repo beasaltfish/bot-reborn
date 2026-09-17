@@ -26,11 +26,16 @@ const ui = createUi(config.lang);
 /** @type {{ stop(): void } | null} */ let keepAlive = null;
 /** @type {Session | null} */ let session = null;
 
-ui.onStart(start);
-ui.onStop(stop);
-// Layer 2 of §4.1. The order inside onEmergencyStop() is the part that matters
-// (car first, state machine second); this line only has to reach it.
-ui.onEmergencyStop(() => session?.onEmergencyStop());
+// One button with two meanings in stage 1: wake it, then stop it. It routes on
+// the tone painted on the button at the moment it was pressed, so what runs is
+// what the user saw — a separate flag could disagree with the face, and the
+// moment it did, a button reading STOP would start the car.
+//
+// Layer 2 of §4.1 lives in the 'stop' branch. The order inside
+// onEmergencyStop() is the part that matters (car first, state machine
+// second); this line only has to reach it.
+ui.onFab((tone) => (tone === 'stop' ? session?.onEmergencyStop() : start()));
+ui.onSleep(stop);
 
 async function start() {
   ui.running(true);

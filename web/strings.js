@@ -26,9 +26,15 @@ export const STRINGS = {
     deviceDisconnected: 'The car came unplugged. I have braked.',
     sessionTimedOut: 'Going to sleep.',
     // --- On-screen copy: never spoken -------------------------------------
-    appTitle: 'Voice robot',
-    start: 'Start listening',
-    stopBtn: 'Stop listening',
+    // The fab carries one word at a time and the screen has no other copy, so
+    // these are short on purpose — §11 budgets the whole main screen at ten
+    // words. None is ever spoken: the fab is a button, not a line.
+    fabStart: 'Wake it',
+    fabStop: 'STOP',
+    sleepBtn: 'Let it sleep',
+    settings: 'Settings',
+    // Kept for the fab's aria-label: the face says STOP, the screen reader
+    // gets the whole phrase.
     emergencyStop: 'EMERGENCY STOP',
     booting: 'Loading the wake-word model…',
     micDenied: 'Microphone access was refused. Nothing can be heard without it.',
@@ -49,9 +55,10 @@ export const STRINGS = {
     apiFailed: '连不上服务器。',
     deviceDisconnected: '小车断开了，我已经刹住。',
     sessionTimedOut: '我先休息了。',
-    appTitle: '语音机器人',
-    start: '开始听',
-    stopBtn: '停止听',
+    fabStart: '叫醒它',
+    fabStop: '停',
+    sleepBtn: '让它睡觉',
+    settings: '设置',
     emergencyStop: '急停',
     booting: '正在加载唤醒词模型…',
     micDenied: '麦克风被拒绝了。没有它什么都听不见。',

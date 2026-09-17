@@ -1,33 +1,40 @@
-// Log, state lamp, the two buttons, and the emergency stop. No logic: every
-// handler here is one line that calls into something else (spec §10).
+// Wiring only. Every method here is one or two lines that call into something
+// else (spec §10); the one table that used to live here — state to string key —
+// moved into robot.js, where it is tested.
 
 import { t } from './strings.js';
+import { applyFace } from './robot.js';
 
 const $ = (/** @type {string} */ id) =>
   /** @type {HTMLElement} */ (document.getElementById(id));
 
-/** @type {Record<import('./audio/session.js').State, import('./strings.js').StringKey>} */
-const STATE_KEY = {
-  SLEEPING: 'stSleeping',
-  LISTENING: 'stListening',
-  CAPTURING: 'stCapturing',
-  THINKING: 'stThinking',
-  SPEAKING: 'stSpeaking',
-};
-
 /** @param {'en' | 'zh'} lang */
 export function createUi(lang) {
   /** @type {string[]} */ const lines = [];
-  const btn = {
-    start: /** @type {HTMLButtonElement} */ ($('start')),
-    stop: /** @type {HTMLButtonElement} */ ($('stop')),
-    estop: /** @type {HTMLButtonElement} */ ($('estop')),
-  };
+  const robot = $('robot');
+  const fab = /** @type {HTMLButtonElement} */ ($('fab'));
+  const sleep = /** @type {HTMLButtonElement} */ ($('sleep'));
 
-  $('title').textContent = t(lang, 'appTitle');
-  btn.start.textContent = t(lang, 'start');
-  btn.stop.textContent = t(lang, 'stopBtn');
-  btn.estop.textContent = t(lang, 'emergencyStop');
+  sleep.textContent = t(lang, 'sleepBtn');
+  $('settings').setAttribute('aria-label', t(lang, 'settings'));
+
+  /**
+   * One button, one place, and its face is whatever is most urgent right now.
+   * Stage 1 uses two of the tones; §5's earlier rungs arrive in stage 2.
+   *
+   * A local function rather than a method called through `this`: running()
+   * needs it, and a method would break the moment somebody destructured the
+   * returned object.
+   *
+   * @param {'go' | 'stop' | 'wait'} tone
+   * @param {import('./strings.js').StringKey} key
+   */
+  const fabFace = (tone, key) => {
+    fab.dataset.tone = tone;
+    fab.textContent = t(lang, key);
+    fab.setAttribute('aria-label', t(lang, tone === 'stop' ? 'emergencyStop' : key));
+    fab.disabled = false;
+  };
 
   return {
     /** @param {string} msg */
@@ -37,23 +44,47 @@ export function createUi(lang) {
       el.textContent = lines.slice(-200).join('\n');
       el.scrollTop = el.scrollHeight;
     },
-    /** @param {import('./audio/session.js').State} s */
-    setState(s) { $('state').textContent = t(lang, STATE_KEY[s]); },
-    /** @param {string} text */
-    setTranscript(text) { $('transcript').textContent = text; },
+
+    /**
+     * The face IS the state display. The live region carries the same thing as
+     * text, because an SVG gives a screen reader nothing.
+     * @param {import('./audio/session.js').State} s
+     */
+    setState(s) {
+      $('robotLabel').textContent = t(lang, applyFace(robot, s).labelKey);
+    },
+
+    /** @param {string} text empty hides the bubble rather than leaving it blank */
+    setTranscript(text) {
+      const el = $('bubble');
+      el.textContent = text;
+      el.hidden = !text;
+    },
+
     /** @param {string} text empty hides it */
     notice(text) { $('notice').hidden = !text; $('notice').textContent = text; },
+
+    fabFace,
+
     /** @param {boolean} on */
     running(on) {
-      btn.start.disabled = on;
-      btn.stop.disabled = !on;
-      btn.estop.disabled = !on;
+      sleep.disabled = !on;
+      fabFace(on ? 'stop' : 'go', on ? 'fabStop' : 'fabStart');
     },
+
+    /**
+     * The click carries the tone that was painted on the button when it was
+     * pressed, so the caller routes on what the user actually saw.
+     *
+     * The plan had app.js keep its own `running` flag for this. Reading it back
+     * off the element is strictly tighter: a separate flag can disagree with
+     * the face — and the moment it does, a button reading STOP starts the car.
+     *
+     * @param {(tone: string) => void} fn
+     */
+    onFab(fn) { fab.addEventListener('click', () => fn(fab.dataset.tone ?? '')); },
+
     /** @param {() => void} fn */
-    onStart(fn) { btn.start.addEventListener('click', fn); },
-    /** @param {() => void} fn */
-    onStop(fn) { btn.stop.addEventListener('click', fn); },
-    /** @param {() => void} fn */
-    onEmergencyStop(fn) { btn.estop.addEventListener('click', fn); },
+    onSleep(fn) { sleep.addEventListener('click', fn); },
   };
 }

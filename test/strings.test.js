@@ -39,10 +39,16 @@ test('t() falls back to the key rather than rendering undefined', () => {
 });
 
 test('every string the UI needs exists in both languages', () => {
+  // Hand-written rather than derived from STRINGS.en, on purpose: deriving it
+  // would make the test agree with whatever the table happens to say, and a key
+  // deleted in both languages would pass. appTitle / start / stopBtn left this
+  // list on 2026-09-17 when the main screen became one robot and one button.
+
   const needed = /** @type {(keyof typeof STRINGS.en)[]} */ ([
     'usbNotConnected', 'didNotCatch', 'apiFailed', 'deviceDisconnected',
     'sessionTimedOut',
-    'appTitle', 'start', 'stopBtn', 'emergencyStop', 'booting', 'micDenied',
+    'fabStart', 'fabStop', 'sleepBtn', 'settings',
+    'emergencyStop', 'booting', 'micDenied',
     'keywordsInvalid', 'screenOffMissed', 'usbNotPaired',
     'stSleeping', 'stListening', 'stCapturing', 'stThinking', 'stSpeaking',
   ]);
