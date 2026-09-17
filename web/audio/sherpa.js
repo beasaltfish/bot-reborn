@@ -22,28 +22,60 @@ const GLUE = [
 
 /** @typedef {{ Module: any, createKws: Function, createVad: Function, tokens: Set<string> }} Sherpa */
 
+/** How long the whole load may take before it is called a failure. Generous:
+ *  ~8 MB over a phone's connection on first visit, cached afterwards. */
+const LOAD_TIMEOUT_MS = 90_000;
+
 /**
+ * Every step reports itself, and a stall becomes an error rather than silence.
+ *
+ * This loader used to be able to hang forever saying nothing: emscripten's own
+ * setStatus never fires before the engine glue runs, printErr went to a console
+ * nobody can see on a phone, and onAbort only covers aborts — not a script that
+ * loads and simply never initialises. A start that hung looked exactly like one
+ * that was slow, which is the same silent-failure shape as everything else this
+ * project has had to dig out.
+ *
  * @param {(status: string) => void} [onStatus]
+ * @param {{ timeoutMs?: number }} [opts]
  * @returns {Promise<Sherpa>}
  */
-export async function loadSherpa(onStatus = () => {}) {
+export async function loadSherpa(onStatus = () => {}, opts = {}) {
   const g = /** @type {any} */ (globalThis);
-  const tokens = parseTokens(
-    await (await fetch(MODELS_BASE + 'tokens.txt')).text(),
-  );
+  onStatus('… tokens.txt');
+  const res = await fetch(MODELS_BASE + 'tokens.txt');
+  if (!res.ok) throw new Error(`tokens.txt: ${res.status} ${res.statusText}`);
+  const tokens = parseTokens(await res.text());
+
+  /** Named so the timeout can say where it stopped, not merely that it did. */
+  let at = 'tokens.txt';
   await new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`gave up after ${at}`)),
+      opts.timeoutMs ?? LOAD_TIMEOUT_MS,
+    );
+    /** @param {Error} e */
+    const fail = (e) => { clearTimeout(timer); reject(e); };
     g.Module = {
       locateFile: (/** @type {string} */ p) => MODELS_BASE + p,
       setStatus: onStatus,
-      onRuntimeInitialized: resolve,
-      onAbort: (/** @type {string} */ why) => reject(new Error('wasm abort: ' + why)),
-      printErr: (/** @type {string} */ s) => console.warn('[wasm]', s),
+      onRuntimeInitialized: () => { clearTimeout(timer); resolve(undefined); },
+      onAbort: (/** @type {string} */ why) => fail(new Error('wasm abort: ' + why)),
+      // Onto the status line as well as the console: on a phone the console is
+      // not reachable, and this is where the engine says what went wrong.
+      printErr: (/** @type {string} */ s) => { console.warn('[wasm]', s); onStatus('wasm: ' + s); },
     };
     (function next(/** @type {number} */ i) {
+      at = GLUE[i];
+      onStatus('… ' + GLUE[i]);
       const el = document.createElement('script');
       el.src = MODELS_BASE + GLUE[i];
-      el.onload = () => void (i + 1 < GLUE.length && next(i + 1));
-      el.onerror = () => reject(new Error('failed to load ' + GLUE[i]));
+      el.onload = () => {
+        onStatus('✓ ' + GLUE[i]);
+        if (i + 1 < GLUE.length) next(i + 1);
+        else at = 'the engine starting up';
+      };
+      el.onerror = () => fail(new Error('failed to load ' + GLUE[i]));
       document.body.appendChild(el);
     })(0);
   });
