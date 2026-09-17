@@ -45,8 +45,8 @@ export const STRINGS = {
     booting: 'Loading the wake-word model…',
     micDenied: 'Microphone access was refused. Nothing can be heard without it.',
     keywordsInvalid: 'A keyword uses a token this model does not know: ',
-    usbNotPaired: 'This phone has never been paired with the car. '
-      + 'Open the connectivity test once to pair it.',
+    usbNotPaired: 'This phone and the car have not met yet.',
+    pairNow: 'Introduce them →',
     screenOffMissed: 'Your phone could not hear me while the screen was off. '
       + 'Keep the screen on if you want me listening.',
     stSleeping: 'asleep',
@@ -70,7 +70,8 @@ export const STRINGS = {
     booting: '正在加载唤醒词模型…',
     micDenied: '麦克风被拒绝了。没有它什么都听不见。',
     keywordsInvalid: '关键词里有这个模型不认识的 token：',
-    usbNotPaired: '这台手机还没和小车配过对。先去连通性测试页连一次。',
+    usbNotPaired: '手机还没见过这台小车。',
+    pairNow: '去认识一下 →',
     screenOffMissed: '你的手机黑屏之后听不见我。想让我一直听着，就别锁屏。',
     stSleeping: '休眠',
     stListening: '在听',

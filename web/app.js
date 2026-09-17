@@ -38,24 +38,26 @@ ui.onFab((tone) => (tone === 'stop' ? session?.onEmergencyStop() : start()));
 ui.onSleep(stop);
 
 /**
- * Boot progress goes to the screen, not only to the log.
+ * Boot progress is diagnostics, not copy.
  *
- * Starting takes several seconds — megabytes of wasm, a microphone prompt and
- * a USB handshake — and the log is hidden on this page now. Without this the
- * screen simply stops after the only button on it is pressed, and a start that
- * hangs is indistinguishable from one that is merely slow. It cost a round of
- * guessing to learn that the hard way.
+ * It went to the notice line for one round and that was wrong: 「✓
+ * sherpa-onnx-wasm-kws-main.js」 is not something to say to a child. The
+ * screen gets one sentence while starting; the trace goes where a developer
+ * can reach it and nowhere else.
  *
  * @param {string} msg
  */
 function step(msg) {
   ui.log(msg);
-  ui.notice(msg);
+  console.info('[boot]', msg);
 }
 
 async function start() {
   ui.running(true);
-  step(t(config.lang, 'booting'));
+  step('start');
+  // One sentence, held until the whole chain is up. The detail is in the
+  // console; what the screen owes the user is "something is happening".
+  ui.notice(t(config.lang, 'booting'));
   try {
     // Before any await: autoplay needs the user gesture, and one await spends it.
     const ka = createKeepAlive({ onLog: ui.log });
@@ -91,7 +93,12 @@ async function start() {
     // pairing happens once, in the onboarding flow, and never here.
     step('… car');
     const [device] = await navigator.usb.getDevices();
-    if (!device) throw new Error(t(config.lang, 'usbNotPaired'));
+    // Not thrown as a bare message: this is the one failure that names
+    // something the user has to go and do, so it travels with somewhere to go.
+    // §5's 「连上车」 rung folds this into the button itself in stage 2.
+    if (!device) throw Object.assign(new Error(t(config.lang, 'usbNotPaired')), {
+      go: { href: 'setup.html', label: t(config.lang, 'pairNow') },
+    });
     const ftdi = await Ftdi.open(navigator.usb, { device });
     step('✓ car');
     const executor = new Executor(ftdi, {
@@ -138,14 +145,15 @@ async function start() {
   } catch (err) {
     const e = /** @type {Error} */ (err);
     const why = e.name === 'NotAllowedError' ? t(config.lang, 'micDenied') : e.message;
-    ui.log('❌ ' + why);
+    step('failed: ' + why);
+    console.error(e);
     stop();
     // After stop(), which does not touch the notice: a failed start used to
     // report itself only into a log this page hides, so pressing the one
     // button looked like pressing nothing. A person then presses it again —
     // and until loadSherpa became a one-shot, the second press wedged the
     // engine permanently.
-    ui.notice('❌ ' + why);
+    ui.notice(why, /** @type {any} */ (e).go);
   }
 }
 

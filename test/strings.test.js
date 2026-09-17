@@ -49,7 +49,7 @@ test('every string the UI needs exists in both languages', () => {
     'sessionTimedOut',
     'fabStart', 'fabStop', 'sleepBtn', 'settings', 'sayThis',
     'emergencyStop', 'booting', 'micDenied',
-    'keywordsInvalid', 'screenOffMissed', 'usbNotPaired',
+    'keywordsInvalid', 'screenOffMissed', 'usbNotPaired', 'pairNow',
     'stSleeping', 'stListening', 'stCapturing', 'stThinking', 'stSpeaking',
   ]);
   for (const key of needed) {

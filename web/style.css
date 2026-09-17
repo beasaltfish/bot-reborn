@@ -411,3 +411,5 @@ section[id^="panel-"].idle { opacity: .55; }
 
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden;
            clip: rect(0 0 0 0); white-space: nowrap; }
+
+.notice-go { color: var(--go); text-decoration: underline; white-space: nowrap; }

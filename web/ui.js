@@ -82,8 +82,29 @@ export function createUi(lang) {
       el.hidden = !text;
     },
 
-    /** @param {string} text empty hides it */
-    notice(text) { $('notice').hidden = !text; $('notice').textContent = text; },
+    /**
+     * The one line on this screen that speaks to the user in sentences, so it
+     * is also the only place a failure may explain itself. Everything else —
+     * boot progress, engine chatter, stack traces — belongs in the console.
+     *
+     * A failure that names something the user must go and do gets a link,
+     * because "open the connectivity test page" is an instruction, and an
+     * instruction the screen cannot carry out itself is a dead end.
+     *
+     * @param {string} text empty hides it
+     * @param {{ href: string, label: string }} [go]
+     */
+    notice(text, go) {
+      const el = $('notice');
+      el.hidden = !text;
+      el.textContent = text;
+      if (!text || !go) return;
+      const a = document.createElement('a');
+      a.href = go.href;
+      a.textContent = go.label;
+      a.className = 'notice-go';
+      el.append(' ', a);
+    },
 
     fabFace,
     running,
