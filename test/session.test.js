@@ -52,13 +52,22 @@ export function harness(over = {}) {
   // The TTS is controllable rather than overridable: a test that replaces it
   // wholesale loses the call recording, and half of what these tests assert is
   // exactly which of speak/cancel ran.
-  /** @type {(() => Promise<void>) | null} */ let speakImpl = null;
+  /** @type {((onPlaying: () => void) => Promise<void>) | null} */ let speakImpl = null;
   /** @type {(() => void) | null} */ let onCancel = null;
   const tts = {
-    /** @param {string} text */
-    speak: (text) => {
+    /** @param {string} text @param {any} [opts] */
+    speak: (text, opts) => {
       calls.push(['tts.speak', text]);
-      return speakImpl?.() ?? Promise.resolve();
+      const onPlaying = () => {
+        calls.push(['tts.playing', text]);
+        opts?.onPlaying?.();
+      };
+      // The default fake is a provider that starts playing the instant it is
+      // asked to. A real one does not — see slowSpeak — and the gap between
+      // the two is the whole reason onPlaying exists.
+      if (speakImpl) return speakImpl(onPlaying);
+      onPlaying();
+      return Promise.resolve();
     },
     cancel: () => { calls.push(['tts.cancel']); onCancel?.(); },
   };
@@ -100,9 +109,27 @@ export function harness(over = {}) {
      *  real WebAudioTts does: cancel() fades out and lets speak() resolve. A
      *  stall that never resolves would hide everything speak()'s tail does. */
     stallSpeak() {
-      speakImpl = () => new Promise((resolve) => { onCancel = () => resolve(); });
+      speakImpl = (onPlaying) => new Promise((resolve) => {
+        onPlaying();
+        onCancel = () => resolve();
+      });
     },
-    /** @param {string} why */
+    /**
+     * A provider that has been ASKED to speak and has not begun: §7.1's
+     * fetch-then-decode window, which it measures at 1–2 s for a long reply.
+     * `begin()` is the first sample reaching the output.
+     */
+    slowSpeak() {
+      /** @type {(() => void) | null} */ let begin = null;
+      speakImpl = (onPlaying) => new Promise((resolve) => {
+        begin = onPlaying;
+        onCancel = () => resolve();
+      });
+      return { begin: () => begin?.() };
+    },
+    /** A request that dies before a single sample plays — onPlaying never
+     *  runs, because nothing was ever audible.
+     *  @param {string} why */
     failSpeak(why) { speakImpl = () => Promise.reject(new Error(why)); },
     /** @param {string} name */
     spoken(name = 'tts.speak') {
@@ -746,3 +773,60 @@ test('a brain that throws is reported, not dropped into the void', async () => {
   assert.equal(h.session.state, 'LISTENING', 'the turn still ends');
 });
 
+
+// --- the face follows the sound, not the request (§7.1) --------------------
+
+test('the mouth does not open until the first sample actually plays', async () => {
+  // The bug this pins: SPEAKING was set on the CALL to speak(), and §7.1 puts
+  // 1–2 s of fetch and decode in front of the first sample. The robot wore the
+  // speaking face, mouth moving, through all of it — in silence.
+  const h = harness();
+  const brain = fakeBrain(h.session, h.calls);
+  h.session.attach(brain);
+  h.session.start();
+  h.wake();
+  const playback = h.slowSpeak();
+  h.vad.segments.push(loud(16));
+  h.feed('vad');
+  await settle();
+  brain.finish();                       // the brain reaches speakingTts.speak()
+  await settle();
+  assert.equal(h.took('tts.speak'), 1, 'the request is out');
+  assert.equal(h.session.state, 'THINKING', 'but nothing is audible yet');
+  playback.begin();
+  assert.equal(h.session.state, 'SPEAKING');
+});
+
+test('§5.3: the ear is not shut for a window with nothing playing in it', async () => {
+  // With bargeIn off, SPEAKING unsubscribes the VAD so the robot does not hear
+  // itself. During the fetch there is no sound to hear, and the ear used to be
+  // shut for the whole 1–2 s of it anyway.
+  const h = harness({ config: { ...defaultConfig('en'), bargeIn: false } });
+  const brain = fakeBrain(h.session, h.calls);
+  h.session.attach(brain);
+  h.session.start();
+  h.wake();
+  const playback = h.slowSpeak();
+  h.vad.segments.push(loud(16));
+  h.feed('vad');
+  await settle();
+  brain.finish();
+  await settle();
+  assert.deepEqual(h.names(), ['kws', 'vad'], 'still listening while it waits');
+  playback.begin();
+  assert.deepEqual(h.names(), ['kws'], 'and deaf only while it is talking');
+});
+
+test('a reply that never plays does not quietly end the turn', async () => {
+  // The turn is not over: brain.js still has a fault to report. speak()'s tail
+  // must not put the session into LISTENING for a playback that never began.
+  const h = harness();
+  h.session.attach(fakeBrain(h.session, h.calls));
+  h.session.start();
+  h.wake();
+  h.failSpeak('TTS request failed: 401');
+  h.vad.segments.push(loud(16));
+  h.feed('vad');
+  await settle();
+  assert.equal(h.calls.filter((c) => c[0] === 'tts.playing').length, 0);
+});

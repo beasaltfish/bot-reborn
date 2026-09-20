@@ -98,7 +98,9 @@ export class Session {
    *   stt: { transcribeDetailed(pcm: Int16Array, rate: number,
    *                     opts?: { signal?: AbortSignal }):
    *            Promise<{ text: string, logprob: number | null }> },
-   *   tts: { speak(text: string, opts?: { signal?: AbortSignal }): Promise<void>,
+   *   tts: { speak(text: string,
+   *                 opts?: { signal?: AbortSignal, onPlaying?: () => void }):
+   *            Promise<void>,
    *          cancel(): void },
    *   executor: { stop(): Promise<void> | void },
    *   earcon: (name: EarconName) => number,
@@ -318,14 +320,40 @@ export class Session {
         // would pass every check below.
         if (this.#ctrl === null) return;
         const gen = this.#gen;
-        this.#setState('SPEAKING');
+        // SPEAKING used to be set right here, on the CALL. But a provider does
+        // not start playing when it is asked to: §7.1 puts 1–2 s of fetch and
+        // decode in front of the first sample, and the robot spent all of it
+        // wearing the speaking face with its mouth moving in silence. It is
+        // the same conflation §5.3 already warns about one line down — the
+        // state has to bracket the playback, and "asked to speak" is not the
+        // start of the playback any more than the LLM is.
+        //
+        // §5.3 falls out of this too: with bargeIn off, SPEAKING is what
+        // unsubscribes the VAD so the robot does not hear itself. Nothing is
+        // audible during the fetch, so there was nothing to protect against
+        // and the ear was shut anyway. The window stays THINKING now, which is
+        // what it actually is, and which already behaves this way for the LLM
+        // call sitting right before it.
+        let started = false;
+        const onPlaying = () => {
+          // The same two gates as above, re-read: this fires a second or two
+          // later, and by then the turn may be gone.
+          if (this.#ctrl === null || gen !== this.#gen) return;
+          started = true;
+          this.#setState('SPEAKING');
+        };
         try {
-          await this.#tts.speak(text, opts);
+          await this.#tts.speak(text, { ...opts, onPlaying });
         } finally {
+          // Only if it was ever entered. A request that failed or was dropped
+          // before a single sample played never took the state machine out of
+          // THINKING, and putting it into LISTENING here would end the turn
+          // early — brain.js still has its failure to report.
+          //
           // The generation check is the whole fix for the spike's second bug:
           // an unconditional setState('LISTENING') here undoes the SLEEPING
           // that `all stop` just set, one tick later and invisibly.
-          if (gen === this.#gen) this.#setState('LISTENING');
+          if (started && gen === this.#gen) this.#setState('LISTENING');
         }
       },
       cancel: () => this.#tts.cancel(),

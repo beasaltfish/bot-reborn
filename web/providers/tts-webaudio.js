@@ -59,8 +59,16 @@ export class WebAudioTts {
 
   /**
    * Resolves when playback finishes, or immediately when cancelled.
+   *
+   * `onPlaying` fires once, at the instant the first sample is scheduled —
+   * NOT when speak() is called. Those are 1–2 s apart for a long reply (§7.1:
+   * fetch, then decodeAudioData, then resume), and anything that paints
+   * "speaking" off the call instead of off this callback shows a robot moving
+   * its mouth in silence. It never fires for a request that is cancelled or
+   * superseded before it reaches the output.
+   *
    * @param {string} text
-   * @param {{ signal?: AbortSignal }} [opts]
+   * @param {{ signal?: AbortSignal, onPlaying?: () => void }} [opts]
    * @returns {Promise<void>}
    */
   async speak(text, opts = {}) {
@@ -73,7 +81,7 @@ export class WebAudioTts {
       ? AbortSignal.any([opts.signal, controller.signal])
       : controller.signal;
     try {
-      return await this.#send(text, epoch, signal);
+      return await this.#send(text, epoch, signal, opts.onPlaying);
     } catch (err) {
       // The caller cancelling the turn is not a failure: cancel() resolves
       // too, and brain.js turns a rejection into an `error` earcon — telling
@@ -91,9 +99,10 @@ export class WebAudioTts {
    * @param {string} text
    * @param {number} epoch
    * @param {AbortSignal} signal
+   * @param {(() => void)} [onPlaying]
    * @returns {Promise<void>}
    */
-  async #send(text, epoch, signal) {
+  async #send(text, epoch, signal, onPlaying) {
     const response = await this.#fetch(`${this.#cfg.baseURL}/audio/speech`, {
       method: 'POST',
       headers: {
@@ -130,6 +139,12 @@ export class WebAudioTts {
       this.#source = source;
       this.#finish = resolve;
       source.start();
+      // After start(), so nothing can report playback that then failed to
+      // begin, and inside the last epoch check above, so a superseded request
+      // cannot announce itself. This is the only honest moment: every epoch
+      // gate between the fetch and here exists because the audio might never
+      // arrive at all.
+      onPlaying?.();
     });
   }
 
