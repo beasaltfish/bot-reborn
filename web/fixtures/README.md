@@ -14,6 +14,29 @@ the most common shape of input in the language-learning case this project is
 partly for. The sentences themselves live in `STT_FIXTURES` in `setup.js`;
 this table follows it.
 
+## The one clip that does ship: `check.wav`
+
+The setup popup asks a narrower question than this page does — **is this layer
+reachable at all**: right baseURL, right model name, working key. That question
+does not need your accent, and making somebody record before they can find out
+whether their key works puts a microphone in front of the very first thing they
+do.
+
+So `check.wav` is in the repo. It carries the same sentence as `mixed.wav`
+—　「这个 sentence 里的 transition word 用得对吗」　— because one clip that
+code-switches exercises Chinese, English and the seam between them at once.
+
+It is **synthesised, not recorded**: nobody's voice, and every clone hears the
+same take. Regenerate it with
+
+    say -v Tingting -r 170 -o check.aiff '这个 sentence 里的 transition word 用得对吗'
+    ffmpeg -i check.aiff -ar 16000 -ac 1 -c:a pcm_s16le check.wav
+
+**It can only answer "is the layer reachable".** Synthetic speech is easier to
+recognise than a person in a room, so a pass proves the wiring and nothing
+about accuracy. "Does it understand *me*" is what the three recorded clips
+below are for, and they stay out of the repo.
+
 ## Recording them
 
 **In the Fixtures section of `setup.html`.** It records straight to 16 kHz
