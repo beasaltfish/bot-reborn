@@ -58,7 +58,19 @@ export const PRESETS = {
       id: 'groq',
       label: 'Groq',
       baseURL: 'https://api.groq.com/openai/v1',
-      models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'],
+      // Groq's four, as its own catalogue lists them (checked 2026-09-20). The
+      // first is the default a preset fills in, and it is the 70B rather than
+      // the fastest of them on purpose: this product cannot work at all
+      // without tool calling, and tool calling is the capability small models
+      // lose first. Anybody chasing time-to-first-token can drop down the
+      // list — the Mind check tells them immediately if they went too far,
+      // because it asks for a tool call and not just an answer.
+      models: [
+        'llama-3.3-70b-versatile',
+        'openai/gpt-oss-120b',
+        'openai/gpt-oss-20b',
+        'llama-3.1-8b-instant',
+      ],
     },
     {
       id: 'openai',
