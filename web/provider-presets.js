@@ -19,14 +19,27 @@
 /** @typedef {'stt' | 'llm' | 'tts'} LayerName */
 
 /**
+ * `voices` is keyed by model id, not held once per provider, because on some
+ * providers the voice name contains the model name: SiliconFlow's speakers are
+ * spelled `<model>:<speaker>`, so changing the model invalidates every voice
+ * in the list. OpenAI's do not, and its two models simply share one array.
+ *
  * @typedef {{
  *   id: string,
  *   label: string,
  *   baseURL: string,
  *   models: string[],
- *   voices?: string[],
+ *   voices?: Record<string, string[]>,
  * }} Preset
  */
+
+/** The eight speakers SiliconFlow gives every one of its TTS models. */
+const SPEAKERS = ['alex', 'anna', 'bella', 'benjamin', 'charles', 'claire', 'david', 'diana'];
+
+/** @param {string} model @returns {string[]} */
+const prefixed = (model) => SPEAKERS.map((s) => `${model}:${s}`);
+
+const SILICONFLOW = 'https://api.siliconflow.com/v1';
 
 /** The id every layer falls back to: nothing filled in, every field typed. */
 export const CUSTOM = 'custom';
@@ -45,6 +58,15 @@ export const PRESETS = {
       label: 'OpenAI',
       baseURL: 'https://api.openai.com/v1',
       models: ['whisper-1'],
+    },
+    {
+      // Spec §8.3 names it as the STT alternative for one reason: SenseVoice
+      // is built for Chinese and English mixed inside a sentence, which is the
+      // shape this project's input actually has.
+      id: 'siliconflow',
+      label: 'SiliconFlow',
+      baseURL: SILICONFLOW,
+      models: ['FunAudioLLM/SenseVoiceSmall'],
     },
   ],
   llm: [
@@ -78,6 +100,12 @@ export const PRESETS = {
       baseURL: 'https://api.openai.com/v1',
       models: ['gpt-4o-mini', 'gpt-4o'],
     },
+    {
+      id: 'siliconflow',
+      label: 'SiliconFlow',
+      baseURL: SILICONFLOW,
+      models: ['deepseek-ai/DeepSeek-V3'],
+    },
   ],
   tts: [
     {
@@ -86,11 +114,42 @@ export const PRESETS = {
       baseURL: 'https://api.openai.com/v1',
       models: ['tts-1', 'tts-1-hd'],
       // §11.1 fixes ONE multilingual voice rather than switching per language,
-      // so this list is "which voice", never "which voice for which language".
-      voices: ['alloy', 'nova', 'shimmer'],
+      // so these lists are "which voice", never "which voice for which
+      // language". OpenAI's names stand on their own, so both models share
+      // them.
+      voices: {
+        'tts-1': ['alloy', 'nova', 'shimmer'],
+        'tts-1-hd': ['alloy', 'nova', 'shimmer'],
+      },
+    },
+    {
+      id: 'siliconflow',
+      label: 'SiliconFlow',
+      baseURL: SILICONFLOW,
+      models: ['fishaudio/fish-speech-1.5', 'FunAudioLLM/CosyVoice2-0.5B'],
+      voices: {
+        'fishaudio/fish-speech-1.5': prefixed('fishaudio/fish-speech-1.5'),
+        'FunAudioLLM/CosyVoice2-0.5B': prefixed('FunAudioLLM/CosyVoice2-0.5B'),
+      },
     },
   ],
 };
+
+/**
+ * The voices a layer can use as it is configured right now.
+ *
+ * Takes the model, not just the preset, because that is the whole reason this
+ * table is shaped the way it is: on SiliconFlow the speaker names carry the
+ * model name, and a voice list that ignored the model would offer eight names
+ * that all belong to some other model.
+ *
+ * @param {Preset | null} preset
+ * @param {string} model
+ * @returns {string[]}
+ */
+export function voicesFor(preset, model) {
+  return preset?.voices?.[model] ?? [];
+}
 
 /**
  * Which preset a stored layer came from, or `custom`.

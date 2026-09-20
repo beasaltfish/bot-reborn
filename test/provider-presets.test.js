@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { PRESETS, CUSTOM, presetIdFor, presetById } from '../web/provider-presets.js';
+import { PRESETS, CUSTOM, presetIdFor, presetById, voicesFor } from '../web/provider-presets.js';
 
 test('a stored baseURL is recognised as the preset it came from', () => {
   assert.equal(presetIdFor('llm', { baseURL: 'https://api.deepseek.com' }), 'deepseek');
@@ -48,13 +48,42 @@ test('every preset can fill in the fields it promises to fill in', () => {
   }
 });
 
-test('TTS presets carry a voice list, because that layer has a fourth field', () => {
-  // Spec §8.2: TTS is the one layer with a required `voice`. A TTS preset
-  // without voices leaves it empty and the request fails on a field the sheet
+test('every TTS model carries its own voices, not the provider', () => {
+  // Spec §8.2: TTS is the one layer with a required `voice`, and a model with
+  // no voices leaves it empty — the request then fails on a field the sheet
   // never showed.
+  //
+  // Keyed by MODEL because on SiliconFlow the speaker names contain the model
+  // name (`<model>:<speaker>`), so a provider-wide list would offer eight
+  // voices that all belong to whichever model was written down first.
   for (const preset of PRESETS.tts) {
-    assert.ok(preset.voices && preset.voices.length > 0, `${preset.id} has no voices`);
+    for (const model of preset.models) {
+      assert.ok(voicesFor(preset, model).length > 0,
+        `${preset.id} has no voices for ${model}`);
+    }
   }
+});
+
+test('a voice that names a model names the model it is filed under', () => {
+  // The failure this catches is a copy-paste one: filing fish-speech's
+  // speakers under CosyVoice. Every field would look filled in and every
+  // request would be refused.
+  for (const preset of PRESETS.tts) {
+    for (const model of preset.models) {
+      for (const voice of voicesFor(preset, model)) {
+        if (!voice.includes(':')) continue;
+        assert.equal(voice.split(':')[0], model,
+          `${preset.id}: voice "${voice}" is filed under "${model}"`);
+      }
+    }
+  }
+});
+
+test('voicesFor answers empty rather than throwing for a layer that has none', () => {
+  // STT and LLM presets have no voices at all, and custom has no preset.
+  assert.deepEqual(voicesFor(presetById('llm', 'groq'), 'anything'), []);
+  assert.deepEqual(voicesFor(null, 'anything'), []);
+  assert.deepEqual(voicesFor(presetById('tts', 'openai'), 'a-model-it-has-never-heard-of'), []);
 });
 
 test('ids are unique within a layer', () => {
