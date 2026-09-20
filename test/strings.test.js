@@ -48,7 +48,7 @@ test('every string the UI needs exists in both languages', () => {
     'usbNotConnected', 'didNotCatch', 'apiFailed', 'deviceDisconnected',
     'sessionTimedOut',
     'fabStart', 'fabKeys', 'fabPair', 'fabSteer', 'fabStop',
-    'sleepBtn', 'settings', 'close', 'sayThis',
+    'micOn', 'micOff', 'settings', 'close', 'sayThis',
     'stepKeys', 'stepCar', 'stepSteer',
     'calTitle', 'calIntro', 'calGo', 'calAsk', 'calLeft', 'calRight',
     'calAgain', 'calDone', 'calNoCar',

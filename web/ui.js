@@ -14,7 +14,7 @@ export function createUi(lang) {
   /** @type {string[]} */ const lines = [];
   const robot = $('robot');
   const fab = /** @type {HTMLButtonElement} */ ($('fab'));
-  const sleep = /** @type {HTMLButtonElement} */ ($('sleep'));
+  const mic = /** @type {HTMLButtonElement} */ ($('mic'));
 
   // The hint depends on two things that arrive through two different calls —
   // running() and setState() — so both are kept and the line is repainted from
@@ -31,7 +31,6 @@ export function createUi(lang) {
     el.hidden = !hintVisible(live, state);
   };
 
-  sleep.textContent = t(lang, 'sleepBtn');
   $('settings').setAttribute('aria-label', t(lang, 'settings'));
 
   /**
@@ -54,7 +53,13 @@ export function createUi(lang) {
 
   /** @param {boolean} on */
   const running = (on) => {
-    sleep.disabled = !on;
+    // Two readings, one element. On: the only control that shuts the ear, and
+    // the only place the whole screen says the ear is open at all. Off: a
+    // status light — the way in is the one big button, and offering it twice
+    // would be offering a choice that is not one.
+    mic.dataset.on = String(on);
+    mic.setAttribute('aria-label', t(lang, on ? 'micOn' : 'micOff'));
+    mic.setAttribute('aria-disabled', String(!on));
     fabFace(on ? 'stop' : 'go', on ? 'fabStop' : 'fabStart');
     // The microphone being open is not a session state — SLEEPING covers both
     // "shut" and "waiting to hear its name" — so it rides on the element
@@ -171,7 +176,17 @@ export function createUi(lang) {
      */
     onFab(fn) { fab.addEventListener('click', () => fn(fab.dataset.tone ?? '')); },
 
-    /** @param {() => void} fn */
-    onSleep(fn) { sleep.addEventListener('click', fn); },
+    /**
+     * Shutting the microphone. Gated on what is painted on the element rather
+     * than on a flag of the caller's — the same reason onFab reads its tone
+     * back off the button: a separate flag can disagree with what the user is
+     * looking at, and here that would mean a status light that stops the
+     * robot when tapped.
+     *
+     * @param {() => void} fn
+     */
+    onMic(fn) {
+      mic.addEventListener('click', () => { if (mic.dataset.on === 'true') fn(); });
+    },
   };
 }

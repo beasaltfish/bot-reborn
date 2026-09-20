@@ -59,7 +59,7 @@ ui.onFab((tone) => {
   }
   void start();
 });
-ui.onSleep(stop);
+ui.onMic(stop);
 
 /**
  * What the one button offers when nothing is running.

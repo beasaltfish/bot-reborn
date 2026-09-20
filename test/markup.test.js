@@ -10,7 +10,7 @@ const hasId = (id) => new RegExp(`id=["']${id}["']`).test(html);
 // nothing in the console but "null is not an object", and no test would catch
 // it — ui.js is DOM-bound and this project does not run a DOM in node.
 const REQUIRED = [
-  'robot', 'bubble', 'fab', 'sleep', 'log', 'notice', 'hint',
+  'robot', 'bubble', 'fab', 'mic', 'log', 'notice', 'hint',
   'settings', 'sheet', 'settingsTitle', 'settingsRows', 'sheetClose',
   'calSheet', 'cal',
   'setupSheet', 'setupTitle', 'setupTabs', 'setupRows', 'setupNote', 'setupFoot',
@@ -31,7 +31,12 @@ test('the retired ids are gone, not merely hidden', () => {
   // #sheetSteps was the onboarding checklist. The robot shows what it is
   // missing now, and a second copy of that answer in the settings sheet said
   // it twice — in text, worse, and one screen further away.
-  for (const id of ['state', 'title', 'start', 'stop', 'estop', 'sheetSteps', 'setupTestAll', 'setupClose']) {
+  // #sleep was the footer's "let it sleep". It named what the RED button
+  // already does — brake, then go to SLEEPING — while doing something else
+  // entirely: shutting the microphone. That job moved to the icon in the
+  // topbar, which is also the only thing that shows the ear is open.
+  for (const id of ['state', 'title', 'start', 'stop', 'estop', 'sleep',
+                    'sheetSteps', 'setupTestAll', 'setupClose']) {
     assert.ok(!hasId(id), `index.html still has the retired #${id}`);
   }
 });

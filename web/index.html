@@ -16,6 +16,24 @@
            carry; settings.js calls preventDefault() on every live click. -->
       <a id="settings" class="icon" href="setup.html" aria-label="Settings">⚙</a>
       <span id="link" class="link" hidden></span>
+
+      <!-- The only thing on screen that persistently answers "is the ear
+           open". The lit antenna says it too, but the antenna means other
+           things as well, and SLEEPING wears the same face whether the
+           microphone is shut or waiting to hear its name.
+
+           A status light while it is off and the off switch while it is on:
+           the way IN is the one big button, and a second control offering the
+           same thing would be a choice that is not one. ui.js sets
+           aria-disabled for the half of the time it is not a control. -->
+      <button id="mic" class="icon mic" type="button" data-on="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="9" y="3" width="6" height="11" rx="3"/>
+          <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0"/>
+          <line x1="12" y1="18" x2="12" y2="21"/>
+          <line class="mic-slash" x1="4.5" y1="20" x2="19.5" y2="4"/>
+        </svg>
+      </button>
     </header>
 
     <section class="stage">
@@ -100,10 +118,6 @@
          red to itself, never moves: at the moment the car is about to get away
          the button has to be where the eyes already are. -->
     <button id="fab" class="fab" disabled></button>
-
-    <footer class="tray">
-      <button id="sleep" class="quiet" disabled></button>
-    </footer>
 
     <pre id="log" class="log" hidden></pre>
 

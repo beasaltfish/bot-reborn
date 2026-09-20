@@ -40,7 +40,10 @@ export const STRINGS = {
     // robot would answer itself. test/strings.test.js enforces that.
     sayThis: 'Say',
     fabStop: 'STOP',
-    sleepBtn: 'Let it sleep',
+    // The microphone icon's two readings. Off is a status, not an offer —
+    // nothing is said about tapping it, because tapping it does nothing.
+    micOn: 'Listening — tap to stop',
+    micOff: 'Not listening',
     settings: 'Settings',
     close: 'Close',
     back: 'Back',
@@ -126,7 +129,8 @@ export const STRINGS = {
     fabSteer: '教我左右',
     sayThis: '说',
     fabStop: '停',
-    sleepBtn: '让它睡觉',
+    micOn: '在听——点一下收工',
+    micOff: '没在听',
     settings: '设置',
     close: '关闭',
     back: '返回',

@@ -291,8 +291,21 @@ section[id^="panel-"].idle { opacity: .55; }
 }
 
 .topbar { display: flex; justify-content: space-between; align-items: center;
-          padding: 10px 0; font-size: 13px; opacity: .6; }
+          padding: 10px 0; font-size: 13px; }
+/* The dimming used to sit on .topbar, which multiplied into everything inside
+   it — including the one element here whose whole job is to be a colour. */
+#settings, .link { opacity: .6; }
 .icon { background: none; border: 0; font-size: 20px; cursor: pointer; color: inherit; }
+
+/* Drawn rather than set as an emoji: the two states differ by colour, and an
+   emoji is whatever colour the platform decided. */
+.mic { padding: 0; line-height: 0; display: flex; }
+.mic svg { width: 22px; height: 22px; fill: none; stroke: currentColor;
+           stroke-width: 1.8; stroke-linecap: round; }
+.mic[data-on="true"] { color: var(--go); }
+.mic[data-on="true"] .mic-slash { display: none; }
+/* Off is a status light. It says so by not looking pressable. */
+.mic[data-on="false"] { opacity: .45; cursor: default; }
 
 .stage { flex: 1; display: flex; flex-direction: column;
          align-items: center; justify-content: center; gap: 14px; min-height: 0; }
@@ -464,7 +477,10 @@ section[id^="panel-"].idle { opacity: .55; }
 /* --- the one button -------------------------------------------------- */
 
 .fab {
-  position: absolute; right: 16px; bottom: 76px;
+  /* 76px was the height of the tray that used to sit under it. The tray is
+     gone — its one button named what the red face already does — so this is
+     the finger-safe gap plus whatever the home indicator claims. */
+  position: absolute; right: 16px; bottom: calc(20px + env(safe-area-inset-bottom));
   width: 78px; height: 78px; border-radius: 50%; border: 0;
   color: #fff; font-size: 14px; font-weight: 700; line-height: 1.2;
   cursor: pointer; z-index: 2;
@@ -481,7 +497,6 @@ section[id^="panel-"].idle { opacity: .55; }
 }
 @media (prefers-reduced-motion: reduce) { .fab { animation: none !important; } }
 
-.tray { padding: 10px 0 max(14px, env(safe-area-inset-bottom)); }
 .quiet { width: 100%; padding: 12px; border-radius: 12px; background: none;
          border: 1.5px solid rgba(128,128,128,.4); color: inherit;
          font-size: 14px; cursor: pointer; }
