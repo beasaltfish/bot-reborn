@@ -433,6 +433,11 @@ section[id^="panel-"].idle { opacity: .55; }
 .sheet { position: fixed; inset: 0; z-index: 10; display: flex;
          align-items: flex-end; justify-content: center;
          background: rgba(0,0,0,.55); }
+/* An author `display` beats the UA sheet's `[hidden] { display: none }` — same
+   specificity, and the author origin wins — so every element this file gives a
+   display to has to say what hidden means for itself, or `el.hidden = true`
+   sets an attribute that changes nothing. */
+.sheet[hidden] { display: none; }
 .panel { width: 100%; max-width: 520px; border-radius: 18px 18px 0 0;
          background: Canvas; color: CanvasText; padding: 18px 16px
          max(18px, env(safe-area-inset-bottom));
