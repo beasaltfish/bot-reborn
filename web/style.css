@@ -386,6 +386,39 @@ section[id^="panel-"].idle { opacity: .55; }
 /* No car paired. Not a session state — SLEEPING already covers "not doing
    anything" — so like data-live it rides on the element rather than becoming
    a sixth face. */
+/* --- the robot as the checklist --------------------------------------
+
+   Three transparent bands over the drawing, one per gating step. They tile the
+   robot's full height rather than tracing its outline: a finger needs about
+   44px and the wheels are seventeen, so hugging the shapes would produce three
+   targets nobody can hit. The bands are ordered head, body, wheels, which is
+   also the order the steps come in.
+
+   The step that is next gets a soft ring. Nothing else advertises that the
+   robot can be touched, and a drawing that silently rewards a tap is a
+   drawing nobody taps. */
+.robot .part {
+  position: absolute; left: 0; width: 100%;
+  border: 0; background: none; padding: 0;
+  border-radius: 16px; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.robot .part[data-part="keys"]  { top: 0;   height: 55%; }
+.robot .part[data-part="car"]   { top: 55%; height: 23%; }
+.robot .part[data-part="steer"] { top: 78%; height: 22%; }
+.robot .part:active { background: rgba(128,128,128,.12); }
+.robot .part:focus-visible { outline: 2px solid var(--tintc); outline-offset: 2px; }
+
+.robot[data-next="keys"]  .part[data-part="keys"],
+.robot[data-next="car"]   .part[data-part="car"],
+.robot[data-next="steer"] .part[data-part="steer"] {
+  animation: robot-part 2.4s ease-in-out infinite;
+}
+@keyframes robot-part {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245,158,11,0) }
+  50%      { box-shadow: 0 0 0 3px rgba(245,158,11,.22) }
+}
+
 /* --- parts it has not been given yet ---------------------------------
 
    Each unconfigured layer is drawn as the part the five faces already use for
@@ -474,19 +507,18 @@ section[id^="panel-"].idle { opacity: .55; }
          max(18px, env(safe-area-inset-bottom));
          display: flex; flex-direction: column; gap: 14px; }
 
-.steps { list-style: none; margin: 0; padding: 0; }
-.step { display: flex; align-items: center; gap: 12px; padding: 13px 4px;
-        font-size: 15px; }
-.step + .step { border-top: 1px solid rgba(128,128,128,.18); }
-.step-mark { width: 20px; text-align: center; flex: 0 0 auto; }
-.step-done .step-mark { color: var(--go); }
-.step-current { font-weight: 600; }
-.step-current .step-mark { color: var(--wait); }
-.step-todo { opacity: .45; }
-/* Only the row that can actually be finished from here looks pressable. A row
-   that invites a tap and does nothing is the same lie as an inert gear. */
-.step-doable { cursor: pointer; }
-.step-doable:active { background: rgba(128,128,128,.12); border-radius: 10px; }
+/* Settings rows. Nothing here is a step, so nothing is numbered or ticked:
+   getting started is the robot and the one button, and this is the drawer you
+   go looking in afterwards. */
+.settings { display: flex; flex-direction: column; }
+.setting { display: flex; flex-direction: column; gap: 8px; padding: 14px 4px;
+           align-items: stretch; text-align: left; }
+.setting + .setting { border-top: 1px solid rgba(128,128,128,.18); }
+.setting-caption { font-size: 12px; opacity: .6; }
+.setting-value { margin: 0; font-size: 13px; opacity: .8; word-break: break-word; }
+.setting-door { font-size: 15px; background: none; border: 0; color: inherit;
+                cursor: pointer; padding: 15px 4px; }
+.setting-door::after { content: ' \203a'; opacity: .5; }
 
 /* The panel can outgrow the screen once three provider layers are open, and a
    bottom sheet that runs off the bottom hides its own close button. */

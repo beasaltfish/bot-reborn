@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { GATING, fabRung, checklist } from '../web/steps.js';
+import { GATING, fabRung, STEP_LABEL } from '../web/steps.js';
 
 const none = { keys: false, car: false, steer: false };
 const all = { keys: true, car: true, steer: true };
@@ -34,31 +34,13 @@ test('red is the stop and nothing else wears it', () => {
   assert.deepEqual(tones, ['wait', 'wait', 'wait', 'go']);
 });
 
-test('the list and the button never disagree about what is next', () => {
-  // Spec §6: one state, two renderings. Two sources would drift, and the drift
-  // would read as the product asking for one thing and rewarding another.
-  for (const done of [none, { ...none, keys: true }, { ...none, keys: true, car: true }, all]) {
-    const current = checklist(done).find((r) => r.state === 'current');
-    const rung = fabRung(done, false);
-    assert.equal(current?.step ?? 'listen', rung.step, `disagreed at ${JSON.stringify(done)}`);
+
+test('every gating step has a name, and it is the name the robot uses', () => {
+  // ui.js labels the robot's three touch bands from this table, and settings
+  // names its two doors from it. A step with no entry is a band a screen
+  // reader announces as "button".
+  for (const step of GATING) {
+    assert.ok(STEP_LABEL[step], `no label for the "${step}" step`);
   }
-});
-
-test('the list marks what is behind you, what is now, and what is not yet', () => {
-  assert.deepEqual(
-    checklist({ keys: true, car: false, steer: false }).map((r) => [r.step, r.state]),
-    [['keys', 'done'], ['car', 'current'], ['steer', 'todo']],
-  );
-});
-
-test('everything done leaves no current row', () => {
-  assert.equal(checklist(all).find((r) => r.state === 'current'), undefined);
-  assert.deepEqual(checklist(all).map((r) => r.state), ['done', 'done', 'done']);
-});
-
-test('a later step finished out of order is still shown as done', () => {
-  // Pairing happens in setup.html too, and calibration could in principle be
-  // done from the bench. The list reports what is true, not what it expected.
-  const rows = checklist({ keys: false, car: false, steer: true });
-  assert.deepEqual(rows.map((r) => r.state), ['current', 'todo', 'done']);
+  assert.equal(Object.keys(STEP_LABEL).length, GATING.length);
 });

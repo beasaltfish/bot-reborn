@@ -3,6 +3,7 @@
 // moved into robot.js, where it is tested.
 
 import { t, KEYWORDS } from './strings.js';
+import { STEP_LABEL } from './steps.js';
 import { applyFace, applyAssembly } from './robot.js';
 
 const $ = (/** @type {string} */ id) =>
@@ -118,6 +119,28 @@ export function createUi(lang) {
     needCar(on) { robot.dataset.need = on ? 'car' : ''; },
     /** @param {import('./robot.js').Part[]} parts */
     assembly(parts) { applyAssembly(robot, parts); },
+
+    /**
+     * Which step the robot is offering to start if it is touched. The same
+     * rung the button is showing, so the ring and the button never point at
+     * two different steps.
+     * @param {import('./steps.js').Step | null} step
+     */
+    nextPart(step) { robot.dataset.next = step ?? ''; },
+
+    /**
+     * The robot is the checklist. A band is pressed, and the step it stands
+     * for is what happens — no list in between.
+     * @param {(step: import('./steps.js').Step) => void} fn
+     */
+    onPart(fn) {
+      for (const el of document.querySelectorAll('.part')) {
+        const step = /** @type {import('./steps.js').Step} */ (
+          /** @type {HTMLElement} */ (el).dataset.part);
+        el.setAttribute('aria-label', t(lang, STEP_LABEL[step]));
+        el.addEventListener('click', () => fn(step));
+      }
+    },
 
     /**
      * The click carries the tone that was painted on the button when it was

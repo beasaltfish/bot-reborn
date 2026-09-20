@@ -11,7 +11,10 @@ const hasId = (id) => new RegExp(`id=["']${id}["']`).test(html);
 // it — ui.js is DOM-bound and this project does not run a DOM in node.
 const REQUIRED = [
   'robot', 'bubble', 'fab', 'sleep', 'log', 'notice', 'hint',
-  'settings', 'sheet', 'sheetSteps', 'sheetClose', 'cal',
+  'settings', 'sheet', 'settingsTitle', 'settingsRows', 'sheetClose',
+  'calSheet', 'cal',
+  'setupSheet', 'setupTitle', 'setupRows', 'setupNote', 'setupTestAll',
+  'setupClose',
 ];
 
 test('index.html provides every element ui.js reaches for', () => {
@@ -24,8 +27,21 @@ test('the retired ids are gone, not merely hidden', () => {
   //
   // #estop is on the list because §5 folded it into #fab: one button, one
   // fixed place, whose face is always the most urgent thing available.
-  for (const id of ['state', 'title', 'start', 'stop', 'estop']) {
+  //
+  // #sheetSteps was the onboarding checklist. The robot shows what it is
+  // missing now, and a second copy of that answer in the settings sheet said
+  // it twice — in text, worse, and one screen further away.
+  for (const id of ['state', 'title', 'start', 'stop', 'estop', 'sheetSteps']) {
     assert.ok(!hasId(id), `index.html still has the retired #${id}`);
+  }
+});
+
+test('the robot carries one touch target per gating step', () => {
+  // The robot IS the checklist now. A missing band is a step with no door:
+  // the ring pulses over a region that does nothing when it is pressed.
+  for (const step of ['keys', 'car', 'steer']) {
+    assert.match(html, new RegExp(`class=["']part["'] data-part=["']${step}["']`),
+      `index.html has no touch target for the "${step}" step`);
   }
 });
 
