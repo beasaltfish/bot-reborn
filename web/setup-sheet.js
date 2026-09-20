@@ -208,19 +208,26 @@ export function createSetupSheet(deps) {
     }
 
     // --- model ------------------------------------------------------------
-    if (preset && !state.freeModel) {
+    //
+    // The list never goes away. Replacing it with a text box the moment
+    // somebody picks "Other" left them typing with no way back to the names
+    // they had a second ago — the one thing this sheet exists to save them
+    // from. "Other" adds a field underneath; picking a name again removes it.
+    if (preset) {
       grid.append(labelled('setupModel', select(
         [...preset.models.map((m) => /** @type {[string, string]} */ ([m, m])),
         /** @type {[string, string]} */ (['', t(deps.lang, 'setupCustom')])],
-        cfg.model,
+        state.freeModel ? '' : cfg.model,
         (v) => {
-          if (v === '') { state.freeModel = true; render(); return; }
-          cfg.model = v;
-          commit();
+          state.freeModel = v === '';
+          if (v !== '') { cfg.model = v; commit(); }
+          render();
         })));
-    } else {
-      grid.append(labelled('setupModel', text(cfg.model, '',
-        (v) => { cfg.model = v; commit(); })));
+    }
+    if (!preset || state.freeModel) {
+      const typed = text(cfg.model, t(deps.lang, 'setupModel'),
+        (v) => { cfg.model = v; commit(); });
+      grid.append(preset ? wide(typed) : labelled('setupModel', typed));
     }
 
     // --- voice: TTS only, and §11.1 fixes one for every language -----------
@@ -362,14 +369,24 @@ export function createSetupSheet(deps) {
     return el;
   }
 
+  /** A field that spans both columns and carries its own caption in the
+   *  placeholder, for the box that appears under a list rather than beside it.
+   *  @param {HTMLElement} field */
+  function wide(field) {
+    const label = document.createElement('label');
+    label.className = 'wide';
+    label.append(field);
+    return label;
+  }
+
   /**
    * @param {import('./strings.js').StringKey} key
    * @param {HTMLElement} field
-   * @param {boolean} [wide]
+   * @param {boolean} [full]
    */
-  function labelled(key, field, wide = false) {
+  function labelled(key, field, full = false) {
     const label = document.createElement('label');
-    if (wide) label.className = 'wide';
+    if (full) label.className = 'wide';
     const span = document.createElement('span');
     span.textContent = t(deps.lang, key);
     span.style.fontSize = '12px';
