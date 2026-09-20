@@ -100,11 +100,52 @@ with whichever face is current.
 |---|---|---|
 | `data-live="true"` | the microphone is open | a sleeping robot's antenna lights: asleep, but listening for its name |
 | `data-need="car"` | no car has been paired | a plug works its way into the robot's side, on a loop |
+| `data-missing` | a token list of parts not configured yet | each named part is drawn dashed and pale |
 
 The first exists because *asleep with the microphone shut* and *asleep waiting
 to hear its name* are one state and two entirely different situations. §5.3
 keeps the keyword spotter subscribed all through `SLEEPING`, so the second one
 really is listening, and the screen should say so.
+
+### The parts it has not been given yet
+
+The five faces had already put each provider layer somewhere on the drawing,
+before anybody went looking for a place to put them:
+
+| Setup row | Part | The face that uses it |
+|---|---|---|
+| **Ears** | the sound waves beside the head | `CAPTURING` — hearing you |
+| **Mind** | the antenna | `THINKING` — the dot orbits |
+| **Voice** | the mouth | `SPEAKING` — the mouth opens |
+| — | the wheels | (no face; left and right are taught, not felt) |
+
+So an unconfigured layer is drawn as **the part that is not there yet**: dashed
+and pale, in the place that part will occupy once it works. Filling in a key
+makes a ghost disappear. The robot is assembled as it is set up, and "what is
+still missing" is answered on the character rather than only in a list.
+
+Dashed rather than a different colour, because the difference that has to read
+at a glance is *absent* versus *present and idle*, and colour is already
+carrying tint.
+
+**Every ghost rule is scoped to the face not currently using that part**, so a
+live face always wins and the drawing never shows a mouth that is both speaking
+and absent. The two barely meet in practice: nothing can start before Ears and
+Mind are configured, so the only ghost that can share the screen with a running
+robot is the mouth of one that was never given a voice — which is exactly what
+it is.
+
+**This is finer than the checklist, and does not duplicate it.** The list
+answers "how many steps are left", and giving it both keys is one step, one
+errand, one sheet. The drawing answers "what is this robot still missing", and
+there the ears and the mind are two different absences. `missingParts()` in
+`robot.js` is the one place that decides; `steps.js` stays the one place that
+decides the other question.
+
+**The wheels go pale from the moment calibration has not been done**, including
+while there is no car at all. Both are true then, and the plug and the pale
+wheels say different things: nothing is plugged in, and nothing has been taught
+left from right.
 
 ---
 
@@ -116,7 +157,7 @@ the last one.
 
 ```mermaid
 flowchart TD
-    A{"API keys set?"} -- no --> B["⚙ Settings · amber"]
+    A{"API keys set?"} -- no --> B["Set me up · amber<br/>opens the setup sheet"]
     A -- yes --> C{"car paired?"}
     C -- no --> D["Plug me in · amber<br/>opens the USB picker"]
     C -- yes --> E{"listening?"}
@@ -139,6 +180,47 @@ afternoon and that was a lie people acted on.
 would notice the car was missing it has spent its own on several awaits. The
 product used to download 19 MB, open the microphone, then report the missing
 car as a failure of the thing you had just asked for.
+
+---
+
+## The two sheets
+
+Both slide up from the bottom, both are their own backdrop, both close on a tap
+outside. They are not the same thing and they never stack:
+
+| | opened by | answers |
+|---|---|---|
+| **Settings** | the gear | what is still missing, and calibration |
+| **Setup** | the amber button, or the first row of Settings | the three keys |
+
+Settings closes itself before opening Setup. Two bottom sheets on one phone
+screen leave the lower one showing around the edges of the upper, and closing
+the top one uncovers a list that is now out of date.
+
+**Setup is three rows, one per layer, named by what they do for the robot.**
+Ears hear you, Mind decides, Voice answers back — not STT, LLM and TTS, which
+are the names of the parts we happened to buy. Voice is folded away: the robot
+starts without it, and then says nothing, and the summary says so rather than
+leaving the row silently absent.
+
+**Only the key is typed.** The address and the model come from a built-in list,
+because they are the same for everybody on the same provider, and every paste
+is one more chance to produce a failure that reads as a bad key. Picking
+"Other…" puts the fields back.
+
+**Each row carries its own test, and that is the point.** One status line at the
+foot of the sheet can say that something failed; it cannot say which of three
+keys is the wrong one, which is the only thing its reader wants to know.
+
+**The Ears test plays a recording that ships with the repo**, and says so under
+every result. It is synthesised, so it is nobody's voice and every clone hears
+the same take — which makes it a fair baseline and makes it useless for "does
+it understand *me*". That question belongs to `setup.html`, where the clips are
+in your own voice.
+
+**There is no Save.** A key is pasted and the very next thing anybody does is
+press Test. A Save in between exists only to be forgotten, and the failure it
+produces points at the key.
 
 ---
 

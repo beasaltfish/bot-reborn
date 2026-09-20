@@ -1,11 +1,13 @@
 // Entry point: wiring only (spec §10). Every decision here is made somewhere
 // else; if a branch shows up in this file it belongs in session.js.
 
-import { loadConfig, saveConfig } from './config.js';
+import { loadConfig, saveConfig, layerReady } from './config.js';
 import { t } from './strings.js';
 import { createUi } from './ui.js';
 import { createSettings } from './settings.js';
+import { createSetupSheet } from './setup-sheet.js';
 import { fabRung } from './steps.js';
+import { missingParts } from './robot.js';
 import { Ftdi , USB_FILTERS } from './ftdi.js';
 import { Executor } from './executor.js';
 import { Brain } from './brain.js';
@@ -50,7 +52,12 @@ ui.onFab((tone) => {
   // colour. Reading it back off steps.js keeps this in step with the list.
   if (tone === 'wait') {
     const rung = fabRung(lastDone, false);
-    return void (rung.step === 'car' ? pair() : settings.open());
+    if (rung.step === 'car') return void pair();
+    // Straight to the sheet that finishes the step, not to the list that
+    // contains it. The list is what the gear is for; the button said "Set me
+    // up", and one more tap to reach the same rung it already named is a tap
+    // that teaches nothing.
+    return void (rung.step === 'keys' ? setupSheet.open() : settings.open());
   }
   void start();
 });
@@ -72,23 +79,49 @@ ui.onSleep(stop);
  */
 async function offerNextStep(running = false) {
   const done = {
-    keys: Boolean(config.llm.baseURL && config.stt.baseURL),
+    // Every field, not just the address: a layer with no key in it used to
+    // count as done, and the first thing it did was fail.
+    keys: layerReady(config.stt) && layerReady(config.llm),
     car: (await navigator.usb.getDevices()).length > 0,
     // Measured, not its value: a car that turned out NOT to be reversed has
     // been calibrated just as much as one that was.
     steer: config.calibration.steerSwapped !== null,
   };
   ui.needCar(!done.car);
+  // The same answer the checklist gives, drawn on the robot instead of listed:
+  // a part it has not been given yet is a part that is not there yet.
+  ui.assembly(missingParts(config));
   const rung = fabRung(done, running);
   ui.fabFace(rung.tone, rung.key);
   return done;
 }
 void offerNextStep();
 
+/**
+ * One AudioContext for the setup sheet's checks.
+ *
+ * Lazy: built on the first check, which is always inside a user gesture, so it
+ * starts running rather than suspended. Shared, because Chrome hard-caps a
+ * document at six and the sheet's TTS check is the kind of thing somebody
+ * presses repeatedly while swapping providers.
+ */
+/** @type {AudioContext | null} */
+let checkCtx = null;
+
+const setupSheet = createSetupSheet({
+  lang: config.lang,
+  config,
+  save: () => saveConfig(config),
+  onChange: () => void refresh(),
+  audioContext: () => (checkCtx ??= new AudioContext()),
+  log: ui.log,
+});
+
 const settings = createSettings({
   lang: config.lang,
   done: () => lastDone,
   openCar: (opts) => openCar(opts),
+  openKeys: () => setupSheet.open(),
   onCalibrated: (swapped) => {
     config.calibration.steerSwapped = swapped;
     saveConfig(config);
@@ -129,7 +162,7 @@ void refresh();
 async function openCar(opts = {}) {
   const [device] = await navigator.usb.getDevices();
   if (!device) throw new Error(t(config.lang, 'usbNotPaired'));
-  // ② if it has been measured; ftdi.js's theoretical 0.15 if it has not.
+  // ② if it has been measured on this car; ftdi.js's 1.2 if it has not.
   const ftdi = await Ftdi.open(navigator.usb, {
     device,
     ...(config.calibration.bytesPerMs === null

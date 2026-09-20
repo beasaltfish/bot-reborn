@@ -25,22 +25,13 @@ const LABEL = { keys: 'stepKeys', car: 'stepCar', steer: 'stepSteer' };
 const MARK = { done: '✓', current: '▸', todo: '' };
 
 /**
- * Steps that are finished somewhere else, and where.
- *
- * The page they lead to writes the same config this list reads, so coming back
- * ticks the row. Until a step has either a flow here or a destination here, the
- * button on the main screen hands the user a list whose current row does
- * nothing — which is the same dead end as an inert gear, one screen deeper.
- */
-const AWAY = { keys: 'setup.html' };
-
-/**
  * @param {{
  *   lang: 'en' | 'zh',
  *   done: () => import('./steps.js').Done,
  *   openCar: (opts?: { raw?: boolean }) =>
  *     Promise<{ executor: import('./executor.js').Executor }>,
  *   onCalibrated: (swapped: boolean) => void,
+ *   openKeys: () => void,
  *   onChange: () => void,
  *   log: (msg: string) => void,
  * }} deps
@@ -72,17 +63,18 @@ export function createSettings(deps) {
       text.textContent = t(deps.lang, LABEL[row.step]);
       li.append(mark, text);
       // A row is pressable when there is something to press it towards:
-      // calibration runs here, keys are entered on setup.html, and pairing
-      // needs a user gesture the fab already owns. A row that looks pressable
-      // but is not is the same lie as a gear that opens nothing.
+      // calibration runs here, keys open the setup sheet, and pairing needs a
+      // user gesture the fab already owns. A row that looks pressable but is
+      // not is the same lie as a gear that opens nothing.
       if (row.step === 'steer') {
         li.classList.add('step-doable');
         li.addEventListener('click', () => startCalibration());
-      } else if (row.step in AWAY) {
+      } else if (row.step === 'keys') {
         li.classList.add('step-doable');
-        li.addEventListener('click', () => {
-          location.href = AWAY[/** @type {'keys'} */ (row.step)];
-        });
+        // Closes this sheet first: two bottom sheets stacked on one phone
+        // screen leaves the lower one visible around the edges of the upper,
+        // and closing the top one reveals a list that is now out of date.
+        li.addEventListener('click', () => { close(); deps.openKeys(); });
       }
       rows.append(li);
     }

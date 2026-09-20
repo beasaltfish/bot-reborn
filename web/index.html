@@ -10,11 +10,10 @@
   <main class="screen">
 
     <header class="topbar">
-      <!-- Stage 2 turns this into the settings sheet with the checklist in it.
-           Until then it goes to the page that already does the one thing the
-           product cannot start without — pairing the car — because a gear that
-           opens nothing reads as broken, and a hidden gear leaves no way in at
-           all except knowing the URL. -->
+      <!-- Opens the settings sheet. The href survives as the no-JS fallback
+           and as the route to the instrument page, which keeps the fixtures,
+           the typed driver and the per-provider comparison the sheet does not
+           carry; settings.js calls preventDefault() on every live click. -->
       <a id="settings" class="icon" href="setup.html" aria-label="Settings">⚙</a>
       <span id="link" class="link" hidden></span>
     </header>
@@ -53,8 +52,8 @@
           <rect class="mouth" x="50" y="66" width="20" height="12" rx="4"/>
 
           <rect class="ink" x="33" y="90" width="54" height="24" rx="7"/>
-          <circle class="ink" cx="33" cy="120" r="10"/>
-          <circle class="ink" cx="87" cy="120" r="10"/>
+          <circle class="ink wheel" cx="33" cy="120" r="10"/>
+          <circle class="ink wheel" cx="87" cy="120" r="10"/>
 
           <!-- Shown only when no car is paired. It moves rather than sits
                still because "plug this in" is an instruction, and an
@@ -94,6 +93,20 @@
     </footer>
 
     <pre id="log" class="log" hidden></pre>
+
+    <!-- Spec §8 of the 2026-09-17 design: setup stops being a page. The rows
+         are built by setup-sheet.js from the provider list, so the only thing
+         written here is the frame — three layers is a fact about the config
+         schema, not about this markup. -->
+    <div id="setupSheet" class="sheet" hidden>
+      <div class="panel">
+        <h2 id="setupTitle" class="panel-title"></h2>
+        <div id="setupRows" class="layers"></div>
+        <p id="setupNote" class="panel-note"></p>
+        <button id="setupTestAll" class="quiet"></button>
+        <button id="setupClose" class="quiet"></button>
+      </div>
+    </div>
 
     <!-- The sheet is its own backdrop: a click that lands on it rather than on
          the panel inside is a click outside, and closes it. -->

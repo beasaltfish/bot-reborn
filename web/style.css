@@ -386,6 +386,37 @@ section[id^="panel-"].idle { opacity: .55; }
 /* No car paired. Not a session state — SLEEPING already covers "not doing
    anything" — so like data-live it rides on the element rather than becoming
    a sixth face. */
+/* --- parts it has not been given yet ---------------------------------
+
+   Each unconfigured layer is drawn as the part the five faces already use for
+   it: the waves for hearing, the antenna for thinking, the mouth for
+   answering. Dashed and pale, because "not there yet" has to read differently
+   from "there and idle" at a glance and without colour.
+
+   Every rule is scoped to the face NOT currently using that part. The ghost is
+   an extra layer that can only ever add something; a live face always wins,
+   and the drawing never shows a mouth that is both speaking and absent. In
+   practice the two barely meet: nothing can start before the ears and the mind
+   are configured, so the only ghost that can share the screen with a running
+   robot is the mouth of one that was never given a voice - which is exactly
+   what it is. */
+.robot[data-missing~="ears"][data-waves="false"] .wave { display: block; }
+.robot[data-missing~="ears"][data-waves="false"] .wave path,
+.robot[data-missing~="voice"][data-mouth="false"] .mouth,
+.robot[data-missing~="wheels"] .wheel,
+.robot[data-missing~="mind"][data-antenna="off"] .antenna * {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-dasharray: 4 4;
+  opacity: .32;
+  animation: none;
+}
+.robot[data-missing~="voice"][data-mouth="false"] .mouth { display: block; }
+/* The antenna is already drawn at .3 when it is off; the dashes have to win
+   over that rule rather than multiply with it. */
+.robot[data-missing~="mind"][data-antenna="off"] .antenna { opacity: 1; }
+
 .robot .plug { display: none; }
 .robot[data-need="car"] .plug { display: block; }
 .robot .plug rect { fill: var(--wait); }
@@ -456,6 +487,47 @@ section[id^="panel-"].idle { opacity: .55; }
    that invites a tap and does nothing is the same lie as an inert gear. */
 .step-doable { cursor: pointer; }
 .step-doable:active { background: rgba(128,128,128,.12); border-radius: 10px; }
+
+/* The panel can outgrow the screen once three provider layers are open, and a
+   bottom sheet that runs off the bottom hides its own close button. */
+.panel { max-height: 88dvh; overflow-y: auto; }
+.panel-title { margin: 0; font-size: 17px; }
+.panel-note { margin: 0; font-size: 13px; opacity: .6; }
+
+/* --- the setup sheet: one row per provider layer ----------------------- */
+
+.layers { display: flex; flex-direction: column; gap: 12px; }
+.layer { border: 1px solid rgba(128,128,128,.25); border-radius: 14px;
+         padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.layer-body { display: flex; flex-direction: column; gap: 10px; }
+.layer-head { display: flex; align-items: baseline; gap: 8px; }
+.layer-name { font-weight: 600; font-size: 15px; }
+.layer-what { font-size: 13px; opacity: .6; flex: 1; }
+
+/* Two columns on a phone is already tight for a baseURL; the key gets the
+   whole width because it is the one field anybody actually pastes. */
+.layer-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.layer-fields .wide { grid-column: 1 / -1; }
+.layer-fields select, .layer-fields input {
+  width: 100%; box-sizing: border-box; padding: 10px;
+  border-radius: 10px; border: 1px solid rgba(128,128,128,.4);
+  background: none; color: inherit; font-size: 14px;
+}
+
+/* The verdict, in the row it belongs to. A single status line at the bottom
+   of the sheet cannot say WHICH key is the bad one, and that is the only
+   thing the person reading it wants to know. */
+.layer-test { align-self: flex-start; padding: 8px 14px; width: auto; }
+.layer-result { margin: 0; font-size: 13px; white-space: pre-wrap;
+                word-break: break-word; }
+.layer-result.pending { opacity: .6; }
+.layer-result.ok { color: var(--go); }
+.layer-result.error { color: var(--stop); }
+
+/* The layer it can start without is folded away, not dropped: it is the one
+   whose absence is a choice rather than a blocker. */
+.layer details summary { cursor: pointer; font-size: 13px; opacity: .7; }
+.layer details[open] summary { margin-bottom: 10px; }
 
 .cal { border: 1px solid rgba(128,128,128,.3); border-radius: 14px; padding: 16px; }
 .cal-say { margin: 0 0 12px; font-size: 15px; }
