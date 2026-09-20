@@ -4,7 +4,7 @@
 
 import { t, KEYWORDS } from './strings.js';
 import { STEP_LABEL } from './steps.js';
-import { applyFace, applyAssembly } from './robot.js';
+import { applyFace, applyAssembly, hintVisible } from './robot.js';
 
 const $ = (/** @type {string} */ id) =>
   /** @type {HTMLElement} */ (document.getElementById(id));
@@ -15,6 +15,21 @@ export function createUi(lang) {
   const robot = $('robot');
   const fab = /** @type {HTMLButtonElement} */ ($('fab'));
   const sleep = /** @type {HTMLButtonElement} */ ($('sleep'));
+
+  // The hint depends on two things that arrive through two different calls —
+  // running() and setState() — so both are kept and the line is repainted from
+  // whichever moved. Deriving it inside only one of them is how it came to
+  // hang around all through a conversation: running(true) put it up, and
+  // nothing ever took it back down.
+  let live = false;
+  /** @type {import('./audio/session.js').State} */ let state = 'SLEEPING';
+  const paintHint = () => {
+    const el = $('hint');
+    // Built here rather than stored joined: a STRINGS entry containing the wake
+    // word is a line TTS could read aloud, and the robot would answer itself.
+    el.textContent = `${t(lang, 'sayThis')} 「${KEYWORDS[0]}」`;
+    el.hidden = !hintVisible(live, state);
+  };
 
   sleep.textContent = t(lang, 'sleepBtn');
   $('settings').setAttribute('aria-label', t(lang, 'settings'));
@@ -45,11 +60,11 @@ export function createUi(lang) {
     // "shut" and "waiting to hear its name" — so it rides on the element
     // instead, and the stylesheet lights the antenna for the second one.
     robot.dataset.live = String(on);
-    // Built here rather than stored joined: a STRINGS entry containing the wake
-    // word is a line TTS could read aloud, and the robot would answer itself.
-    const hint = $('hint');
-    hint.textContent = `${t(lang, 'sayThis')} 「${KEYWORDS[0]}」`;
-    hint.hidden = !on;
+    live = on;
+    // A fresh session starts in SLEEPING, and onState only fires on a CHANGE —
+    // so the first one may never arrive, and this cannot wait for it.
+    if (on) state = 'SLEEPING';
+    paintHint();
   };
 
   // Paint the resting face now, not on the caller's first running(false).
@@ -73,7 +88,9 @@ export function createUi(lang) {
      * @param {import('./audio/session.js').State} s
      */
     setState(s) {
+      state = s;
       $('robotLabel').textContent = t(lang, applyFace(robot, s).labelKey);
+      paintHint();
     },
 
     /** @param {string} text empty hides the bubble rather than leaving it blank */

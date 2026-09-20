@@ -88,6 +88,27 @@ export function applyAssembly(root, parts) {
   root.dataset.missing = parts.join(' ');
 }
 
+/**
+ * Whether to show the "say its name" line.
+ *
+ * Two conditions, and the second one is the one this was missing: the hint is
+ * an instruction, and an instruction stops being one the moment it has been
+ * carried out. SLEEPING is the only state where saying the name does anything
+ * — §5.3 keeps KWS subscribed there and #onWake answers it — so from
+ * LISTENING onwards the line is telling the user to do something they have
+ * already done, on a robot that is visibly awake and waiting.
+ *
+ * It comes back when the session times out to SLEEPING (§5.2), which is
+ * exactly when it is true again.
+ *
+ * @param {boolean} live whether the microphone is open at all
+ * @param {State} state
+ * @returns {boolean}
+ */
+export function hintVisible(live, state) {
+  return live && state === 'SLEEPING';
+}
+
 /** @param {State} state @returns {Face} */
 export function faceFor(state) {
   const face = FACES[state];

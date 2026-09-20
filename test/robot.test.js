@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { STATES, faceFor, applyFace, missingParts, applyAssembly } from '../web/robot.js';
+import { STATES, faceFor, applyFace, missingParts, applyAssembly, hintVisible } from '../web/robot.js';
 import { STRINGS } from '../web/strings.js';
 
 test('the five states are session.js\'s five, in its own order', () => {
@@ -139,4 +139,28 @@ test('nothing missing clears the attribute rather than leaving the last value', 
   const fake = { dataset: /** @type {Record<string, string>} */ ({ missing: 'ears mind' }) };
   applyAssembly(/** @type {any} */ (fake), []);
   assert.equal(fake.dataset.missing, '');
+});
+
+
+// --- the wake-word hint ----------------------------------------------------
+
+test('the hint is only up while saying the name would do something', () => {
+  // It is an instruction, and SLEEPING is the only state where carrying it out
+  // has any effect (§5.3 keeps KWS subscribed there). From LISTENING onwards
+  // it tells the user to do a thing they have already done.
+  assert.equal(hintVisible(true, 'SLEEPING'), true);
+  for (const s of STATES.filter((s) => s !== 'SLEEPING')) {
+    assert.equal(hintVisible(true, s), false, `${s} must not carry the hint`);
+  }
+});
+
+test('a shut microphone carries no hint, asleep or not', () => {
+  // SLEEPING covers both "the mic is shut" and "waiting to hear its name", and
+  // only the second one can be acted on.
+  for (const s of STATES) assert.equal(hintVisible(false, s), false);
+});
+
+test('the hint comes back when the session times out (§5.2)', () => {
+  assert.equal(hintVisible(true, 'SPEAKING'), false);
+  assert.equal(hintVisible(true, 'SLEEPING'), true);
 });
