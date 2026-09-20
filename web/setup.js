@@ -16,6 +16,9 @@ import { AudioPipeline, RATE } from './audio/pipeline.js';
 import { joinFrames, toInt16 } from './audio/pcm.js';
 import { encodeWav } from './audio/wav.js';
 import { matchFixture, saveFixture, recordedAt } from './fixture-store.js';
+// The three checks have one definition; this page and the product's setup
+// sheet ask the same questions of different audio. See web/checks.js.
+import { checkLlm, checkTts, fetchClip, transcribeClip } from './checks.js';
 
 /**
  * @typedef {import('./config.js').Config} Config
@@ -198,28 +201,8 @@ const STT_FIXTURES = /** @type {const} */ ([
 async function loadFixture(path) {
   const recorded = await matchFixture(path);
   if (recorded) return { response: recorded, source: 'recording' };
-
-  const response = await fetch(path);
-  // Cloudflare Pages (wrangler pages dev included) does not 404 a missing
-  // static path — it falls back to serving index.html with status 200.
-  // response.ok alone would call that "found" and hand decodeAudioData an
-  // HTML page, which fails with a cryptic decode error instead of ever
-  // saying the clip is missing. The content-type gives it away: a real .wav
-  // is never served as text/html.
-  const contentType = response.headers.get('content-type') ?? '';
-  if (!response.ok || contentType.includes('text/html')) return null;
-  return { response, source: 'file' };
-}
-
-/** @param {AudioBuffer} buffer @returns {{ pcm: Int16Array, sampleRate: number }} */
-function toInt16Pcm(buffer) {
-  const float = buffer.getChannelData(0);
-  const pcm = new Int16Array(float.length);
-  for (let i = 0; i < float.length; i++) {
-    const clamped = Math.max(-1, Math.min(1, float[i]));
-    pcm[i] = clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff;
-  }
-  return { pcm, sampleRate: buffer.sampleRate };
+  const response = await fetchClip(path);
+  return response ? { response, source: /** @type {const} */ ('file') } : null;
 }
 
 /** @param {OpenAiCompatStt} stt @returns {Promise<string>} */
@@ -235,37 +218,23 @@ async function testStt(stt) {
         `${fixture.path} has not been recorded, and this test must not be skipped silently.\n\n`
         + `Record 「${fixture.say}」 under Fixtures above.`);
     }
-    const audioBuffer = await ctx.decodeAudioData(await found.response.arrayBuffer());
-    const { pcm, sampleRate } = toInt16Pcm(audioBuffer);
-    const text = await stt.transcribe(pcm, sampleRate);
+    const text = await transcribeClip(stt, found.response, ctx);
     lines.push(`${fixture.label}: ${text || '(empty)'}`);
   }
   return lines.join('\n');
 }
 
-/**
- * Two assertions, because "can chat" and "can call tools" are different
- * capabilities and a provider can have the first without the second.
- * @param {OpenAiCompatLlm} llm @returns {Promise<string>}
- */
-async function testLlm(llm) {
-  const chat = await llm.chat(
-    [{ role: 'user', content: 'Reply with exactly: ok' }], TOOLS);
-  if (!chat.text) throw new Error('the model returned no text');
-
-  const tool = await llm.chat(
-    [{ role: 'system', content: buildSystemPrompt({ replyLang: null, bargeIn: true }) },
-      { role: 'user', content: 'go forward for one second' }], TOOLS);
-  if (tool.toolCalls.length === 0) {
-    throw new Error('the model can chat but did not call a tool — tool calling is unusable on this provider');
-  }
-  return `text ✅ “${chat.text}” · tool ✅ ${tool.toolCalls[0].name}`;
+/** @param {OpenAiCompatLlm} llm @returns {Promise<string>} */
+function testLlm(llm) {
+  return checkLlm(llm, {
+    tools: TOOLS,
+    systemPrompt: buildSystemPrompt({ replyLang: null, bargeIn: true }),
+  });
 }
 
 /** @param {WebAudioTts} tts @returns {Promise<string>} */
 async function testTts(tts) {
-  const text = '「往前走」的英文是 go forward';
-  await tts.speak(text);
+  const text = await checkTts(tts);
   return `played 「${text}」 — were both languages intelligible? (your ears decide this one, not the code)`;
 }
 
