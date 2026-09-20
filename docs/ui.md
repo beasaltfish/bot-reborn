@@ -218,10 +218,14 @@ screen leave the lower one showing around the edges of the upper, and closing
 the top one uncovers a panel that has since gone stale.
 
 **What it hands over instead is the way back.** A sheet opened from another one
-is given the function that reopens it, and its own closing button then reads
-*Back* rather than *Close* — the word says where it goes. Opened from the robot
-there is nothing to hand over, the field is null, and the button reads *Close*
-and means it.
+is given the function that reopens it, and then shows **two** buttons: *Back*
+returns to the drawer it came from, *Close* is done with all of it. They are
+different intentions and one button cannot be both. Opened from the robot there
+is nothing to hand over, and the only button is *Close*.
+
+On the calibration sheet the pair sits outside the flow rather than at the end
+of it, so leaving is possible at every step. It can be opened by mistake, and a
+car that has just been told to turn is not a good place to be stuck.
 
 **Settings is not part of getting started.** It used to hold the onboarding
 checklist, and the day the robot started showing which parts it had not been
@@ -229,20 +233,45 @@ given, the list became a second, worse copy of the same answer — in text, one
 screen further away. Nothing behind the gear is ordered, numbered or ticked
 now; it is the drawer you go looking in afterwards.
 
-**Setup is three rows, one per layer, named by what they do for the robot.**
+**Setup is three tabs, one per layer, named by what they do for the robot.**
 Ears hear you, Mind decides, Voice answers back — not STT, LLM and TTS, which
-are the names of the parts we happened to buy. Voice is folded away: the robot
-starts without it, and then says nothing, and the summary says so rather than
-leaving the row silently absent.
+are the names of the parts we happened to buy.
+
+Tabs rather than three rows on one screen: stacked, that is eleven fields, a
+panel scrolling inside a sheet that is already the height of the screen, and a
+dropdown somewhere in the middle opening a scrolling list of its own. Setting
+up a key is not a form-filling session; it is the same three-field errand done
+three times. The tab carries a tick when its layer is complete — that mark is
+what lets tabs replace the stack without losing anything, because three open
+panels showed at a glance which were empty and three bare words would not.
+
+It opens on the first unfinished layer, not always on the first tab. Somebody
+who came back to fix their Voice key should not have to walk past two ticked
+layers to reach it.
 
 **Only the key is typed.** The address and the model come from a built-in list,
 because they are the same for everybody on the same provider, and every paste
 is one more chance to produce a failure that reads as a bad key. Picking
 "Other…" puts the fields back.
 
-**Each row carries its own test, and that is the point.** One status line at the
-foot of the sheet can say that something failed; it cannot say which of three
-keys is the wrong one, which is the only thing its reader wants to know.
+**Each layer carries its own test, beside its own fields.** One status line at
+the foot of the sheet can say that something failed; it cannot say which of
+three keys is the wrong one, which is the only thing its reader wants to know.
+There is no "test all three" either: the three are configured one at a time and
+each is tested where it is configured.
+
+**The Mind test asks for a tool call, not just an answer.** That is not the
+test being strict — `brain.js` drives the car through tools, so a model that
+can chat and cannot call one is a model this product cannot use. Models are not
+filtered out of the list for it: which models support tool calling changes
+faster than a hard-coded list can, and a stale list is worse than none when the
+test answers authoritatively in two seconds.
+
+**A voice belongs to a model, not to a provider.** On SiliconFlow the speakers
+are spelled `<model>:<speaker>`, so changing the model invalidates every voice
+name; on OpenAI they stand on their own. The preset table is keyed by model for
+that reason, and changing model or provider rewrites the voice if the stored
+one no longer belongs to anything.
 
 **The Ears test plays a recording that ships with the repo**, and says so under
 every result. It is synthesised, so it is nobody's voice and every clone hears

@@ -532,18 +532,34 @@ section[id^="panel-"].idle { opacity: .55; }
 
 /* --- the setup sheet: one row per provider layer ----------------------- */
 
+/* One layer at a time. Three stacked was eleven fields on a phone screen, and
+   a panel that scrolled inside a sheet that was already the height of the
+   screen. */
+.tabs { display: flex; gap: 6px; }
+.tab { flex: 1; padding: 10px 6px; border-radius: 10px; font-size: 14px;
+       border: 1px solid rgba(128,128,128,.3); background: none; color: inherit;
+       cursor: pointer; opacity: .55; }
+.tab-on { opacity: 1; font-weight: 600; border-color: currentColor; }
+/* The mark is what lets tabs replace the stack without losing anything: three
+   open panels showed at a glance which were empty, three bare words would not. */
+.tab-done::before { content: '\2713 '; color: var(--go); }
+
+.foot { display: flex; gap: 8px; }
+
 .layers { display: flex; flex-direction: column; gap: 12px; }
-.layer { border: 1px solid rgba(128,128,128,.25); border-radius: 14px;
-         padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.layer { display: flex; flex-direction: column; gap: 10px; }
 .layer-body { display: flex; flex-direction: column; gap: 10px; }
 .layer-head { display: flex; align-items: baseline; gap: 8px; }
-.layer-name { font-weight: 600; font-size: 15px; }
 .layer-what { font-size: 13px; opacity: .6; flex: 1; }
 
 /* Two columns on a phone is already tight for a baseURL; the key gets the
    whole width because it is the one field anybody actually pastes. */
-.layer-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.layer-fields .wide { grid-column: 1 / -1; }
+/* One field per row now that there is only one layer on screen: a baseURL or
+   a voice name like `FunAudioLLM/CosyVoice2-0.5B:alex` does not fit in half a
+   phone, and half-width fields were what made the panel scroll. */
+.layer-fields { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.layer-fields label { display: flex; flex-direction: column; gap: 4px; }
+.field-caption { font-size: 12px; opacity: .6; }
 .layer-fields select, .layer-fields input {
   width: 100%; box-sizing: border-box; padding: 10px;
   border-radius: 10px; border: 1px solid rgba(128,128,128,.4);

@@ -93,7 +93,6 @@ export const STRINGS = {
     // start a fallback, it starts a robot with nothing to speak with.
     setupVoiceOptional: 'It starts without this — and stays silent.',
     setupTest: 'Test',
-    setupTestAll: 'Test all three',
     setupNeedKey: 'Paste a key first',
     setupSave: 'Save',
     setupSaved: 'Saved',
@@ -160,7 +159,6 @@ export const STRINGS = {
     setupCustom: '其它…',
     setupVoiceOptional: '不填也能启动，只是它不会出声。',
     setupTest: '测一下',
-    setupTestAll: '三个都测一遍',
     setupNeedKey: '先把密钥贴进来',
     setupSave: '保存',
     setupSaved: '已保存',

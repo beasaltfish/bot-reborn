@@ -13,8 +13,8 @@ const REQUIRED = [
   'robot', 'bubble', 'fab', 'sleep', 'log', 'notice', 'hint',
   'settings', 'sheet', 'settingsTitle', 'settingsRows', 'sheetClose',
   'calSheet', 'cal',
-  'setupSheet', 'setupTitle', 'setupRows', 'setupNote', 'setupTestAll',
-  'setupClose',
+  'setupSheet', 'setupTitle', 'setupTabs', 'setupRows', 'setupNote', 'setupFoot',
+  'calFoot',
 ];
 
 test('index.html provides every element ui.js reaches for', () => {
@@ -31,7 +31,7 @@ test('the retired ids are gone, not merely hidden', () => {
   // #sheetSteps was the onboarding checklist. The robot shows what it is
   // missing now, and a second copy of that answer in the settings sheet said
   // it twice — in text, worse, and one screen further away.
-  for (const id of ['state', 'title', 'start', 'stop', 'estop', 'sheetSteps']) {
+  for (const id of ['state', 'title', 'start', 'stop', 'estop', 'sheetSteps', 'setupTestAll', 'setupClose']) {
     assert.ok(!hasId(id), `index.html still has the retired #${id}`);
   }
 });

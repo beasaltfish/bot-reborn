@@ -33,6 +33,7 @@ const TURN_MS = 600;
 export function createCalibration(deps) {
   const sheet = $('calSheet');
   const cal = $('cal');
+  const foot = $('calFoot');
 
   sheet.addEventListener('click', (e) => { if (e.target === sheet) close(); });
 
@@ -44,8 +45,29 @@ export function createCalibration(deps) {
   /** @param {{ back?: () => void }} [opts] */
   function open(opts = {}) {
     back = opts.back ?? null;
+    // Both offered, because they are different intentions: one returns to the
+    // drawer this was opened from, the other is done. They sit outside the
+    // flow rather than inside it, so leaving is possible at every step and not
+    // only at the end — this can be opened by mistake, and a car that has been
+    // told to turn is not a good place to be stuck.
+    foot.textContent = '';
+    if (back) foot.append(footButton('back', () => close()));
+    foot.append(footButton('close', () => { back = null; close(); }));
     sheet.hidden = false;
     ask('calIntro', [['calGo', () => void turn()]]);
+  }
+
+  /**
+   * @param {import('./strings.js').StringKey} key
+   * @param {() => void} fn
+   */
+  function footButton(key, fn) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'quiet';
+    b.textContent = t(deps.lang, key);
+    b.addEventListener('click', fn);
+    return b;
   }
 
   function close() {
@@ -87,7 +109,9 @@ export function createCalibration(deps) {
   /** @param {boolean} swapped */
   function settle(swapped) {
     deps.onCalibrated(swapped);
-    ask('calDone', [[back ? 'back' : 'close', () => close()]]);
+    // No button of its own: leaving is what the two in the footer are for, and
+    // a third one saying the same thing is a third thing to read.
+    ask('calDone', []);
   }
 
   /**

@@ -6,22 +6,30 @@
 // This asks the one question standing between a person and their first turn of
 // the wheels: what are your three keys.
 //
-// Two things follow from that, and they are the whole design:
+// Three things follow from that, and they are the whole design:
 //
-//   1. Only the key is typed. baseURL and model come from a built-in list,
+//   1. One layer at a time, behind tabs. Three stacked layers is eleven fields
+//      on one phone screen, and a panel that scrolls inside a sheet that is
+//      itself the height of the screen — with a select somewhere in the middle
+//      opening its own scrolling list. Setting up a key is not a form-filling
+//      session; it is the same three-field errand done three times.
+//   2. Only the key is typed. baseURL and model come from a built-in list,
 //      because they are identical for everybody on the same provider and every
 //      paste is another chance to produce a failure that reads as a bad key.
-//   2. Each layer carries its own test. A single status line at the foot of
-//      the sheet can say "something failed" and cannot say which of three keys
-//      is wrong, which is the only thing its reader wants to know.
+//   3. Each layer carries its own test, next to its own fields. A status line
+//      at the foot of a sheet can say "something failed" and cannot say which
+//      of three keys is wrong, which is the only thing its reader wants to
+//      know. There is no "test all three": the three are configured one at a
+//      time and each is tested where it is configured.
 //
 // Saving is not a button. A key is pasted, and the very next thing anybody
 // does is press Test — a Save in between exists only to be forgotten, and the
 // failure it produces ("bad key") points at the wrong thing.
 
 import { t } from './strings.js';
-import { PRESETS, CUSTOM, presetIdFor, presetById } from './provider-presets.js';
+import { PRESETS, CUSTOM, presetIdFor, presetById, voicesFor } from './provider-presets.js';
 import { checkStt, checkLlm, checkTts } from './checks.js';
+import { layerReady } from './config.js';
 import { OpenAiCompatStt } from './providers/stt-openai-compat.js';
 import { OpenAiCompatLlm } from './providers/llm-openai-compat.js';
 import { WebAudioTts } from './providers/tts-webaudio.js';
@@ -64,8 +72,10 @@ const LAYERS = [
  */
 export function createSetupSheet(deps) {
   const sheet = $('setupSheet');
+  const tabs = $('setupTabs');
   const rows = $('setupRows');
   const note = $('setupNote');
+  const foot = $('setupFoot');
 
   /**
    * Which preset each layer is showing, and whether its model is being typed
@@ -78,36 +88,27 @@ export function createSetupSheet(deps) {
    */
   const ui = {};
 
-  /** The test button and result line of each rendered row, for "test all". */
-  /** @type {Map<string, { button: HTMLButtonElement, result: HTMLElement }>} */
-  const wired = new Map();
+  /** @type {'stt' | 'llm' | 'tts'} */
+  let active = 'stt';
 
   /**
    * Where closing this sheet goes, when it was opened from somewhere that is
    * not the main screen.
    *
    * A sheet closes whatever opened it — two bottom sheets on one phone leave
-   * the lower one showing around the edges of the upper — and without this,
-   * every door into here is one-way. Somebody who went looking in settings for
-   * their keys presses the only button on the sheet and lands on the robot,
-   * with the drawer they were rummaging in shut behind them.
+   * the lower one showing around the edges of the upper — so without this,
+   * every door into here is one-way.
    *
    * @type {(() => void) | null}
    */
   let back = null;
 
   $('setupTitle').textContent = t(deps.lang, 'setupTitle');
-  $('setupTestAll').textContent = t(deps.lang, 'setupTestAll');
-  $('setupClose').addEventListener('click', () => close());
-  $('setupTestAll').addEventListener('click', () => void testAll());
   sheet.addEventListener('click', (e) => { if (e.target === sheet) close(); });
 
   /** @param {{ back?: () => void }} [opts] */
   function open(opts = {}) {
     back = opts.back ?? null;
-    // The button says where it goes. "Close" on a sheet that reopens the one
-    // behind it is a small lie that costs somebody a second tap every time.
-    $('setupClose').textContent = t(deps.lang, back ? 'back' : 'close');
     for (const layer of LAYERS) {
       const cfg = deps.config[layer.name];
       const presetId = presetIdFor(layer.name, cfg);
@@ -117,7 +118,10 @@ export function createSetupSheet(deps) {
         freeModel: !preset || !preset.models.includes(cfg.model),
       };
     }
-    note.textContent = t(deps.lang, 'setupEarsNote');
+    // Opens on the first layer that is not finished, not always on the first
+    // tab. Somebody who came back to fix their Voice key should not have to
+    // walk past two ticked layers to reach it.
+    active = (LAYERS.find((l) => !layerReady(deps.config[l.name])) ?? LAYERS[0]).name;
     render();
     sheet.hidden = false;
   }
@@ -133,8 +137,58 @@ export function createSetupSheet(deps) {
   }
 
   function render() {
+    renderTabs();
     rows.textContent = '';
-    for (const layer of LAYERS) rows.append(renderLayer(layer));
+    const layer = /** @type {LayerRow} */ (LAYERS.find((l) => l.name === active));
+    rows.append(renderLayer(layer));
+    note.textContent = t(deps.lang, layer.optional ? 'setupVoiceOptional' : 'setupEarsNote');
+    renderFoot();
+  }
+
+  /**
+   * A tab per layer, each carrying whether that layer is finished. The mark is
+   * the reason the tabs can replace the stack without losing anything: three
+   * open panels showed you at a glance which ones were empty, and three bare
+   * words would not.
+   */
+  function renderTabs() {
+    tabs.textContent = '';
+    for (const layer of LAYERS) {
+      const tab = document.createElement('button');
+      tab.type = 'button';
+      tab.className = 'tab';
+      tab.setAttribute('role', 'tab');
+      tab.setAttribute('aria-selected', String(layer.name === active));
+      if (layer.name === active) tab.classList.add('tab-on');
+      if (layerReady(deps.config[layer.name])) tab.classList.add('tab-done');
+      tab.textContent = t(deps.lang, layer.label);
+      tab.addEventListener('click', () => { active = layer.name; render(); });
+      tabs.append(tab);
+    }
+  }
+
+  /** Back and Close are both offered, because they are different intentions:
+   *  one returns to the drawer this was opened from, the other is done. */
+  function renderFoot() {
+    foot.textContent = '';
+    if (back) foot.append(footButton('back', () => close()));
+    foot.append(footButton('close', () => {
+      back = null;
+      close();
+    }));
+  }
+
+  /**
+   * @param {import('./strings.js').StringKey} key
+   * @param {() => void} fn
+   */
+  function footButton(key, fn) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'quiet';
+    b.textContent = t(deps.lang, key);
+    b.addEventListener('click', fn);
+    return b;
   }
 
   /** @param {LayerRow} layer */
@@ -144,29 +198,11 @@ export function createSetupSheet(deps) {
 
     const head = document.createElement('div');
     head.className = 'layer-head';
-    const name = document.createElement('span');
-    name.className = 'layer-name';
-    name.textContent = t(deps.lang, layer.label);
     const what = document.createElement('span');
     what.className = 'layer-what';
     what.textContent = t(deps.lang, layer.what);
-    head.append(name, what);
-    box.append(head);
-
-    const body = fields(layer);
-    if (layer.optional) {
-      // Folded, not dropped. The robot starts without a voice and then says
-      // nothing, which is a surprising enough outcome to deserve the sentence
-      // in the summary rather than silence in the sheet.
-      const details = document.createElement('details');
-      const summary = document.createElement('summary');
-      summary.textContent = t(deps.lang, 'setupVoiceOptional');
-      details.append(summary, body);
-      details.open = Boolean(deps.config.tts.apiKey);
-      box.append(details);
-    } else {
-      box.append(body);
-    }
+    head.append(what);
+    box.append(head, fields(layer));
     return box;
   }
 
@@ -193,13 +229,17 @@ export function createSetupSheet(deps) {
           cfg.baseURL = picked.baseURL;
           if (!picked.models.includes(cfg.model)) cfg.model = picked.models[0];
           state.freeModel = false;
+          // The voice belongs to the model on some providers, so a provider
+          // that cannot supply the stored one has invalidated it.
+          const voices = voicesFor(picked, cfg.model);
+          if (voices.length && !voices.includes(cfg.voice)) cfg.voice = voices[0];
         } else {
           state.freeModel = true;
         }
         commit();
         render();
       });
-    grid.append(labelled('setupProvider', provider));
+    grid.append(labelled('setupProvider', provider, true));
 
     // --- baseURL, only when there is no preset to supply it ----------------
     if (!preset) {
@@ -220,24 +260,29 @@ export function createSetupSheet(deps) {
         state.freeModel ? '' : cfg.model,
         (v) => {
           state.freeModel = v === '';
-          if (v !== '') { cfg.model = v; commit(); }
+          if (v !== '') {
+            cfg.model = v;
+            const voices = voicesFor(preset, v);
+            if (voices.length && !voices.includes(cfg.voice)) cfg.voice = voices[0];
+            commit();
+          }
           render();
-        })));
+        }), true));
     }
     if (!preset || state.freeModel) {
       const typed = text(cfg.model, t(deps.lang, 'setupModel'),
-        (v) => { cfg.model = v; commit(); });
-      grid.append(preset ? wide(typed) : labelled('setupModel', typed));
+        (v) => { cfg.model = v; commit(); render(); });
+      grid.append(preset ? wide(typed) : labelled('setupModel', typed, true));
     }
 
     // --- voice: TTS only, and §11.1 fixes one for every language -----------
     if (layer.name === 'tts') {
-      const voices = preset?.voices;
-      grid.append(labelled('setupVoiceField', voices
+      const voices = voicesFor(preset, cfg.model);
+      grid.append(labelled('setupVoiceField', voices.length
         ? select(voices.map((v) => /** @type {[string, string]} */ ([v, v])),
           cfg.voice || voices[0],
           (v) => { cfg.voice = v; commit(); })
-        : text(cfg.voice, '', (v) => { cfg.voice = v; commit(); })));
+        : text(cfg.voice, '', (v) => { cfg.voice = v; commit(); }), true));
     }
 
     // --- key: the only field anybody actually types ------------------------
@@ -247,15 +292,12 @@ export function createSetupSheet(deps) {
     grid.append(labelled('setupKey', key, true));
 
     const button = document.createElement('button');
+    button.type = 'button';
     button.className = 'quiet layer-test';
     button.textContent = t(deps.lang, 'setupTest');
     const result = document.createElement('p');
     result.className = 'layer-result';
     button.addEventListener('click', () => void runCheck(layer, button, result));
-    // Registered here, not on first click: "Test all three" has to reach a row
-    // nobody has pressed yet, which is every row the first time the sheet is
-    // opened — the case the button exists for.
-    wired.set(layer.name, { button, result });
 
     const box = document.createElement('div');
     box.className = 'layer-body';
@@ -279,6 +321,9 @@ export function createSetupSheet(deps) {
     say(result, '…', 'pending');
     try {
       say(result, await perform(layer.name), 'ok');
+      // A pass is what turns the tab's mark green, and the tab is rendered
+      // from the config rather than from the result — so this redraws.
+      renderTabs();
     } catch (err) {
       const e = /** @type {Error} */ (err);
       deps.log(`${layer.name} check: ${e.message}`);
@@ -307,19 +352,6 @@ export function createSetupSheet(deps) {
       { audioContext: deps.audioContext() }));
   }
 
-  /**
-   * All three, one after another rather than at once: the TTS check plays
-   * audio, and running it under a transcription request means listening to the
-   * answer while the question is still being asked.
-   */
-  async function testAll() {
-    for (const layer of LAYERS) {
-      const cell = wired.get(layer.name);
-      if (!cell) continue;
-      await runCheck(layer, cell.button, cell.result);
-    }
-  }
-
   // --- small builders -----------------------------------------------------
 
   /** @param {HTMLElement} el @param {string} text @param {string} state */
@@ -331,7 +363,6 @@ export function createSetupSheet(deps) {
   /** Persist on every edit. See the note at the top on why there is no Save. */
   function commit() {
     deps.save();
-    note.textContent = t(deps.lang, 'setupSaved');
   }
 
   /**
@@ -369,8 +400,8 @@ export function createSetupSheet(deps) {
     return el;
   }
 
-  /** A field that spans both columns and carries its own caption in the
-   *  placeholder, for the box that appears under a list rather than beside it.
+  /** A field with no caption of its own, for the box that appears under a list
+   *  rather than beside it.
    *  @param {HTMLElement} field */
   function wide(field) {
     const label = document.createElement('label');
@@ -388,9 +419,8 @@ export function createSetupSheet(deps) {
     const label = document.createElement('label');
     if (full) label.className = 'wide';
     const span = document.createElement('span');
+    span.className = 'field-caption';
     span.textContent = t(deps.lang, key);
-    span.style.fontSize = '12px';
-    span.style.opacity = '.6';
     label.append(span, field);
     return label;
   }
