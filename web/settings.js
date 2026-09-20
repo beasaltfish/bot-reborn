@@ -25,6 +25,16 @@ const LABEL = { keys: 'stepKeys', car: 'stepCar', steer: 'stepSteer' };
 const MARK = { done: '✓', current: '▸', todo: '' };
 
 /**
+ * Steps that are finished somewhere else, and where.
+ *
+ * The page they lead to writes the same config this list reads, so coming back
+ * ticks the row. Until a step has either a flow here or a destination here, the
+ * button on the main screen hands the user a list whose current row does
+ * nothing — which is the same dead end as an inert gear, one screen deeper.
+ */
+const AWAY = { keys: 'setup.html' };
+
+/**
  * @param {{
  *   lang: 'en' | 'zh',
  *   done: () => import('./steps.js').Done,
@@ -61,12 +71,18 @@ export function createSettings(deps) {
       const text = document.createElement('span');
       text.textContent = t(deps.lang, LABEL[row.step]);
       li.append(mark, text);
-      // Only the step that can be finished from here is a button. The other
-      // two live on other pages, and a row that looks pressable but is not is
-      // the same lie as a gear that opens nothing.
+      // A row is pressable when there is something to press it towards:
+      // calibration runs here, keys are entered on setup.html, and pairing
+      // needs a user gesture the fab already owns. A row that looks pressable
+      // but is not is the same lie as a gear that opens nothing.
       if (row.step === 'steer') {
         li.classList.add('step-doable');
         li.addEventListener('click', () => startCalibration());
+      } else if (row.step in AWAY) {
+        li.classList.add('step-doable');
+        li.addEventListener('click', () => {
+          location.href = AWAY[/** @type {'keys'} */ (row.step)];
+        });
       }
       rows.append(li);
     }
