@@ -60,8 +60,13 @@
           <g class="eye-closed">
             <path d="M37 58 q8 6 16 0"/><path d="M67 58 q8 6 16 0"/>
           </g>
+          <!-- Not a mirrored version of eye-closed. Those two were ∨ and ∧ —
+               the same two strokes at the same size, differing only in which
+               way they curved — and at 46vw nobody reads an arc's direction.
+               Filled and raised against stroked and level is a difference that
+               survives a glance. -->
           <g class="eye-up">
-            <path d="M38 56 q7 -7 14 0"/><path d="M68 56 q7 -7 14 0"/>
+            <circle cx="45" cy="54" r="5"/><circle cx="75" cy="54" r="5"/>
           </g>
           <g class="eye-smile">
             <path d="M37 54 q8 -6 16 0"/><path d="M67 54 q8 -6 16 0"/>
@@ -80,6 +85,15 @@
             <rect x="-4" y="96" width="16" height="12" rx="2"/>
             <line x1="12" y1="99" x2="30" y2="99"/>
             <line x1="12" y1="105" x2="30" y2="105"/>
+          </g>
+
+          <!-- SLEEPING's own part. The plug moves rather than sits still
+               because an instruction reads faster as a gesture than as a
+               label; this is the same argument for a state. -->
+          <g class="doze">
+            <path d="M98 44 h5 l-5 6 h5"/>
+            <path d="M105 33 h6 l-6 7 h6"/>
+            <path d="M111 20 h6 l-6 7 h6"/>
           </g>
 
           <g class="wave">

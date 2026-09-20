@@ -43,6 +43,27 @@ test('no two faces look the same', () => {
   }
 });
 
+test('every state owns a part no other state draws', () => {
+  // SLEEPING used to own nothing: it was the other faces minus their parts,
+  // which is why it read as an ordinary idle robot rather than a sleeping one.
+  const only = (/** @type {(f: import('../web/robot.js').Face) => boolean} */ has) =>
+    STATES.filter((s) => has(faceFor(s)));
+  assert.deepEqual(only((f) => f.doze), ['SLEEPING']);
+  assert.deepEqual(only((f) => f.waves), ['CAPTURING']);
+  assert.deepEqual(only((f) => f.mouth), ['SPEAKING']);
+  assert.deepEqual(only((f) => f.antenna === 'orbit'), ['THINKING']);
+});
+
+test('applyFace writes the doze mark, not just the ones it started with', () => {
+  // A field added to Face and forgotten here renders as whatever the previous
+  // state left behind — the exact failure faceFor() throws to prevent.
+  const root = /** @type {any} */ ({ dataset: {} });
+  applyFace(root, 'SLEEPING');
+  assert.equal(root.dataset.doze, 'true');
+  applyFace(root, 'THINKING');
+  assert.equal(root.dataset.doze, 'false');
+});
+
 test('LISTENING and CAPTURING differ by the sound waves and nothing else', () => {
   // Stated as its own test because it is the one distinction a reader is most
   // likely to "simplify" away later.

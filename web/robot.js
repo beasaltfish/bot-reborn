@@ -21,6 +21,7 @@ import { layerReady } from './config.js';
  *   antenna: 'off' | 'lit' | 'orbit',
  *   waves: boolean,
  *   mouth: boolean,
+ *   doze: boolean,
  *   motion: 'breathe' | 'bob' | 'still',
  *   tint: 'dim' | 'go' | 'wait',
  *   labelKey: StringKey,
@@ -32,13 +33,20 @@ export const STATES = /** @type {const} */ ([
   'SLEEPING', 'LISTENING', 'CAPTURING', 'THINKING', 'SPEAKING',
 ]);
 
-/** @type {Record<State, Face>} */
+/**
+ * Every state owns at least one part nobody else uses: the waves are
+ * CAPTURING's, the mouth is SPEAKING's, the orbiting antenna is THINKING's.
+ * SLEEPING was the one with nothing of its own — it was "the others, minus
+ * things" — and it read as an ordinary idle robot. `doze` is its part.
+ *
+ * @type {Record<State, Face>}
+ */
 const FACES = {
-  SLEEPING:  { eyes: 'closed', antenna: 'off',   waves: false, mouth: false, motion: 'breathe', tint: 'dim',  labelKey: 'stSleeping' },
-  LISTENING: { eyes: 'open',   antenna: 'lit',   waves: false, mouth: false, motion: 'bob',     tint: 'go',   labelKey: 'stListening' },
-  CAPTURING: { eyes: 'open',   antenna: 'lit',   waves: true,  mouth: false, motion: 'bob',     tint: 'go',   labelKey: 'stCapturing' },
-  THINKING:  { eyes: 'up',     antenna: 'orbit', waves: false, mouth: false, motion: 'still',   tint: 'wait', labelKey: 'stThinking' },
-  SPEAKING:  { eyes: 'smile',  antenna: 'lit',   waves: false, mouth: true,  motion: 'bob',     tint: 'go',   labelKey: 'stSpeaking' },
+  SLEEPING:  { eyes: 'closed', antenna: 'off',   waves: false, mouth: false, doze: true,  motion: 'breathe', tint: 'dim',  labelKey: 'stSleeping' },
+  LISTENING: { eyes: 'open',   antenna: 'lit',   waves: false, mouth: false, doze: false, motion: 'bob',     tint: 'go',   labelKey: 'stListening' },
+  CAPTURING: { eyes: 'open',   antenna: 'lit',   waves: true,  mouth: false, doze: false, motion: 'bob',     tint: 'go',   labelKey: 'stCapturing' },
+  THINKING:  { eyes: 'up',     antenna: 'orbit', waves: false, mouth: false, doze: false, motion: 'still',   tint: 'wait', labelKey: 'stThinking' },
+  SPEAKING:  { eyes: 'smile',  antenna: 'lit',   waves: false, mouth: true,  doze: false, motion: 'bob',     tint: 'go',   labelKey: 'stSpeaking' },
 };
 
 /**
@@ -132,6 +140,7 @@ export function applyFace(root, state) {
   root.dataset.antenna = f.antenna;
   root.dataset.waves = String(f.waves);
   root.dataset.mouth = String(f.mouth);
+  root.dataset.doze = String(f.doze);
   root.dataset.motion = f.motion;
   root.dataset.tint = f.tint;
   return f;
