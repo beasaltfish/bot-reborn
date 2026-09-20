@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  SHIPPED_CLIP, TTS_CHECK_LINE,
+  MATERIAL,
   fetchClip, toInt16Pcm, checkStt, checkLlm, checkTts,
 } from '../web/checks.js';
 
@@ -57,7 +57,7 @@ test('fetchClip refuses a real 404 too', async () => {
 
 test('fetchClip returns a genuine wav', async () => {
   await withFetch(async () => response(), async () => {
-    assert.notEqual(await fetchClip(SHIPPED_CLIP), null);
+    assert.notEqual(await fetchClip(MATERIAL.zh.clip), null);
   });
 });
 
@@ -133,13 +133,44 @@ test('checkLlm passes only when both answers arrive, and names the tool', async 
   assert.match(out, /move/);
 });
 
-test('checkTts speaks the line that contains both languages', async () => {
-  // A voice that can only read one of them fails silently otherwise: it reads
-  // the half it knows and sounds perfectly fine doing it.
-  let spoken = null;
-  const out = await checkTts({ speak: async (text) => { spoken = text; } });
-  assert.equal(spoken, TTS_CHECK_LINE);
-  assert.equal(out, TTS_CHECK_LINE);
-  assert.match(TTS_CHECK_LINE, /[一-鿿]/);
-  assert.match(TTS_CHECK_LINE, /[a-z]/i);
+test('checkTts speaks the line for the language it was given', async () => {
+  for (const lang of /** @type {const} */ (['en', 'zh'])) {
+    let spoken = null;
+    const out = await checkTts({ speak: async (text) => { spoken = text; } }, lang);
+    assert.equal(spoken, MATERIAL[lang].line);
+    assert.equal(out, MATERIAL[lang].line);
+  }
+});
+
+test('the Chinese material code-switches and the English material does not', () => {
+  // The zh line carries both languages because a voice that can only read one
+  // of them fails silently otherwise — it reads the half it knows and sounds
+  // perfectly fine doing it. The en line must NOT, or an English-only user is
+  // being failed for a capability they will never use.
+  assert.match(MATERIAL.zh.line, /[一-鿿]/);
+  assert.match(MATERIAL.zh.line, /[a-z]/i);
+  assert.doesNotMatch(MATERIAL.en.line, /[一-鿿]/);
+  assert.match(MATERIAL.en.line, /[a-z]/i);
+});
+
+test('each language has its own clip, and they are different files', () => {
+  // One clip shared between them is the bug this table exists to prevent: it
+  // means one of the two languages is being tested with the other's audio.
+  assert.notEqual(MATERIAL.en.clip, MATERIAL.zh.clip);
+  for (const lang of /** @type {const} */ (['en', 'zh'])) {
+    assert.match(MATERIAL[lang].clip, /^fixtures\/.+\.wav$/);
+  }
+});
+
+test('checkStt reads the clip belonging to the language it was given', async () => {
+  /** @type {string[]} */
+  const asked = [];
+  await withFetch(async (/** @type {string} */ path) => {
+    asked.push(path);
+    return response();
+  }, async () => {
+    await checkStt({ transcribe: async () => 'ok' }, ctx, 'en');
+    await checkStt({ transcribe: async () => 'ok' }, ctx, 'zh');
+  });
+  assert.deepEqual(asked, [MATERIAL.en.clip, MATERIAL.zh.clip]);
 });

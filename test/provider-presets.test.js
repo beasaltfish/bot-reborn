@@ -42,7 +42,8 @@ test('every preset can fill in the fields it promises to fill in', () => {
   for (const [layer, list] of Object.entries(PRESETS)) {
     for (const preset of list) {
       assert.ok(preset.baseURL.startsWith('https://'), `${layer}/${preset.id} baseURL`);
-      assert.ok(preset.models.length > 0, `${layer}/${preset.id} has no model`);
+      assert.ok(preset.models.length > 0 || preset.openModels,
+        `${layer}/${preset.id} has no model and did not say so`);
       assert.ok(preset.id !== CUSTOM, `${layer}/${preset.id} shadows "custom"`);
     }
   }
@@ -84,6 +85,21 @@ test('voicesFor answers empty rather than throwing for a layer that has none', (
   assert.deepEqual(voicesFor(presetById('llm', 'groq'), 'anything'), []);
   assert.deepEqual(voicesFor(null, 'anything'), []);
   assert.deepEqual(voicesFor(presetById('tts', 'openai'), 'a-model-it-has-never-heard-of'), []);
+});
+
+test('an empty model list has to be deliberate', () => {
+  // `openModels` is not ceremony. Without it, a typo that empties a list and a
+  // provider whose model is genuinely the user's to name look identical — and
+  // the first one ships a preset that fills in an address and leaves the model
+  // blank, which reads on screen as configured and fails at the first request.
+  for (const [layer, list] of Object.entries(PRESETS)) {
+    for (const preset of list) {
+      if (preset.openModels) {
+        assert.equal(preset.models.length, 0,
+          `${layer}/${preset.id} says openModels and also lists models`);
+      }
+    }
+  }
 });
 
 test('ids are unique within a layer', () => {

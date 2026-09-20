@@ -34,6 +34,7 @@
  *   label: string,
  *   baseURL: string,
  *   models: string[],
+ *   openModels?: boolean,
  *   voices?: Record<string, string[]>,
  * }} Preset
  */
@@ -109,6 +110,24 @@ export const PRESETS = {
       label: 'SiliconFlow',
       baseURL: SILICONFLOW,
       models: ['deepseek-ai/DeepSeek-V3'],
+    },
+    {
+      // Address known, model yours to name. A dropdown exists to fill in the
+      // value that is the same for everybody on a provider; OpenRouter's model
+      // is a real choice among hundreds, so a dropdown there stops being a
+      // default and becomes a browser — and a four-hundred-row select on a
+      // phone is worse than a text box. Only the half that is identical for
+      // everybody is filled in.
+      //
+      // Their /api/v1/models is public and reports which models accept tools,
+      // which is the one argument for fetching the list instead. That belongs
+      // to a picker with a search box in it, not to this select, and it is not
+      // what stands between somebody and their first turn of the wheels.
+      id: 'openrouter',
+      label: 'OpenRouter',
+      baseURL: 'https://openrouter.ai/api/v1',
+      models: [],
+      openModels: true,
     },
   ],
   tts: [

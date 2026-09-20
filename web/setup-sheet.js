@@ -117,6 +117,14 @@ export function createSetupSheet(deps) {
         presetId,
         freeModel: !preset || !preset.models.includes(cfg.model),
       };
+      // A voice that names a model it is no longer paired with is not a
+      // preference, it is a stale string the provider will refuse.
+      if (layer.name === 'tts') {
+        const voices = voicesFor(preset, cfg.model);
+        if (voices.length && !voices.includes(deps.config.tts.voice)) {
+          deps.config.tts.voice = voices[0];
+        }
+      }
     }
     // Opens on the first layer that is not finished, not always on the first
     // tab. Somebody who came back to fix their Voice key should not have to
@@ -227,8 +235,13 @@ export function createSetupSheet(deps) {
         const picked = presetById(layer.name, id);
         if (picked) {
           cfg.baseURL = picked.baseURL;
-          if (!picked.models.includes(cfg.model)) cfg.model = picked.models[0];
-          state.freeModel = false;
+          // `?? cfg.model` matters: a preset that lists no models on purpose
+          // (OpenRouter) would otherwise write `undefined` over whatever was
+          // there, and undefined is not a string the config schema allows.
+          if (!picked.models.includes(cfg.model)) {
+            cfg.model = picked.models[0] ?? cfg.model;
+          }
+          state.freeModel = !picked.models.includes(cfg.model);
           // The voice belongs to the model on some providers, so a provider
           // that cannot supply the stored one has invalidated it.
           const voices = voicesFor(picked, cfg.model);
@@ -253,7 +266,10 @@ export function createSetupSheet(deps) {
     // somebody picks "Other" left them typing with no way back to the names
     // they had a second ago — the one thing this sheet exists to save them
     // from. "Other" adds a field underneath; picking a name again removes it.
-    if (preset) {
+    // A provider that lists no models on purpose gets the text box alone. An
+    // empty select whose only entry is "Other" is a control that offers one
+    // choice and takes a tap to make it.
+    if (preset && !preset.openModels) {
       grid.append(labelled('setupModel', select(
         [...preset.models.map((m) => /** @type {[string, string]} */ ([m, m])),
         /** @type {[string, string]} */ (['', t(deps.lang, 'setupCustom')])],
@@ -269,10 +285,11 @@ export function createSetupSheet(deps) {
           render();
         }), true));
     }
-    if (!preset || state.freeModel) {
+    const listed = Boolean(preset) && !preset?.openModels;
+    if (!listed || state.freeModel) {
       const typed = text(cfg.model, t(deps.lang, 'setupModel'),
         (v) => { cfg.model = v; commit(); render(); });
-      grid.append(preset ? wide(typed) : labelled('setupModel', typed, true));
+      grid.append(listed ? wide(typed) : labelled('setupModel', typed, true));
     }
 
     // --- voice: TTS only, and §11.1 fixes one for every language -----------
@@ -337,7 +354,7 @@ export function createSetupSheet(deps) {
   async function perform(name) {
     if (name === 'stt') {
       const heard = await checkStt(
-        new OpenAiCompatStt(deps.config.stt), deps.audioContext());
+        new OpenAiCompatStt(deps.config.stt), deps.audioContext(), deps.lang);
       // Said every time, not once: a transcript that reads correctly is the
       // most convincing wrong evidence on this sheet. It was a recording.
       return `“${heard}”\n${t(deps.lang, 'setupHeardNote')}`;
@@ -349,7 +366,7 @@ export function createSetupSheet(deps) {
       });
     }
     return checkTts(new WebAudioTts(deps.config.tts,
-      { audioContext: deps.audioContext() }));
+      { audioContext: deps.audioContext() }), deps.lang);
   }
 
   // --- small builders -----------------------------------------------------

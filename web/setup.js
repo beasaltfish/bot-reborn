@@ -234,7 +234,11 @@ function testLlm(llm) {
 
 /** @param {WebAudioTts} tts @returns {Promise<string>} */
 async function testTts(tts) {
-  const text = await checkTts(tts);
+  // Always the code-switching line here, whatever the UI language is set to.
+  // The sheet matches its material to who is using it; this page is the
+  // instrument, and §12 ⑪ compares providers against the hardest case there
+  // is — which is both languages inside one sentence.
+  const text = await checkTts(tts, 'zh');
   return `played 「${text}」 — were both languages intelligible? (your ears decide this one, not the code)`;
 }
 

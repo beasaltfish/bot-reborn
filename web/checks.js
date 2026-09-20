@@ -12,19 +12,39 @@
 // came from; the two callers own that. No DOM here (spec §10).
 
 /**
- * The clip that ships. Synthesised, so it is nobody's voice and every clone
- * hears the same take — see web/fixtures/README.md. It code-switches on
- * purpose: one clip then exercises Chinese, English and the seam between them,
- * which is the shape §9.3 says an easy clip would leave untested.
+ * The clips that ship, and the lines the voice check speaks — one pair per UI
+ * language. Synthesised, so they are nobody's voice and every clone hears the
+ * same take; see web/fixtures/README.md.
+ *
+ * There are two pairs because §9.3's "test the hardest case" is a statement
+ * about the input this product actually gets, not a difficulty setting. For a
+ * Chinese user the hardest case is code-switching mid-sentence, and one clip
+ * then exercises Chinese, English and the seam between them at once. For
+ * somebody who will only ever speak English to it, that same clip tests
+ * something they do not need and can fail a provider that serves them
+ * perfectly well — a false negative, which is worse than no check at all,
+ * because it sends them away from a setup that worked.
+ *
+ * Keyed on `lang` because it is the only signal there is. It is the UI
+ * language rather than a declaration of what somebody will say out loud, so it
+ * can be wrong; the sheet shows the transcript it got, which makes a mismatch
+ * legible rather than mysterious.
+ *
+ * @type {Record<'en' | 'zh', { clip: string, line: string }>}
  */
-export const SHIPPED_CLIP = 'fixtures/check.wav';
-
-/**
- * The line the TTS check speaks. Both languages in one sentence, because a
- * voice that can only do one of them fails silently otherwise — it reads the
- * half it knows and sounds fine.
- */
-export const TTS_CHECK_LINE = '「往前走」的英文是 go forward';
+export const MATERIAL = {
+  en: {
+    clip: 'fixtures/check-en.wav',
+    line: 'Left wheel, right wheel, and a long straight road.',
+  },
+  zh: {
+    clip: 'fixtures/check-mixed.wav',
+    // Both languages in one sentence, because a voice that can only do one of
+    // them fails silently otherwise — it reads the half it knows and sounds
+    // perfectly fine doing it.
+    line: '「往前走」的英文是 go forward',
+  },
+};
 
 /**
  * Fetch a clip, refusing the page Cloudflare serves instead of a 404.
@@ -82,11 +102,13 @@ export async function transcribeClip(stt, clip, ctx) {
  *
  * @param {{ transcribe: (pcm: Int16Array, rate: number) => Promise<string> }} stt
  * @param {AudioContext | OfflineAudioContext} ctx
+ * @param {'en' | 'zh'} [lang]
  * @returns {Promise<string>} the transcript, for showing
  */
-export async function checkStt(stt, ctx) {
-  const clip = await fetchClip(SHIPPED_CLIP);
-  if (!clip) throw new Error(`${SHIPPED_CLIP} is missing from this deployment`);
+export async function checkStt(stt, ctx, lang = 'zh') {
+  const path = MATERIAL[lang].clip;
+  const clip = await fetchClip(path);
+  if (!clip) throw new Error(`${path} is missing from this deployment`);
   const text = (await transcribeClip(stt, clip, ctx)).trim();
   if (!text) throw new Error('the transcript came back empty');
   return text;
@@ -118,14 +140,16 @@ export async function checkLlm(llm, deps) {
 }
 
 /**
- * The one check the code cannot grade. It plays the line; whether both
- * languages were intelligible is a question for ears, and saying so out loud
- * is more honest than a green tick that only means the request returned 200.
+ * The one check the code cannot grade. It plays the line; whether it was
+ * intelligible is a question for ears, and saying so out loud is more honest
+ * than a green tick that only means the request returned 200.
  *
  * @param {{ speak: (text: string) => Promise<void> }} tts
+ * @param {'en' | 'zh'} [lang]
  * @returns {Promise<string>}
  */
-export async function checkTts(tts) {
-  await tts.speak(TTS_CHECK_LINE);
-  return TTS_CHECK_LINE;
+export async function checkTts(tts, lang = 'zh') {
+  const line = MATERIAL[lang].line;
+  await tts.speak(line);
+  return line;
 }

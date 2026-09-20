@@ -30,11 +30,13 @@ dist/
 # Connectivity-test fixture audio: each person's own voice, recorded locally
 # per web/fixtures/README.md, never someone else's sample.
 web/fixtures/*.wav
-# Except this one. It is synthesised, so it is nobody's voice, and every clone
-# hears the same take — which is what lets the setup popup ask "is this layer
-# reachable" without asking anyone to record anything first. It cannot answer
-# "does it understand *me*"; that is what the recorded three are for.
-!web/fixtures/check.wav
+# Except these. They are synthesised, so they are nobody's voice, and every
+# clone hears the same take — which is what lets the setup sheet ask "is this
+# layer reachable" without asking anyone to record anything first. They cannot
+# answer "does it understand *me*"; that is what the recorded three are for.
+# There are two because an English-only user tested against a code-switching
+# clip fails a setup that works perfectly well for them.
+!web/fixtures/check-*.wav
 
 # Personal design notes and specs (Chinese, single-author working documents)
 docs/design-notes/

@@ -279,6 +279,16 @@ the same take — which makes it a fair baseline and makes it useless for "does
 it understand *me*". That question belongs to `setup.html`, where the clips are
 in your own voice.
 
+**There are two recordings, and two lines for the Voice test, one pair per UI
+language.** §9.3's "test the hardest case" is a statement about the input this
+product actually gets, not a difficulty setting. For a Chinese user the hardest
+case is code-switching mid-sentence. For somebody who will only ever speak
+English to their robot, that same clip tests a capability they do not need and
+can fail a provider that serves them perfectly well — a false negative, which
+is worse than no check at all, because it sends them away from a setup that
+worked. `lang` is the only signal there is and it can be wrong, so the sheet
+shows the transcript it got: a mismatch is then legible rather than mysterious.
+
 **There is no Save.** A key is pasted and the very next thing anybody does is
 press Test. A Save in between exists only to be forgotten, and the failure it
 produces points at the key.
