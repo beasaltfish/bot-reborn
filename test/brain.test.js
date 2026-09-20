@@ -251,12 +251,20 @@ function brainHarness({ connected = true, reply, gateMotion = false } = {}) {
   const config = { lang: 'zh', replyLang: null, bargeIn: true };
   /** @type {Array<'en' | 'zh' | null>} */
   const langChanges = [];
-  return { events, executor, llm, tts, config, motionGates, langChanges,
+  /** @type {Array<[string, string]>} */
+  const faults = [];
+  return { events, executor, llm, tts, config, motionGates, langChanges, faults,
     brain: new Brain({
       llm, executor, tts, earcon, config,
       onReplyLangChange: (lang) => langChanges.push(lang),
+      onFault: (part, err) => faults.push([part, err.message]),
     }) };
 }
+
+/** Make the fake TTS reject, the way a 401 or a timeout does. */
+const breakVoice = (/** @type {any} */ h, /** @type {string} */ why) => {
+  h.tts.speak = async () => { throw new Error(why); };
+};
 
 /** @param {any} content @param {any[]} [tool_calls] */
 const say = (content, tool_calls) => ({
@@ -617,4 +625,58 @@ test('a turn that records nothing does not touch the stored preference', async (
   const h = brainHarness({ reply: say('ok') });
   await h.brain.handle('hello');
   assert.deepEqual(h.langChanges, []);
+});
+
+
+// --- a failure has to reach somebody (§6.7) --------------------------------
+
+test('handle: a TTS that throws is reported, not swallowed', async () => {
+  // It used to take the whole turn down: handle() rejected, session.js's
+  // `void this.#turn(samples)` dropped the rejection, and the robot went
+  // quiet with nothing on screen and nothing in the console.
+  const h = brainHarness({ reply: say('北京是中国的首都。') });
+  breakVoice(h, 'TTS request failed: 401 Unauthorized');
+  await h.brain.handle('中国的首都是哪');
+  assert.deepEqual(h.faults, [['tts', 'TTS request failed: 401 Unauthorized']]);
+  assert.deepEqual(h.events, [{ op: 'earcon', name: 'error' }]);
+});
+
+test('handle: an LLM failure reports which instrument it was, and why', async () => {
+  const h = brainHarness({ reply: new Error('LLM request failed: 429 Too Many Requests') });
+  await h.brain.handle('你好');
+  assert.deepEqual(h.faults, [['llm', 'LLM request failed: 429 Too Many Requests']]);
+});
+
+test('both down: two reports, one beep (the second failure is a consequence)', async () => {
+  // The LLM goes down, and then the fixed line saying so cannot be spoken
+  // either. Two low two-tones back to back would claim two independent
+  // faults; the written channel has no such limit and carries both.
+  const h = brainHarness({ reply: new Error('network down') });
+  breakVoice(h, 'no voice');
+  await h.brain.handle('你好');
+  assert.deepEqual(h.faults, [['llm', 'network down'], ['tts', 'no voice']]);
+  assert.equal(h.events.filter((e) => e.op === 'earcon').length, 1);
+});
+
+test('the beep budget is per turn, not for the life of the brain', async () => {
+  const h = brainHarness({ reply: new Error('down') });
+  await h.brain.handle('你好');
+  await h.brain.handle('你好');
+  assert.equal(h.events.filter((e) => e.op === 'earcon').length, 2);
+});
+
+test('cancel(): a TTS abort is not a fault (spec §8.1)', async () => {
+  const h = brainHarness({ reply: say('一段很长的回答') });
+  // The signal is ALREADY aborted by the time #say reaches it — cancel() runs
+  // before the fake LLM resolves — so this must not wait for an event that has
+  // already fired. A provider behaves the same way: fetch rejects at once on a
+  // spent signal.
+  h.tts.speak = async (/** @type {any} */ _text, /** @type {any} */ opts) => {
+    if (opts.signal.aborted) throw new DOMException('aborted', 'AbortError');
+  };
+  const turn = h.brain.handle('说点什么');
+  h.brain.cancel();
+  await turn;
+  assert.deepEqual(h.faults, []);
+  assert.deepEqual(h.events, []);
 });

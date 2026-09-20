@@ -80,7 +80,7 @@ export function wantedSubscriptions(state, bargeIn, earconPlaying) {
 
 export class Session {
   #pipeline; #kws; #vad; #stt; #tts; #executor; #rawEarcon; #config;
-  #now; #after; #onState;
+  #now; #after; #onState; #onFault;
   /** @type {any} */ #brain = null;
   /** @type {State} */ #state = 'SLEEPING';
   #lastVoiceAt = 0;
@@ -106,6 +106,7 @@ export class Session {
    *   now?: () => number,
    *   after?: (ms: number, fn: () => void) => void,
    *   onState?: (state: State) => void,
+   *   onFault?: (part: import('../strings.js').FaultPart, err: Error) => void,
    * }} deps
    */
   constructor(deps) {
@@ -122,6 +123,10 @@ export class Session {
       ?? ((/** @type {number} */ ms, /** @type {() => void} */ fn) =>
         void setTimeout(fn, ms));
     this.#onState = deps.onState ?? (() => {});
+    // Default noop only so the tests can build a Session without one. In the
+    // app this is always wired: a failure nobody is told about is the defect
+    // this argument exists to close.
+    this.#onFault = deps.onFault ?? (() => {});
   }
 
   get state() { return this.#state; }
@@ -227,11 +232,16 @@ export class Session {
       heard = await this.#stt.transcribeDetailed(
         toInt16(samples), RATE, { signal: ctrl.signal },
       );
-    } catch {
+    } catch (err) {
       // Cancelling is not failing. Reporting a fault here would answer "the
       // user changed their mind" with a failure report — the same distinction
       // brain.js draws around chat().
       if (gen !== this.#gen) return;
+      // Before the earcon and before the line, because the two below are the
+      // only report the user gets and BOTH of them are audio. A 401 and a
+      // timeout sound identical; whoever has to go and fix a key needs the
+      // status code somewhere it can be read.
+      this.#onFault('stt', /** @type {Error} */ (err));
       this.#playEarcon('error');
       await this.#speakFixed('apiFailed');
       return this.#endTurn(gen);
@@ -253,7 +263,19 @@ export class Session {
     // Brain owns the rest of the turn: the LLM, the validator, the executor,
     // the earcons and the reply. It speaks through this.speakingTts, which is
     // what puts the session into SPEAKING for exactly the playback.
-    await this.#brain.handle(text);
+    // brain.js reports and absorbs its own failures, so what reaches here is
+    // the unexpected. It used to reach nobody at all: handle() rejected, the
+    // rejection propagated out of #turn, and `void this.#turn(samples)` at the
+    // call site dropped it on the floor — no earcon, no line, no console
+    // entry. A robot that has just failed and a robot that heard nothing look
+    // and sound exactly the same, which is the worst way for this to fail.
+    try {
+      await this.#brain.handle(text);
+    } catch (err) {
+      if (gen !== this.#gen) return;
+      this.#onFault('turn', /** @type {Error} */ (err));
+      this.#playEarcon('error');
+    }
     this.#endTurn(gen);
   }
 
@@ -264,7 +286,12 @@ export class Session {
    * @param {import('../strings.js').StringKey} key
    */
   async #speakFixed(key) {
-    await this.speakingTts.speak(t(this.#config.lang, key)).catch(() => {});
+    // Swallowed so the caller's turn still ends tidily, but no longer in
+    // silence: this is the case where BOTH instruments are down, and the
+    // screen is the only channel left. The earcon has already played, so the
+    // report here is the written one only.
+    await this.speakingTts.speak(t(this.#config.lang, key))
+      .catch((err) => this.#onFault('tts', err));
   }
 
   /** @param {number} gen */

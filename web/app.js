@@ -2,7 +2,7 @@
 // else; if a branch shows up in this file it belongs in session.js.
 
 import { loadConfig, saveConfig, layerReady, resetSticky } from './config.js';
-import { t } from './strings.js';
+import { t, FAULT_LABEL } from './strings.js';
 import { createUi } from './ui.js';
 import { createSettings } from './settings.js';
 import { createCalibration } from './calibrate.js';
@@ -280,6 +280,21 @@ async function start() {
       tts.speak(t(config.lang, 'deviceDisconnected')).catch(() => {});
     };
 
+    // One turn can fault twice: the instrument fails, and then the line that
+    // would report it cannot be spoken either. The first is the cause and the
+    // second is a consequence of it — overwriting the notice with the
+    // consequence sends the user to fix the wrong instrument. Every fault
+    // reaches the log; the notice keeps the first one of the turn.
+    let reported = false;
+    /** @type {(part: import('./strings.js').FaultPart, err: Error) => void} */
+    const onFault = (part, err) => {
+      ui.log(`${part}: ${err.message}`);
+      console.error(`[${part}]`, err);
+      if (reported) return;
+      reported = true;
+      ui.notice(t(config.lang, FAULT_LABEL[part]) + err.message);
+    };
+
     session = new Session({
       pipeline,
       kws: createSpotter(sherpa, keywords),
@@ -289,7 +304,15 @@ async function start() {
       executor,
       earcon,
       config,
-      onState: (s) => ui.setState(s),
+      // THINKING is the start of an attempt, which is the honest moment to
+      // clear the last one's verdict: the notice then means "the turn you
+      // just took failed", and it goes away by trying again rather than by a
+      // timer nobody can see.
+      onState: (s) => {
+        if (s === 'THINKING') { reported = false; ui.notice(''); }
+        ui.setState(s);
+      },
+      onFault,
     });
     // Brain gets the session's wrappers, never the raw provider: speakingTts is
     // what makes SPEAKING bracket exactly the playback, and session.earcon is
@@ -304,6 +327,7 @@ async function start() {
       // here it is not sticky at all, and the settings page (part 3) would have
       // nothing to show or reset.
       onReplyLangChange: () => saveConfig(config),
+      onFault,
     }));
     session.start();
 

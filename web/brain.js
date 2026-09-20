@@ -209,7 +209,9 @@ function isValidStep(step) {
 // --- One turn --------------------------------------------------------------
 
 export class Brain {
-  #llm; #executor; #tts; #earcon; #config; #onReplyLangChange;
+  #llm; #executor; #tts; #earcon; #config; #onReplyLangChange; #onFault;
+  /** Whether this turn has already sounded its failure. See #fail. */
+  #beeped = false;
   /** @type {AbortController | null} */
   #turn = null;
   /** @type {object[]} */ #history = [];
@@ -222,6 +224,7 @@ export class Brain {
    *   earcon: (name: import('./audio/earcon.js').EarconName) => void,
    *   config: { lang: 'en' | 'zh', replyLang: 'zh' | 'en' | null, bargeIn: boolean },
    *   onReplyLangChange?: (lang: 'en' | 'zh' | null) => void,
+   *   onFault?: (part: import('./strings.js').FaultPart, err: Error) => void,
    * }} deps
    */
   constructor(deps) {
@@ -231,6 +234,7 @@ export class Brain {
     this.#earcon = deps.earcon;
     this.#config = deps.config;
     this.#onReplyLangChange = deps.onReplyLangChange ?? (() => {});
+    this.#onFault = deps.onFault ?? (() => {});
   }
 
   get history() { return this.#history; }
@@ -247,6 +251,7 @@ export class Brain {
 
   /** @param {string} userText */
   async handle(userText) {
+    this.#beeped = false;
     const text = userText.trim();
     if (text === '') { this.#earcon('huh'); return; }
 
@@ -261,8 +266,8 @@ export class Brain {
     // the prompt — actions are short enough that it would be stale on arrival,
     // and it would tempt the model into things the hardware cannot do.
     if (!this.#executor.connected) {
-      this.#earcon('error');
-      await this.#tts.speak(t(this.#config.lang, 'usbNotConnected'), { signal: turn.signal });
+      this.#beep();
+      await this.#say(t(this.#config.lang, 'usbNotConnected'), turn);
       return;
     }
 
@@ -275,12 +280,12 @@ export class Brain {
         TOOLS,
         { signal: turn.signal },
       );
-    } catch {
+    } catch (err) {
       // Cancelling is not failing. Without this line the `error` earcon and
       // the apiFailed line would be the answer to the user changing their mind.
       if (turn.signal.aborted) return;
-      this.#earcon('error');
-      await this.#tts.speak(t(this.#config.lang, 'apiFailed'), { signal: turn.signal });
+      this.#fail('llm', /** @type {Error} */ (err));
+      await this.#say(t(this.#config.lang, 'apiFailed'), turn);
       return;
     }
 
@@ -313,10 +318,58 @@ export class Brain {
       this.#earcon('done');
     } else if (hadMoveIntent) {
       // Rule 4: a movement was attempted and nothing survived validation.
-      this.#earcon('error');
+      this.#beep();
     }
 
-    if (reply.text) await this.#tts.speak(reply.text, { signal: turn.signal });
+    if (reply.text) await this.#say(reply.text, turn);
+  }
+
+  /**
+   * Every spoken line goes through here.
+   *
+   * It used to be a bare `await this.#tts.speak(...)`, and a TTS that threw
+   * took the whole turn with it: handle() rejected, session.js's
+   * `void this.#turn(samples)` swallowed the rejection, and a robot whose
+   * voice had just died was indistinguishable from one that had heard
+   * nothing. The earcon is the half of the report that still works when the
+   * thing that broke IS the mouth.
+   *
+   * @param {string} text
+   * @param {AbortController} turn
+   */
+  async #say(text, turn) {
+    try {
+      await this.#tts.speak(text, { signal: turn.signal });
+    } catch (err) {
+      // Same distinction as around chat(): the user cancelling is not a fault.
+      if (turn.signal.aborted) return;
+      this.#fail('tts', /** @type {Error} */ (err));
+    }
+  }
+
+  /**
+   * Report a failure once, in both channels this robot has.
+   *
+   * At most one earcon per turn, which is what #beeped is for: a turn can fail
+   * twice — the LLM goes down, and then the line saying so cannot be spoken
+   * either — and two low two-tones back to back say "two things broke" when
+   * the second is only a consequence of the first. The written report has no
+   * such limit; both faults reach onFault, and the caller decides what the
+   * screen shows.
+   *
+   * @param {import('./strings.js').FaultPart} part
+   * @param {Error} err
+   */
+  #fail(part, err) {
+    this.#onFault(part, err);
+    this.#beep();
+  }
+
+  /** @see #fail for why this is at most once per turn. */
+  #beep() {
+    if (this.#beeped) return;
+    this.#beeped = true;
+    this.#earcon('error');
   }
 
   /**

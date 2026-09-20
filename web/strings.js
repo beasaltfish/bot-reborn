@@ -62,6 +62,15 @@ export const STRINGS = {
     booting: 'Loading the wake-word model…',
     micDenied: 'Microphone access was refused. Nothing can be heard without it.',
     keywordsInvalid: 'A keyword uses a token this model does not know: ',
+    // The three instruments, named the way the setup sheet and the drawing
+    // name them. Somebody who has to go and fix a key needs to read "its ears
+    // stopped working", not "STT 401" — the acronym is the name of a part we
+    // happened to buy. What follows each of these is the raw provider message,
+    // which stays English on purpose: it is instrument reading, not copy.
+    faultEars: 'Its ears stopped working: ',
+    faultMind: 'Its mind stopped working: ',
+    faultVoice: 'Its voice stopped working: ',
+    faultUnknown: 'Something went wrong: ',
     usbNotPaired: 'This phone and the car have not met yet.',
     pairNow: 'Introduce them →',
     screenOffMissed: 'Your phone could not hear me while the screen was off. '
@@ -137,6 +146,10 @@ export const STRINGS = {
     booting: '正在加载唤醒词模型…',
     micDenied: '麦克风被拒绝了。没有它什么都听不见。',
     keywordsInvalid: '关键词里有这个模型不认识的 token：',
+    faultEars: '耳朵出问题了：',
+    faultMind: '脑子出问题了：',
+    faultVoice: '嗓子出问题了：',
+    faultUnknown: '出了点问题：',
     usbNotPaired: '手机还没见过这台小车。',
     pairNow: '去认识一下 →',
     screenOffMissed: '你的手机黑屏之后听不见我。想让我一直听着，就别锁屏。',
@@ -173,6 +186,25 @@ export const STRINGS = {
 };
 
 /** @typedef {keyof typeof STRINGS.en} StringKey */
+
+/**
+ * Which part of the chain a failure came from.
+ *
+ * 'turn' is not an instrument: it is the last resort, for a throw nobody
+ * expected. It has a name of its own because "something broke and we cannot
+ * say what" still has to reach the screen — that case being silent is the
+ * whole reason this type exists.
+ *
+ * @typedef {'stt' | 'llm' | 'tts' | 'turn'} FaultPart
+ */
+
+/** @type {Record<FaultPart, StringKey>} */
+export const FAULT_LABEL = {
+  stt: 'faultEars',
+  llm: 'faultMind',
+  tts: 'faultVoice',
+  turn: 'faultUnknown',
+};
 
 /**
  * @param {'en' | 'zh'} lang

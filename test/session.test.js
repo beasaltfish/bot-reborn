@@ -62,6 +62,7 @@ export function harness(over = {}) {
     },
     cancel: () => { calls.push(['tts.cancel']); onCancel?.(); },
   };
+  /** @type {Array<[string, string]>} */ const faults = [];
   const deps = {
     pipeline, kws, vad, tts,
     stt: { transcribeDetailed: async () => ({ text: 'hello', logprob: null }) },
@@ -71,11 +72,16 @@ export function harness(over = {}) {
     now: () => now,
     after: (/** @type {number} */ ms, /** @type {() => void} */ fn) =>
       void timers.push({ ms, fn }),
+    // Recorded rather than ignored: half of what a failure now owes the user is
+    // written, not beeped, and a harness with no ear for it could not tell the
+    // silent version from the fixed one.
+    onFault: (/** @type {string} */ part, /** @type {Error} */ err) =>
+      void faults.push([part, err.message]),
     ...over,
   };
   const session = new Session(deps);
   const h = {
-    session, deps, calls, pipeline, kws, vad,
+    session, deps, calls, pipeline, kws, vad, faults,
     /** @param {number} [ms] */
     tick(ms = 0) { now += ms; timers.splice(0).forEach((t) => t.fn()); },
     // Frames only reach a subscriber. That is the point of the gate, so the
@@ -687,3 +693,56 @@ test('the stop word is still answered while capturing — it is the brake', asyn
   assert.equal(h.took('executor.stop'), 1);
   assert.equal(h.session.state, 'SLEEPING');
 });
+
+
+// --- a failure has to reach somebody (§6.7) --------------------------------
+
+test('a failed STT reports the instrument and the reason, not just a beep', async () => {
+  // The earcon and the spoken line are both audio, and a 401 and a timeout
+  // sound identical. Whoever has to go and fix a key needs the status code
+  // somewhere it can be read.
+  const h = harness({
+    stt: { transcribeDetailed: async () => { throw new Error('STT request failed: 401'); } },
+  });
+  h.session.attach(fakeBrain(h.session, h.calls));
+  h.session.start();
+  h.wake();
+  h.vad.segments.push(loud(16));
+  h.feed('vad');
+  await settle();
+  assert.deepEqual(h.faults, [['stt', 'STT request failed: 401']]);
+});
+
+test('ears and voice both down: both are reported, in that order', async () => {
+  const h = harness({
+    stt: { transcribeDetailed: async () => { throw new Error('502'); } },
+  });
+  h.session.attach(fakeBrain(h.session, h.calls));
+  h.session.start();
+  h.wake();
+  h.failSpeak('timeout');
+  h.vad.segments.push(loud(16));
+  h.feed('vad');
+  await settle();
+  assert.deepEqual(h.faults, [['stt', '502'], ['tts', 'timeout']]);
+});
+
+test('a brain that throws is reported, not dropped into the void', async () => {
+  // brain.js absorbs its own failures, so anything reaching here is the
+  // unexpected — and `void this.#turn(samples)` at the call site means an
+  // unhandled rejection reaches nobody at all.
+  const h = harness();
+  h.session.attach({
+    handle: async () => { throw new Error('unexpected'); },
+    cancel() {}, resetHistory() {},
+  });
+  h.session.start();
+  h.wake();
+  h.vad.segments.push(loud(16));
+  h.feed('vad');
+  await settle();
+  assert.deepEqual(h.faults, [['turn', 'unexpected']]);
+  assert.ok(h.calls.some((c) => c[0] === 'earcon' && c[1] === 'error'));
+  assert.equal(h.session.state, 'LISTENING', 'the turn still ends');
+});
+
