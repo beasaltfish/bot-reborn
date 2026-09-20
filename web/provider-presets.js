@@ -20,6 +20,14 @@
 // ordinary key cannot reach answers 404 "no such model", and on a sheet whose
 // only typed field is the key, that reads as a bad key — the exact failure the
 // dropdowns exist to prevent. Only list what a new account can actually call.
+//
+// The one thing it must not do is narrow the project to its author. This is an
+// open-source robot; the decisions in the spec about Chinese and English mixed
+// in one sentence are decisions about THIS robot's own user, and a provider is
+// not disqualified for failing to serve that user as long as it serves some
+// user completely. The hard requirement is the wire format — the three
+// provider classes speak OpenAI-compatible endpoints and nothing else, so a
+// service with its own API shape cannot be listed however good it is.
 
 /** @typedef {'stt' | 'llm' | 'tts'} LayerName */
 
@@ -136,10 +144,18 @@ export const PRESETS = {
       label: 'OpenAI',
       baseURL: 'https://api.openai.com/v1',
       models: ['tts-1', 'tts-1-hd'],
-      // §11.1 fixes ONE multilingual voice rather than switching per language,
-      // so these lists are "which voice", never "which voice for which
-      // language". OpenAI's names stand on their own, so both models share
-      // them.
+      // §11.1 fixes ONE voice rather than switching per language, so these
+      // lists are "which voice", never "which voice for which language".
+      //
+      // That rule picks a MULTILINGUAL voice for this robot, because its own
+      // user speaks Chinese and English in one breath and a voice that guesses
+      // wrong loses half a sentence. It is not an entry requirement for this
+      // table. Somebody who will only ever speak English to their robot is
+      // well served by an English-only provider, and keeping one out on the
+      // strength of a decision made for a different user is the same mistake
+      // as testing that user's setup with a code-switching clip.
+      //
+      // OpenAI's names stand on their own, so both models share them.
       voices: {
         'tts-1': ['alloy', 'nova', 'shimmer'],
         'tts-1-hd': ['alloy', 'nova', 'shimmer'],
