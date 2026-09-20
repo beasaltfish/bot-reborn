@@ -69,6 +69,10 @@ export const STRINGS = {
     // The three layers are named by what they do for the robot, not by their
     // acronyms. Somebody setting this up is giving a toy a sense; STT, LLM and
     // TTS are the names of the parts we happened to buy.
+    settingsLanguage: 'Language',
+    settingsSticky: 'What it picked up by voice',
+    settingsForget: 'Forget it',
+    settingsTools: 'Instruments',
     setupTitle: 'Give it a brain',
     setupEars: 'Ears',
     setupMind: 'Mind',
@@ -135,6 +139,10 @@ export const STRINGS = {
     usbNotPaired: '手机还没见过这台小车。',
     pairNow: '去认识一下 →',
     screenOffMissed: '你的手机黑屏之后听不见我。想让我一直听着，就别锁屏。',
+    settingsLanguage: '语言',
+    settingsSticky: '它从语音里记下的',
+    settingsForget: '忘掉',
+    settingsTools: '仪器',
     setupTitle: '给它一个大脑',
     setupEars: '耳朵',
     setupMind: '脑子',

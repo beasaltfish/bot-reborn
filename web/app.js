@@ -1,10 +1,11 @@
 // Entry point: wiring only (spec §10). Every decision here is made somewhere
 // else; if a branch shows up in this file it belongs in session.js.
 
-import { loadConfig, saveConfig, layerReady } from './config.js';
+import { loadConfig, saveConfig, layerReady, resetSticky } from './config.js';
 import { t } from './strings.js';
 import { createUi } from './ui.js';
 import { createSettings } from './settings.js';
+import { createCalibration } from './calibrate.js';
 import { createSetupSheet } from './setup-sheet.js';
 import { fabRung } from './steps.js';
 import { missingParts } from './robot.js';
@@ -51,13 +52,10 @@ ui.onFab((tone) => {
   // Amber is whichever gating step is unfinished, so the rung decides, not the
   // colour. Reading it back off steps.js keeps this in step with the list.
   if (tone === 'wait') {
-    const rung = fabRung(lastDone, false);
-    if (rung.step === 'car') return void pair();
-    // Straight to the sheet that finishes the step, not to the list that
-    // contains it. The list is what the gear is for; the button said "Set me
-    // up", and one more tap to reach the same rung it already named is a tap
-    // that teaches nothing.
-    return void (rung.step === 'keys' ? setupSheet.open() : settings.open());
+    // The same routing the robot's own bands use, from the same rung: the
+    // button names a step, and pressing it does that step. Nothing in this
+    // path goes through a list.
+    return void startStep(fabRung(lastDone, false).step);
   }
   void start();
 });
@@ -88,10 +86,13 @@ async function offerNextStep(running = false) {
     steer: config.calibration.steerSwapped !== null,
   };
   ui.needCar(!done.car);
-  // The same answer the checklist gives, drawn on the robot instead of listed:
-  // a part it has not been given yet is a part that is not there yet.
+  // What is still missing, drawn on the robot rather than listed anywhere: a
+  // part it has not been given yet is a part that is not there yet.
   ui.assembly(missingParts(config));
   const rung = fabRung(done, running);
+  // The ring on the robot and the word on the button come from the same rung,
+  // so they can never point at two different steps.
+  ui.nextPart(rung.step === 'listen' || rung.step === 'stop' ? null : rung.step);
   ui.fabFace(rung.tone, rung.key);
   return done;
 }
@@ -117,11 +118,9 @@ const setupSheet = createSetupSheet({
   log: ui.log,
 });
 
-const settings = createSettings({
+const calibration = createCalibration({
   lang: config.lang,
-  done: () => lastDone,
   openCar: (opts) => openCar(opts),
-  openKeys: () => setupSheet.open(),
   onCalibrated: (swapped) => {
     config.calibration.steerSwapped = swapped;
     saveConfig(config);
@@ -132,10 +131,43 @@ const settings = createSettings({
   log: ui.log,
 });
 
+const settings = createSettings({
+  lang: config.lang,
+  config,
+  save: () => saveConfig(config),
+  openKeys: () => setupSheet.open(),
+  calibrate: () => calibration.open(),
+  onResetSticky: () => {
+    // Assigned back into the same object every other module is holding: they
+    // were handed `config` itself, and swapping in a fresh one would leave the
+    // brain and the session reading the values this button just cleared.
+    Object.assign(config, resetSticky(config));
+    saveConfig(config);
+  },
+  onChange: () => void refresh(),
+});
+
+/**
+ * Begin a gating step. The robot's bands and the amber button both land here,
+ * so a tap on the wheels and a press of a button reading "Teach me left" can
+ * never turn out to mean two different things.
+ *
+ * @param {import('./steps.js').Step | 'listen' | 'stop'} step
+ */
+function startStep(step) {
+  if (step === 'car') return void pair();
+  if (step === 'steer') return void calibration.open();
+  if (step === 'keys') return void setupSheet.open();
+}
+
+// The robot is the checklist: a band of the drawing is pressed, and the step it
+// stands for happens.
+ui.onPart(startStep);
+
 /** The settings list reads this synchronously while it renders, and
  *  getDevices() is a promise — so the answer is kept rather than re-asked. */
 let lastDone = { keys: false, car: false, steer: false };
-async function refresh() { lastDone = await offerNextStep(); settings.render(); }
+async function refresh() { lastDone = await offerNextStep(); }
 void refresh();
 
 /**

@@ -147,6 +147,25 @@ while there is no car at all. Both are true then, and the plug and the pale
 wheels say different things: nothing is plugged in, and nothing has been taught
 left from right.
 
+### The robot is the checklist
+
+Each region of the drawing is the door to the step it stands for. Press the
+head and the setup sheet opens; press the body and the USB picker opens; press
+the wheels and it offers to learn left from right. There is no list in between,
+and the step that is next carries a soft ring — nothing else would tell anybody
+that a drawing can be touched.
+
+They are real `<button>` elements laid over the SVG, not clicks on the shapes.
+The dashed arcs are two pixels wide and a finger is not, and a shape inside an
+SVG is not something a screen reader can be handed. The three bands tile the
+robot's full height rather than tracing its outline, for the same reason: the
+wheels are seventeen pixels tall and a touch target is forty-four.
+
+The ring and the button's word are set from one `fabRung()` result in one line
+of `app.js`, and both land in the same `startStep()`. A tap on the wheels and a
+press of a button reading "Teach me left" cannot turn out to mean two different
+things.
+
 ---
 
 ## The one button
@@ -183,19 +202,26 @@ car as a failure of the thing you had just asked for.
 
 ---
 
-## The two sheets
+## The three sheets
 
-Both slide up from the bottom, both are their own backdrop, both close on a tap
-outside. They are not the same thing and they never stack:
+All slide up from the bottom, all are their own backdrop, all close on a tap
+outside, and they never stack:
 
 | | opened by | answers |
 |---|---|---|
-| **Settings** | the gear | what is still missing, and calibration |
-| **Setup** | the amber button, or the first row of Settings | the three keys |
+| **Setup** | the head, or the amber button | the three keys |
+| **Teach left and right** | the wheels, or the amber button | which way did it go |
+| **Settings** | the gear | language, what it picked up by voice, the instruments |
 
-Settings closes itself before opening Setup. Two bottom sheets on one phone
+A sheet closes itself before opening another. Two bottom sheets on one phone
 screen leave the lower one showing around the edges of the upper, and closing
-the top one uncovers a list that is now out of date.
+the top one uncovers a panel that has since gone stale.
+
+**Settings is not part of getting started.** It used to hold the onboarding
+checklist, and the day the robot started showing which parts it had not been
+given, the list became a second, worse copy of the same answer — in text, one
+screen further away. Nothing behind the gear is ordered, numbered or ticked
+now; it is the drawer you go looking in afterwards.
 
 **Setup is three rows, one per layer, named by what they do for the robot.**
 Ears hear you, Mind decides, Voice answers back — not STT, LLM and TTS, which
