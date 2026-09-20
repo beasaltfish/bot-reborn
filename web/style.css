@@ -516,9 +516,13 @@ section[id^="panel-"].idle { opacity: .55; }
 .setting + .setting { border-top: 1px solid rgba(128,128,128,.18); }
 .setting-caption { font-size: 12px; opacity: .6; }
 .setting-value { margin: 0; font-size: 13px; opacity: .8; word-break: break-word; }
-.setting-door { font-size: 15px; background: none; border: 0; color: inherit;
+/* A row, not a stack: .setting is a flex column, and a door inherits that
+   unless it says otherwise — which puts the chevron on its own line under the
+   label. */
+.setting-door { flex-direction: row; align-items: center; justify-content: space-between;
+                font-size: 15px; background: none; border: 0; color: inherit;
                 cursor: pointer; padding: 15px 4px; }
-.setting-door::after { content: ' \203a'; opacity: .5; }
+.setting-door::after { content: '\203a'; opacity: .5; font-size: 18px; }
 
 /* The panel can outgrow the screen once three provider layers are open, and a
    bottom sheet that runs off the bottom hides its own close button. */

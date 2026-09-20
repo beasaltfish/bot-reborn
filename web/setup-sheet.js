@@ -82,14 +82,32 @@ export function createSetupSheet(deps) {
   /** @type {Map<string, { button: HTMLButtonElement, result: HTMLElement }>} */
   const wired = new Map();
 
+  /**
+   * Where closing this sheet goes, when it was opened from somewhere that is
+   * not the main screen.
+   *
+   * A sheet closes whatever opened it — two bottom sheets on one phone leave
+   * the lower one showing around the edges of the upper — and without this,
+   * every door into here is one-way. Somebody who went looking in settings for
+   * their keys presses the only button on the sheet and lands on the robot,
+   * with the drawer they were rummaging in shut behind them.
+   *
+   * @type {(() => void) | null}
+   */
+  let back = null;
+
   $('setupTitle').textContent = t(deps.lang, 'setupTitle');
-  $('setupClose').textContent = t(deps.lang, 'close');
   $('setupTestAll').textContent = t(deps.lang, 'setupTestAll');
   $('setupClose').addEventListener('click', () => close());
   $('setupTestAll').addEventListener('click', () => void testAll());
   sheet.addEventListener('click', (e) => { if (e.target === sheet) close(); });
 
-  function open() {
+  /** @param {{ back?: () => void }} [opts] */
+  function open(opts = {}) {
+    back = opts.back ?? null;
+    // The button says where it goes. "Close" on a sheet that reopens the one
+    // behind it is a small lie that costs somebody a second tap every time.
+    $('setupClose').textContent = t(deps.lang, back ? 'back' : 'close');
     for (const layer of LAYERS) {
       const cfg = deps.config[layer.name];
       const presetId = presetIdFor(layer.name, cfg);
@@ -107,6 +125,11 @@ export function createSetupSheet(deps) {
   function close() {
     sheet.hidden = true;
     deps.onChange();
+    const to = back;
+    // Cleared before it runs, not after: whatever it reopens may open this
+    // sheet again from a different door, and it must not inherit this one.
+    back = null;
+    to?.();
   }
 
   function render() {

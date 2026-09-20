@@ -135,8 +135,8 @@ const settings = createSettings({
   lang: config.lang,
   config,
   save: () => saveConfig(config),
-  openKeys: () => setupSheet.open(),
-  calibrate: () => calibration.open(),
+  openKeys: (back) => setupSheet.open({ back }),
+  calibrate: (back) => calibration.open({ back }),
   onResetSticky: () => {
     // Assigned back into the same object every other module is holding: they
     // were handed `config` itself, and swapping in a fresh one would leave the

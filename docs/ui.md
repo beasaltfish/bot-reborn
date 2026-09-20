@@ -217,6 +217,12 @@ A sheet closes itself before opening another. Two bottom sheets on one phone
 screen leave the lower one showing around the edges of the upper, and closing
 the top one uncovers a panel that has since gone stale.
 
+**What it hands over instead is the way back.** A sheet opened from another one
+is given the function that reopens it, and its own closing button then reads
+*Back* rather than *Close* — the word says where it goes. Opened from the robot
+there is nothing to hand over, the field is null, and the button reads *Close*
+and means it.
+
 **Settings is not part of getting started.** It used to hold the onboarding
 checklist, and the day the robot started showing which parts it had not been
 given, the list became a second, worse copy of the same answer — in text, one

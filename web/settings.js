@@ -34,8 +34,8 @@ const TOOLS = [
  *   lang: 'en' | 'zh',
  *   config: import('./config.js').Config,
  *   save: () => void,
- *   openKeys: () => void,
- *   calibrate: () => void,
+ *   openKeys: (back: () => void) => void,
+ *   calibrate: (back: () => void) => void,
  *   onResetSticky: () => void,
  *   onChange: () => void,
  * }} deps
@@ -60,9 +60,10 @@ export function createSettings(deps) {
 
     // Closing first, always: two bottom sheets on one phone screen leave the
     // lower one showing around the edges of the upper, and closing the top one
-    // uncovers a panel that has since gone stale.
-    rows.append(door('stepKeys', () => { close(); deps.openKeys(); }));
-    rows.append(door('stepSteer', () => { close(); deps.calibrate(); }));
+    // uncovers a panel that has since gone stale. What is handed over is the
+    // way back, so a door out of a drawer is not a one-way door.
+    rows.append(door('stepKeys', () => { close(); deps.openKeys(open); }));
+    rows.append(door('stepSteer', () => { close(); deps.calibrate(open); }));
     rows.append(language());
     rows.append(sticky());
     rows.append(tools());

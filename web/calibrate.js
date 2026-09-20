@@ -36,7 +36,14 @@ export function createCalibration(deps) {
 
   sheet.addEventListener('click', (e) => { if (e.target === sheet) close(); });
 
-  function open() {
+  /** Where closing goes when this was opened from a sheet rather than from the
+   *  robot — see the same field in setup-sheet.js.
+   *  @type {(() => void) | null} */
+  let back = null;
+
+  /** @param {{ back?: () => void }} [opts] */
+  function open(opts = {}) {
+    back = opts.back ?? null;
     sheet.hidden = false;
     ask('calIntro', [['calGo', () => void turn()]]);
   }
@@ -44,6 +51,9 @@ export function createCalibration(deps) {
   function close() {
     sheet.hidden = true;
     deps.onChange();
+    const to = back;
+    back = null;
+    to?.();
   }
 
   /**
@@ -77,7 +87,7 @@ export function createCalibration(deps) {
   /** @param {boolean} swapped */
   function settle(swapped) {
     deps.onCalibrated(swapped);
-    ask('calDone', [['close', () => close()]]);
+    ask('calDone', [[back ? 'back' : 'close', () => close()]]);
   }
 
   /**
