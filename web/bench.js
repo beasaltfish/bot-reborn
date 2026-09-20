@@ -229,8 +229,8 @@ for (const button of document.querySelectorAll('[data-pins]')) {
       // One transferOut, stop byte already inside the same buffer — spec §4.2.
       await dev.write(dev.buildStream(pins, 600));
 
-      // Mind the timing. 3000 bytes at 1200 baud run for a dozen seconds, but
-      // this writes only 600 ms, which drains quickly at the calibration rate —
+      // Mind the timing. 3000 bytes at 1200 baud run for about 2.5 s, but
+      // this writes only 600 ms — 720 bytes, gone in 600 ms —
       // so by read-back time the pins may already have fallen to 0x00 on their
       // own. That case is reported as ambiguous rather than as a MISMATCH,
       // because it is usually just a normal ending. A chip genuinely stuck low
@@ -270,7 +270,7 @@ el('byteRateBtn').addEventListener('click', async () => {
   stream.fill(0x10, 0, BYTE_RATE_TEST_BYTES);
   stream[BYTE_RATE_TEST_BYTES] = 0x00;
 
-  const theory = (BYTE_RATE_TEST_BYTES * 8) / BENCH_BAUD; // seconds, at 8 bit/byte
+  const theory = BYTE_RATE_TEST_BYTES / BENCH_BAUD; // seconds, at one byte per baud tick
   log(`writing ${BYTE_RATE_TEST_BYTES} bytes @ ${BENCH_BAUD} baud, theory says ${theory.toFixed(1)} s`);
   log('start the stopwatch now — from the motor starting to the motor stopping. Measure how far the car went, too.');
   try {
@@ -290,14 +290,21 @@ el('computeBtn').addEventListener('click', () => {
   const metres = Number(inputEl('measuredMetres').value);
   if (!seconds) return;
 
-  const theory = (BYTE_RATE_TEST_BYTES * 8) / BENCH_BAUD;
+  const theory = BYTE_RATE_TEST_BYTES / BENCH_BAUD;
   const msPerByte = (seconds * 1000) / BYTE_RATE_TEST_BYTES;
   const out = [
     `measured ${seconds} s / theory ${theory.toFixed(1)} s = ratio ${(seconds / theory).toFixed(3)}`,
     `${msPerByte.toFixed(3)} ms per byte  →  bytesPerMs = ${(1 / msPerByte).toFixed(4)}`,
-    msPerByte >= 2 && msPerByte <= 5
-      ? '✅ inside spec §12 2\'s target band of 2-5 ms/byte'
-      : '⚠️ outside the 2-5 ms/byte target band — the baud rate or the divisor encoding is probably wrong; do not go further yet',
+    // The ratio is the verdict, not the band. §12 ②'s 2-5 ms/byte was picked to
+    // land one MAX_COAST_MS slice in a few hundred bytes, back when the byte
+    // rate was assumed to be baud/8; at the real 1:1 it would need 200-500
+    // baud, which encodeBaudRate cannot express (the divisor saturates near
+    // 732). 1200 baud gives 0.83 ms/byte and a 1.2 KB slice, which is fine on
+    // both counts the band was protecting — resolution and bandwidth.
+    Math.abs(seconds / theory - 1) < 0.25
+      ? '✅ ratio ≈ 1: one byte per baud tick, which is what bytesPerMs assumes'
+      : '⚠️ ratio is not ≈ 1 — the multiplier is not 1:1 on this part, so DEFAULT_BYTES_PER_MS in ftdi.js is wrong for it',
+    `ⓘ ${msPerByte.toFixed(3)} ms/byte. §12 ② asks for 2-5, which needs 200-500 baud — unreachable below ~732. See the note in ftdi.js; it is the band that is stale, not this reading.`,
   ];
   if (metres) {
     const speed = metres / seconds;

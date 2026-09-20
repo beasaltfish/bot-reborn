@@ -76,10 +76,41 @@ yet**; do not treat a blank row as "fine".
 | # | What | Measured | Feeds |
 |---|---|---|---|
 | ① | Which steer byte is left: `0x40` or `0x80` | | `STEER_BITS` in `web/executor.js` |
-| ② | Bitbang byte rate at 1200 baud (target 2–5 ms/byte), and the car's speed in m/s | | `DEFAULT_BYTES_PER_MS` in `web/ftdi.js`; cross-checks `MAX_COAST_MS ≈ 1.5 m` |
+| ② | Bitbang byte rate at 1200 baud (target 2–5 ms/byte), and the car's speed in m/s | **1:1 — one byte per baud tick.** 3000 bytes ran ≈ 2 s against a theoretical 2.5 s (2026-09-20, stopwatch). Road speed not measured yet. See the note below | `DEFAULT_BYTES_PER_MS` in `web/ftdi.js`; cross-checks `MAX_COAST_MS ≈ 1.5 m` |
 | ③ | Pull-down resistors on U3/U5 inputs? (power off, measure input-to-GND: tens of kΩ = yes, open = no) | | Spec §4.7's gap. No pull-downs → solder 2 × 10 kΩ to GND, or layer 0 does not hold when USB is unplugged |
 | ④ | Board VCC and U3 logic threshold (5 V logic needs ≥ 0.7 × VCC = 3.5 V; the FT232H drives 3.3 V) | | Whether a level shifter is needed at all |
 | ⑧ | Shortest pulse that reliably starts the motor (from 100 ms, +50 ms, 10 tries each) | | `MIN_DURATION_MS` in `web/executor.js` |
+
+## ② the byte rate, and why its target band is stale (measured 2026-09-20)
+
+In async bitbang the baud generator clocks out **one whole byte per tick**, not
+one bit: a byte here is a pin pattern, not a character being serialised. So at
+1200 baud the chip emits 1200 bytes per second, and `bytesPerMs` is 1.2.
+
+`ftdi.js` used to assume `baud / 8` — 0.15 bytes/ms, ten times too slow. Every
+duration the executor asked for was cut by that factor, silently: `buildStream`
+sized the buffer from the wrong rate, the chip clocked it out correctly, and the
+trailing `0x00` landed early. A 600 ms calibration turn came out as a twitch
+too short to tell left from right, and nothing reported a fault, because there
+was none — the buffer was simply the wrong length.
+
+The measurement: 3000 bytes at 1200 baud, stopwatch on the motor. The ÷8 model
+predicts 20 s, the 1:1 model 2.5 s, and it ran about 2 s. A stopwatch cannot
+separate 2.0 from 2.5, but it settles 1:1 against ÷8 beyond any doubt.
+
+**The 2–5 ms/byte target in spec §12 ② is not reachable and no longer wanted.**
+It came from wanting one `MAX_COAST_MS` slice to be a few hundred bytes — too
+few and the time resolution is coarse, too many and every write pushes
+kilobytes. At the real 1:1 rate that band means 200–500 baud, and
+`encodeBaudRate` cannot express it: the divisor field is 14 integer bits plus 3
+fractional, so the largest divisor is about 16384 and the slowest baud on the
+12 MHz path is 12 MHz / 16384 ≈ 732. Reaching lower means leaving the /5
+prescaler on for a 2.4 MHz base (down to ≈ 146 baud), which is a second clock
+path this project does not implement.
+
+It does not need to. At 1200 baud the slice is 0.83 ms/byte and 1200 bytes:
+fine resolution, and 1.2 KB per write is nothing. Both of the band's motives
+are satisfied by the rate we already have.
 
 ## USB driver
 

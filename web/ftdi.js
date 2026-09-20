@@ -35,10 +35,15 @@ const PORT_A = 1;
 // stored through this permutation table. This mirrors libftdi's
 // ftdi_convert_baudrate() — the numbers below are not free parameters.
 //
-// Caveat: this covers only the 12 MHz-base path. Real libftdi switches to a
-// different clock path below roughly 732 baud; this project never asks for
-// anything that slow (the calibration rate is 1200), so that branch is not
-// implemented here.
+// Caveat: this covers only the 12 MHz-base path. The divisor field is 14
+// integer bits plus 3 fractional ones, so the largest divisor it can hold is
+// about 16384 and the slowest baud it can express is 12 MHz / 16384 ≈ 732 —
+// that is where the wall is, not at anybody's choice of threshold. Going below
+// it means slowing the base clock instead, by leaving the /5 prescaler on
+// (2.4 MHz base, down to roughly 146 baud); real libftdi switches paths there.
+// Not implemented, and ② removed the reason to want it: the only motive was to
+// land a MAX_COAST_MS slice in a few hundred bytes, and at 1200 baud it is
+// 1200 bytes, which is 1.2 KB per write and costs nothing.
 
 const H_CLK = 120_000_000;
 const H_CLK_DIV = 10;
@@ -93,13 +98,20 @@ export function encodeBaudRate(baud) {
 /**
  * Byte rate of the pin output in async bitbang mode.
  *
- * PLACEHOLDER — calibration item ② (spec §12) measures this. Do not treat the
- * default as known-good: FTDI's bitbang clock is a multiple of the configured
- * baud rate and the multiplier is not documented consistently across parts,
- * which is exactly why ② exists. Task 5 replaces this with a measured value
- * recorded in docs/hardware.md.
+ * One byte per baud tick, not one bit: in async bitbang the baud generator
+ * clocks out a whole byte each period, because a byte here is a pin pattern
+ * rather than a character being serialised. The old value divided by 8 and was
+ * therefore ten times too slow — every duration the executor asked for came out
+ * as a twitch, and nothing anywhere said so, because the chip did exactly what
+ * it was told and the buffer was simply too short.
+ *
+ * Calibration item ② (spec §12) confirmed the 1:1 multiplier on this board:
+ * 3000 bytes at 1200 baud ran for about 2 s against a theoretical 2.5 s, where
+ * the ÷8 model predicted 20 s. A stopwatch over 2 s cannot do better than that,
+ * so this stays the theoretical value; a measurement precise enough to beat it
+ * belongs in config.calibration.bytesPerMs, which overrides this.
  */
-export const DEFAULT_BYTES_PER_MS = 1200 / 8 / 1000; // 0.15 — theory only, unverified
+export const DEFAULT_BYTES_PER_MS = 1200 / 1000; // 1.2 bytes/ms at 1200 baud
 
 const DEFAULT_BAUD_RATE = 1200;
 
