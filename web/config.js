@@ -16,6 +16,23 @@ export const CONFIG_KEY = 'voicebot.config';
 export const STICKY = /** @type {const} */ (['ttsPath', 'replyLang']);
 
 /**
+ * Whether a provider layer has everything a request to it needs.
+ *
+ * All of the fields, not just the address. "The baseURL is set" was the old
+ * test for having a brain, and it passes for a layer with no key in it — a
+ * robot that looks configured and fails on its first sentence. TTS carries a
+ * fourth field (§8.2) and is recognised by having one, so the check does not
+ * need to be told which layer it is looking at.
+ *
+ * @param {{ baseURL: string, apiKey: string, model: string, voice?: string }} layer
+ * @returns {boolean}
+ */
+export function layerReady(layer) {
+  if (!layer?.baseURL || !layer.apiKey || !layer.model) return false;
+  return !('voice' in layer) || Boolean(layer.voice);
+}
+
+/**
  * @param {string} [_navLang] ignored since 2026-09-17; kept so the signature
  *   and its tests survive until a language switcher exists to justify reading
  *   it again.

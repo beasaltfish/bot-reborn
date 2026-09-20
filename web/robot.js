@@ -10,6 +10,8 @@
 // opaque classes would let that pair drift apart silently — see the test that
 // pins them together.
 
+import { layerReady } from './config.js';
+
 /** @typedef {import('./audio/session.js').State} State */
 /** @typedef {import('./strings.js').StringKey} StringKey */
 
@@ -38,6 +40,53 @@ const FACES = {
   THINKING:  { eyes: 'up',     antenna: 'orbit', waves: false, mouth: false, motion: 'still',   tint: 'wait', labelKey: 'stThinking' },
   SPEAKING:  { eyes: 'smile',  antenna: 'lit',   waves: false, mouth: true,  motion: 'bob',     tint: 'go',   labelKey: 'stSpeaking' },
 };
+
+/**
+ * The parts the robot has not been given yet.
+ *
+ * The five faces already put each layer somewhere on the drawing — the sound
+ * waves only appear while it is hearing you, the antenna only orbits while it
+ * is thinking, the mouth only opens while it is speaking. So "which layer is
+ * missing" has an answer in the same three places, and an unconfigured layer
+ * can be drawn as the part that is not there yet rather than as a row of text
+ * somewhere else.
+ *
+ * This is finer than steps.js on purpose and does not duplicate it. The
+ * checklist answers "how many steps are left", and giving it both keys is one
+ * step, one errand, one sheet. The drawing answers "what is this robot still
+ * missing", and there the ears and the mind are two different absences.
+ *
+ * The wheels are listed from the moment calibration has not been done,
+ * including while there is no car at all. Both are true then, and the plug and
+ * the pale wheels say two different things: nothing is plugged in, and nothing
+ * has been taught left from right.
+ *
+ * @typedef {'ears' | 'mind' | 'voice' | 'wheels'} Part
+ * @param {import('./config.js').Config} config
+ * @returns {Part[]}
+ */
+export function missingParts(config) {
+  /** @type {Part[]} */
+  const missing = [];
+  if (!layerReady(config.stt)) missing.push('ears');
+  if (!layerReady(config.llm)) missing.push('mind');
+  if (!layerReady(config.tts)) missing.push('voice');
+  // Measured, not its value — same rule as the checklist's. A car that turned
+  // out NOT to be reversed has been taught just as much as one that was.
+  if (config.calibration.steerSwapped === null) missing.push('wheels');
+  return missing;
+}
+
+/**
+ * Written as one attribute holding a token list, so the stylesheet asks
+ * `[data-missing~="ears"]` and no part needs an attribute of its own.
+ *
+ * @param {HTMLElement} root
+ * @param {Part[]} parts
+ */
+export function applyAssembly(root, parts) {
+  root.dataset.missing = parts.join(' ');
+}
 
 /** @param {State} state @returns {Face} */
 export function faceFor(state) {

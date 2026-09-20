@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { STATES, faceFor, applyFace } from '../web/robot.js';
+import { STATES, faceFor, applyFace, missingParts, applyAssembly } from '../web/robot.js';
 import { STRINGS } from '../web/strings.js';
 
 test('the five states are session.js\'s five, in its own order', () => {
@@ -80,4 +80,63 @@ test('applyFace on an unknown state throws rather than leaving the last face up'
   // awake while the session had moved on.
   const fake = { dataset: {} };
   assert.throws(() => applyFace(/** @type {any} */ (fake), /** @type {any} */ ('NAPPING')));
+});
+
+// --- the parts it has not been given yet ----------------------------------
+
+/** @param {any} over @returns {any} */
+const cfg = (over = {}) => ({
+  stt: { baseURL: '', apiKey: '', model: '' },
+  llm: { baseURL: '', apiKey: '', model: '' },
+  tts: { baseURL: '', apiKey: '', model: '', voice: '' },
+  calibration: { steerSwapped: null, bytesPerMs: null },
+  ...over,
+});
+
+const full = { baseURL: 'https://x.test/v1', apiKey: 'k', model: 'm' };
+
+test('a config straight out of the box is missing every part', () => {
+  assert.deepEqual(missingParts(cfg()), ['ears', 'mind', 'voice', 'wheels']);
+});
+
+test('each layer accounts for exactly one part', () => {
+  assert.ok(!missingParts(cfg({ stt: full })).includes('ears'));
+  assert.ok(missingParts(cfg({ stt: full })).includes('mind'));
+  assert.ok(!missingParts(cfg({ llm: full })).includes('mind'));
+  assert.ok(!missingParts(cfg({ tts: { ...full, voice: 'v' } })).includes('voice'));
+});
+
+test('an address with no key behind it is not a part it has been given', () => {
+  // This is the case the old check passed: baseURL set, nothing else, and the
+  // robot looked complete right up until its first sentence failed.
+  assert.ok(missingParts(cfg({ llm: { baseURL: 'https://x.test', apiKey: '', model: '' } }))
+    .includes('mind'));
+});
+
+test('TTS is not complete without its voice (spec §8.2 gives it a fourth field)', () => {
+  assert.ok(missingParts(cfg({ tts: { ...full, voice: '' } })).includes('voice'));
+});
+
+test('a car that measured as NOT reversed has still been taught', () => {
+  // `false` is a measurement. Only `null` means nobody has asked the question,
+  // and treating the two alike would leave the wheels pale forever on half the
+  // cars in the world.
+  assert.ok(!missingParts(cfg({ calibration: { steerSwapped: false, bytesPerMs: null } }))
+    .includes('wheels'));
+  assert.ok(missingParts(cfg({ calibration: { steerSwapped: true, bytesPerMs: null } }))
+    .length === 3);
+});
+
+test('applyAssembly writes a token list the stylesheet can match one part at a time', () => {
+  // The CSS asks [data-missing~="ears"]. A joined string like "earsmind" would
+  // match nothing and fail without an error anywhere.
+  const fake = { dataset: /** @type {Record<string, string>} */ ({}) };
+  applyAssembly(/** @type {any} */ (fake), ['ears', 'wheels']);
+  assert.deepEqual(fake.dataset.missing.split(' '), ['ears', 'wheels']);
+});
+
+test('nothing missing clears the attribute rather than leaving the last value', () => {
+  const fake = { dataset: /** @type {Record<string, string>} */ ({ missing: 'ears mind' }) };
+  applyAssembly(/** @type {any} */ (fake), []);
+  assert.equal(fake.dataset.missing, '');
 });

@@ -3,7 +3,7 @@
 // moved into robot.js, where it is tested.
 
 import { t, KEYWORDS } from './strings.js';
-import { applyFace } from './robot.js';
+import { applyFace, applyAssembly } from './robot.js';
 
 const $ = (/** @type {string} */ id) =>
   /** @type {HTMLElement} */ (document.getElementById(id));
@@ -116,6 +116,8 @@ export function createUi(lang) {
      * @param {boolean} on
      */
     needCar(on) { robot.dataset.need = on ? 'car' : ''; },
+    /** @param {import('./robot.js').Part[]} parts */
+    assembly(parts) { applyAssembly(robot, parts); },
 
     /**
      * The click carries the tone that was painted on the button when it was
