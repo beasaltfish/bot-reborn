@@ -82,6 +82,21 @@ export const PRESETS = {
       baseURL: SILICONFLOW,
       models: ['FunAudioLLM/SenseVoiceSmall'],
     },
+    {
+      // Audio lives on its own host here, not on the inference endpoint the
+      // rest of Fireworks uses — pointing this at api.fireworks.ai/inference/v1
+      // gets a 404 from a URL that looks entirely correct.
+      //
+      // Listed with one model, not two: Fireworks deprecated audio inference in
+      // June 2026, turbo still answers and plain whisper-v3 returns auth
+      // errors. A row that 401s is the failure this table exists to prevent,
+      // so only the one that works is here — and if turbo follows it, this
+      // entry goes rather than getting a footnote.
+      id: 'fireworks',
+      label: 'Fireworks',
+      baseURL: 'https://audio-turbo.api.fireworks.ai/v1',
+      models: ['whisper-v3-turbo'],
+    },
   ],
   llm: [
     {
@@ -118,6 +133,35 @@ export const PRESETS = {
       label: 'SiliconFlow',
       baseURL: SILICONFLOW,
       models: ['deepseek-ai/DeepSeek-V3'],
+    },
+    {
+      // Kimi, on the global platform. Moonshot runs two — api.moonshot.ai and
+      // api.moonshot.cn — and a key from one is refused by the other, exactly
+      // like SiliconFlow's pair. This is the .ai one, to match the SiliconFlow
+      // row beside it; somebody on the mainland platform changes one letter
+      // under "Other".
+      //
+      // NOT moonshot-v1-*: that whole series was retired on 2026-08-31 and now
+      // answers 404, which on this sheet reads as a broken key.
+      id: 'moonshot',
+      label: 'Moonshot (Kimi)',
+      baseURL: 'https://api.moonshot.ai/v1',
+      models: ['kimi-k3', 'kimi-k2.6'],
+    },
+    {
+      id: 'zhipu',
+      label: 'Zhipu (GLM)',
+      baseURL: 'https://open.bigmodel.cn/api/paas/v4',
+      models: ['glm-4.7-flash', 'glm-4.7'],
+    },
+    {
+      // Alibaba Model Studio, international endpoint. The mainland one is
+      // dashscope.aliyuncs.com without the -intl, and the keys are again not
+      // interchangeable.
+      id: 'dashscope',
+      label: 'Alibaba (Qwen)',
+      baseURL: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
+      models: ['qwen-plus', 'qwen-turbo', 'qwen-max'],
     },
     {
       // Address known, model yours to name. A dropdown exists to fill in the
