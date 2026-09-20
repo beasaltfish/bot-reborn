@@ -15,6 +15,11 @@
 // setup.html has been carrying as placeholders since it was written. Anything
 // this list gets wrong is fixable by picking `custom`, which is why the list
 // can afford to be short.
+//
+// It can afford to be short and cannot afford to be aspirational. A model an
+// ordinary key cannot reach answers 404 "no such model", and on a sheet whose
+// only typed field is the key, that reads as a bad key — the exact failure the
+// dropdowns exist to prevent. Only list what a new account can actually call.
 
 /** @typedef {'stt' | 'llm' | 'tts'} LayerName */
 
@@ -80,19 +85,18 @@ export const PRESETS = {
       id: 'groq',
       label: 'Groq',
       baseURL: 'https://api.groq.com/openai/v1',
-      // Groq's four, as its own catalogue lists them (checked 2026-09-20). The
-      // first is the default a preset fills in, and it is the 70B rather than
-      // the fastest of them on purpose: this product cannot work at all
-      // without tool calling, and tool calling is the capability small models
-      // lose first. Anybody chasing time-to-first-token can drop down the
-      // list — the Mind check tells them immediately if they went too far,
-      // because it asks for a tool call and not just an answer.
-      models: [
-        'llama-3.3-70b-versatile',
-        'openai/gpt-oss-120b',
-        'openai/gpt-oss-20b',
-        'llama-3.1-8b-instant',
-      ],
+      // Groq's two llama models are Enterprise-only — their catalogue prices
+      // them at "Contact Sales", and an ordinary key gets 404 "no such model",
+      // which reads as a broken setup rather than as a plan you are not on.
+      // They are not here for exactly the reason this list exists; anybody
+      // with that contract can type the name under "Other".
+      //
+      // Between the two that remain, the 120B is first because tool calling is
+      // the capability smaller models lose first and this product cannot work
+      // without it. The 20B is one line down for anybody chasing
+      // time-to-first-token, and the Mind check answers whether they went too
+      // far, because it asks for a tool call and not merely an answer.
+      models: ['openai/gpt-oss-120b', 'openai/gpt-oss-20b'],
     },
     {
       id: 'openai',
