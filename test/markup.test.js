@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { HEADLINES } from '../web/audio-bench/headlines.js';
 
 const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
 const audioBench = readFileSync(new URL('../web/audio-bench.html', import.meta.url), 'utf8');
@@ -106,4 +107,34 @@ test('the audio bench ships a picker with one option per panel', () => {
     .matchAll(/<option value="([a-z]+)"/g)].map((m) => m[1]);
   assert.match(audioBench, /id="panelPick"/);
   assert.deepEqual(panels.sort(), options.sort());
+});
+
+test('every headline the bar mirrors exists in the page', () => {
+  // The bar reads these ids out of the document. A typo is a bar that stays
+  // blank through an entire measurement, with nothing in the console but
+  // "null is not an object" — exactly the failure this file was written for.
+  for (const [panel, spec] of Object.entries(HEADLINES)) {
+    const ids = Array.isArray(spec) ? spec : [spec.mirror];
+    for (const id of ids) {
+      assert.match(audioBench, new RegExp(`id="${id}"`),
+        `audio-bench.html has no #${id}, which ${panel} declares as a headline`);
+    }
+  }
+});
+
+test('every panel declares a headline', () => {
+  // A panel with none is a panel whose readings still need scrolling to, which
+  // is the whole complaint.
+  const panels = [...audioBench.matchAll(/<section id="panel-([a-z]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(panels.sort(), Object.keys(HEADLINES).sort());
+});
+
+test('a headline is at most three readings', () => {
+  // Four will not fit beside a picker and a button at 400 px, and a bar that
+  // wraps to two lines eats the screen it was meant to save.
+  for (const [panel, spec] of Object.entries(HEADLINES)) {
+    if (Array.isArray(spec)) {
+      assert.ok(spec.length <= 3, `${panel} declares ${spec.length} headlines`);
+    }
+  }
 });

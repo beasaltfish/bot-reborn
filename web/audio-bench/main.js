@@ -10,6 +10,7 @@ import { loadSherpa } from '../audio/sherpa.js';
 import { unknownTokens } from '../audio/keyword-lines.js';
 import { createLog, setStat, setDisabled } from './readout.js';
 import { createKnobs } from './knobs.js';
+import { HEADLINES } from './headlines.js';
 import { createResidency } from './residency.js';
 import { createAcoustics } from './acoustics.js';
 import { createRecognition } from './recognition.js';
@@ -34,11 +35,59 @@ function showPanel(name) {
   }
 }
 
+/** @type {ReturnType<typeof setInterval> | null} */ let mirrorTimer = null;
+
+/**
+ * The bar shows the running panel's headline readings, refreshed four times a
+ * second. Polling rather than pushing: every panel already writes its numbers
+ * through setStat(), and threading a second sink through four panels to save
+ * four reads a second would be paying in coupling for nothing.
+ *
+ * @param {string | null} owner
+ */
+function mirror(owner) {
+  if (mirrorTimer !== null) { clearInterval(mirrorTimer); mirrorTimer = null; }
+  const bar = $('benchbarRead');
+
+  // Put a hoisted element back BEFORE clearing the bar, or clearing destroys
+  // it. #acBar belongs between the Abort button and the first stat row, which
+  // is where it sits in the markup.
+  const hoisted = bar.firstElementChild;
+  if (hoisted && hoisted.id === 'acBar') {
+    $('panel-acoustics').insertBefore(
+      hoisted, /** @type {HTMLElement} */ ($('acFloor').parentElement));
+  }
+  bar.textContent = '';
+  if (!owner) return;
+
+  const spec = HEADLINES[owner];
+  if (!spec) return;
+  if (!Array.isArray(spec)) {
+    // Hoist the element rather than copy its text: it is a display, not a
+    // reading. It goes back on release (above), so the panel is whole again
+    // when you scroll up to read the stat rows.
+    bar.append($(spec.mirror));
+    return;
+  }
+  // The label is the <b> beside the <span>, so the bar says "Keyword hits 3"
+  // rather than "3" — three of them side by side, read at a glance.
+  const labels = spec.map((id) => /** @type {[string, string]} */ (
+    [id, $(id).previousElementSibling?.textContent ?? id]));
+  mirrorTimer = setInterval(() => {
+    bar.textContent = labels
+      .map(([id, label]) => `${label} ${$(id).textContent}`)
+      .join('  ·  ');
+  }, 250);
+}
+
 const knobs = createKnobs({
   log,
-  // Switching away from a running panel would hide the thing that is running
-  // and take its readings off the bar with it. Stop it first.
-  onOwner: (owner) => setDisabled('panelPick', owner !== null),
+  onOwner: (owner) => {
+    // Switching away from a running panel would hide the thing that is running
+    // and take its readings off the bar with it. Stop it first.
+    setDisabled('panelPick', owner !== null);
+    mirror(owner);
+  },
 });
 
 $('panelPick').addEventListener('change', () =>

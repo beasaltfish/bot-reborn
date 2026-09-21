@@ -260,6 +260,34 @@ section[id^="panel-"].idle { opacity: .55; }
   word-break: break-all; text-align: left; opacity: .9;
 }
 
+/* The bottom bar. Fixed rather than sticky: `main` is a centred column and a
+   sticky child of it stops at the column's bottom, which on a short panel is
+   halfway up the screen. */
+#benchbar {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  background: Canvas;
+  border-top: 1px solid rgba(128, 128, 128, .35);
+  font-size: 13px;
+  text-align: left;
+}
+#benchbar select { flex: none; max-width: 40%; }
+#benchbarMain { flex: none; display: flex; gap: 6px; }
+#benchbarMain button { margin: 0; }
+/* One line, clipped. A bar that wraps eats the screen it was meant to save. */
+#benchbarRead { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The keep-alive cue is hoisted in here while acoustics runs, and it is sized
+   to be read at arm's length; in the bar it has to behave. */
+#benchbar #acBar { margin: 0; padding: 0; border: 0; }
+#benchbar #acCue { font-size: 14px; }
+#benchbar #acCount { font-size: 20px; margin: 0; }
+#benchbar #acSub, #benchbar #acLine { display: none; }
+
+/* So the last panel is not permanently under the bar. */
+body { padding-bottom: 96px; }
+
 /* --- The game shell (spec 2026-09-17 §4, §11) ---------------------------
    Colour carries meaning here and nowhere else in the product:
    green = ready, amber = your turn or busy, red = the emergency stop alone.
