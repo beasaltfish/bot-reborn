@@ -682,7 +682,8 @@ like speech or like assembly.
 **Symptom.** `recognition` running, nobody speaking, and transcripts kept
 arriving — one to two a minute, forever, each one a paid STT call. Every one of
 them was a transcript of nothing: whisper handed an empty room answers with
-「谢谢大家」or 「请不吝点赞 订阅 转发 打赏支持明镜与点点栏目」, both of which are
+「谢谢大家」("thank you, everyone") or 「请不吝点赞 订阅 转发 打赏支持明镜与点点栏目」
+("please like, subscribe, share and support…"), both of which are
 end-card boilerplate memorised from its training set, or it continues the
 `prompt` we sent and returns that as the transcript. `stt-openai-compat.js`
 warns about the last one in a comment above `BILINGUAL_PROMPT`; six of these
@@ -717,7 +718,7 @@ Three things follow, and the first two are about the product, not the bench:
   the car never reaches SLEEPING, silently, with nothing in any log.
 - **A hallucinated transcript reaches the executor.** `#onSegment()` → `#turn`
   → STT → LLM → car, with nothing in between asking whether there was a voice.
-  One of these runs produced 「回来」out of an empty room; that is one of the
+  One of these runs produced 「回来」("come back") out of an empty room; that is one of the
   five commands.
 - **`no_speech_prob` cannot be used to catch it.** It read **0.00 on every
   reading**, including the −92 dB one. `verbose_json` returns the field on this
@@ -739,18 +740,21 @@ removes the cause and neither of these is asked to be the only defence:
 - `SPEECH_FLOOR_DB = -40` — 4 dB above the loudest burst, 15 dB below the
   quietest speech. Biased towards refusing: a command thrown away costs a
   repeat, a burst let through drives the car. **Duration cannot do this job** —
-  the same runs put 「回来」at 0.4 s and bursts at 0.4 s, 6.4 s and 10.6 s.
+  the same runs put 「回来」("come back") at 0.4 s and bursts at 0.4 s, 6.4 s and 10.6 s.
 - `LOGPROB_FLOOR = -1` — a second axis, catching the other failure. 「谢谢大家」
-  at −21 dB, 「我以来」for 「倒回来」, 「请我一下来」for 「停下来」and the prompt
+  at −21 dB, 「我以来」(gibberish) for 「倒回来」("back up"), 「请我一下来」
+  (gibberish) for 「停下来」("stop") and the prompt
   echoed back all arrived at a perfectly good input level and all sat below −1.
   Across seventeen readings it discarded seven and lost no correct transcript.
-  It is a veto, never a licence: 「Don't go out.」for 「把灯关了」came back at
+  It is a veto, never a licence: 「Don't go out.」for 「把灯关了」("turn off the
+  light") came back at
   −0.21, confidently wrong.
 
 ### The run-on sentence is a to-do, not a required sample (2026-09-17)
 
-「hey steven 往前走」 said in one breath was going to be ⑯'s必测样本, because
-「往」 lands inside the 80 ms the `wake` earcon gates. It was downgraded: almost
+「hey steven 往前走」 ("hey steven, go forward") said in one breath was going to
+be a required sample for ⑯, because 「往」 — the first syllable after the wake
+word — lands inside the 80 ms the `wake` earcon gates. It was downgraded: almost
 everybody wakes the robot and then speaks, with a pause. Run-on stays a goal,
 just not one worth a round of calibration to defend now. It comes back if real
 use shows it hurting.

@@ -122,8 +122,9 @@ $('stop').addEventListener('click', () => {
 // in SLEEPING (only KWS runs there, and the VAD is unsubscribed, so the AEC
 // bursts cannot reach anything) and on everywhere else — but it would switch
 // at the SLEEPING → LISTENING edge, which is the instant the wake word fires,
-// and a hole there lands on 「往」. Press this mid-run to find out what the
-// switch costs before any of it reaches session.js.
+// and a hole there lands on the first syllable after the wake word. Press this
+// mid-run to find out what the switch costs before any of it reaches
+// session.js.
 $('nsToggle').addEventListener('click', async () => {
   if (!pipeline) { log('start the microphone first'); return; }
   const want = !(/** @type {HTMLInputElement} */ ($('ns')).checked);

@@ -88,7 +88,8 @@ export function createRecognition() {
    * hit unsubscribes vad synchronously from inside that loop. A Map iterator
    * skips a key deleted before it reaches it, so the VAD never sees the frame
    * the keyword was found in — the 100 ms carrying the end of "steven" and the
-   * attack of 「往」.
+   * attack of the first syllable after it. See docs/hardware.md, "The run-on
+   * sentence is a to-do, not a required sample".
    *
    * That behaviour hangs entirely on the order of two lines in reconcile().
    * Swap them and the gate costs nothing. Nothing tests it, in either file.
@@ -107,8 +108,10 @@ export function createRecognition() {
   /**
    * The model's own two numbers ride along with the text, because the text on
    * its own cannot say whether there was anything to transcribe: handed an
-   * empty room whisper answers 「谢谢大家」or continues its own prompt, and
-   * both read as a transcript. `nsp` is that opinion, and it is a different
+   * empty room whisper answers with end-card boilerplate memorised from its
+   * training set, or continues its own prompt, and both read as a transcript.
+   * The transcripts themselves are in docs/hardware.md, "AEC feeds the VAD in
+   * a silent room". `nsp` is that opinion, and it is a different
    * axis from the dB — one is measured off the audio, one is the model's.
    *
    * Nothing is filtered on it yet. This run is the one that finds out where
@@ -137,8 +140,9 @@ export function createRecognition() {
   /**
    * The level is on the line because the transcript cannot be trusted to say
    * whether there was anything to transcribe. Handed an empty room, whisper
-   * does not answer with silence — it answers with 「谢谢大家」or with this
-   * file's own BILINGUAL_PROMPT continued, both of which read as a transcript.
+   * does not answer with silence — it answers with memorised end-card
+   * boilerplate, or with this file's own BILINGUAL_PROMPT continued, both of
+   * which read as a transcript. The transcripts are in docs/hardware.md.
    * A dB figure next to the duration is the one part of the line that comes
    * from the audio rather than from the model.
    *
@@ -198,9 +202,10 @@ export function createRecognition() {
    * The difference is not a detail. §5.3 leaves the VAD UNSUBSCRIBED through
    * SLEEPING, so on the product's wake path the detector never hears the
    * keyword at all, and picks up from whichever frame arrives after the earcon
-   * window closes. "hey steven 往前走" said in one breath therefore loses more
-   * than the one frame the `both` wiring's gate drops — it loses everything up
-   * to roughly 100 ms past the hit. Nothing had ever measured that, because
+   * window closes. The run-on wake sentence (instrument-material.js's `runOn`)
+   * said in one breath therefore loses more than the one frame the `both`
+   * wiring's gate drops — it loses everything up to roughly 100 ms past the
+   * hit. Nothing had ever measured that, because
    * nothing could: this panel fed the VAD every frame regardless of state.
    *
    * The policy itself is imported, never copied. wantedSubscriptions is the
