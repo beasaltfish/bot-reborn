@@ -133,6 +133,27 @@ export function createKnobs(opts) {
     }
   });
 
+  /**
+   * While the car is circling, the bar's middle slot IS the stop. The motor
+   * toggle that started it is somewhere up the page, and cruise() renews itself
+   * and never resolves — so before this, chasing the car meant scrolling.
+   *
+   * @param {boolean} on
+   */
+  function showStop(on) {
+    $('benchbarStop').hidden = !on;
+    for (const b of ['start', 'stop']) $(b).hidden = on;
+  }
+
+  $('benchbarStop').addEventListener('click', () => {
+    executor?.stop();
+    circling = false;
+    $('motorToggle').textContent = 'Make the car circle (noise for ⑦)';
+    status('motor', 'dim', 'motor off');
+    showStop(false);
+    log('■ motor stopped from the bar');
+  });
+
   $('motorToggle').addEventListener('click', () => {
     if (!executor) return;
     if (circling) {
@@ -140,6 +161,7 @@ export function createKnobs(opts) {
       circling = false;
       $('motorToggle').textContent = 'Make the car circle (noise for ⑦)';
       status('motor', 'dim', 'motor off');
+      showStop(false);
       log('■ motor stopped');
       return;
     }
@@ -151,6 +173,7 @@ export function createKnobs(opts) {
     circling = true;
     $('motorToggle').textContent = '■ Stop the car';
     status('motor', 'go', 'motor running');
+    showStop(true);
     log('▶︎ motor circling — this is the noise floor ⑦ is measured against');
   });
 

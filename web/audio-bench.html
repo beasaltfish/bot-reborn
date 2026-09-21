@@ -292,6 +292,11 @@
            hand the panels a null sherpa. main.js enables it. -->
       <button id="start" class="primary" disabled>Start</button>
       <button id="stop" disabled>Stop</button>
+      <!-- Hidden until the car is actually moving, and then it replaces the
+           two above. One button, one fixed place, whose face is always the most
+           urgent thing available — the rule docs/ui.md settled for the product.
+           Red exists on this page only while there is something to stop. -->
+      <button id="benchbarStop" class="danger" hidden>■ STOP THE CAR</button>
     </span>
     <span id="benchbarRead"></span>
   </div>

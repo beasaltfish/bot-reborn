@@ -103,3 +103,29 @@ test('every instrument page mounts the strip', () => {
     assert.match(source, /id="instrumentStatus"/, `${name} does not mount the status strip`);
   }
 });
+
+test('red is the emergency stop and nothing else', () => {
+  // docs/ui.md: the button that must be found instantly stops being findable
+  // the moment it is one of several red things. Two of these pages have a real
+  // emergency stop; the third makes the car circle with no stop at all, which
+  // is what #benchbarStop is for.
+  const allowed = /** @type {Record<string, string[]>} */ ({
+    'bench.html': ['stopBtn'],
+    'setup.html': ['stopBtn'],
+    'audio-bench.html': ['benchbarStop'],
+  });
+  for (const [name, source] of PAGES_SRC) {
+    const reds = [...source.matchAll(/<button[^>]*\bdanger\b[^>]*>/g)]
+      .map((m) => (m[0].match(/id="([^"]+)"/) ?? [])[1]);
+    assert.deepEqual(reds.sort(), allowed[name].sort(),
+      `${name} paints something red that is not its emergency stop`);
+  }
+});
+
+test('the audio bench has an emergency stop at all', () => {
+  // cruise() renews itself and never resolves. Before this existed, the only
+  // way to stop the car was to scroll back up to the button that started it.
+  const [, source] = /** @type {[string, string, number]} */ (
+    PAGES_SRC.find(([n]) => n === 'audio-bench.html'));
+  assert.match(source, /id="benchbarStop"/);
+});
