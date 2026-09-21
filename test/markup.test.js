@@ -198,3 +198,17 @@ test('every "why" link lands on a heading that exists', () => {
     }
   }
 });
+
+test('both stylesheets declare color-scheme', () => {
+  // The split lost this once already. It lived at the top of the single
+  // stylesheet, the top of that file went to the benches, and index.html spent
+  // a commit rendering light-only on a phone set to dark. Nothing else catches
+  // it: it is a property on :root, not a class any page names.
+  const product = readFileSync(new URL('../web/style.css', import.meta.url), 'utf8');
+  const instrument = readFileSync(new URL('../web/instrument.css', import.meta.url), 'utf8');
+  for (const [name, css] of /** @type {[string, string][]} */ ([
+    ['style.css', product], ['instrument.css', instrument],
+  ])) {
+    assert.match(css, /color-scheme:\s*light dark/, `${name} does not declare color-scheme`);
+  }
+});

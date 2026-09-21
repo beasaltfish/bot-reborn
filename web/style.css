@@ -34,15 +34,18 @@ body {
    Anything that wants attention without being urgent uses amber, never red. */
 
 :root {
+  /* Without this the page is light-only and renders on white whatever the
+     phone is set to. It used to sit at the top of the single stylesheet, which
+     is how the CSS split lost it for index.html: the top of that file was the
+     bench's half. */
+  color-scheme: light dark;
+
   --go: #22c55e;
   --wait: #f59e0b;
   --stop: #ef4444;
   --ink: currentColor;
 }
 
-/* The shared stylesheet gives body 20px of padding for the bench and setup
-   pages. Here it is 40px added to a 100dvh child, which is exactly enough to
-   make the one screen that must not scroll, scroll. */
 /* `.shell` is gone along with its rule. It existed only to undo the 20px of
    body padding the benches need, and that padding now lives in instrument.css
    with them; `margin: 0` is what body says above anyway. */
