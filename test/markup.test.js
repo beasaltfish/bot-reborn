@@ -138,3 +138,28 @@ test('a headline is at most three readings', () => {
     }
   }
 });
+
+const bench = readFileSync(new URL('../web/bench.html', import.meta.url), 'utf8');
+const setup = readFileSync(new URL('../web/setup.html', import.meta.url), 'utf8');
+
+test('the product and the instruments do not share a stylesheet', () => {
+  // One file was dressing two audiences, and they undid each other: `.hint` was
+  // defined twice, and `.shell` existed only to cancel the `body` padding the
+  // benches need. Splitting them is what deletes the counter-rule.
+  assert.match(html, /href="style\.css"/);
+  assert.ok(!/href="instrument\.css"/.test(html), 'index.html must not link the instrument sheet');
+  for (const [name, source] of /** @type {[string, string][]} */ ([
+    ['bench', bench], ['setup', setup], ['audio-bench', audioBench],
+  ])) {
+    assert.match(source, /href="instrument\.css"/, `${name}.html must link instrument.css`);
+    assert.ok(!/href="style\.css"/.test(source), `${name}.html must not link the product sheet`);
+  }
+});
+
+test('the gear has no dead link behind it', () => {
+  // settings.js calls preventDefault() and opens the sheet; the href was the
+  // page that used to be there. A dead href is a promise the markup makes and
+  // the code breaks — and on a slow load it is a promise the markup keeps.
+  assert.ok(!/id="settings"[^>]*href=/.test(html),
+    'index.html still carries the retired href on #settings');
+});

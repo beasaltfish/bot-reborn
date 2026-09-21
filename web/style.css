@@ -1,188 +1,16 @@
-:root {
-  color-scheme: light dark;
-}
+/* The product: index.html. The instruments have their own sheet.
+ *
+ * `.notice` and `.log` live here rather than in instrument.css because
+ * index.html is their only user — they were on the bench's side of the old
+ * single file purely because that is where they were written. */
 
 body {
   margin: 0;
-  padding: 20px;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Kept deliberately: only one rule in this file sets text-align of its own,
+     so everything else inherits centring from here. */
   text-align: center;
 }
-
-main {
-  max-width: 640px;
-  margin: 0 auto;
-}
-
-hr {
-  margin: 20px 0;
-}
-
-button {
-  padding: 15px 20px;
-  font-size: 16px;
-  cursor: pointer;
-}
-
-button.primary {
-  padding: 15px 30px;
-  font-size: 18px;
-}
-
-.controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  justify-content: center;
-}
-
-#status {
-  margin-top: 20px;
-  font-variant-numeric: tabular-nums;
-}
-
-.diagnostics {
-  text-align: left;
-}
-
-.diagnostics h2 {
-  font-size: 16px;
-  text-align: center;
-}
-
-.hint {
-  font-size: 14px;
-  line-height: 1.5;
-  opacity: 0.8;
-}
-
-#log,
-#turnLog {
-  margin-top: 12px;
-  padding: 10px;
-  min-height: 120px;
-  max-height: 45vh;
-  overflow: auto;
-  border: 1px solid currentColor;
-  border-radius: 4px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
-  line-height: 1.45;
-  white-space: pre-wrap;
-  word-break: break-all;
-  opacity: 0.9;
-}
-
-/* --- setup.html: config form, connectivity tests, typed drive --------- */
-
-form fieldset {
-  text-align: left;
-  margin-bottom: 12px;
-  border-radius: 4px;
-}
-
-form label {
-  display: block;
-  margin: 8px 0;
-  font-size: 14px;
-}
-
-form label input {
-  display: block;
-  width: 100%;
-  box-sizing: border-box;
-  margin-top: 4px;
-  padding: 8px;
-  font-size: 14px;
-}
-
-#tests,
-#fixtures {
-  text-align: left;
-  padding-left: 22px;
-}
-
-#tests li,
-#fixtures li {
-  margin-bottom: 18px;
-}
-
-/* The sentence to read out. Bigger than the surrounding prose because it is
-   the one line on the page a person performs rather than reads, and a misread
-   word is a fixture that tests the wrong thing. */
-.say {
-  margin: 0 0 8px;
-  font-size: 18px;
-  line-height: 1.5;
-}
-
-/* .controls centres itself for the voice page's button row; inside a fixture
-   row it sits under a left-aligned sentence and has to line up with it. */
-#fixtures .controls {
-  justify-content: flex-start;
-}
-
-/* Multi-line on purpose, and on the SUCCESS path too: the STT test joins its
-   three transcripts with "\n" and three separately legible transcripts is the
-   whole point of spec §9.3's three fixtures. Collapsed to one line they are
-   unreadable. Shared with the fixture rows above, whose status is one line. */
-.result {
-  display: block;
-  margin-top: 8px;
-  font-weight: bold;
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
-}
-
-.result:empty { display: none; }
-
-.result.ok { color: #2e7d32; }
-.result.error { color: #c62828; }
-.result.pending { opacity: 0.6; }
-
-button.danger {
-  background: #c62828;
-  color: #fff;
-  border: none;
-}
-
-/* The bench page's emergency stop follows the page down: the 20 s byte-rate
-   run (calibration ②) is the one moment the car is most likely to leave the
-   bench, and the button has to be wherever the reader's eyes already are. */
-.stopbar {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  padding: 8px 0;
-  background: Canvas;
-}
-
-#textForm {
-  display: flex;
-  gap: 8px;
-  align-items: stretch;
-}
-
-#textForm input {
-  flex: 1;
-  padding: 10px;
-  font-size: 16px;
-}
-
-/* The voice page's emergency stop (spec §4.1 layer 2). Bigger than the bench's:
-   there, the reader is sitting at a table watching a calibration run; here the
-   phone is strapped to a moving car and the person is chasing it. */
-#estop {
-  width: 100%;
-  min-height: 4.5rem;
-  font-size: 1.5rem;
-  font-weight: 700;
-  border-radius: 12px;
-}
-
-#estop:disabled { background: #999; }
-
-.state { margin-left: 12px; opacity: 0.7; }
 
 .notice {
   padding: 12px;
@@ -192,8 +20,6 @@ button.danger {
   border-radius: 8px;
 }
 
-.transcript { min-height: 1.5em; font-size: 1.1rem; }
-
 .log {
   max-height: 40vh;
   overflow: auto;
@@ -201,92 +27,6 @@ button.danger {
   font-size: 0.8rem;
   white-space: pre-wrap;
 }
-
-/* --- audio-bench.html: panels, knobs and stat rows -------------------- */
-
-/* Shared with the old spike pages' layout, which was legible at arm's length
-   while talking over the phone's own speaker — that is still the posture. */
-.stat {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 6px 0;
-  border-bottom: 1px solid rgba(128, 128, 128, .3);
-  font-variant-numeric: tabular-nums;
-  text-align: left;
-}
-
-.stat b { flex: none; opacity: .7; font-weight: normal; }
-.stat span { text-align: right; }
-
-/* A panel that is not the running one dims rather than disappears: the point
-   of one page is that you can see what else is available without navigating. */
-section[id^="panel-"] { text-align: left; }
-section[id^="panel-"] h2 { text-align: center; }
-section[id^="panel-"].idle { opacity: .55; }
-
-.verdict { font-weight: bold; }
-
-/* Read at arm's length while you are talking over the phone's own speaker. */
-#acBar {
-  border: 2px solid currentColor;
-  border-radius: 6px;
-  padding: 14px 12px;
-  margin: 12px 0;
-  text-align: center;
-}
-#acCue { font-size: 24px; font-weight: bold; line-height: 1.3; }
-#acSub { opacity: .7; font-size: 14px; margin-top: 4px; }
-#acCount { font-size: 40px; font-weight: bold; font-variant-numeric: tabular-nums; margin-top: 6px; }
-#acLine {
-  font-size: 20px; line-height: 1.4; margin-top: 8px;
-  padding: 8px; border-radius: 4px; background: rgba(128, 128, 128, .2);
-}
-
-/* Knob rows: two to a line on a phone, one when there is no room. */
-.row { display: flex; flex-wrap: wrap; gap: 10px; }
-.row label { flex: 1 1 40%; font-size: 14px; text-align: left; }
-.row label input { width: 100%; box-sizing: border-box; padding: 8px; }
-
-#rcSamples { text-align: left; padding-left: 22px; }
-#rcSamples li { margin-bottom: 12px; }
-#rcSamples .controls { justify-content: flex-start; }
-
-#pvTurnLog {
-  margin-top: 12px; padding: 10px; min-height: 120px; max-height: 45vh;
-  overflow: auto; border: 1px solid currentColor; border-radius: 4px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px; line-height: 1.45; white-space: pre-wrap;
-  word-break: break-all; text-align: left; opacity: .9;
-}
-
-/* The bottom bar. Fixed rather than sticky: `main` is a centred column and a
-   sticky child of it stops at the column's bottom, which on a short panel is
-   halfway up the screen. */
-#benchbar {
-  position: fixed;
-  left: 0; right: 0; bottom: 0;
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
-  background: Canvas;
-  border-top: 1px solid rgba(128, 128, 128, .35);
-  font-size: 13px;
-  text-align: left;
-}
-#benchbar select { flex: none; max-width: 40%; }
-#benchbarMain { flex: none; display: flex; gap: 6px; }
-#benchbarMain button { margin: 0; }
-/* One line, clipped. A bar that wraps eats the screen it was meant to save. */
-#benchbarRead { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* The keep-alive cue is hoisted in here while acoustics runs, and it is sized
-   to be read at arm's length; in the bar it has to behave. */
-#benchbar #acBar { margin: 0; padding: 0; border: 0; }
-#benchbar #acCue { font-size: 14px; }
-#benchbar #acCount { font-size: 20px; margin: 0; }
-#benchbar #acSub, #benchbar #acLine { display: none; }
-
-/* So the last panel is not permanently under the bar. */
-body { padding-bottom: 96px; }
 
 /* --- The game shell (spec 2026-09-17 §4, §11) ---------------------------
    Colour carries meaning here and nowhere else in the product:
@@ -303,7 +43,9 @@ body { padding-bottom: 96px; }
 /* The shared stylesheet gives body 20px of padding for the bench and setup
    pages. Here it is 40px added to a 100dvh child, which is exactly enough to
    make the one screen that must not scroll, scroll. */
-.shell { margin: 0; padding: 0; }
+/* `.shell` is gone along with its rule. It existed only to undo the 20px of
+   body padding the benches need, and that padding now lives in instrument.css
+   with them; `margin: 0` is what body says above anyway. */
 
 /* Single screen, never scrolls. dvh rather than vh: on a phone the URL bar
    collapses and vh would leave the fab under it. */
