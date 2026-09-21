@@ -116,6 +116,12 @@ function assertFilled(cfg, label) {
   }
 }
 
+// Nothing in this form submits. Saving is per layer, below, and the tests read
+// the fields directly — so a submit can only come from a stray Enter key or a
+// button that forgot its type, and both of those would reload the page and
+// throw away what was typed.
+el('cfgForm').addEventListener('submit', (event) => event.preventDefault());
+
 // One Save per layer, beside that layer's own Test. A card is one question —
 // fill it in, keep it, try it, read the answer — and a single Save two cards
 // away made the answer to "does this layer work" arrive somewhere else.
@@ -426,6 +432,10 @@ let recording = null;
 /** @param {string} label @returns {HTMLButtonElement} */
 function rowButton(label) {
   const button = document.createElement('button');
+  // A bare <button> is type="submit". These rows live inside #cfgForm now, so
+  // without this, Record submits the form and the page reloads — taking the
+  // recording, and anything typed above it, with it.
+  button.type = 'button';
   button.textContent = label;
   return button;
 }

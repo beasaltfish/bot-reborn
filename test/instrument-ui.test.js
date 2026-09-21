@@ -194,3 +194,22 @@ test('every id the instruments reach for exists in their markup', () => {
     }
   }
 });
+
+test('nothing in the config form can submit it', () => {
+  // A bare <button> is type="submit". The recording rows moved inside #cfgForm
+  // when the fixtures joined the STT card, and Record — created in JS with no
+  // type — began reloading the page, discarding the clip and every field above
+  // it. Two guards, because they fail differently: the markup one catches a
+  // button somebody writes, the handler catches the ones nobody can see,
+  // including a stray Enter in a text field.
+  const [, source] = /** @type {[string, string, number]} */ (
+    PAGES_SRC.find(([n]) => n === 'setup.html'));
+  const form = source.slice(source.indexOf('<form id="cfgForm">'), source.indexOf('</form>'));
+  const bare = [...form.matchAll(/<button(?![^>]*\btype=)[^>]*>/g)].map((m) => m[0]);
+  assert.deepEqual(bare, [], 'a button in #cfgForm has no type, so it submits');
+
+  assert.match(read('web/setup.js'), /el\('cfgForm'\)\.addEventListener\('submit'/,
+    'setup.js no longer stops #cfgForm from submitting');
+  assert.match(read('web/setup.js'), /function rowButton[\s\S]{0,300}?button\.type = 'button'/,
+    'rowButton creates a submit button');
+});
