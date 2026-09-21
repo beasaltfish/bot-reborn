@@ -192,3 +192,30 @@ test('readPins(): throws instead of returning undefined when the transfer fails'
   dev.controlTransferIn = async () => ({ status: 'stall', data: new DataView(new ArrayBuffer(1)) });
   await assert.rejects(() => ftdi.readPins(), /stall/);
 });
+
+test('setBaudRate() reports the baud it could actually set', async () => {
+  // The divisor field saturates near 732, so a request below that is clamped —
+  // silently, until this returned it. ② compared a clamped 732-baud run against
+  // a 600-baud expectation and reported a multiplier that had not moved as one
+  // that had.
+  const dev = fakeDevice();
+  const ftdi = await Ftdi.open(fakeUsb(dev));
+  assert.equal(await ftdi.setBaudRate(1200), 1200);
+  assert.equal(await ftdi.setBaudRate(600), 732, 'the clamp is not reported');
+});
+
+test('the byte rate follows the baud that was actually set', async () => {
+  // ② measured five bytes per baud tick. A stream built after a baud change
+  // from the rate before it is the wrong length, which is the same class of bug
+  // as the ÷8 this project started with.
+  const dev = fakeDevice();
+  const ftdi = await Ftdi.open(fakeUsb(dev));
+  assert.equal(ftdi.bytesPerMs, 6, '1200 baud × 5 / 1000');
+  await ftdi.setBaudRate(2400);
+  assert.equal(ftdi.bytesPerMs, 12);
+
+  // A measurement of a real board outranks the model and is not overwritten.
+  const calibrated = await Ftdi.open(fakeUsb(fakeDevice()), { bytesPerMs: 0.42 });
+  await calibrated.setBaudRate(2400);
+  assert.equal(calibrated.bytesPerMs, 0.42);
+});

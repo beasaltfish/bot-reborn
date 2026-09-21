@@ -35,6 +35,11 @@ const PORT_A = 1;
 // stored through this permutation table. This mirrors libftdi's
 // ftdi_convert_baudrate() — the numbers below are not free parameters.
 //
+// The /5 is switched off here the way libftdi does it — and ② measured that on
+// this part the bit changes nothing either way, which is why there is no option
+// for it: a knob that provably does nothing is worse than no knob. The base is
+// 60 MHz regardless, which is where the ×5 in BYTES_PER_BAUD_TICK comes from.
+//
 // Caveat: this covers only the 12 MHz-base path. The divisor field is 14
 // integer bits plus 3 fractional ones, so the largest divisor it can hold is
 // about 16384 and the slowest baud it can express is 12 MHz / 16384 ≈ 732 —
@@ -95,25 +100,44 @@ export function encodeBaudRate(baud) {
 
 // --- Device wrapper --------------------------------------------------------
 
-/**
- * Byte rate of the pin output in async bitbang mode.
- *
- * One byte per baud tick, not one bit: in async bitbang the baud generator
- * clocks out a whole byte each period, because a byte here is a pin pattern
- * rather than a character being serialised. The old value divided by 8 and was
- * therefore ten times too slow — every duration the executor asked for came out
- * as a twitch, and nothing anywhere said so, because the chip did exactly what
- * it was told and the buffer was simply too short.
- *
- * Calibration item ② (spec §12) confirmed the 1:1 multiplier on this board:
- * 3000 bytes at 1200 baud ran for about 2 s against a theoretical 2.5 s, where
- * the ÷8 model predicted 20 s. A stopwatch over 2 s cannot do better than that,
- * so this stays the theoretical value; a measurement precise enough to beat it
- * belongs in config.calibration.bytesPerMs, which overrides this.
- */
-export const DEFAULT_BYTES_PER_MS = 1200 / 1000; // 1.2 bytes/ms at 1200 baud
-
 const DEFAULT_BAUD_RATE = 1200;
+
+/**
+ * Bytes clocked out per baud tick in async bitbang mode — FIVE, measured.
+ *
+ * A byte here is a pin pattern rather than a character being serialised, so the
+ * baud generator clocks out a whole byte each period rather than a bit; that
+ * much was already known, and is why the ÷8 this once used was ten times too
+ * slow. What was not known is that the period is not the one that was asked
+ * for. `encodeBaudRate` computes its divisor against a 12 MHz base, mirroring
+ * libftdi; this part's generator runs from 60 MHz. 60 / 12 = 5, and the pins
+ * move five times faster than every duration in this project assumed.
+ *
+ * Measured by ② on 2026-09-21, on the phone, against the chip's own pin
+ * read-back rather than a stopwatch:
+ *
+ *   1500 / 3000 / 6000 bytes @ 1200 baud → 0.25 / 0.52 / 1.00 s (the rate is a
+ *   rate: the run scales with the byte count, and the host wrote every byte)
+ *   3000 bytes @ 732 / 1200 / 2400 baud → 5.12 / 5.00 / 4.81 × the baud
+ *   ACTUALLY set (5.0 within the ±25 ms the read-back can resolve)
+ *
+ * The ÷5 prescaler bit is not the mechanism: setting it either way changes
+ * nothing on this part, which is itself a finding — libftdi switches it off and
+ * computes as if it were on.
+ *
+ * The stopwatch reading this replaces (2026-09-20, "about 2 s against a
+ * theoretical 2.5 s") was not a small error. A 0.5 s run timed by hand off a
+ * motor that keeps turning after the pins drop reads as 2 s, and it agreed with
+ * the assumption, which is why it stood for a day.
+ */
+export const BYTES_PER_BAUD_TICK = 5;
+
+/**
+ * 6.0 bytes/ms at 1200 baud. A calibration in config.calibration.bytesPerMs
+ * still overrides it — this is the theoretical value for a part that behaves
+ * like the one ② measured, not a measurement of yours.
+ */
+export const DEFAULT_BYTES_PER_MS = DEFAULT_BAUD_RATE * BYTES_PER_BAUD_TICK / 1000;
 
 export class Ftdi {
   /** @type {USBDevice | null} */
@@ -124,6 +148,9 @@ export class Ftdi {
 
   /** @type {number} */
   #bytesPerMs = DEFAULT_BYTES_PER_MS;
+
+  /** Whether #bytesPerMs came from a measurement rather than from the model. */
+  #calibrated = false;
 
   /** @type {((reason: Error) => void) | null} */
   onDisconnect = null;
@@ -145,6 +172,7 @@ export class Ftdi {
 
     ftdi.#device = device;
     ftdi.#endpoint = endpoint;
+    ftdi.#calibrated = opts.bytesPerMs !== undefined;
     ftdi.#bytesPerMs = opts.bytesPerMs ?? DEFAULT_BYTES_PER_MS;
 
     // FTDI wValue layout: high byte = mode, low byte = pin direction mask.
@@ -165,10 +193,25 @@ export class Ftdi {
   get device() { return this.#device; }
   get bytesPerMs() { return this.#bytesPerMs; }
 
-  /** @param {number} baud */
+  /**
+   * The baud the chip was ACTUALLY set to, which is not always the one asked
+   * for: the divisor field saturates near 732 baud, and below that the request
+   * is silently clamped. It used to be computed and dropped on the floor, which
+   * is how ② came to compare a 732-baud run against a 600-baud expectation and
+   * report a multiplier that had not moved as one that had.
+   *
+   * @param {number} baud
+   * @returns {Promise<number>} the baud actually set
+   */
   async setBaudRate(baud) {
-    const { value, index } = encodeBaudRate(baud);
+    const { value, index, actualBaud } = encodeBaudRate(baud);
     await this.#control(SIO_SET_BAUDRATE_REQUEST, value, index);
+    // A baud change moves the byte rate with it, so a stream built afterwards
+    // from the old rate would be the wrong length. Not applied over a
+    // calibration the caller supplied: that is a measurement of this board, and
+    // it outranks the model.
+    if (!this.#calibrated) this.#bytesPerMs = actualBaud * BYTES_PER_BAUD_TICK / 1000;
+    return actualBaud;
   }
 
   /**
@@ -190,13 +233,21 @@ export class Ftdi {
     return stream;
   }
 
-  /** @param {Uint8Array<ArrayBuffer>} bytes */
+  /** @param {Uint8Array<ArrayBuffer>} bytes
+   *  @returns {Promise<number>} what the host says it actually wrote */
   async write(bytes) {
     const device = this.#requireDevice();
     const result = await device.transferOut(this.#endpoint, bytes);
     if (result.status !== 'ok') {
       throw new Error(`bulk write returned status "${result.status}"`);
     }
+    // Returned rather than checked here. A short write is a real fault — the
+    // stop byte is the LAST byte, so a truncated stream is a car that never
+    // stops — but ② has to be able to report the count rather than have it
+    // thrown at it: "the chip is five times faster than assumed" and "only a
+    // fifth of the bytes arrived" produce the same short run, and the count is
+    // what separates them.
+    return result.bytesWritten;
   }
 
   /** Drop whatever the chip has queued but not yet clocked out (spec §4.4). */

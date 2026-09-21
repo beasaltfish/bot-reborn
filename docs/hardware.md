@@ -76,10 +76,11 @@ yet**; do not treat a blank row as "fine".
 | # | What | Measured | Feeds |
 |---|---|---|---|
 | ① | Which steer byte is left: `0x40` or `0x80` | | `STEER_BITS` in `web/executor.js` |
-| ② | Bitbang byte rate at 1200 baud (target 2–5 ms/byte), and the car's speed in m/s | **1:1 — one byte per baud tick.** 3000 bytes ran ≈ 2 s against a theoretical 2.5 s (2026-09-20, stopwatch). Road speed not measured yet. See the note below | `DEFAULT_BYTES_PER_MS` in `web/ftdi.js`; cross-checks `MAX_COAST_MS ≈ 1.5 m` |
+| ② | Bitbang byte rate at 1200 baud | **5:1 — five bytes per baud tick, 6000 bytes/s at 1200 baud** (2026-09-21, timed off the chip's own pin read-back over three byte counts and three bauds). The 1:1 that stood before it was a stopwatch on a 0.5 s run. See the note below | `DEFAULT_BYTES_PER_MS` in `web/ftdi.js`, now 6.0 |
+| ②b | Road speed in m/s, to check spec §4.3's `MAX_COAST_MS ≈ 1.5 m` | Not measured, and no longer measured by ② — see docs/instruments.md § ② | Wants its own procedure: a measured distance on the floor, crossed at speed |
 | ③ | Pull-down resistors on U3/U5 inputs? (power off, measure input-to-GND: tens of kΩ = yes, open = no) | | Spec §4.7's gap. No pull-downs → solder 2 × 10 kΩ to GND, or layer 0 does not hold when USB is unplugged |
 | ④ | Board VCC and U3 logic threshold (5 V logic needs ≥ 0.7 × VCC = 3.5 V; the FT232H drives 3.3 V) | | Whether a level shifter is needed at all |
-| ⑧ | Shortest pulse that reliably starts the motor (from 100 ms, +50 ms, 10 tries each) | | `MIN_DURATION_MS` in `web/executor.js` |
+| ⑧ | Shortest pulse that reliably starts the motor (from 100 ms, +50 ms, 10 tries each) | **Not measured.** Every pulse ⑧ fired before 2026-09-21 was a fifth of its label, because ② was wrong by 5×, so there is nothing to carry over. The card now keeps the tally and names the answer | `MIN_DURATION_MS` in `web/executor.js`, a guess of 300 until this is run |
 
 ## ② the byte rate, and why its target band is stale (measured 2026-09-20)
 
@@ -94,9 +95,34 @@ trailing `0x00` landed early. A 600 ms calibration turn came out as a twitch
 too short to tell left from right, and nothing reported a fault, because there
 was none — the buffer was simply the wrong length.
 
-The measurement: 3000 bytes at 1200 baud, stopwatch on the motor. The ÷8 model
-predicts 20 s, the 1:1 model 2.5 s, and it ran about 2 s. A stopwatch cannot
-separate 2.0 from 2.5, but it settles 1:1 against ÷8 beyond any doubt.
+The first measurement (2026-09-20): 3000 bytes at 1200 baud, stopwatch on the
+motor. The ÷8 model predicts 20 s, the 1:1 model 2.5 s, and it ran "about 2 s".
+That settled ÷8, and it was wrong about everything else.
+
+**The rate is 5 bytes per baud tick, not 1 (measured 2026-09-21).** ② now times
+the run off the chip's own pin read-back, ±25 ms, instead of off a hand:
+
+| | |
+|---|---|
+| 1500 / 3000 / 6000 bytes @ 1200 baud | 0.25 / 0.52 / 1.00 s — the run scales with the byte count, and the host reported writing every byte, so it is a rate rather than a truncated write |
+| 3000 bytes @ 732 / 1200 / 2400 baud actually set | 5.12 / 5.00 / 4.81 × the baud — one constant across a 3.3× range |
+| ÷5 prescaler bit, both ways | no effect on this part, which is itself a finding: libftdi switches it off and computes the divisor as if it were on |
+
+`encodeBaudRate` computes its divisor against a 12 MHz base, mirroring libftdi.
+This part's generator runs from 60 MHz. 60 / 12 = 5.
+
+Why the stopwatch missed it by 5×: the real run is 0.5 s. Hand-timing a 0.5 s
+event is mostly reaction time, the motor keeps turning after the pins drop, and
+the answer it gave agreed with what the code already assumed — so nobody looked
+again. The lesson is in the instrument, not in the person: ② now logs the whole
+pin trace and the byte count the host claims to have written, so a reading can
+be argued with.
+
+Consequence for the product: **every duration was coming out five times short.**
+`buildStream(0x10, 600)` sized 720 bytes for a chip that plays 6000 a second —
+120 ms of driving where 600 ms was asked for. `DEFAULT_BYTES_PER_MS` is now 6.0,
+and ⑧ (the motor's starting threshold) has to be re-run: every pulse it tested
+was a fifth of its label.
 
 **The 2–5 ms/byte target in spec §12 ② is not reachable and no longer wanted.**
 It came from wanting one `MAX_COAST_MS` slice to be a few hundred bytes — too
@@ -108,9 +134,13 @@ fractional, so the largest divisor is about 16384 and the slowest baud on the
 prescaler on for a 2.4 MHz base (down to ≈ 146 baud), which is a second clock
 path this project does not implement.
 
-It does not need to. At 1200 baud the slice is 0.83 ms/byte and 1200 bytes:
-fine resolution, and 1.2 KB per write is nothing. Both of the band's motives
-are satisfied by the rate we already have.
+It does not need to. At 1200 baud the real rate is 0.167 ms/byte, so a
+`MAX_COAST_MS` slice is 6000 bytes: finer resolution than the band ever asked
+for, and 6 KB per write is still nothing. Both of the band's motives are
+satisfied by the rate we already have.
+
+Note the floor this implies: the slowest byte rate this code can reach is the
+732-baud clamp × 5 ≈ 3660 bytes/s. Asking for less does not get less.
 
 ## USB driver
 
