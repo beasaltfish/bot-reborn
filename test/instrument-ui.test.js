@@ -174,7 +174,7 @@ test('every id the instruments reach for exists in their markup', () => {
   // `$('x')` in a page's own modules has to name something in that page.
   const SOURCES = /** @type {[string, string[]][]} */ ([
     ['web/setup.html', ['web/setup.js']],
-    ['web/bench.html', ['web/bench.js']],
+    ['web/bench.html', ['web/panels/pins.js']],
     ['web/audio-bench.html', [
       'web/audio-bench/main.js', 'web/audio-bench/knobs.js',
       'web/audio-bench/residency.js', 'web/audio-bench/acoustics.js',
@@ -224,4 +224,20 @@ test('the USB test sends what the product sends, not a number of its own', () =>
   assert.match(js, /import \{[^}]*\bMIN_DURATION_MS\b[^}]*\} from '\.\/executor\.js'/);
   assert.ok(!/buildStream\(0x10,\s*\d/.test(js),
     'testUsb hard-codes a pulse length; use MIN_DURATION_MS');
+});
+
+test('the pins panel registers every control it used to', () => {
+  // bench.js attached eleven listeners at the top level of a module. Turning
+  // that into a factory is where a button silently stops responding: it throws
+  // nothing, it just does nothing, and no other test would notice.
+  const js = read('web/panels/pins.js');
+  for (const id of ['connectBtn', 'stopBtn', 'byteRateBtn', 'computeBtn',
+                    'scanAllBtn', 'readPinsBtn', 'listGrantedBtn', 'copyLogBtn']) {
+    assert.match(js, new RegExp(`'${id}'`), `pins.js no longer touches #${id}`);
+  }
+  for (const attr of ['data-pins', 'data-pulse']) {
+    assert.match(js, new RegExp(attr), `pins.js no longer wires [${attr}]`);
+  }
+  // And the listeners are inside start(), not at module scope.
+  assert.ok(!/^el\(/m.test(js), 'pins.js still attaches listeners at module scope');
 });

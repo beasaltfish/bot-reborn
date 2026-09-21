@@ -102,6 +102,12 @@
     </div>
   </section>
 </main>
-<script type="module" src="bench.js"></script>
+<script type="module">
+  // Temporary while the three instruments merge into dev.html — see
+  // web/panels/legacy-shim.js.
+  import { createPins } from './panels/pins.js';
+  import { bootLegacy } from './panels/legacy-shim.js';
+  bootLegacy(createPins(), ['usb']);
+</script>
 </body>
 </html>
