@@ -146,6 +146,12 @@
     </div>
   </section>
 </main>
-<script type="module" src="setup.js"></script>
+<script type="module">
+  // Temporary while the three instruments merge into dev.html — see
+  // web/panels/legacy-shim.js.
+  import { createConnectivity } from './panels/connectivity.js';
+  import { bootLegacy } from './panels/legacy-shim.js';
+  bootLegacy(createConnectivity(), ['usb', 'mic', 'config']);
+</script>
 </body>
 </html>

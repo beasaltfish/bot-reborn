@@ -173,7 +173,7 @@ test('every id the instruments reach for exists in their markup', () => {
   // Derived rather than listed, so it cannot go stale: every `el('x')` and
   // `$('x')` in a page's own modules has to name something in that page.
   const SOURCES = /** @type {[string, string[]][]} */ ([
-    ['web/setup.html', ['web/setup.js']],
+    ['web/setup.html', ['web/panels/connectivity.js']],
     ['web/bench.html', ['web/panels/pins.js']],
     ['web/audio-bench.html', [
       'web/audio-bench/main.js', 'web/audio-bench/knobs.js',
@@ -208,9 +208,9 @@ test('nothing in the config form can submit it', () => {
   const bare = [...form.matchAll(/<button(?![^>]*\btype=)[^>]*>/g)].map((m) => m[0]);
   assert.deepEqual(bare, [], 'a button in #cfgForm has no type, so it submits');
 
-  assert.match(read('web/setup.js'), /el\('cfgForm'\)\.addEventListener\('submit'/,
+  assert.match(read('web/panels/connectivity.js'), /el\('cfgForm'\)\.addEventListener\('submit'/,
     'setup.js no longer stops #cfgForm from submitting');
-  assert.match(read('web/setup.js'), /function rowButton[\s\S]{0,300}?button\.type = 'button'/,
+  assert.match(read('web/panels/connectivity.js'), /function rowButton[\s\S]{0,300}?button\.type = 'button'/,
     'rowButton creates a submit button');
 });
 
@@ -220,8 +220,8 @@ test('the USB test sends what the product sends, not a number of its own', () =>
   // fail for a reason which is not connectivity sends you to the solder joints
   // for nothing — and when ⑧ finally measures the motor's threshold, a literal
   // here would be a second place somebody has to remember.
-  const js = read('web/setup.js');
-  assert.match(js, /import \{[^}]*\bMIN_DURATION_MS\b[^}]*\} from '\.\/executor\.js'/);
+  const js = read('web/panels/connectivity.js');
+  assert.match(js, /import \{[^}]*\bMIN_DURATION_MS\b[^}]*\} from '[^']*executor\.js'/);
   assert.ok(!/buildStream\(0x10,\s*\d/.test(js),
     'testUsb hard-codes a pulse length; use MIN_DURATION_MS');
 });
@@ -240,4 +240,20 @@ test('the pins panel registers every control it used to', () => {
   }
   // And the listeners are inside start(), not at module scope.
   assert.ok(!/^el\(/m.test(js), 'pins.js still attaches listeners at module scope');
+});
+
+test('the connectivity panel registers every control it used to', () => {
+  // setup.js ran eight listeners and four builders at module scope. The order
+  // is load-bearing — the fixture rows must exist before anything refreshes
+  // them — so start() calls named functions in the order they used to run, and
+  // this pins that none of them was dropped on the way.
+  const js = read('web/panels/connectivity.js');
+  for (const id of ['cfgForm', 'connectBtn', 'textForm', 'stopBtn', 'turnLog']) {
+    assert.match(js, new RegExp(`'${id}'`), `connectivity.js no longer touches #${id}`);
+  }
+  for (const attr of ['data-save', 'data-test']) {
+    assert.match(js, new RegExp(attr), `connectivity.js no longer wires [${attr}]`);
+  }
+  assert.match(js, /STT_FIXTURES/, 'the fixture rows are no longer built');
+  assert.ok(!/^el\(/m.test(js), 'connectivity.js still attaches listeners at module scope');
 });

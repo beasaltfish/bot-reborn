@@ -13,7 +13,7 @@ const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hang
 // not here: it is translated, and strings.js's zh table IS the locale.
 const INSTRUMENTS = [
   'web/bench.html', 'web/panels/pins.js',
-  'web/setup.html', 'web/setup.js',
+  'web/setup.html', 'web/panels/connectivity.js',
   'web/audio-bench.html',
   'web/audio-bench/acoustics.js', 'web/audio-bench/knobs.js',
   'web/audio-bench/main.js', 'web/audio-bench/providers.js',
