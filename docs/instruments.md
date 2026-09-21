@@ -292,11 +292,36 @@ saved — fill it in, listen, change it, listen again.
 
 ---
 
-## What the pages themselves keep
+## How the pages are put together
+
+Three rules, the same on all three pages.
+
+**A card is a group, and its order is the navigation.** Header, then what you
+do, then what came back — never reordered, in any of the eighteen cards. Looking
+for a number you go to the bottom of a card; looking for a button you go to the
+middle. `<hr>` used to do this job and all it could say was "the thing above
+ended". `test/instrument-ui.test.js` holds the order.
+
+**Red belongs to the emergency stop, and to nothing else.** `docs/ui.md` fixes
+four meanings — red for the stop, green for ready or working, amber for your
+turn, dim for not yet — and the instruments use the same four. The button that
+must be found instantly stops being findable the moment it is one of several red
+things. `bench.html` and `setup.html` each have a real stop; `audio-bench.html`
+grows one **only while the car is moving**: the moment you start the motor, the
+middle of the bottom bar becomes `■ STOP THE CAR` and the Start/Stop pair goes
+away. Before that existed, `cruise()` renewed itself forever and the only way to
+stop the car was to scroll back to the button that started it.
+
+**The strip at the top says what is on.** Microphone, USB, keep-alive, motor,
+which panel is running — every one of those facts was already known somewhere in
+the code and none of it was ever shown in one place. It is also the only route
+between these three pages; there was none before.
+
+### What the pages keep, and what they hand here
 
 A page says what to press. This file says why it is that.
 
-The test that keeps it that way is in `test/markup.test.js`: `audio-bench.html`
-is held under 400 words of visible prose, `setup.html` under 300 and
-`bench.html` under 250. Raising a number there is a decision, not a fix — the
-page is read by somebody standing in a quiet room holding nothing but the phone.
+`test/markup.test.js` holds the line: `audio-bench.html` under 400 words of
+prose, `setup.html` under 220, `bench.html` under 140. Raising a number is a
+decision, not a fix — the page is read by somebody standing in a quiet room
+holding nothing but the phone.
