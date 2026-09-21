@@ -87,6 +87,24 @@ test('a card is a header, then what you do, then what came back', () => {
 });
 
 
+test('every "Status:" line for the cable is written where the cable is opened', () => {
+  // One page opens one FT232H, and two panels still show a line for it —
+  // each wrote its own while each was its own page. What this caught: connect()
+  // wrote the connectivity test's line only, so the pin bench, which is the tab
+  // you are on when you first plug a freshly soldered board in, went on reading
+  // "not connected" with the cable open.
+  const dev = read('web/dev.html');
+  const shown = [...dev.matchAll(/id="([^"]+)"[^>]*>\s*Status:/g)].map((m) => m[1]);
+  const written = (read('web/dev.js')
+    .match(/for \(const id of \[([^\]]+)\]\) setStat\(id, `Status: /) ?? [])[1];
+  assert.ok(written, 'dev.js no longer has one place that writes the cable status');
+  assert.deepEqual(
+    shown.sort(),
+    [...written.matchAll(/'([^']+)'/g)].map((m) => m[1]).sort(),
+    'a "Status:" line on dev.html is not written when the cable opens',
+  );
+});
+
 test('every instrument page mounts the strip', () => {
   for (const [name, source] of PAGES_SRC) {
     assert.match(source, /id="instrumentStatus"/, `${name} does not mount the status strip`);
@@ -95,10 +113,9 @@ test('every instrument page mounts the strip', () => {
 
 test('red is the emergency stop and nothing else', () => {
   // docs/ui.md: the button that must be found instantly stops being findable
-  // the moment it is one of several red things. Two of these pages have a real
-  // emergency stop; the third makes the car circle with no stop at all, which
-  // is what #benchbarStop is for.
-  // One page, one stop. It used to be three, one per page.
+  // the moment it is one of several red things.
+  // One page, one stop. It used to be three, one per page — and the audio one
+  // had a second stop of its own in the bar, for the car it set circling.
   const allowed = /** @type {Record<string, string[]>} */ ({ 'dev.html': ['stopBtn'] });
   for (const [name, source] of PAGES_SRC) {
     const reds = [...source.matchAll(/<button[^>]*\bdanger\b[^>]*>/g)]

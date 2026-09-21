@@ -125,6 +125,10 @@ function mirror(owner) {
 
 const knobs = createKnobs({
   log,
+  // The one cable, read on each click rather than captured: `executor` below is
+  // null until Connect and null again on unplug.
+  executor: () => executor,
+  onRunning: (on) => armStop(on),
   onOwner: (owner) => {
     // Switching away from a running panel would hide the thing that is running
     // and take its readings off the bar with it. Stop it first.
@@ -145,8 +149,21 @@ const knobs = createKnobs({
 /** @type {Executor | null} */ let executor = null;
 
 /**
- * One cable, one handle. Two buttons reach it — the pin bench keeps one of its
- * own because wiring up a freshly soldered board is the thing you do before
+ * Both "Status:" lines the page still carries for the one cable. The pin bench
+ * and the connectivity test each wrote their own while they were two pages;
+ * the connection is now made in one place, so it is reported from one place —
+ * writing only one of them is what left a connected cable reading "not
+ * connected" on whichever tab you happened to be looking at.
+ *
+ * @param {string} text
+ */
+function cableStatus(text) {
+  for (const id of ['status', 'usbStatus']) setStat(id, `Status: ${text}`);
+}
+
+/**
+ * One cable, one handle. Three buttons reach it — each group keeps its own
+ * because wiring up a freshly soldered board is the thing you do before
  * anything else, and making that start in another group would be a detour on
  * the most common path.
  */
@@ -154,6 +171,7 @@ async function connect() {
   if (ftdi) { log('already connected'); return; }
   if (!navigator.usb) {
     status.set('usb', 'wait', 'no WebUSB (needs Chrome / Edge)');
+    cableStatus('this browser has no WebUSB (needs Chrome / Edge)');
     return;
   }
   try {
@@ -166,17 +184,23 @@ async function connect() {
       ftdi = null;
       executor = null;
       status.set('usb', 'dim', 'USB disconnected');
+      cableStatus('disconnected');
+      // The car is unplugged, so it is no longer circling — and the toggle that
+      // set it going still says "■ Stop the car" until somebody says otherwise.
+      knobs.stopMotor();
+      setDisabled('motorToggle', true);
       log('!! ' + err.message);
     };
     executor = new Executor(ftdi, {
       onError: (err) => { status.set('usb', 'wait', '!! ' + err.message); log('executor: ' + err.message); },
     });
     status.set('usb', 'go', 'USB connected');
-    setStat('usbStatus', 'Status: connected');
+    cableStatus('connected');
     setDisabled('motorToggle', false);
     log('▶︎ FT232H connected');
   } catch (err) {
     status.set('usb', 'wait', 'USB connect failed');
+    cableStatus(/** @type {Error} */ (err).message);
     log('❌ ' + /** @type {Error} */ (err).message);
   }
 }
@@ -207,6 +231,9 @@ $('stopBtn').addEventListener('click', async () => {
   // did the second would still have twenty seconds of bytes behind it.
   try { await ftdi?.purgeTx(); } catch { /* the pins still have to go low */ }
   executor?.stop();
+  // The motor toggle started it and still says "■ Stop the car"; a stop the
+  // toggle does not know about would leave the car's own button lying.
+  knobs.stopMotor();
   armStop(false);
   log('■ emergency stop');
 });
@@ -332,7 +359,7 @@ $('start').addEventListener('click', async () => {
     const ctx = {
       pipeline, sherpa, keywords, config, log,
       status: (id, state, label) => status.set(id, state, label),
-      exclusion: knobs.exclusion, knobs,
+      exclusion: knobs.exclusion,
       get ftdi() { return ftdi; },
       get executor() { return executor; },
       armStop,
@@ -398,7 +425,7 @@ for (const panel of PASSIVE_PANELS) {
   panel.start(/** @type {DevContext} */ ({
     pipeline: null, sherpa: null, keywords: '', config, log,
     status: (id, state, label) => status.set(id, state, label),
-    exclusion: knobs.exclusion, knobs,
+    exclusion: knobs.exclusion,
     get ftdi() { return ftdi; },
     get executor() { return executor; },
     armStop,

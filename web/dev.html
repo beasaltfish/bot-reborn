@@ -238,55 +238,6 @@
   </section>
   </section>
 
-  <!-- Shared by the four audio panels and shown with any of them: the
-       microphone constraints are read once at Start, and the two cross-cutting
-       knobs stay on across whichever panel runs (audio bench spec 3.1). -->
-  <div id="audioCommon" hidden>
-  <section class="card">
-    <header><h2>Microphone</h2><span class="dot"></span></header>
-    <p class="hint">
-      The checkboxes are read once, at Start; the button changes the live track
-      and reports how many 100 ms frames went missing doing it — <b>gap 0</b>
-      means the switch is free. echoCancellation locks while anything runs:
-      stop, change it, start again.
-      <a href="../docs/instruments.md#echocancellation-and-why-it-locks-at-start">why</a>
-    </p>
-    <div class="card-do">
-      <label><input id="aec" type="checkbox" checked> echoCancellation</label>
-      <label><input id="ns" type="checkbox" checked> noiseSuppression</label>
-      <div class="controls">
-        <button id="nsToggle">Flip noiseSuppression on the live track</button>
-      </div>
-    </div>
-    <div class="card-read">
-      <p id="boot">Loading the model…</p>
-      <p id="cfgWarn" class="result error"></p>
-    </div>
-  </section>
-
-  <section class="card">
-    <header><h2>Cross-cutting</h2><span class="dot"></span></header>
-    <p class="hint">
-      Set these <b>after</b> Start; they stay on across whichever panel runs.
-      ⑫ compares the middle keep-alive option against the last.
-      <a href="../docs/instruments.md#why-the-two-cross-cutting-knobs-are-not-a-panel">why they are not a panel</a>
-    </p>
-    <div class="card-do">
-      <label>Keep-alive tone
-        <select id="kaMode">
-          <option value="off" selected>off</option>
-          <option value="hidden">only while the screen is off (what ships)</option>
-          <option value="always">always (⑫'s control arm)</option>
-        </select>
-      </label>
-      <div class="controls">
-        <button id="usbConnect">Connect the FT232H</button>
-        <button id="motorToggle" disabled>Make the car circle (noise for ⑦)</button>
-      </div>
-    </div>
-  </section>
-  </div>
-
   <section id="panel-residency">
    <section class="card">
     <header><h2>Residency — ⑤ ⑫ ⑭ ⑮</h2><span class="dot"></span></header>
@@ -502,6 +453,61 @@
     </div>
    </section>
   </section>
+
+  <!-- Shared by the four audio panels and shown with any of them: the
+       microphone constraints are read once at Start, and the two cross-cutting
+       knobs stay on across whichever panel runs (audio bench spec 3.1).
+
+       AFTER the four, not before them. It used to sit above the group, and
+       since it is the same two cards for all four, switching between Res, Acou,
+       Recog and Prov changed nothing on the screen a phone can show — the panel
+       you actually picked was below the fold, and the page read as a dead
+       tab bar. -->
+  <div id="audioCommon" hidden>
+  <section class="card">
+    <header><h2>Microphone</h2><span class="dot"></span></header>
+    <p class="hint">
+      The checkboxes are read once, at Start; the button changes the live track
+      and reports how many 100 ms frames went missing doing it — <b>gap 0</b>
+      means the switch is free. echoCancellation locks while anything runs:
+      stop, change it, start again.
+      <a href="../docs/instruments.md#echocancellation-and-why-it-locks-at-start">why</a>
+    </p>
+    <div class="card-do">
+      <label><input id="aec" type="checkbox" checked> echoCancellation</label>
+      <label><input id="ns" type="checkbox" checked> noiseSuppression</label>
+      <div class="controls">
+        <button id="nsToggle">Flip noiseSuppression on the live track</button>
+      </div>
+    </div>
+    <div class="card-read">
+      <p id="boot">Loading the model…</p>
+      <p id="cfgWarn" class="result error"></p>
+    </div>
+  </section>
+
+  <section class="card">
+    <header><h2>Cross-cutting</h2><span class="dot"></span></header>
+    <p class="hint">
+      Set these <b>after</b> Start; they stay on across whichever panel runs.
+      ⑫ compares the middle keep-alive option against the last.
+      <a href="../docs/instruments.md#why-the-two-cross-cutting-knobs-are-not-a-panel">why they are not a panel</a>
+    </p>
+    <div class="card-do">
+      <label>Keep-alive tone
+        <select id="kaMode">
+          <option value="off" selected>off</option>
+          <option value="hidden">only while the screen is off (what ships)</option>
+          <option value="always">always (⑫'s control arm)</option>
+        </select>
+      </label>
+      <div class="controls">
+        <button id="usbConnect">Connect the FT232H</button>
+        <button id="motorToggle" disabled>Make the car circle (noise for ⑦)</button>
+      </div>
+    </div>
+  </section>
+  </div>
 
   <!-- The page log, and the bar. Neither is in a card: the log belongs to the
        whole page rather than to any one measurement, and the bar is fixed. -->

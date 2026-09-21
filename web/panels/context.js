@@ -22,7 +22,6 @@
  *   exclusion: ReturnType<typeof import('./knobs.js').createExclusion>,
  *   ftdi: import('../ftdi.js').Ftdi | null,
  *   executor: import('../executor.js').Executor | null,
- *   knobs: { readonly executor: import('../executor.js').Executor | null },
  *   armStop: (on: boolean) => void,
  * }} DevContext
  *

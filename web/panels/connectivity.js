@@ -217,17 +217,12 @@ export function createConnectivity() {
     fillSuggestions();
   }
 
-  // --- USB connect ------------------------------------------------------------
+  // --- The cable ---------------------------------------------------------------
   //
-  // WebUSB's requestDevice() needs a user gesture, so this cannot happen on
-  // page load — a dedicated button, then the Ftdi/Executor pair is reused by
-  // both the USB connectivity test and the typed-drive section below.
-
-
-  /** @param {string} text */
-  function setUsbStatus(text) {
-    el('usbStatus').textContent = `Status: ${text}`;
-  }
+  // Opened by the entry file and handed here on ctx: requestDevice() needs a
+  // user gesture, and one page may hold only one handle. This panel reads the
+  // handle and reports its own verdicts; #usbStatus says what the cable is
+  // doing, and that is written where the connection is made.
 
   /** @returns {import('../ftdi.js').Ftdi} */
   function requireFtdi() {

@@ -7,9 +7,6 @@
 // "this page only plays the sound; it does not do the keeping-alive".
 
 import { createKeepAlive } from '../audio/keepalive.js';
-import { Ftdi } from '../ftdi.js';
-import { Executor } from '../executor.js';
-import { setStat, setDisabled } from './readout.js';
 
 /** @typedef {'off' | 'hidden' | 'always'} KeepAliveMode */
 
@@ -66,11 +63,16 @@ const $ = (/** @type {string} */ id) =>
 
 /**
  * `onStatus` has the same shape as the strip's own `set`, and for the same
- * reason `onOwner` exists: this module owns the keep-alive and the motor, but
- * it must not reach for the page's strip. The entry file owns that wiring.
+ * reason `onOwner` and `onRunning` exist: this module owns the keep-alive and
+ * the motor, but it must not reach for the page's strip, its cable or its stop
+ * button. The entry file owns all three, and hands the cable back through
+ * `executor` — read on each click, because the page may connect and disconnect
+ * under it.
  *
  * @param {{
  *   log: (msg: string) => void,
+ *   executor?: () => import('../executor.js').Executor | null,
+ *   onRunning?: (on: boolean) => void,
  *   onOwner?: (owner: string | null) => void,
  *   onStatus?: (id: string, state: 'go' | 'wait' | 'dim', label: string) => void,
  * }} opts
@@ -105,63 +107,37 @@ export function createKnobs(opts) {
   });
 
   // --- motor noise (⑦) ----------------------------------------------------
-  /** @type {Executor | null} */ let executor = null;
+  //
+  // The cable belongs to the page, not to this module. This used to open its
+  // own — harmless while this file was the audio page's alone, a second
+  // claimInterface(0) on the same device the moment the three pages became one,
+  // because the entry file wires the same button to the one connect() it owns.
+  const executor = opts.executor ?? (() => null);
+  const onRunning = opts.onRunning ?? (() => {});
   let circling = false;
 
-  $('usbConnect').addEventListener('click', async () => {
-    if (!navigator.usb) {
-      setStat('usbStatus', 'USB: this browser has no WebUSB (needs Chrome / Edge)');
-      return;
-    }
-    try {
-      const ftdi = await Ftdi.open(navigator.usb);
-      // Executor's constructor wires ftdi.onDisconnect itself (§4.6) — setting
-      // it here as well would just overwrite Executor's own handler.
-      executor = new Executor(ftdi, {
-        onError: (err) => {
-          setStat('usbStatus', `USB: !! ${err.message}`);
-          log('executor: ' + err.message);
-        },
-      });
-      setStat('usbStatus', 'USB: connected');
-      status('usb', 'go', 'USB connected');
-      setDisabled('motorToggle', false);
-      log('USB connected');
-    } catch (err) {
-      setStat('usbStatus', 'USB: ' + /** @type {Error} */ (err).message);
-      status('usb', 'wait', 'USB connect failed');
-    }
-  });
-
   /**
-   * While the car is circling, the bar's middle slot IS the stop. The motor
-   * toggle that started it is somewhere up the page, and cruise() renews itself
-   * and never resolves — so before this, chasing the car meant scrolling.
-   *
-   * @param {boolean} on
+   * Also the page's one stop button: cruise() renews itself and never resolves,
+   * and the toggle that started it is somewhere up the page, so the thing that
+   * stops the car has to be the one that is always in reach.
    */
-  function showStop(on) {
-    $('benchbarStop').hidden = !on;
-    for (const b of ['start', 'stop']) $(b).hidden = on;
-  }
-
-  $('benchbarStop').addEventListener('click', () => {
-    executor?.stop();
+  function stopMotor() {
+    // A no-op unless this module is the one that set the car going: the page's
+    // stop button calls it on every press, and it already stopped the cable
+    // itself before asking.
+    if (!circling) return;
+    executor()?.stop();
     circling = false;
     $('motorToggle').textContent = 'Make the car circle (noise for ⑦)';
     status('motor', 'dim', 'motor off');
-    showStop(false);
-    log('■ motor stopped from the bar');
-  });
+    onRunning(false);
+  }
 
   $('motorToggle').addEventListener('click', () => {
-    if (!executor) return;
+    const exec = executor();
+    if (!exec) { log('connect the FT232H first'); return; }
     if (circling) {
-      executor.stop();
-      circling = false;
-      $('motorToggle').textContent = 'Make the car circle (noise for ⑦)';
-      status('motor', 'dim', 'motor off');
-      showStop(false);
+      stopMotor();
       log('■ motor stopped');
       return;
     }
@@ -169,16 +145,13 @@ export function createKnobs(opts) {
     // making their noise for a minute at a time, next to the phone, without the
     // car leaving the table. cruise() renews itself and never resolves, so it
     // is deliberately not awaited.
-    executor.cruise('forward', 'left');
+    exec.cruise('forward', 'left');
     circling = true;
     $('motorToggle').textContent = '■ Stop the car';
     status('motor', 'go', 'motor running');
-    showStop(true);
+    onRunning(true);
     log('▶︎ motor circling — this is the noise floor ⑦ is measured against');
   });
 
-  return {
-    exclusion,
-    get executor() { return executor; },
-  };
+  return { exclusion, stopMotor };
 }

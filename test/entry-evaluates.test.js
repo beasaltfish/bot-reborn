@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 // Does the entry file survive its own evaluation?
 //
@@ -8,15 +9,19 @@ import assert from 'node:assert/strict';
 // module that throws simply stops. Every listener after the throw is never
 // attached, and the page looks completely normal and does nothing at all.
 //
-// It happened on 2026-09-21: showPanel() read a `const` declared two hundred
-// lines below it and ran during evaluation, which is a temporal dead zone. The
-// tabs stopped responding; the markup tests stayed green, because the markup
-// was right.
+// It happened twice on 2026-09-21. First showPanel() read a `const` declared
+// two hundred lines below it and ran during evaluation, which is a temporal
+// dead zone. Then knobs.js kept listening on #benchbarStop, an id the page
+// merge had retired, and getElementById handed it null. Both times the tabs
+// stopped responding and the markup tests stayed green, because the markup was
+// right.
 //
-// The stub is deliberately dumb. It is not a DOM and does not pretend to be
-// one — it answers every call with something shaped enough to keep going, so
-// that what surfaces is an error in OUR order of operations rather than a
-// missing browser feature.
+// The stub is deliberately dumb everywhere EXCEPT the ids: it is not a DOM and
+// does not pretend to be one, so that what surfaces is an error in OUR order of
+// operations rather than a missing browser feature. But getElementById answers
+// from dev.html's real ids and returns null for the rest — a retired id is not
+// a browser feature, it is the page and the code disagreeing, which is exactly
+// what this test is for.
 
 /** @returns {any} */
 const stub = () => ({
@@ -29,11 +34,17 @@ const stub = () => ({
   firstElementChild: null, previousElementSibling: null,
 });
 
+/** Every id dev.html actually carries. */
+const IDS = new Set(
+  [...readFileSync(new URL('../web/dev.html', import.meta.url), 'utf8')
+    .matchAll(/id="([^"]+)"/g)].map((m) => m[1]),
+);
+
 test('web/dev.js evaluates without throwing', async () => {
   const g = /** @type {any} */ (globalThis);
   g.window = g;
   g.document = {
-    getElementById: () => stub(),
+    getElementById: (/** @type {string} */ id) => (IDS.has(id) ? stub() : null),
     querySelector: () => stub(),
     querySelectorAll: () => [stub()],
     createElement: () => stub(),

@@ -75,7 +75,7 @@ export function createProviders() {
 
   function runLoop() {
     if (!ctx || session) return;
-    const executor = ctx.knobs.executor;
+    const executor = ctx.executor;
     if (!executor) { logTurn('!! connect the FT232H above first'); return; }
     if (!ctx.config.llm.baseURL) { logTurn('!! no LLM configured — see dev.html'); return; }
     if (!ctx.exclusion.claim(NAME)) {

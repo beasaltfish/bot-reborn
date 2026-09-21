@@ -100,6 +100,19 @@ test('the developer page fits on a phone rather than reading like a paper', () =
     `dev.html carries ${words} words of prose; the why belongs in docs/instruments.md`);
 });
 
+test('the panel you picked comes before the cards every panel shares', () => {
+  // #audioCommon is the same two cards for all four audio panels. Above the
+  // group, it made switching between them change nothing a phone can show: the
+  // chosen panel was below the fold, and the tabs read as dead.
+  const shared = dev.indexOf('<div id="audioCommon"');
+  const panels = [...dev.matchAll(/<section id="panel-([a-z]+)"/g)];
+  assert.ok(shared > 0, 'dev.html no longer has the shared audio cards');
+  for (const m of panels) {
+    assert.ok(m.index < shared,
+      `#panel-${m[1]} sits after the cards every audio panel shares`);
+  }
+});
+
 test('there is one tab per panel and no tab without one', () => {
   // A panel with no tab is a panel nobody can reach; a tab naming no panel
   // blanks the page. It was a <select> until 2026-09-21 — three actions per
