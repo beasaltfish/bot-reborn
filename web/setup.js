@@ -437,7 +437,12 @@ for (const fixture of STT_FIXTURES) {
   say.className = 'say';
   // Not a label but the material: lang="" keeps a browser from picking a font
   // per the page's lang="en" and rendering the Chinese in it.
-  say.lang = fixture.path === 'fixtures/en.wav' ? 'en' : 'zh';
+  //
+  // Derived from the text rather than the filename. It used to test
+  // `path === 'fixtures/en.wav'`, which is a path only the Chinese arm has —
+  // so once the English arm arrived (en-short / en-long / en-numbers) all three
+  // of its lines were being marked as Chinese.
+  say.lang = /\p{Script=Han}/u.test(fixture.say) ? 'zh' : 'en';
   say.textContent = fixture.say;
 
   const controls = document.createElement('div');
@@ -541,6 +546,7 @@ async function toggleRecording(path) {
     return;
   }
   await refreshFixtureRow(path);
+  await refreshFixtureSummary();
 }
 
 /**
@@ -561,7 +567,22 @@ async function playFixture(path) {
   source.start();
 }
 
+/**
+ * The folded recordings keep their count visible. Three of three is the only
+ * state in which Test STT can pass — a clip that was never recorded fails the
+ * test rather than being skipped quietly — so hiding the rows must not hide
+ * that.
+ */
+async function refreshFixtureSummary() {
+  const found = await Promise.all(STT_FIXTURES.map((f) => loadFixture(f.path)));
+  const n = found.filter(Boolean).length;
+  el('fixtureSummary').textContent = n === STT_FIXTURES.length
+    ? `recordings ${n}/${n}`
+    : `recordings ${n}/${STT_FIXTURES.length} — Test STT will fail`;
+}
+
 for (const fixture of STT_FIXTURES) refreshFixtureRow(fixture.path);
+refreshFixtureSummary();
 
 // --- Typed drive: the full chain minus the microphone ----------------------
 

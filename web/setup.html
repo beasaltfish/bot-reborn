@@ -21,14 +21,35 @@
   <section class="card">
     <header><h2>STT</h2><span class="dot"></span></header>
     <p class="hint">
-      Reads the three clips from Fixtures below. All three must come back with
-      a transcript; one that was never recorded fails rather than being skipped
-      quietly.
+      Reads the three clips recorded below in <b>your own voice</b>: a pass
+      means the chain understands you, not just that the key is valid. All
+      three must come back with a transcript.
     </p>
     <div class="card-do">
       <label>baseURL <input name="stt.baseURL" list="sttBaseURLs" autocomplete="off"></label>
       <label>apiKey <input name="stt.apiKey" type="password" autocomplete="off"></label>
       <label>model <input name="stt.model" list="sttModels" autocomplete="off"></label>
+
+      <!-- The clips the test reads, in the card that reads them. They used to
+           be a section of their own further down, and the hint up here had to
+           point at it — the same "it is somewhere else on this page" the tests
+           themselves had until they moved beside their fields.
+
+           Folded, because recording is done once a session and then never
+           again; the summary keeps the part that still matters, which is
+           whether all three exist. -->
+      <details class="knobs">
+        <summary id="fixtureSummary">recordings</summary>
+        <p class="hint">
+          Say each line as written, then <b>listen back before trusting it</b> —
+          a clip that got cut off still transcribes into something plausible.
+          Kept in this browser, never in the repo. The microphone stays open
+          from the first Record until you leave the page.
+          <a href="../docs/instruments.md#why-the-three-clips-have-to-be-recorded-and-listened-back-to">why your own voice</a>
+        </p>
+        <ol id="fixtures"></ol>
+      </details>
+
       <div class="controls">
         <button type="button" data-save="stt">Save</button>
         <button type="button" data-test="stt">Test STT</button>
@@ -103,20 +124,6 @@
   </section>
 
   <p id="cfgStatus" class="hint"></p>
-
-  <section class="card">
-    <header><h2>Fixtures</h2><span class="dot"></span></header>
-    <p class="hint">
-    Say each line as written, then <b>listen back before trusting it</b> — a
-    clip that got cut off still transcribes into something plausible. Kept in
-    this browser, never in the repo. The microphone stays open from the first
-    Record until you leave the page.
-    <a href="../docs/instruments.md#why-the-three-clips-have-to-be-recorded-and-listened-back-to">why</a>
-    </p>
-    <div class="card-do">
-      <ol id="fixtures"></ol>
-    </div>
-  </section>
 
   <section class="card">
     <header><h2>Typed driver</h2><span class="dot"></span></header>

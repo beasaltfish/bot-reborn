@@ -49,7 +49,7 @@ test('no red that is not the emergency stop', () => {
 
 const PAGES_SRC = /** @type {[string, string, number][]} */ ([
   ['bench.html', read('web/bench.html'), 5],
-  ['setup.html', read('web/setup.html'), 6],
+  ['setup.html', read('web/setup.html'), 5],
   ['audio-bench.html', read('web/audio-bench.html'), 8],
 ]);
 
@@ -163,4 +163,34 @@ test('every provider layer can be saved and tested where it is typed', () => {
     assert.match(source, new RegExp(`data-test="${layer}"`), `no Test for ${layer}`);
   }
   assert.match(source, /data-test="usb"/);
+});
+
+test('every id the instruments reach for exists in their markup', () => {
+  // The same contract markup.test.js holds for index.html, which the two bench
+  // pages never had: a typo here is a blank page at runtime with nothing in the
+  // console but "null is not an object", and no other test would notice.
+  //
+  // Derived rather than listed, so it cannot go stale: every `el('x')` and
+  // `$('x')` in a page's own modules has to name something in that page.
+  const SOURCES = /** @type {[string, string[]][]} */ ([
+    ['web/setup.html', ['web/setup.js']],
+    ['web/bench.html', ['web/bench.js']],
+    ['web/audio-bench.html', [
+      'web/audio-bench/main.js', 'web/audio-bench/knobs.js',
+      'web/audio-bench/residency.js', 'web/audio-bench/acoustics.js',
+      'web/audio-bench/recognition.js', 'web/audio-bench/providers.js',
+    ]],
+  ]);
+  for (const [page, modules] of SOURCES) {
+    const html = read(page);
+    for (const module of modules) {
+      const js = read(module);
+      const ids = new Set([...js.matchAll(/\b(?:el|\$|setStat|setDisabled)\(\s*'([A-Za-z][\w-]*)'/g)]
+        .map((m) => m[1]));
+      for (const id of ids) {
+        assert.ok(html.includes(`id="${id}"`),
+          `${module} reaches for #${id}, which ${page} does not have`);
+      }
+    }
+  }
 });
