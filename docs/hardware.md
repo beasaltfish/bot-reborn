@@ -70,7 +70,7 @@ drive bit and one steer bit, never two of either.
 ## Calibration results (spec §12)
 
 These are measurements, not decisions. Fill them in from the bench page
-(`web/bench.html`) and update the constants they feed. **Blank = not measured
+(`web/dev.html`) and update the constants they feed. **Blank = not measured
 yet**; do not treat a blank row as "fine".
 
 | # | What | Measured | Feeds |
@@ -810,9 +810,9 @@ person. Most of them are about that combination rather than about the code, so
 swapping any part of it retires them. There is no way to tell from a number
 whether it still holds; this table is the substitute.
 
-Re-run all of these on `audio-bench.html`. The hardware items above them
+Re-run all of these on `dev.html`. The hardware items above them
 (D6/D7 polarity, byte rate, the motor's starting threshold) expire on a change
-of *car*, not of phone, and are measured on `bench.html`.
+of *car*, not of phone, and are measured on `dev.html`.
 
 | Reading | Why it expires | Panel |
 |---|---|---|
@@ -838,5 +838,5 @@ via `SHERPA_ONNX_EXIT(-1)` instead of failing quietly.
 Half-way between the two: **Chrome refusing `applyConstraints` on a live audio
 track** is a fact about the browser, not about this phone, so it will not move
 when the device does — but it can move when Chrome does, and it fails silently
-in one of its two forms. Re-measure it with the button on `audio-bench.html`
+in one of its two forms. Re-measure it with the button on `dev.html`
 before building anything that depends on the answer.

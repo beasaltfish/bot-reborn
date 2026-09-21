@@ -8,7 +8,7 @@
 // to it, that same clip tests something they do not need.
 //
 // THIS FILE IS THE ONLY PLACE AN INSTRUMENT MAY CARRY CHINESE. Everything else
-// under bench.html / setup.html / audio-bench.html is English, and
+// under dev.html / dev.html / dev.html is English, and
 // test/instrument-language.test.js enforces both halves of that — including
 // that the zh arm below still HAS Chinese in it, because translating it away
 // would stop ⑩ and ⑪ measuring code-switching without anything going red.

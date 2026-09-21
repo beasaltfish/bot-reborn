@@ -9,7 +9,7 @@ test('a stored baseURL is recognised as the preset it came from', () => {
 });
 
 test('a trailing slash is the same provider, not a different one', () => {
-  // Somebody who pasted the URL by hand on setup.html before the sheet existed
+  // Somebody who pasted the URL by hand on dev.html before the sheet existed
   // would otherwise open the sheet and find their provider demoted to "Other",
   // with the address they already had sitting in a text box.
   assert.equal(presetIdFor('llm', { baseURL: 'https://api.deepseek.com/' }), 'deepseek');

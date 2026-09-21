@@ -36,7 +36,7 @@ const num = (/** @type {string} */ id) =>
   Number(/** @type {HTMLInputElement} */ ($(id)).value);
 
 export function createRecognition() {
-  /** @type {import('./main.js').BenchContext | null} */ let ctx = null;
+  /** @type {import('./context.js').AudioContext | null} */ let ctx = null;
   /** @type {OpenAiCompatStt | null} */ let stt = null;
   /** @type {ReturnType<typeof createRecorder> | null} */ let recorder = null;
   /** @type {((name: 'wake') => number) | null} */ let earcon = null;
@@ -422,7 +422,7 @@ export function createRecognition() {
   return {
     name: NAME,
 
-    /** @param {import('./main.js').BenchContext} c */
+    /** @param {import('./context.js').AudioContext} c */
     start(c) {
       ctx = c;
       // ⑯ is "say these words and see whether the head survives", so the words

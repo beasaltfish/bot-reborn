@@ -92,7 +92,7 @@ const pct = (/** @type {number | null} */ v) =>
 // --- the panel ------------------------------------------------------------
 
 export function createAcoustics() {
-  /** @type {import('./main.js').BenchContext | null} */ let ctx = null;
+  /** @type {import('./context.js').AudioContext | null} */ let ctx = null;
   // Fixed at page Start, which is also when config stops changing. Defaulting
   // to the en arm rather than null keeps showCue() typed: it runs before the
   // first start() on a reload-and-abort.
@@ -301,7 +301,7 @@ export function createAcoustics() {
     if (!ctx) return;
     if (active) return;
     if (!ctx.config.stt.baseURL || !ctx.config.tts.baseURL) {
-      ctx.log('this panel needs STT and TTS configured on setup.html');
+      ctx.log('this panel needs STT and TTS configured on dev.html');
       return;
     }
     if (!ctx.exclusion.claim(NAME)) {
@@ -374,7 +374,7 @@ export function createAcoustics() {
 
   return {
     name: NAME,
-    /** @param {import('./main.js').BenchContext} c */
+    /** @param {import('./context.js').AudioContext} c */
     start(c) {
       ctx = c;
       material = materialFor(c.config.lang);

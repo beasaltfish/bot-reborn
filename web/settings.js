@@ -17,16 +17,18 @@ const $ = (/** @type {string} */ id) =>
   /** @type {HTMLElement} */ (document.getElementById(id));
 
 /**
- * The instrument pages. They are English-only by the language rule — they are
- * instruments, not product — and they are listed rather than hidden because a
- * maintainer with no way back to them has to remember URLs.
+ * The instrument page. English-only by the language rule — it is an instrument,
+ * not product — and listed rather than hidden because a maintainer with no way
+ * back to it has to remember the URL.
+ *
+ * It was three entries until the three benches merged: they each opened their
+ * own handle to the same FT232H, which is fine in three documents and is a
+ * failed claimInterface in one.
  *
  * @type {[string, string][]}
  */
 const TOOLS = [
-  ['setup.html', 'Connectivity test'],
-  ['bench.html', 'Pin bench'],
-  ['audio-bench.html', 'Audio bench'],
+  ['dev.html', 'Developer options'],
 ];
 
 /**

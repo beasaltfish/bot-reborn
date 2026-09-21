@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { PAGES } from '../web/instrument-status.js';
 
 /** @param {string} rel */
 const read = (rel) => readFileSync(new URL('../' + rel, import.meta.url), 'utf8');
@@ -47,10 +46,10 @@ test('no red that is not the emergency stop', () => {
     'instrument.css hard-codes a red; use var(--stop), and only for the emergency stop');
 });
 
+// One page now. The count is the three pages' cards added up: merging them was
+// not licence to grow or shed one.
 const PAGES_SRC = /** @type {[string, string, number][]} */ ([
-  ['bench.html', read('web/bench.html'), 5],
-  ['setup.html', read('web/setup.html'), 5],
-  ['audio-bench.html', read('web/audio-bench.html'), 8],
+  ['dev.html', read('web/dev.html'), 18],
 ]);
 
 test('no instrument page still separates its sections with a rule', () => {
@@ -87,16 +86,6 @@ test('a card is a header, then what you do, then what came back', () => {
   }
 });
 
-test('the status strip knows all three instruments and nothing else', () => {
-  // The three pages cannot reach each other today: the only route is back to
-  // index.html and in through the gear, or typing a URL on a phone.
-  assert.deepEqual(PAGES.map((p) => p.href).sort(),
-    ['audio-bench.html', 'bench.html', 'setup.html']);
-  for (const p of PAGES) {
-    assert.ok(p.label.length > 0 && p.label.length <= 12,
-      `"${p.label}" does not fit on one line of a phone`);
-  }
-});
 
 test('every instrument page mounts the strip', () => {
   for (const [name, source] of PAGES_SRC) {
@@ -109,11 +98,8 @@ test('red is the emergency stop and nothing else', () => {
   // the moment it is one of several red things. Two of these pages have a real
   // emergency stop; the third makes the car circle with no stop at all, which
   // is what #benchbarStop is for.
-  const allowed = /** @type {Record<string, string[]>} */ ({
-    'bench.html': ['stopBtn'],
-    'setup.html': ['stopBtn'],
-    'audio-bench.html': ['benchbarStop'],
-  });
+  // One page, one stop. It used to be three, one per page.
+  const allowed = /** @type {Record<string, string[]>} */ ({ 'dev.html': ['stopBtn'] });
   for (const [name, source] of PAGES_SRC) {
     const reds = [...source.matchAll(/<button[^>]*\bdanger\b[^>]*>/g)]
       .map((m) => (m[0].match(/id="([^"]+)"/) ?? [])[1]);
@@ -126,8 +112,8 @@ test('the audio bench has an emergency stop at all', () => {
   // cruise() renews itself and never resolves. Before this existed, the only
   // way to stop the car was to scroll back up to the button that started it.
   const [, source] = /** @type {[string, string, number]} */ (
-    PAGES_SRC.find(([n]) => n === 'audio-bench.html'));
-  assert.match(source, /id="benchbarStop"/);
+    PAGES_SRC.find(([n]) => n === 'dev.html'));
+  assert.match(source, /id="stopBtn"/);
 });
 
 test('the connectivity test knows no provider the preset list does not', () => {
@@ -142,12 +128,16 @@ test('the connectivity test knows no provider the preset list does not', () => {
   // answers 404 "no such model", which on a page about connectivity reads as a
   // bad key — the exact failure provider-presets.js exists to prevent.
   const [, source] = /** @type {[string, string, number]} */ (
-    PAGES_SRC.find(([n]) => n === 'setup.html'));
-  const providerish = [...source.matchAll(/placeholder="([^"]*)"/g)]
+    PAGES_SRC.find(([n]) => n === 'dev.html'));
+  // Scoped to the config form. Once the three pages merged, a sample-name
+  // placeholder like "kws-01" elsewhere on the page looked exactly like a model
+  // name to this heuristic.
+  const form = source.slice(source.indexOf('<form id="cfgForm">'), source.indexOf('</form>'));
+  const providerish = [...form.matchAll(/placeholder="([^"]*)"/g)]
     .map((m) => m[1])
     .filter((v) => /^https?:\/\//.test(v) || /^[a-z0-9]+[-/][a-z0-9.\-/]+$/i.test(v));
   assert.deepEqual(providerish, [],
-    'setup.html hard-codes a provider endpoint or model; build it from PRESETS');
+    'dev.html hard-codes a provider endpoint or model; build it from PRESETS');
 });
 
 test('every provider layer can be saved and tested where it is typed', () => {
@@ -157,7 +147,7 @@ test('every provider layer can be saved and tested where it is typed', () => {
   // the control" complaint wearing a different hat. assertFilled's own error
   // message used to end "under Configuration above first", pointing up the page.
   const [, source] = /** @type {[string, string, number]} */ (
-    PAGES_SRC.find(([n]) => n === 'setup.html'));
+    PAGES_SRC.find(([n]) => n === 'dev.html'));
   for (const layer of ['stt', 'llm', 'tts']) {
     assert.match(source, new RegExp(`data-save="${layer}"`), `no Save for ${layer}`);
     assert.match(source, new RegExp(`data-test="${layer}"`), `no Test for ${layer}`);
@@ -173,12 +163,11 @@ test('every id the instruments reach for exists in their markup', () => {
   // Derived rather than listed, so it cannot go stale: every `el('x')` and
   // `$('x')` in a page's own modules has to name something in that page.
   const SOURCES = /** @type {[string, string[]][]} */ ([
-    ['web/setup.html', ['web/panels/connectivity.js']],
-    ['web/bench.html', ['web/panels/pins.js']],
-    ['web/audio-bench.html', [
-      'web/audio-bench/main.js', 'web/audio-bench/knobs.js',
-      'web/audio-bench/residency.js', 'web/audio-bench/acoustics.js',
-      'web/audio-bench/recognition.js', 'web/audio-bench/providers.js',
+    ['web/dev.html', [
+      'web/dev.js', 'web/panels/pins.js', 'web/panels/connectivity.js',
+      'web/panels/knobs.js', 'web/panels/residency.js',
+      'web/panels/acoustics.js', 'web/panels/recognition.js',
+      'web/panels/providers.js',
     ]],
   ]);
   for (const [page, modules] of SOURCES) {
@@ -203,7 +192,7 @@ test('nothing in the config form can submit it', () => {
   // button somebody writes, the handler catches the ones nobody can see,
   // including a stray Enter in a text field.
   const [, source] = /** @type {[string, string, number]} */ (
-    PAGES_SRC.find(([n]) => n === 'setup.html'));
+    PAGES_SRC.find(([n]) => n === 'dev.html'));
   const form = source.slice(source.indexOf('<form id="cfgForm">'), source.indexOf('</form>'));
   const bare = [...form.matchAll(/<button(?![^>]*\btype=)[^>]*>/g)].map((m) => m[0]);
   assert.deepEqual(bare, [], 'a button in #cfgForm has no type, so it submits');
@@ -231,8 +220,10 @@ test('the pins panel registers every control it used to', () => {
   // that into a factory is where a button silently stops responding: it throws
   // nothing, it just does nothing, and no other test would notice.
   const js = read('web/panels/pins.js');
-  for (const id of ['connectBtn', 'stopBtn', 'byteRateBtn', 'computeBtn',
-                    'scanAllBtn', 'readPinsBtn', 'listGrantedBtn', 'copyLogBtn']) {
+  // connectBtn, stopBtn and copyLogBtn are gone from here on purpose: the page
+  // owns the one cable, the one emergency stop and the one log.
+  for (const id of ['byteRateBtn', 'computeBtn',
+                    'scanAllBtn', 'readPinsBtn', 'listGrantedBtn']) {
     assert.match(js, new RegExp(`'${id}'`), `pins.js no longer touches #${id}`);
   }
   for (const attr of ['data-pins', 'data-pulse']) {
@@ -248,7 +239,8 @@ test('the connectivity panel registers every control it used to', () => {
   // them — so start() calls named functions in the order they used to run, and
   // this pins that none of them was dropped on the way.
   const js = read('web/panels/connectivity.js');
-  for (const id of ['cfgForm', 'connectBtn', 'textForm', 'stopBtn', 'turnLog']) {
+  // connectBtn and stopBtn moved to the page, which owns one of each.
+  for (const id of ['cfgForm', 'textForm', 'turnLog']) {
     assert.match(js, new RegExp(`'${id}'`), `connectivity.js no longer touches #${id}`);
   }
   for (const attr of ['data-save', 'data-test']) {
@@ -263,8 +255,20 @@ test('the model is not fetched until an audio panel is chosen', () => {
   // nothing works yet — a fresh clone, a just-soldered board, no key typed —
   // and making them queue behind the heaviest asset in the project is the one
   // regression merging the three pages would otherwise introduce.
-  const js = read('web/audio-bench/main.js');
+  const js = read('web/dev.js');
   assert.ok(!/^\(async \(\) => \{[\s\S]*?loadSherpa/m.test(js),
     'main.js still loads the model at import time');
   assert.match(js, /function ensureSherpa/, 'main.js has no lazy loader');
+});
+
+test('nothing still points at the three pages that were merged away', () => {
+  // They each opened their own handle to the same FT232H — fine in three
+  // documents, a failed claimInterface in one. A stale reference is a link or a
+  // comment sending somebody to a page that no longer exists.
+  for (const rel of ['web/dev.html', 'web/dev.js', 'web/settings.js',
+                     'web/checks.js', 'web/panels/pins.js',
+                     'web/panels/connectivity.js', 'docs/instruments.md']) {
+    assert.ok(!/\b(bench|setup|audio-bench)\.html\b/.test(read(rel)),
+      `${rel} still points at a page that no longer exists`);
+  }
 });

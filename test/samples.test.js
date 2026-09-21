@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { sliceFrames } from '../web/audio-bench/samples.js';
+import { sliceFrames } from '../web/panels/samples.js';
 
 test('an exact multiple slices into whole frames and nothing else', () => {
   const frames = sliceFrames(new Float32Array(3200), 1600);

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { keepAliveOptions, createExclusion } from '../web/audio-bench/knobs.js';
+import { keepAliveOptions, createExclusion } from '../web/panels/knobs.js';
 
 test('off means no tone at all, not a tone with always:false', () => {
   // The trap this pins: `hidden` ALSO has always:false, and it is the product

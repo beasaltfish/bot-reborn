@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { HEADLINES } from '../web/audio-bench/headlines.js';
+import { HEADLINES } from '../web/panels/headlines.js';
 
 const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
-const audioBench = readFileSync(new URL('../web/audio-bench.html', import.meta.url), 'utf8');
+const dev = readFileSync(new URL('../web/dev.html', import.meta.url), 'utf8');
 
 /**
  * How much PROSE a page puts in front of somebody holding a phone — paragraphs
@@ -87,25 +87,27 @@ test('nothing ships wearing red — the fab earns it at runtime', () => {
   assert.ok(!/class=["'][^"']*\bdanger\b/.test(html), 'no element may ship with .danger');
 });
 
-test('the audio bench fits on a phone rather than reading like a paper', () => {
+test('the developer page fits on a phone rather than reading like a paper', () => {
   // It was 1734 words, which is ten-odd screens of prose before the first
   // button. The argument did not get thrown away — it is in docs/instruments.md
   // — and this is the ratchet that keeps it there. Raising this number is a
   // decision, not a fix: the page is read by somebody standing in a quiet room
   // holding nothing but the phone.
-  const words = proseWords(audioBench);
-  assert.ok(words < 400,
-    `audio-bench.html carries ${words} words of prose; the why belongs in docs/instruments.md`);
+  const words = proseWords(dev);
+  // 760 = the three pages' own ceilings added up (400 + 220 + 140). Merging
+  // them was not licence to write more: the three actually summed to 705.
+  assert.ok(words < 760,
+    `dev.html carries ${words} words of prose; the why belongs in docs/instruments.md`);
 });
 
-test('the audio bench ships a picker with one option per panel', () => {
+test('the picker has one option per panel', () => {
   // A panel with no option is a panel nobody can reach; an option naming no
   // panel is a picker entry that blanks the page.
-  const panels = [...audioBench.matchAll(/<section id="panel-([a-z]+)"/g)].map((m) => m[1]);
-  const picker = audioBench.slice(audioBench.indexOf('<select id="panelPick">'));
+  const panels = [...dev.matchAll(/<section id="panel-([a-z]+)"/g)].map((m) => m[1]);
+  const picker = dev.slice(dev.indexOf('<select id="panelPick">'));
   const options = [...picker.slice(0, picker.indexOf('</select>'))
     .matchAll(/<option value="([a-z]+)"/g)].map((m) => m[1]);
-  assert.match(audioBench, /id="panelPick"/);
+  assert.match(dev, /id="panelPick"/);
   assert.deepEqual(panels.sort(), options.sort());
 });
 
@@ -116,16 +118,22 @@ test('every headline the bar mirrors exists in the page', () => {
   for (const [panel, spec] of Object.entries(HEADLINES)) {
     const ids = Array.isArray(spec) ? spec : [spec.mirror];
     for (const id of ids) {
-      assert.match(audioBench, new RegExp(`id="${id}"`),
+      assert.match(dev, new RegExp(`id="${id}"`),
         `audio-bench.html has no #${id}, which ${panel} declares as a headline`);
     }
   }
 });
 
-test('every panel declares a headline', () => {
-  // A panel with none is a panel whose readings still need scrolling to, which
-  // is the whole complaint.
-  const panels = [...audioBench.matchAll(/<section id="panel-([a-z]+)"/g)].map((m) => m[1]);
+test('every panel that measures declares a headline', () => {
+  // A measuring panel with none is a panel whose readings still need scrolling
+  // to, which is the whole complaint.
+  //
+  // The two passive panels are deliberately absent. They hold no run and no
+  // live reading: the pin bench fires a pulse and the connectivity test answers
+  // in place, so there is nothing for a bar to follow you with.
+  const PASSIVE = ['pins', 'connectivity'];
+  const panels = [...dev.matchAll(/<section id="panel-([a-z]+)"/g)]
+    .map((m) => m[1]).filter((n) => !PASSIVE.includes(n));
   assert.deepEqual(panels.sort(), Object.keys(HEADLINES).sort());
 });
 
@@ -139,8 +147,6 @@ test('a headline is at most three readings', () => {
   }
 });
 
-const bench = readFileSync(new URL('../web/bench.html', import.meta.url), 'utf8');
-const setup = readFileSync(new URL('../web/setup.html', import.meta.url), 'utf8');
 
 test('the product and the instruments do not share a stylesheet', () => {
   // One file was dressing two audiences, and they undid each other: `.hint` was
@@ -148,9 +154,7 @@ test('the product and the instruments do not share a stylesheet', () => {
   // benches need. Splitting them is what deletes the counter-rule.
   assert.match(html, /href="style\.css"/);
   assert.ok(!/href="instrument\.css"/.test(html), 'index.html must not link the instrument sheet');
-  for (const [name, source] of /** @type {[string, string][]} */ ([
-    ['bench', bench], ['setup', setup], ['audio-bench', audioBench],
-  ])) {
+  for (const [name, source] of /** @type {[string, string][]} */ ([['dev', dev]])) {
     assert.match(source, /href="instrument\.css"/, `${name}.html must link instrument.css`);
     assert.ok(!/href="style\.css"/.test(source), `${name}.html must not link the product sheet`);
   }
@@ -164,15 +168,6 @@ test('the gear has no dead link behind it', () => {
     'index.html still carries the retired href on #settings');
 });
 
-test('the other two instruments were already short, and stay short', () => {
-  // Lower ceilings than the audio bench's because these pages are smaller, not
-  // because their prose is worth less: a ratchet set above where a page already
-  // sits is not a ratchet.
-  const setupWords = proseWords(setup);
-  const benchWords = proseWords(bench);
-  assert.ok(setupWords < 220, `setup.html carries ${setupWords} words of prose`);
-  assert.ok(benchWords < 140, `bench.html carries ${benchWords} words of prose`);
-});
 
 test('every "why" link lands on a heading that exists', () => {
   // The pages now hand their reasoning to docs/instruments.md and point at it.
@@ -189,9 +184,7 @@ test('every "why" link lands on a heading that exists', () => {
     .replace(/\s+/g, '-');
   const headings = new Set([...doc.matchAll(/^#{2,4}\s+(.*)$/gm)].map((m) => slug(m[1])));
 
-  for (const [name, source] of /** @type {[string, string][]} */ ([
-    ['audio-bench', audioBench], ['setup', setup], ['bench', bench],
-  ])) {
+  for (const [name, source] of /** @type {[string, string][]} */ ([['dev', dev]])) {
     for (const m of source.matchAll(/docs\/instruments\.md#([^"']+)/g)) {
       assert.ok(headings.has(m[1]),
         `${name}.html links to docs/instruments.md#${m[1]}, which is not a heading there`);

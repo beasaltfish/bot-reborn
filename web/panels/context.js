@@ -19,10 +19,22 @@
  *   config: import('../config.js').Config,
  *   log: (msg: string) => void,
  *   status: (id: string, state: StatusState, label: string) => void,
- *   exclusion: ReturnType<typeof import('../audio-bench/knobs.js').createExclusion>,
+ *   exclusion: ReturnType<typeof import('./knobs.js').createExclusion>,
+ *   ftdi: import('../ftdi.js').Ftdi | null,
+ *   executor: import('../executor.js').Executor | null,
  *   knobs: { readonly executor: import('../executor.js').Executor | null },
  *   armStop: (on: boolean) => void,
  * }} DevContext
+ *
+ * What the four audio panels get instead. They only ever start after the
+ * microphone is open and the model is in, so their two nullable fields are not
+ * nullable for them — and narrowing once here beats a null check in every panel
+ * that could only ever be dead code.
+ *
+ * @typedef {DevContext & {
+ *   pipeline: import('../audio/pipeline.js').AudioPipeline,
+ *   sherpa: import('../audio/sherpa.js').Sherpa,
+ * }} AudioContext
  */
 
 export {};

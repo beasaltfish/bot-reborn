@@ -1,21 +1,35 @@
-// The audio bench's entry point: load the wasm, hold the microphone, hand both
-// to the panels. Wiring only — every decision belongs to a panel or to the
-// product module the panel is driving (spec §10).
+// Developer options: the one page behind the gear, and the only entry file the
+// instruments have.
 //
-// An entry file, so it may touch document/navigator at the top level.
+// It owns the three things a page can only have one of — the FT232H, the
+// microphone, and the emergency stop — and hands them to the panels. Wiring
+// only: every decision belongs to a panel or to the product module the panel is
+// driving (spec §10).
+//
+// The FT232H being owned here is not tidiness. Ftdi.open() calls
+// claimInterface(0), so a second open on the same device fails; three pages
+// each opening their own was fine while they were three documents and is a bug
+// the moment they are one.
 
-import { loadConfig } from '../config.js';
-import { AudioPipeline } from '../audio/pipeline.js';
-import { loadSherpa } from '../audio/sherpa.js';
-import { unknownTokens } from '../audio/keyword-lines.js';
-import { createLog, setStat, setDisabled } from './readout.js';
-import { createKnobs } from './knobs.js';
-import { HEADLINES } from './headlines.js';
-import { createStatus } from '../instrument-status.js';
-import { createResidency } from './residency.js';
-import { createAcoustics } from './acoustics.js';
-import { createRecognition } from './recognition.js';
-import { createProviders } from './providers.js';
+import { loadConfig } from './config.js';
+import { AudioPipeline } from './audio/pipeline.js';
+import { loadSherpa } from './audio/sherpa.js';
+import { unknownTokens } from './audio/keyword-lines.js';
+import { createLog, setStat, setDisabled } from './panels/readout.js';
+import { createKnobs } from './panels/knobs.js';
+import { HEADLINES } from './panels/headlines.js';
+import { createStatus } from './instrument-status.js';
+// eslint-disable-next-line no-unused-vars -- typedef only
+/** @typedef {import('./panels/context.js').DevContext} DevContext */
+/** @typedef {import('./panels/context.js').AudioContext} AudioContext */
+import { createResidency } from './panels/residency.js';
+import { createAcoustics } from './panels/acoustics.js';
+import { createRecognition } from './panels/recognition.js';
+import { createProviders } from './panels/providers.js';
+import { createPins } from './panels/pins.js';
+import { createConnectivity } from './panels/connectivity.js';
+import { Ftdi } from './ftdi.js';
+import { Executor } from './executor.js';
 
 const $ = (/** @type {string} */ id) =>
   /** @type {HTMLElement} */ (document.getElementById(id));
@@ -44,6 +58,10 @@ function showPanel(name) {
   for (const section of document.querySelectorAll('section[id^="panel-"]')) {
     /** @type {HTMLElement} */ (section).hidden = section.id !== `panel-${name}`;
   }
+  // The microphone constraints and the two cross-cutting knobs belong to all
+  // four audio panels at once, so they travel with the group rather than with
+  // any one of them.
+  $('audioCommon').hidden = PASSIVE.has(name);
 }
 
 /** @type {ReturnType<typeof setInterval> | null} */ let mirrorTimer = null;
@@ -106,44 +124,118 @@ const knobs = createKnobs({
   onStatus: (id, state, label) => status.set(id, state, label),
 });
 
+// --- the one FT232H, and the one emergency stop ---------------------------
+
+/** @type {Ftdi | null} */ let ftdi = null;
+/** @type {Executor | null} */ let executor = null;
+
+/**
+ * One cable, one handle. Two buttons reach it — the pin bench keeps one of its
+ * own because wiring up a freshly soldered board is the thing you do before
+ * anything else, and making that start in another group would be a detour on
+ * the most common path.
+ */
+async function connect() {
+  if (ftdi) { log('already connected'); return; }
+  if (!navigator.usb) {
+    status.set('usb', 'wait', 'no WebUSB (needs Chrome / Edge)');
+    return;
+  }
+  try {
+    // No baudRate and no bytesPerMs: 1200 is ftdi.js's default and every
+    // instrument already used it, so the merge changes nothing here. ② is
+    // MEASURING bytesPerMs, which is why it must not be handed a calibrated
+    // one.
+    ftdi = await Ftdi.open(navigator.usb);
+    ftdi.onDisconnect = (err) => {
+      ftdi = null;
+      executor = null;
+      status.set('usb', 'dim', 'USB disconnected');
+      log('!! ' + err.message);
+    };
+    executor = new Executor(ftdi, {
+      onError: (err) => { status.set('usb', 'wait', '!! ' + err.message); log('executor: ' + err.message); },
+    });
+    status.set('usb', 'go', 'USB connected');
+    setStat('usbStatus', 'Status: connected');
+    setDisabled('motorToggle', false);
+    log('▶︎ FT232H connected');
+  } catch (err) {
+    status.set('usb', 'wait', 'USB connect failed');
+    log('❌ ' + /** @type {Error} */ (err).message);
+  }
+}
+
+for (const id of ['connectBtn', 'pinsConnectBtn', 'usbConnect']) {
+  $(id).addEventListener('click', () => void connect());
+}
+
+/**
+ * docs/ui.md's "The one button": one button, one fixed place, whose face is
+ * always the most urgent thing available. Red exists on this page only while
+ * the car might be moving, which is what makes reserving it true rather than
+ * merely stated.
+ *
+ * Three things set the car going and each arms it: the motor toggle (⑦), a pin
+ * button, and the typed driver.
+ *
+ * @param {boolean} on
+ */
+function armStop(on) {
+  $('stopBtn').hidden = !on;
+  for (const b of ['start', 'stop']) $(b).hidden = on;
+}
+
+$('stopBtn').addEventListener('click', async () => {
+  // Both halves, because the two used to live in two pages and each knew only
+  // its own: purge what is queued, then pull the pins low. A stop that only
+  // did the second would still have twenty seconds of bytes behind it.
+  try { await ftdi?.purgeTx(); } catch { /* the pins still have to go low */ }
+  executor?.stop();
+  armStop(false);
+  log('■ emergency stop');
+});
+
 $('panelPick').addEventListener('change', () => {
   const picked = /** @type {HTMLSelectElement} */ ($('panelPick')).value;
   showPanel(picked);
   if (NEEDS_MODEL.has(picked)) void ensureSherpa();
 });
-showPanel('residency');
-// The page opens on residency, so the model still starts downloading at once
-// here. On dev.html the opening panel is the pin bench and this line goes.
-void ensureSherpa();
+showPanel('pins');
 
-/** @type {import('../audio/sherpa.js').Sherpa | null} */ let sherpa = null;
+
+
+/** @type {import('./audio/sherpa.js').Sherpa | null} */ let sherpa = null;
 /** @type {string} */ let keywords = '';
 /** @type {AudioPipeline | null} */ let pipeline = null;
 
 /**
  * Panels register here. Each one is handed everything it could need and takes
  * what it uses; a panel never reaches for a global.
- * @type {Array<{ name: string, start(ctx: BenchContext): void, stop(): void }>}
+ * @type {Array<{ name: string, start(ctx: AudioContext): void, stop(): void }>}
  */
-const PANELS = [
+/** The two that never touch the microphone. They start at once. */
+const PASSIVE_PANELS = [createPins(), createConnectivity()];
+
+/** The four that share it. They start when Start opens the pipeline. */
+const AUDIO_PANELS = [
   createResidency(), createAcoustics(), createRecognition(), createProviders(),
 ];
 
 /**
- * @typedef {{
- *   pipeline: AudioPipeline,
- *   sherpa: import('../audio/sherpa.js').Sherpa,
- *   keywords: string,
- *   config: import('../config.js').Config,
- *   log: (msg: string) => void,
- *   exclusion: ReturnType<typeof import('./knobs.js').createExclusion>,
- *   knobs: ReturnType<typeof import('./knobs.js').createKnobs>,
- * }} BenchContext
+ * The two that never claim the exclusion, and never need the model.
+ *
+ * Exclusion was always about the microphone — "two panels measuring at once
+ * would each be measuring the other" — and these two do not touch it. They also
+ * have to be able to run WHILE an audio panel does: ⑦ is KWS measured against
+ * the motor's own noise.
  */
+const PASSIVE = new Set(['pins', 'connectivity']);
+
 
 // --- The model, the first time an audio panel is chosen --------------------
 
-/** @type {Promise<import('../audio/sherpa.js').Sherpa> | null} */
+/** @type {Promise<import('./audio/sherpa.js').Sherpa> | null} */
 let sherpaLoad = null;
 
 /**
@@ -186,7 +278,7 @@ function ensureSherpa() {
 const NEEDS_MODEL = new Set(['residency', 'acoustics', 'recognition', 'providers']);
 
 if (!config.stt.baseURL || !config.llm.baseURL || !config.tts.baseURL) {
-  setStat('cfgWarn', 'No providers configured — set them up on setup.html first. '
+  setStat('cfgWarn', 'No providers configured — set them up on dev.html first. '
     + 'The residency and acoustics panels still run; recognition and providers do not.');
 }
 
@@ -212,12 +304,17 @@ $('start').addEventListener('click', async () => {
     });
     log(`▶︎ microphone open, echoCancellation ${echoCancellation ? 'on' : 'off'}`
       + `, noiseSuppression ${noiseSuppression ? 'on' : 'off'}`);
-    /** @type {BenchContext} */
+    /** @type {AudioContext} */
+    /** @type {AudioContext} */
     const ctx = {
       pipeline, sherpa, keywords, config, log,
+      status: (id, state, label) => status.set(id, state, label),
       exclusion: knobs.exclusion, knobs,
+      get ftdi() { return ftdi; },
+      get executor() { return executor; },
+      armStop,
     };
-    for (const panel of PANELS) panel.start(ctx);
+    for (const panel of AUDIO_PANELS) panel.start(ctx);
     setDisabled('stop', false);
   } catch (err) {
     const e = /** @type {Error} */ (err);
@@ -229,7 +326,7 @@ $('start').addEventListener('click', async () => {
 });
 
 $('stop').addEventListener('click', () => {
-  for (const panel of PANELS) panel.stop();
+  for (const panel of AUDIO_PANELS) panel.stop();
   pipeline?.stop();
   pipeline = null;
   setDisabled('stop', true);
@@ -267,4 +364,22 @@ $('copyLog').addEventListener('click', () => {
     .catch((err) => log('copy failed: ' + err.message));
 });
 
-export { PANELS, log };
+
+/**
+ * The two passive panels start immediately: their `start` only attaches
+ * listeners, and the tools you reach for when nothing works yet must not wait
+ * for a microphone or for 18 MB of wasm. The four audio panels start on Start,
+ * where a non-null pipeline and sherpa exist for them.
+ */
+for (const panel of PASSIVE_PANELS) {
+  panel.start(/** @type {DevContext} */ ({
+    pipeline: null, sherpa: null, keywords: '', config, log,
+    status: (id, state, label) => status.set(id, state, label),
+    exclusion: knobs.exclusion, knobs,
+    get ftdi() { return ftdi; },
+    get executor() { return executor; },
+    armStop,
+  }));
+}
+
+export { PASSIVE_PANELS, AUDIO_PANELS, log };

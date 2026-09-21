@@ -12,7 +12,7 @@
 // and the audio panels have had this shape since the bench was written, so this
 // is catching up rather than inventing.
 
-import { Ftdi, encodeBaudRate, PIN_MASK, FTDI_VID, FT232H_PID } from '../ftdi.js';
+import { encodeBaudRate, PIN_MASK, FTDI_VID, FT232H_PID } from '../ftdi.js';
 
 const BENCH_BAUD = 1200; // the calibration baud rate spec §12 ② specifies
 const BYTE_RATE_TEST_BYTES = 3000;
@@ -35,7 +35,6 @@ const NAME = 'pins';
  * be able to coexist.
  */
 export function createPins() {
-  /** @type {Ftdi | null} */ let ftdi = null;
   /** @type {import('./context.js').DevContext | null} */ let ctx = null;
 
   /** Resolved in start(), never at import. A module that reads the document to
@@ -73,13 +72,13 @@ export function createPins() {
 
   /** The connected Ftdi, or null with the status set — callers just write
    *  `if (!dev) return;`.
-   *  @returns {Ftdi | null} */
+   *  @returns {import('../ftdi.js').Ftdi | null} */
   function requireFtdi() {
-    if (!ftdi) {
+    if (!ctx?.ftdi) {
       setStatus('connect the device first');
       return null;
     }
-    return ftdi;
+    return ctx?.ftdi;
   }
 
   // --- Diagnostics lifted from app.js (verbatim, except the pin width grew
@@ -132,7 +131,7 @@ export function createPins() {
     return null;
   }
 
-  /** @param {Ftdi} dev */
+  /** @param {import('../ftdi.js').Ftdi} dev */
   async function logPinState(dev) {
     const value = await dev.readPins();
     const d4 = (value >> 4) & 1, d5 = (value >> 5) & 1;
@@ -168,54 +167,6 @@ export function createPins() {
       logEl = el('log');
       ctx.status('usb', 'dim', 'USB not connected');
 
-      el('connectBtn').addEventListener('click', async () => {
-        const usb = navigator.usb;
-        if (!usb) {
-          setStatus('this browser has no WebUSB');
-          return;
-        }
-
-        try {
-          log(`requesting a device matching ${hex(FTDI_VID)}:${hex(FT232H_PID)} ...`);
-          const device = await usb.requestDevice({
-            filters: [{ vendorId: FTDI_VID, productId: FT232H_PID }],
-          });
-
-          log('device selected:');
-          log(describeDevice(device));
-
-          const endpoint = findBulkOutEndpoint(device);
-          log(`bulk OUT endpoint (diagnostic): ${endpoint === null ? 'not found' : endpoint}`);
-
-          const opened = await Ftdi.open(usb, { baudRate: BENCH_BAUD, device });
-          opened.onDisconnect = (err) => {
-            ftdi = null;
-            log(`!! device disconnected: ${err.message}`);
-            setStatus('disconnected');
-            ctx?.status('usb', 'dim', 'USB disconnected');
-          };
-          ftdi = opened;
-
-          // encodeBaudRate's actualBaud is the rate the divisor can actually land on,
-          // which need not equal the requested one. ②'s "theoretical duration" is
-          // computed from BENCH_BAUD, so the gap between the two is printed here —
-          // otherwise a later ms/byte figure comes out skewed with no way to tell
-          // whether the divisor is to blame.
-          const { actualBaud } = encodeBaudRate(BENCH_BAUD);
-          log(`connected at ${BENCH_BAUD} baud (async bitbang, D4-D7 as outputs), ` +
-            `divisor lands on ${actualBaud}, bytesPerMs=${opened.bytesPerMs}`);
-          log('pin state after entering bitbang mode:');
-          await logPinState(opened);
-
-          setStatus('FT232H connected');
-          ctx?.status('usb', 'go', 'USB connected');
-        } catch (err) {
-          const e = /** @type {Error} */ (err);
-          log(`!! ${e.name}: ${e.message}`);
-          setStatus(`connect failed: ${e.message}`);
-          ctx?.status('usb', 'wait', 'USB connect failed');
-        }
-      });
 
       // --- Emergency stop (spec §4.1 layer 2) --------------------------------------
       //
@@ -228,19 +179,6 @@ export function createPins() {
       // the 0x00 with it. ②'s 3000 bytes run for 20 seconds; without this button the
       // only recourse is unplugging the cable.
 
-      el('stopBtn').addEventListener('click', async () => {
-        const dev = requireFtdi();
-        if (!dev) return;
-        try {
-          await dev.purgeTx();
-          await dev.write(new Uint8Array([0x00]));
-          log('■ emergency stop: purgeTx dropped the queued bytes, then 0x00 pulled the pins low');
-        } catch (err) {
-          const e = /** @type {Error} */ (err);
-          log(`!! emergency stop failed ${e.name}: ${e.message} — unplug the cable`);
-          setStatus(`emergency stop failed: ${e.message}`);
-        }
-      });
 
       // --- ① the six pin combinations: which of side A / B is left --------------
 
@@ -417,14 +355,6 @@ export function createPins() {
         for (const d of devices) log(describeDevice(d));
       });
 
-      el('copyLogBtn').addEventListener('click', async () => {
-        try {
-          await navigator.clipboard.writeText(logText);
-          setStatus('log copied to the clipboard');
-        } catch {
-          setStatus('copy failed — select the log text by hand');
-        }
-      });
 
       reportEnvironment();
     },

@@ -5,7 +5,7 @@
 // — and a flow with two doors that renders inside one of them is a flow that
 // drags a whole settings panel onto the screen behind it.
 //
-// This asks bench.html's question differently on purpose. The bench asks
+// This asks dev.html's question differently on purpose. The bench asks
 // whether the chip is driving the pins at all — read-back, MISMATCH,
 // AMBIGUOUS — and its reader is holding a soldering iron. This asks one
 // question of somebody who just wants the car to turn the right way: which way

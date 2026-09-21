@@ -19,7 +19,7 @@ const $ = (/** @type {string} */ id) =>
   /** @type {HTMLElement} */ (document.getElementById(id));
 
 export function createResidency() {
-  /** @type {import('./main.js').BenchContext | null} */ let ctx = null;
+  /** @type {import('./context.js').AudioContext | null} */ let ctx = null;
   /** @type {ReturnType<typeof setInterval> | null} */ let timer = null;
   let running = false;
   let startedAt = 0;
@@ -74,7 +74,7 @@ export function createResidency() {
   return {
     name: NAME,
 
-    /** @param {import('./main.js').BenchContext} c */
+    /** @param {import('./context.js').AudioContext} c */
     start(c) {
       ctx = c;
       setDisabled('resRun', false);

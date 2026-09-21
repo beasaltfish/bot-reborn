@@ -1,6 +1,6 @@
 # Fixed audio for the connectivity test
 
-`setup.html`'s STT test reads three clips of 2–4 seconds each:
+`dev.html`'s STT test reads three clips of 2–4 seconds each:
 
 | File | Contents | What it tests |
 |---|---|---|
@@ -50,7 +50,7 @@ below are for, and they stay out of the repo.
 
 ## Recording them
 
-**In the Fixtures section of `setup.html`.** It records straight to 16 kHz
+**In the Fixtures section of `dev.html`.** It records straight to 16 kHz
 mono, plays the clip back so you can hear whether the sentence survived, and
 keeps the result in the browser's Cache API under the same path the test
 fetches (`fixtures/zh.wav`). That is the only route that exists on a phone,
@@ -98,5 +98,5 @@ figure taken in English and one taken in Chinese answer different questions;
 write down which arm a reading came from.
 
 Neither set ships. Like the Chinese three, these are recorded in **your own
-voice** on `setup.html` and kept in this browser. The only clips in the repo are
+voice** on `dev.html` and kept in this browser. The only clips in the repo are
 the two synthesised ones described under "The two clips that do ship" above.

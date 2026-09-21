@@ -8,11 +8,11 @@
 // This is a convenience over §8.2's schema, not a replacement for it. Nothing
 // here is stored: picking a preset writes its baseURL and model into the same
 // three flat fields the config has always had, and `custom` writes whatever
-// was typed. A config assembled on setup.html by hand loads back into these
+// was typed. A config assembled on dev.html by hand loads back into these
 // rows as `custom` if it matches no preset, and still works.
 //
 // The endpoints and the two default models are the ones spec §8.3 chose and
-// setup.html has been carrying as placeholders since it was written. Anything
+// dev.html has been carrying as placeholders since it was written. Anything
 // this list gets wrong is fixable by picking `custom`, which is why the list
 // can afford to be short.
 //

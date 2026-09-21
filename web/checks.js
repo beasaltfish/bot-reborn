@@ -1,7 +1,7 @@
 // What "this layer works" means, in one place.
 //
 // Two surfaces ask it now and they ask different versions of the same
-// question. setup.html is the instrument: three clips in your own voice, so a
+// question. dev.html is the instrument: three clips in your own voice, so a
 // pass means the chain understands *you*. The setup sheet is the product: one
 // clip that ships with the repo, so a pass means the baseURL, the model name
 // and the key are right — and nobody has to hold a microphone before they can

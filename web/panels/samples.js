@@ -5,7 +5,7 @@
 // parameters, which answers nothing — so a sample is recorded once and every
 // sweep replays the same audio.
 //
-// Storage is fixture-store.js, the module setup.html already uses, under a
+// Storage is fixture-store.js, the module dev.html already uses, under a
 // `calib/` prefix. Its keys are relative paths, so the two sets never collide.
 
 import { saveFixture, matchFixture, listFixtures, deleteFixture } from '../fixture-store.js';

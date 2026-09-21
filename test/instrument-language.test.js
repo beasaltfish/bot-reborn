@@ -12,13 +12,12 @@ const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hang
 // Every instrument source. The product (index.html, app.js, strings.js …) is
 // not here: it is translated, and strings.js's zh table IS the locale.
 const INSTRUMENTS = [
-  'web/bench.html', 'web/panels/pins.js',
-  'web/setup.html', 'web/panels/connectivity.js',
-  'web/audio-bench.html',
-  'web/audio-bench/acoustics.js', 'web/audio-bench/knobs.js',
-  'web/audio-bench/main.js', 'web/audio-bench/providers.js',
-  'web/audio-bench/readout.js', 'web/audio-bench/recognition.js',
-  'web/audio-bench/residency.js', 'web/audio-bench/samples.js',
+  'web/dev.html', 'web/dev.js',
+  'web/panels/pins.js', 'web/panels/connectivity.js',
+  'web/panels/acoustics.js', 'web/panels/knobs.js',
+  'web/dev.js', 'web/panels/providers.js',
+  'web/panels/readout.js', 'web/panels/recognition.js',
+  'web/panels/residency.js', 'web/panels/samples.js',
 ];
 
 // The ratchet. Each entry is a file that still has Chinese in it and the task

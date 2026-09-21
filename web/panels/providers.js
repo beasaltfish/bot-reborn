@@ -29,7 +29,7 @@ const val = (/** @type {string} */ id) =>
   /** @type {HTMLInputElement} */ ($(id)).value.trim();
 
 export function createProviders() {
-  /** @type {import('./main.js').BenchContext | null} */ let ctx = null;
+  /** @type {import('./context.js').AudioContext | null} */ let ctx = null;
   let material = materialFor('en');
   /** @type {Session | null} */ let session = null;
   let turnLog = '';
@@ -77,7 +77,7 @@ export function createProviders() {
     if (!ctx || session) return;
     const executor = ctx.knobs.executor;
     if (!executor) { logTurn('!! connect the FT232H above first'); return; }
-    if (!ctx.config.llm.baseURL) { logTurn('!! no LLM configured — see setup.html'); return; }
+    if (!ctx.config.llm.baseURL) { logTurn('!! no LLM configured — see dev.html'); return; }
     if (!ctx.exclusion.claim(NAME)) {
       logTurn(`!! another panel (${ctx.exclusion.owner}) is running`);
       return;
@@ -162,7 +162,7 @@ export function createProviders() {
   return {
     name: NAME,
 
-    /** @param {import('./main.js').BenchContext} c */
+    /** @param {import('./context.js').AudioContext} c */
     start(c) {
       ctx = c;
       material = materialFor(c.config.lang);

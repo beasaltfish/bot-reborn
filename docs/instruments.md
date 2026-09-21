@@ -1,8 +1,12 @@
 # The instruments
 
-Three pages in this repo are instruments rather than product. They exist to
-measure **this phone, this room and this voice**, and their answers expire when
-any of the three changes.
+One page in this repo is an instrument rather than product: `web/dev.html`,
+behind the gear. It exists to measure **this phone, this room and this voice**,
+and its answers expire when any of the three changes.
+
+It was three pages until 2026-09-21. They each opened their own handle to the
+same FT232H — fine in three documents, a failed `claimInterface` in one — and a
+single calibration meant connecting the cable once per page.
 
 > The rule that put them here: **would this question become a problem again on a
 > different phone?** Yes = an instrument, and the apparatus has to survive so the
@@ -24,7 +28,7 @@ both directions, including that the Chinese arm still *has* Chinese in it.
 
 ---
 
-## Pin bench — `bench.html`
+## Pin bench
 
 The bring-up panel for ① ② ⑧. It stands in for `web/app.js`, whose model (D4/D5,
 one byte at a time) cannot express "write 3000 bytes and then start a
@@ -67,7 +71,7 @@ that has ever moved it.
 
 ---
 
-## Connectivity test — `setup.html`
+## Connectivity test
 
 **This is the instrument, not the way in.** Setting up three providers for the
 first time happens in the robot itself now: a sheet with three keys in it and a
@@ -105,7 +109,7 @@ from.
 
 ---
 
-## Audio bench — `audio-bench.html`
+## Audio bench
 
 The permanent instrument for every audio-side calibration §12 still wants.
 ⑤ ⑥ ⑩ were each answered on one phone and every one of those answers expires
@@ -286,7 +290,7 @@ because with only `♪ done` there is nothing to count. It needs the FT232H
 connected: the car is what the tool calls drive.
 
 **⑪ — the same line, one provider at a time.** This is the item that can overturn
-a *choice* rather than a constant: §8.3's default TTS. `setup.html`'s TTS test
+a *choice* rather than a constant: §8.3's default TTS. `dev.html`'s TTS test
 only ever tries the one you have configured; ⑪ is the comparison. Nothing here is
 saved — fill it in, listen, change it, listen again.
 
@@ -306,7 +310,7 @@ ended". `test/instrument-ui.test.js` holds the order.
 four meanings — red for the stop, green for ready or working, amber for your
 turn, dim for not yet — and the instruments use the same four. The button that
 must be found instantly stops being findable the moment it is one of several red
-things. `bench.html` and `setup.html` each have a real stop; `audio-bench.html`
+things. `dev.html` and `dev.html` each have a real stop; `dev.html`
 grows one **only while the car is moving**: the moment you start the motor, the
 middle of the bottom bar becomes `■ STOP THE CAR` and the Start/Stop pair goes
 away. Before that existed, `cruise()` renewed itself forever and the only way to
@@ -321,7 +325,7 @@ between these three pages; there was none before.
 
 A page says what to press. This file says why it is that.
 
-`test/markup.test.js` holds the line: `audio-bench.html` under 400 words of
-prose, `setup.html` under 220, `bench.html` under 140. Raising a number is a
+`test/markup.test.js` holds the line: `dev.html` under 400 words of
+prose, `dev.html` under 220, `dev.html` under 140. Raising a number is a
 decision, not a fix — the page is read by somebody standing in a quiet room
 holding nothing but the phone.

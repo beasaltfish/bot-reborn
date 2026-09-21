@@ -3,19 +3,227 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Audio bench</title>
+<title>Developer options</title>
 <link rel="stylesheet" href="instrument.css">
 </head>
 <body>
 <main>
   <div id="instrumentStatus"></div>
-  <h1>Audio bench</h1>
-  <p class="hint">
-    <b>Measuring the background or the battery means no adb, no cable and no
-    charger.</b> A debug connection keeps the phone awake and contaminates the
-    reading.
-    <a href="../docs/instruments.md#audio-bench-audio-benchhtml">what this measures</a>
-  </p>
+  <h1>Developer options</h1>
+
+  <section id="panel-pins">
+  <section class="card">
+    <header><h2>Connection</h2><span class="dot"></span></header>
+    <div class="card-do">
+      <button id="pinsConnectBtn" class="primary">Connect the FT232H</button>
+    </div>
+    <div class="card-read">
+      <p id="status">Status: not connected</p>
+    </div>
+  </section>
+
+  <section class="card">
+    <header><h2>① Polarity</h2><span class="dot"></span></header>
+    <p class="hint">Is side A left or right? Each button holds its pins high for
+      600 ms. Watch which way the wheels turn, and write the answer into
+      docs/hardware.md.</p>
+    <div class="card-do">
+      <div class="controls">
+        <button data-pins="0x50">forward + side A (0x50)</button>
+        <button data-pins="0x90">forward + side B (0x90)</button>
+        <button data-pins="0x10">forward, straight (0x10)</button>
+        <button data-pins="0x20">backward, straight (0x20)</button>
+        <button data-pins="0x60">backward + side A (0x60)</button>
+        <button data-pins="0xa0">backward + side B (0xa0)</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <header><h2>② Byte rate</h2><span class="dot"></span></header>
+    <p class="hint">
+      At 1200 baud, 3000 forward bytes plus one stop byte in one go. Time the
+      motor with a stopwatch; measure how far it travelled.
+      <b>If the car is about to leave the bench, hit Emergency stop.</b>
+      <a href="../docs/instruments.md#why-there-is-an-emergency-stop-at-the-top">why that is the only thing that can</a>
+    </p>
+    <div class="card-do">
+      <div class="controls">
+        <button id="byteRateBtn">Write 3000 bytes (≈ 2.5 s in theory)</button>
+      </div>
+      <label>Measured seconds <input id="measuredSeconds" type="number" step="0.1" inputmode="decimal"></label>
+      <label>Measured metres <input id="measuredMetres" type="number" step="0.1" inputmode="decimal"></label>
+      <div class="controls">
+        <button id="computeBtn">Compute ms/byte and m/s</button>
+      </div>
+    </div>
+    <div class="card-read">
+      <p id="byteRateResult"></p>
+    </div>
+  </section>
+
+  <section class="card">
+    <header><h2>⑧ Motor threshold</h2><span class="dot"></span></header>
+    <p class="hint">Start at 100 ms and add 50 ms each round, ten tries each.
+      The answer is the smallest pulse that moves the car every single time.</p>
+    <div class="card-do">
+      <div class="controls">
+        <button data-pulse="100">100 ms</button>
+        <button data-pulse="150">150 ms</button>
+        <button data-pulse="200">200 ms</button>
+        <button data-pulse="250">250 ms</button>
+        <button data-pulse="300">300 ms</button>
+        <button data-pulse="350">350 ms</button>
+        <button data-pulse="400">400 ms</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <header><h2>Diagnostics</h2><span class="dot"></span></header>
+    <div class="card-do">
+      <div class="controls">
+        <button id="scanAllBtn">Scan every USB device</button>
+        <button id="readPinsBtn">Read the pins</button>
+        <button id="listGrantedBtn">List granted devices</button>
+      </div>
+    </div>
+  </section>
+  </section>
+
+  <section id="panel-connectivity">
+  <form id="cfgForm">
+  <section class="card">
+    <header><h2>STT</h2><span class="dot" id="sttDot"></span></header>
+    <p class="hint">
+      Reads the three clips below, in <b>your own voice</b>: a pass means the
+      chain understands you, not just that the key is valid.
+    </p>
+    <div class="card-do">
+      <label>baseURL <input name="stt.baseURL" list="sttBaseURLs" autocomplete="off"></label>
+      <label>apiKey <input name="stt.apiKey" type="password" autocomplete="off"></label>
+      <label>model <input name="stt.model" list="sttModels" autocomplete="off"></label>
+
+      <!-- The clips the test reads, in the card that reads them. They used to
+           be a section of their own further down, and the hint up here had to
+           point at it — the same "it is somewhere else on this page" the tests
+           themselves had until they moved beside their fields.
+
+           Folded, because recording is done once a session and then never
+           again; the summary keeps the part that still matters, which is
+           whether all three exist. -->
+      <details class="knobs">
+        <summary id="fixtureSummary">recordings</summary>
+        <p class="hint">
+          Say each line as written, then <b>listen back before trusting it</b> —
+          a clip that got cut off still transcribes into something plausible.
+          Kept in this browser, never in the repo.
+          <a href="../docs/instruments.md#why-the-three-clips-have-to-be-recorded-and-listened-back-to">why your own voice</a>
+        </p>
+        <ol id="fixtures"></ol>
+      </details>
+
+      <div class="controls">
+        <button type="button" data-save="stt">Save</button>
+        <button type="button" data-test="stt">Test STT</button>
+      </div>
+    </div>
+    <div class="card-read">
+      <span id="sttResult" class="result"></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <header><h2>LLM</h2><span class="dot"></span></header>
+    <p class="hint">It has to answer <b>and</b> to call a tool. Those are two
+      different things, verified separately.</p>
+    <div class="card-do">
+      <label>baseURL <input name="llm.baseURL" list="llmBaseURLs" autocomplete="off"></label>
+      <label>apiKey <input name="llm.apiKey" type="password" autocomplete="off"></label>
+      <label>model <input name="llm.model" list="llmModels" autocomplete="off"></label>
+      <div class="controls">
+        <button type="button" data-save="llm">Save</button>
+        <button type="button" data-test="llm">Test LLM</button>
+      </div>
+    </div>
+    <div class="card-read">
+      <span id="llmResult" class="result"></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <header><h2>TTS</h2><span class="dot"></span></header>
+    <p class="hint">Synthesises the check line for the language the robot is set
+      to — code-switched in Chinese, plain in English.
+      <b>Every language in it has to be intelligible.</b></p>
+    <div class="card-do">
+      <label>baseURL <input name="tts.baseURL" list="ttsBaseURLs" autocomplete="off"></label>
+      <label>apiKey <input name="tts.apiKey" type="password" autocomplete="off"></label>
+      <label>model <input name="tts.model" list="ttsModels" autocomplete="off"></label>
+      <label>voice <input name="tts.voice" list="ttsVoices" autocomplete="off"></label>
+      <div class="controls">
+        <button type="button" data-save="tts">Save</button>
+        <button type="button" data-test="tts">Test TTS</button>
+      </div>
+    </div>
+    <div class="card-read">
+      <span id="ttsResult" class="result"></span>
+    </div>
+  </section>
+  </form>
+
+  <!-- Suggestions only, and empty here on purpose: setup.js fills them from
+       provider-presets.js, the same list the product's setup sheet reads. The
+       two surfaces look nothing alike and must not know different things. -->
+  <datalist id="sttBaseURLs"></datalist><datalist id="sttModels"></datalist>
+  <datalist id="llmBaseURLs"></datalist><datalist id="llmModels"></datalist>
+  <datalist id="ttsBaseURLs"></datalist><datalist id="ttsModels"></datalist>
+  <datalist id="ttsVoices"></datalist>
+
+  <section class="card">
+    <header><h2>USB</h2><span class="dot"></span></header>
+    <p class="hint">Connect first; the typed driver needs it too. The test
+      writes the shortest pulse the robot itself will issue — <b>green only
+      means the bytes reached the chip.</b> Nothing moving is not proof of bad
+      wiring: what actually starts this motor is ⑧ on
+      <a href="#panel-pins">the pin bench</a>, still unmeasured.</p>
+    <div class="card-do">
+      <div class="controls">
+        <button id="connectBtn">Connect the FT232H</button>
+        <button data-test="usb">Make the car twitch</button>
+      </div>
+    </div>
+    <div class="card-read">
+      <p id="usbStatus" class="hint">Status: not connected</p>
+      <span id="usbResult" class="result"></span>
+    </div>
+  </section>
+
+  <p id="cfgStatus" class="hint"></p>
+
+  <section class="card">
+    <header><h2>Typed driver</h2><span class="dot"></span></header>
+    <p class="hint">
+      The four cards above are one layer each; this is all of them at once
+      except STT. Text goes straight to brain.js, so it needs the LLM, the TTS
+      and the car — no microphone.
+    </p>
+    <div class="card-do">
+      <form id="textForm">
+        <input id="textInput" placeholder="drive forward for two seconds, and tell me a joke" autocomplete="off">
+        <button type="submit">Send</button>
+      </form>
+    </div>
+    <div class="card-read">
+      <pre id="turnLog"></pre>
+    </div>
+  </section>
+  </section>
+
+  <!-- Shared by the four audio panels and shown with any of them: the
+       microphone constraints are read once at Start, and the two cross-cutting
+       knobs stay on across whichever panel runs (audio bench spec 3.1). -->
+  <div id="audioCommon" hidden>
   <section class="card">
     <header><h2>Microphone</h2><span class="dot"></span></header>
     <p class="hint">
@@ -58,10 +266,8 @@
         <button id="motorToggle" disabled>Make the car circle (noise for ⑦)</button>
       </div>
     </div>
-    <div class="card-read">
-      <p id="usbStatus" class="hint">USB: not connected</p>
-    </div>
   </section>
+  </div>
 
   <section id="panel-residency">
    <section class="card">
@@ -288,11 +494,23 @@
        long to find the button" and "the readings are a screen away from the
        control". Inside <main> so it inherits the page, not the viewport edge. -->
   <div id="benchbar">
+    <!-- Six entries, not eighteen: a card is a group, a section is what you can
+         see at once. The two in the first groups never claim the microphone,
+         so they may run while an audio panel does — ⑦ is KWS measured against
+         the motor's own noise. -->
     <select id="panelPick">
-      <option value="residency">Residency — ⑤ ⑫ ⑭ ⑮</option>
-      <option value="acoustics">Acoustics — ⑥ ⑬</option>
-      <option value="recognition">Recognition — ⑦ ⑩ ⑯</option>
-      <option value="providers">Providers — ⑨ ⑪</option>
+      <optgroup label="Pins">
+        <option value="pins" selected>Pin bench — ① ② ⑧</option>
+      </optgroup>
+      <optgroup label="Connectivity">
+        <option value="connectivity">Providers, USB and the typed driver</option>
+      </optgroup>
+      <optgroup label="Audio">
+        <option value="residency">Residency — ⑤ ⑫ ⑭ ⑮</option>
+        <option value="acoustics">Acoustics — ⑥ ⑬</option>
+        <option value="recognition">Recognition — ⑦ ⑩ ⑯</option>
+        <option value="providers">Providers — ⑨ ⑪</option>
+      </optgroup>
     </select>
     <span id="benchbarMain">
       <!-- disabled until the wasm has loaded: pressing Start before that would
@@ -303,11 +521,11 @@
            two above. One button, one fixed place, whose face is always the most
            urgent thing available — the rule docs/ui.md settled for the product.
            Red exists on this page only while there is something to stop. -->
-      <button id="benchbarStop" class="danger" hidden>■ STOP THE CAR</button>
+      <button id="stopBtn" class="danger" hidden>■ STOP THE CAR</button>
     </span>
     <span id="benchbarRead"></span>
   </div>
 </main>
-<script type="module" src="audio-bench/main.js"></script>
+<script type="module" src="dev.js"></script>
 </body>
 </html>

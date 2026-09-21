@@ -11,8 +11,7 @@
 // app that does, so that §8.2's schema has exactly one definition.
 
 import { CONFIG_KEY, loadConfig, saveConfig } from '../config.js';
-import { Ftdi } from '../ftdi.js';
-import { Executor, MIN_DURATION_MS } from '../executor.js';
+import { MIN_DURATION_MS } from '../executor.js';
 import { OpenAiCompatStt } from '../providers/stt-openai-compat.js';
 import { OpenAiCompatLlm } from '../providers/llm-openai-compat.js';
 import { WebAudioTts } from '../providers/tts-webaudio.js';
@@ -224,52 +223,20 @@ export function createConnectivity() {
   // page load — a dedicated button, then the Ftdi/Executor pair is reused by
   // both the USB connectivity test and the typed-drive section below.
 
-  /** @type {Ftdi | null} */
-  let ftdi = null;
-  /** @type {Executor | null} */
-  let executor = null;
 
   /** @param {string} text */
   function setUsbStatus(text) {
     el('usbStatus').textContent = `Status: ${text}`;
   }
 
-  /** @returns {Ftdi} */
+  /** @returns {import('../ftdi.js').Ftdi} */
   function requireFtdi() {
-    if (!ftdi) throw new Error('press “Connect the FT232H” beside this first');
-    return ftdi;
+    const dev = ctx?.ftdi ?? null;
+    if (!dev) throw new Error('press “Connect the FT232H” first');
+    return dev;
   }
 
-  function wireConnect() {
-    el('connectBtn').addEventListener('click', async () => {
-      const usb = navigator.usb;
-      if (!usb) {
-        setUsbStatus('this browser has no WebUSB (needs a Chromium engine: Chrome / Edge)');
-        return;
-      }
-      try {
-        const opened = await Ftdi.open(usb);
-        ftdi = opened;
-        // Executor's constructor wires ftdi.onDisconnect itself (spec §4.6) — do
-        // not also set it here, that would just overwrite Executor's own handler.
-        executor = new Executor(opened, {
-          onError: (err) => {
-            setUsbStatus(`!! ${err.message}`);
-            ctx?.status('usb', 'dim', 'USB disconnected');
-            logTurn(`!! executor: ${err.message}`);
-          },
-        });
-        setUsbStatus('connected');
-        ctx?.status('usb', 'go', 'USB connected');
-        logTurn('USB connected');
-      } catch (err) {
-        const e = /** @type {Error} */ (err);
-        setUsbStatus(`connect failed: ${e.message}`);
-        ctx?.status('usb', 'wait', 'USB connect failed');
-      }
-    });
-  }
-
+  
   // --- Connectivity tests (spec §9.3) -----------------------------------------
   //
   // Every test exercises the hardest case on purpose — an easy input passing
@@ -337,7 +304,7 @@ export function createConnectivity() {
     return `played 「${text}」 — were both languages intelligible? (your ears decide this one, not the code)`;
   }
 
-  /** @param {Ftdi} dev @returns {Promise<string>} */
+  /** @param {import('../ftdi.js').Ftdi} dev @returns {Promise<string>} */
   /**
    * The one test whose second half happens outside the computer.
    *
@@ -353,11 +320,11 @@ export function createConnectivity() {
    * sits still, and you go looking at solder joints.
    *
    * Importing it also means there is one place to change. MIN_DURATION_MS is
-   * itself a placeholder until ⑧ (bench.html) measures the shortest pulse that
+   * itself a placeholder until ⑧ (dev.html) measures the shortest pulse that
    * starts this motor every time; when that lands, this test follows it without
    * anybody remembering to.
    *
-   * @param {Ftdi} dev
+   * @param {import('../ftdi.js').Ftdi} dev
    */
   async function testUsb(dev) {
     await dev.write(dev.buildStream(0x10, MIN_DURATION_MS));
@@ -426,7 +393,7 @@ export function createConnectivity() {
   // The three clips have to be in your own voice (web/fixtures/README.md), and
   // on a phone there is no repo to drop a file into and no ffmpeg to make one —
   // so the page that needs them is the only place that can collect them. The
-  // rows are built from STT_FIXTURES rather than written into setup.html so
+  // rows are built from STT_FIXTURES rather than written into dev.html so
   // that "which clips exist" has one definition.
   //
   // Recording sits above the tests and the tests gain no side effect from it: a
@@ -658,7 +625,7 @@ export function createConnectivity() {
 
   /** @type {Brain | null} */
   let brain = null;
-  /** @type {Executor | null} */
+  /** @type {import('../executor.js').Executor | null} */
   let brainExecutor = null;
 
   /**
@@ -667,7 +634,7 @@ export function createConnectivity() {
    * because that would throw away Brain's own conversation history and the
    * replyLang preference set_reply_language may have written into it (spec
    * §6.4, §11.1). Editing the config after this point requires reconnecting.
-   * @param {Executor} exec
+   * @param {import('../executor.js').Executor} exec
    * @returns {Brain}
    */
   function ensureBrain(exec) {
@@ -697,7 +664,7 @@ export function createConnectivity() {
   // a thin decorator on the way to Brain. Brain itself learns nothing about the
   // DOM from this: it still sees an executor and a tts.
 
-  /** @param {Executor} exec */
+  /** @param {import('../executor.js').Executor} exec */
   function logged(exec) {
     return {
       get connected() { return exec.connected; },
@@ -753,7 +720,7 @@ export function createConnectivity() {
       input.value = '';
       logTurn(`> ${text}`);
 
-      if (!executor) {
+      if (!ctx?.executor) {
         logTurn('!! connect USB first');
         return;
       }
@@ -762,7 +729,7 @@ export function createConnectivity() {
         (document.querySelector('#textForm button[type="submit"]'));
       sendBtn.disabled = true;
       try {
-        await ensureBrain(executor).handle(text);
+        await ensureBrain(ctx.executor).handle(text);
       } catch (err) {
         const e = /** @type {Error} */ (err);
         logTurn(`!! ${e.name}: ${e.message}`);
@@ -776,17 +743,7 @@ export function createConnectivity() {
   // module-level `executor` directly and never goes through Brain, so it does
   // not depend on a turn ever having been sent. ------------------------------
 
-  function wireEmergencyStop() {
-    el('stopBtn').addEventListener('click', () => {
-      if (!executor) {
-        logTurn('■ emergency stop: USB is not connected, so there is no car to stop');
-        return;
-      }
-      executor.stop(); // sync gen++ happens before this returns
-      logTurn('■ emergency stop');
-    });
-  }
-
+  
   return {
     name: NAME,
 
@@ -801,12 +758,10 @@ export function createConnectivity() {
       wireFormGuard();
       wireSaveButtons();
       fillEverything();
-      wireConnect();
       wireTests();
       buildFixtureRows();
       refreshFixtures();
       wireTypedDriver();
-      wireEmergencyStop();
     },
 
     /** The recorder holds a microphone of its own; nothing else here owns a

@@ -60,7 +60,7 @@ export function recordedAt(response) {
 /**
  * Every stored key under a prefix, as the relative paths they were saved with.
  *
- * setup.html does not need this — its three fixtures are a fixed list in
+ * dev.html does not need this — its three fixtures are a fixed list in
  * STT_FIXTURES. The audio bench does: its calibration samples are however many
  * you recorded, under `calib/`, and ⑯'s whole method is replaying that set
  * against one parameter after another.

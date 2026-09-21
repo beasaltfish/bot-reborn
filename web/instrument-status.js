@@ -9,21 +9,12 @@
 // A dot plus a label, using the four meanings docs/ui.md fixes. Red is not
 // among them: red is the emergency stop's alone, and a status strip is never an
 // emergency — it is what is true right now.
+//
+// It used to carry links between the three instrument pages as well. There is
+// one page now, so there is nowhere to link to.
 
 /** @typedef {'go' | 'wait' | 'dim'} State */
 
-/**
- * The three instruments. One list, used both for the links and by the test that
- * checks the links go somewhere.
- *
- * Labels are short because they share a line with up to five readings on a
- * phone. English-only, like everything else on these pages.
- */
-export const PAGES = [
-  { href: 'bench.html', label: 'pin' },
-  { href: 'setup.html', label: 'setup' },
-  { href: 'audio-bench.html', label: 'audio' },
-];
 
 /**
  * @param {HTMLElement} mount the <div id="instrumentStatus"> in the page
@@ -46,26 +37,7 @@ export function createStatus(mount, items) {
     list.append(el);
   }
 
-  const nav = document.createElement('nav');
-  nav.className = 'status-nav';
-  // Which page this is, read from the document rather than passed in: a page
-  // that had to name itself could name itself wrongly, and the only symptom
-  // would be a link that looks available and goes nowhere new.
-  const here = location.pathname.split('/').pop() || 'index.html';
-  for (const page of PAGES) {
-    if (page.href === here) {
-      const self = document.createElement('span');
-      self.textContent = page.label;
-      nav.append(self);
-    } else {
-      const a = document.createElement('a');
-      a.href = page.href;
-      a.textContent = page.label;
-      nav.append(a);
-    }
-  }
-
-  mount.append(list, nav);
+  mount.append(list);
 
   return {
     /**
