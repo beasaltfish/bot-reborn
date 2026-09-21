@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { PAGES } from '../web/instrument-status.js';
 
 /** @param {string} rel */
 const read = (rel) => readFileSync(new URL('../' + rel, import.meta.url), 'utf8');
@@ -83,5 +84,22 @@ test('a card is a header, then what you do, then what came back', () => {
         assert.ok(readAt > doAt, `a card in ${name} puts its readings before its controls`);
       }
     }
+  }
+});
+
+test('the status strip knows all three instruments and nothing else', () => {
+  // The three pages cannot reach each other today: the only route is back to
+  // index.html and in through the gear, or typing a URL on a phone.
+  assert.deepEqual(PAGES.map((p) => p.href).sort(),
+    ['audio-bench.html', 'bench.html', 'setup.html']);
+  for (const p of PAGES) {
+    assert.ok(p.label.length > 0 && p.label.length <= 12,
+      `"${p.label}" does not fit on one line of a phone`);
+  }
+});
+
+test('every instrument page mounts the strip', () => {
+  for (const [name, source] of PAGES_SRC) {
+    assert.match(source, /id="instrumentStatus"/, `${name} does not mount the status strip`);
   }
 });

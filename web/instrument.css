@@ -319,3 +319,34 @@ section[id^="panel-"].idle { opacity: .55; }
 #benchbar #acSub, #benchbar #acLine { display: none; }
 
 
+
+/* --- the status strip --------------------------------------------------
+ *
+ * One line: what is on, and the only route between these three pages. Sticky,
+ * because "I do not know what state it is in" is a question you have while
+ * scrolled to the bottom of a panel. */
+
+#instrumentStatus {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  margin: calc(var(--gap) * -2) calc(var(--gap) * -2) var(--gap);
+  padding: var(--gap) calc(var(--gap) * 2);
+  background: Canvas;
+  border-bottom: 1px solid var(--edge);
+  font-size: 12px;
+}
+
+.status-items { flex: 1; display: flex; flex-wrap: wrap; gap: var(--gap); }
+/* Dim is the resting state of most of these most of the time, and it must not
+   read as a fault. */
+.status-item { opacity: .45; white-space: nowrap; }
+.status-item[data-state="go"]   { color: var(--go);   opacity: 1; }
+.status-item[data-state="wait"] { color: var(--wait); opacity: 1; }
+
+.status-nav { flex: none; display: flex; gap: var(--gap); opacity: .6; }
+/* The page you are already on: named, not offered. */
+.status-nav span { font-weight: 600; opacity: .5; }
