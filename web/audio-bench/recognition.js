@@ -430,6 +430,21 @@ export function createRecognition() {
       const material = materialFor(c.config.lang);
       setStat('rcSayCommands', material.commands.join(' / '));
       setStat('rcSayRunOn', material.runOn);
+
+      // Generated, never written by hand. Which arm you are on decides what
+      // every reading below means, and a summary that drifted from its knobs
+      // would do it without a sound.
+      const KNOBS = /** @type {[string, string][]} */ ([
+        ['rcKwsThreshold', 'kws'], ['rcVadThreshold', 'vad'],
+        ['rcMinSilence', 'sil'], ['rcMinSpeech', 'spk'],
+        ['rcBufferSeconds', 'buf'], ['rcMinLevel', 'floor'],
+        ['rcWiring', 'wiring'], ['rcWakeMode', 'wake'],
+      ]);
+      const renderSummary = () => setStat('rcKnobSummary', KNOBS
+        .map(([id, name]) => `${name} ${/** @type {HTMLInputElement} */ ($(id)).value}`)
+        .join(' · '));
+      for (const [id] of KNOBS) $(id).addEventListener('change', renderSummary);
+      renderSummary();
       stt = c.config.stt.baseURL ? new OpenAiCompatStt(c.config.stt) : null;
       recorder = createRecorder({ pipeline: c.pipeline, log: c.log });
       earcon = createEarcon(c.pipeline.audioContext);

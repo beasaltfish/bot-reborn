@@ -350,3 +350,15 @@ section[id^="panel-"].idle { opacity: .55; }
 .status-nav { flex: none; display: flex; gap: var(--gap); opacity: .6; }
 /* The page you are already on: named, not offered. */
 .status-nav span { font-weight: 600; opacity: .5; }
+
+/* Folded knobs. The summary is generated from the values, never written by
+   hand: a hand-written one drifts from the knobs it describes, silently, and
+   you end up reading numbers taken at settings you no longer have. */
+.knobs { margin-bottom: var(--gap); }
+.knobs > summary {
+  cursor: pointer;
+  font-size: 12px;
+  opacity: .7;
+  font-variant-numeric: tabular-nums;
+}
+.knobs[open] > summary { margin-bottom: var(--gap); }

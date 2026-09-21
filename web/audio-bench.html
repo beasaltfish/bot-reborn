@@ -150,6 +150,12 @@
       <a href="../docs/instruments.md#recognition-⑦-⑩-⑯">why</a>
     </p>
     <div class="card-do">
+      <!-- Folded, with the values kept in the summary. They are set once a
+           session and then never looked at again — but which arm you are on
+           decides what the readings mean, so the values stay visible while the
+           editing surface goes away. -->
+      <details class="knobs">
+        <summary id="rcKnobSummary">settings</summary>
     <div class="row">
       <label>KWS threshold<input id="rcKwsThreshold" type="number" step="0.05" value="0.25" inputmode="decimal"></label>
       <label>KWS score<input id="rcKwsScore" type="number" step="0.5" value="1" inputmode="decimal"></label>
@@ -195,6 +201,7 @@
       head that want opposite fixes.
       <a href="../docs/instruments.md#the-wake-earcon-switch">why</a>
     </p>
+      </details>
     <div class="controls">
       <button id="rcRun" disabled>Run</button>
       <button id="rcStop" disabled>Stop</button>
