@@ -25,6 +25,7 @@ import { RATE } from '../audio/pipeline.js';
 import { OpenAiCompatStt } from '../providers/stt-openai-compat.js';
 import { WebAudioTts } from '../providers/tts-webaudio.js';
 import { rms, dbOf, dbs, fmt, setStat, setDisabled } from './readout.js';
+import { materialFor } from '../instrument-material.js';
 
 const NAME = 'acoustics';
 const SUB = 'acoustics';
@@ -32,28 +33,6 @@ const SUB = 'acoustics';
 const $ = (/** @type {string} */ id) =>
   /** @type {HTMLElement} */ (document.getElementById(id));
 
-// Long on purpose: the probe needs ~23 s of continuous speech to walk its five
-// windows, and a passage that runs out mid-window aborts the run.
-//
-// Chinese with English spliced into it, also on purpose, and NOT an oversight
-// left over from translating this file to English: waiting item ⑪ is about how
-// each TTS provider handles code-switching, and a monolingual passage would
-// never ask the question. Same for READ_LINE.
-const SCRIPT_TEXT =
-    '好的，我先往前走一点。「往前走」的英文是 go forward，走慢一点就是 ' +
-    'go forward slowly。你可以试着跟我说一遍，不用着急，说错了我们再来一次。' +
-    '接下来我会一直念下去，你照着屏幕上的提示做就行，该安静的时候安静，' +
-    '该说话的时候就正常说话，不用管我念到哪里。' +
-    '我现在往左边转一点，「向左转」是 turn left，往右边就是 turn right。' +
-    '再往前一点点，然后停下来，「停下来」是 stop，或者 hold on。' +
-    '给你数两遍：one, two, three, four, five, six, seven, eight, nine, ten。' +
-    '一，二，三，四，五，六，七，八，九，十。' +
-    '好了，这一段差不多念完了，看看屏幕上那几行电平对不对得上。';
-
-// The line you read, twice: once in silence and once over the robot. Also
-// code-switched — this is the sentence waiting item ⑩ is about, and the one a
-// phone mic is worst at.
-const READ_LINE = '往前走三米，然后 turn left，停在红色的箱子旁边';
 
 /** @type {Record<string, { ms: number, cue: string, sub: string, read?: boolean }>} */
 const PHASES = {
@@ -114,6 +93,10 @@ const pct = (/** @type {number | null} */ v) =>
 
 export function createAcoustics() {
   /** @type {import('./main.js').BenchContext | null} */ let ctx = null;
+  // Fixed at page Start, which is also when config stops changing. Defaulting
+  // to the en arm rather than null keeps showCue() typed: it runs before the
+  // first start() on a reload-and-abort.
+  let material = materialFor('en');
   /** @type {WebAudioTts | null} */ let tts = null;
   /** @type {OpenAiCompatStt | null} */ let stt = null;
   let active = false;
@@ -150,7 +133,7 @@ export function createAcoustics() {
     setStat('acCue', text);
     setStat('acSub', sub);
     setStat('acCount', count == null ? '' : String(count));
-    setStat('acLine', read ? READ_LINE : '');
+    setStat('acLine', read ? material.readLine : '');
     $('acLine').hidden = !read;
     $('acBar').hidden = !active;
   }
@@ -203,7 +186,7 @@ export function createAcoustics() {
    */
   async function transcribeProbe() {
     showCue('⑦ transcribing…', 'sending both recordings to STT — do not close the page', null);
-    /** @type {any} */ const out = { ref: READ_LINE };
+    /** @type {any} */ const out = { ref: material.readLine };
     for (const k of ['control', 'talk']) {
       const pcm = joinFrames(rec[k]);
       if (!pcm.length) { out[k] = '(nothing was recorded)'; continue; }
@@ -218,8 +201,8 @@ export function createAcoustics() {
         ctx?.log('❌ ' + out[k]);
       }
     }
-    out.cerControl = cer(READ_LINE, out.control);
-    out.cerTalk = cer(READ_LINE, out.talk);
+    out.cerControl = cer(material.readLine, out.control);
+    out.cerTalk = cer(material.readLine, out.talk);
     sttOut = out;
   }
 
@@ -366,7 +349,7 @@ export function createAcoustics() {
       // away, so the phase stays `control`: nothing is playing yet, and a fixed
       // delay here would eat into `quiet` instead.
       showCue('③ waiting for it to start…', 'TTS is fetching the audio', null);
-      playing = player.speak(SCRIPT_TEXT);
+      playing = player.speak(material.script);
       if (!await waitForAudio(15000)) throw new Error('waited 15 s and TTS never made a sound');
       for (const p of SCRIPT) await hold(p, true);
       player.cancel();
@@ -394,6 +377,7 @@ export function createAcoustics() {
     /** @param {import('./main.js').BenchContext} c */
     start(c) {
       ctx = c;
+      material = materialFor(c.config.lang);
       setDisabled('acRun', false);
       $('acRun').addEventListener('click', () => void runProbe());
       $('acStop').addEventListener('click', () => { aborted = true; });
