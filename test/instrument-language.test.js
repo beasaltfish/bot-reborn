@@ -59,8 +59,7 @@ test('the allow-list only ever shrinks', () => {
   }
 });
 
-test('the material table is the one place Chinese is allowed',
-  { skip: 'web/instrument-material.js lands in Task 2' }, () => {
+test('the material table is the one place Chinese is allowed', () => {
   // Not on INSTRUMENTS, and deliberately asserted the other way round: if this
   // file ever stops carrying Chinese, the zh arm has been translated away and
   // ⑩ ⑪ stopped measuring code-switching without anything else going red.
