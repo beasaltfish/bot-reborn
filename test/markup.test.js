@@ -163,3 +163,13 @@ test('the gear has no dead link behind it', () => {
   assert.ok(!/id="settings"[^>]*href=/.test(html),
     'index.html still carries the retired href on #settings');
 });
+
+test('the other two instruments were already short, and stay short', () => {
+  // Lower ceilings than the audio bench's because these pages are smaller, not
+  // because their prose is worth less: a ratchet set above where a page already
+  // sits is not a ratchet.
+  const setupWords = proseWords(setup);
+  const benchWords = proseWords(bench);
+  assert.ok(setupWords < 220, `setup.html carries ${setupWords} words of prose`);
+  assert.ok(benchWords < 140, `bench.html carries ${benchWords} words of prose`);
+});

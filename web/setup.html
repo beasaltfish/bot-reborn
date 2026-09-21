@@ -10,15 +10,10 @@
 <main>
   <h1>Connectivity test</h1>
   <p class="hint">
-    <b>This is the instrument, not the way in.</b> Setting up three providers
-    for the first time happens in <a href="index.html">the robot</a> now — a
-    sheet with three keys in it and a test beside each one. What is here that
-    is not there: fixtures in <b>your own voice</b>, so a pass means the chain
-    understands you and not just that the key is valid; the typed driver, which
-    reaches brain.js without a microphone; and every field editable at once,
-    which is what comparing one provider against another needs (spec §12 ⑪).
-    The two write the same config, so either can be used to fix what the other
-    set.
+    <b>This is the instrument, not the way in.</b> First-time setup happens in
+    <a href="index.html">the robot</a>. What is here that is not there: fixtures
+    in <b>your own voice</b>, the typed driver, and every field editable at once.
+    <a href="../docs/instruments.md#connectivity-test--setuphtml">why</a>
   </p>
 
   <hr>
@@ -56,15 +51,11 @@
   <hr>
   <h2>Fixtures</h2>
   <p class="hint">
-    The STT test reads three fixed clips, and they have to be <b>your own
-    voice</b>: somebody else's accent cannot find your problem. Say each line
-    as written, then <b>listen back before trusting it</b> — a clip where the
-    sentence got cut off still transcribes into something plausible.
-    Recordings are kept in this browser, never in the repo, so clearing site
-    storage means recording them again. The microphone stays open from the
-    first Record until you leave the page. A <code>.wav</code> put into
-    <code>web/fixtures/</code> with ffmpeg is used when there is no recording —
-    see <code>web/fixtures/README.md</code>.
+    Say each line as written, then <b>listen back before trusting it</b> — a
+    clip that got cut off still transcribes into something plausible. Kept in
+    this browser, never in the repo. The microphone stays open from the first
+    Record until you leave the page.
+    <a href="../docs/instruments.md#why-the-three-clips-have-to-be-recorded-and-listened-back-to">why</a>
   </p>
   <ol id="fixtures"></ol>
 
@@ -76,11 +67,8 @@
       <button data-test="stt">Test STT</button>
       <span id="sttResult" class="result"></span>
       <p class="hint">
-        Reads the three clips from Fixtures above — <b>the hardest three inputs
-        for the language this robot is set to</b>, which in Chinese means one of
-        them mixes both languages inside a single sentence. All three must come
-        back with a transcript. A clip that was never recorded fails this test
-        rather than being skipped quietly.
+        All three clips must come back with a transcript. A clip that was never
+        recorded fails rather than being skipped quietly.
       </p>
     </li>
     <li>
@@ -105,8 +93,8 @@
   <hr>
   <h2>Typed driver</h2>
   <p class="hint">
-    Skips the microphone and feeds text straight to brain.js — the whole v1
-    chain except for STT. Connect the FT232H above first.
+    Text straight to brain.js — the whole chain except STT. Connect the FT232H
+    above first.
   </p>
   <form id="textForm">
     <input id="textInput" placeholder="drive forward for two seconds, and tell me a joke" autocomplete="off">
