@@ -7,7 +7,7 @@
 
 import { CONFIG_KEY, loadConfig, saveConfig } from './config.js';
 import { Ftdi } from './ftdi.js';
-import { Executor } from './executor.js';
+import { Executor, MIN_DURATION_MS } from './executor.js';
 import { OpenAiCompatStt } from './providers/stt-openai-compat.js';
 import { OpenAiCompatLlm } from './providers/llm-openai-compat.js';
 import { WebAudioTts } from './providers/tts-webaudio.js';
@@ -325,17 +325,23 @@ async function testTts(tts) {
  * moved, and it must not pretend to: a mis-soldered pin, a dead motor and a
  * flat battery all pass this.
  *
- * 200 ms is not a threshold anybody measured. ⑧ (bench.html) exists to find the
- * shortest pulse that starts the motor every time, sweeping from 100 ms to
- * 400 ms, and it is still blank in docs/hardware.md — so a car that does not
- * twitch here may simply have been asked too briefly.
+ * The pulse is MIN_DURATION_MS, not a number of its own. It used to be a
+ * literal 200 — SHORTER THAN ANYTHING THE PRODUCT CAN EMIT, because the
+ * executor refuses any move below MIN_DURATION_MS. A connectivity test that
+ * fails for a reason which is not connectivity is worse than no test: the car
+ * sits still, and you go looking at solder joints.
+ *
+ * Importing it also means there is one place to change. MIN_DURATION_MS is
+ * itself a placeholder until ⑧ (bench.html) measures the shortest pulse that
+ * starts this motor every time; when that lands, this test follows it without
+ * anybody remembering to.
  *
  * @param {Ftdi} dev
  */
 async function testUsb(dev) {
-  await dev.write(dev.buildStream(0x10, 200));
-  return 'sent 200 ms of forward — did the car move? (no movement is not proof '
-    + 'of bad wiring: ⑧ is unmeasured)';
+  await dev.write(dev.buildStream(0x10, MIN_DURATION_MS));
+  return `sent ${MIN_DURATION_MS} ms of forward — did the car move? `
+    + '(no movement is not proof of bad wiring: ⑧ is unmeasured)';
 }
 
 /** @param {HTMLElement} target @param {string} text @param {'ok' | 'error' | 'pending'} state */

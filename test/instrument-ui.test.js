@@ -213,3 +213,15 @@ test('nothing in the config form can submit it', () => {
   assert.match(read('web/setup.js'), /function rowButton[\s\S]{0,300}?button\.type = 'button'/,
     'rowButton creates a submit button');
 });
+
+test('the USB test sends what the product sends, not a number of its own', () => {
+  // It used to write a literal 200 ms, which is shorter than anything the
+  // executor will emit (MIN_DURATION_MS is 300). A connectivity test that can
+  // fail for a reason which is not connectivity sends you to the solder joints
+  // for nothing — and when ⑧ finally measures the motor's threshold, a literal
+  // here would be a second place somebody has to remember.
+  const js = read('web/setup.js');
+  assert.match(js, /import \{[^}]*\bMIN_DURATION_MS\b[^}]*\} from '\.\/executor\.js'/);
+  assert.ok(!/buildStream\(0x10,\s*\d/.test(js),
+    'testUsb hard-codes a pulse length; use MIN_DURATION_MS');
+});
