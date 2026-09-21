@@ -76,10 +76,11 @@
       <button data-test="stt">Test STT</button>
       <span id="sttResult" class="result"></span>
       <p class="hint">
-        Reads the three clips from Fixtures above: Chinese, English, and
-        <b>the two mixed inside one sentence</b>. All three must come back with
-        a transcript. A clip that was never recorded fails this test rather
-        than being skipped quietly.
+        Reads the three clips from Fixtures above — <b>the hardest three inputs
+        for the language this robot is set to</b>, which in Chinese means one of
+        them mixes both languages inside a single sentence. All three must come
+        back with a transcript. A clip that was never recorded fails this test
+        rather than being skipped quietly.
       </p>
     </li>
     <li>
@@ -90,7 +91,9 @@
     <li>
       <button data-test="tts">Test TTS</button>
       <span id="ttsResult" class="result"></span>
-      <p class="hint">Synthesises 「『往前走』的英文是 go forward」. <b>Both languages have to be intelligible.</b></p>
+      <p class="hint">Synthesises the check line for the language the robot is
+        set to — code-switched in Chinese, plain in English.
+        <b>Every language in it has to be intelligible.</b></p>
     </li>
     <li>
       <button data-test="usb">Test USB</button>

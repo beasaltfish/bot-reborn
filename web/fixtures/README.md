@@ -74,3 +74,29 @@ the same take, and a file on disk cannot be re-recorded by accident.
 These `.wav` files stay out of the repo (see `web/fixtures/*.wav` in
 `.gitignore`) — they are your own accent, and somebody else's samples cannot
 find your problem.
+
+## The English arm
+
+`STT_FIXTURES` is keyed on the UI language (see `web/instrument-material.js`),
+so the three clips above are the **Chinese** set. Set the robot to English and
+the page asks for three different ones:
+
+| File | Contents | What it tests |
+|---|---|---|
+| `en-short.wav` | "back up" | a command too short for context to rescue |
+| `en-long.wav` | "keep going forward until I say stop" | a long sentence |
+| `en-numbers.wav` | "go forward three metres and stop beside the red box" | a number, a unit and a colour |
+
+There is no code-switched clip in this set, and that is the point. §9.3's
+"hardest case" is a statement about the input this user actually produces: for
+somebody who will only ever speak English to their robot, a mixed clip tests a
+capability they do not need and can fail a provider that serves them perfectly
+well.
+
+**The consequence is that the two arms are not comparable.** A calibration
+figure taken in English and one taken in Chinese answer different questions;
+write down which arm a reading came from.
+
+Neither set ships. Like the Chinese three, these are recorded in **your own
+voice** on `setup.html` and kept in this browser. The only clips in the repo are
+the two synthesised ones described under "The two clips that do ship" above.

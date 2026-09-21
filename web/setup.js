@@ -19,6 +19,7 @@ import { matchFixture, saveFixture, recordedAt } from './fixture-store.js';
 // The three checks have one definition; this page and the product's setup
 // sheet ask the same questions of different audio. See web/checks.js.
 import { checkLlm, checkTts, fetchClip, transcribeClip } from './checks.js';
+import { materialFor } from './instrument-material.js';
 
 /**
  * @typedef {import('./config.js').Config} Config
@@ -179,15 +180,13 @@ el('connectBtn').addEventListener('click', async () => {
 // tells you nothing. See web/fixtures/README.md for why the three STT
 // fixtures are what they are.
 
-// `say` is what the recorder puts on screen, so the three sentences have one
-// definition rather than one here and one in fixtures/README.md. They are not
-// UI text and are never translated: they are the audio under test, and the
-// third one only tests code-switching while it stays exactly this shape.
-const STT_FIXTURES = /** @type {const} */ ([
-  { path: 'fixtures/zh.wav', label: 'Chinese', say: '往前开两秒然后左转' },
-  { path: 'fixtures/en.wav', label: 'English', say: 'keep going forward until I say stop' },
-  { path: 'fixtures/mixed.wav', label: 'mixed in one sentence', say: '这个 sentence 里的 transition word 用得对吗' },
-]);
+// The three clips this page asks you to record, keyed on the UI language for
+// the reason checks.js gives: for somebody who will only ever speak English to
+// this robot, the code-switched clip tests a capability they do not need and
+// can fail a provider that serves them perfectly well. `say` is what the
+// recorder puts on screen, so each sentence has one definition — in
+// instrument-material.js — rather than one here and one in fixtures/README.md.
+const STT_FIXTURES = materialFor(loadConfig().lang).fixtures;
 
 /**
  * The one place a fixture is read, whether it was recorded on this page or

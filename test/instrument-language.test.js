@@ -25,8 +25,6 @@ const INSTRUMENTS = [
 // that takes it off this list. Shrink it; never grow it. When it is empty this
 // test becomes the plain rule and stays that way.
 const ALLOWED = new Set([
-  'web/setup.js',                   // Task 6
-  'web/setup.html',                 // Task 6
   'web/audio-bench.html',           // Task 7
 ]);
 
