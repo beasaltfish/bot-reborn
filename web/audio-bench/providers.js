@@ -19,9 +19,9 @@ import { OpenAiCompatStt } from '../providers/stt-openai-compat.js';
 import { OpenAiCompatLlm } from '../providers/llm-openai-compat.js';
 import { WebAudioTts } from '../providers/tts-webaudio.js';
 import { setStat, setDisabled } from './readout.js';
+import { materialFor } from '../instrument-material.js';
 
 const NAME = 'providers';
-const MIXED_LINE = '「往前走」的英文是 go forward';
 
 const $ = (/** @type {string} */ id) =>
   /** @type {HTMLElement} */ (document.getElementById(id));
@@ -30,6 +30,7 @@ const val = (/** @type {string} */ id) =>
 
 export function createProviders() {
   /** @type {import('./main.js').BenchContext | null} */ let ctx = null;
+  let material = materialFor('en');
   /** @type {Session | null} */ let session = null;
   let turnLog = '';
 
@@ -149,7 +150,7 @@ export function createProviders() {
     }, { audioContext: ctx.pipeline.audioContext });
     try {
       const t0 = performance.now();
-      await tts.speak(MIXED_LINE);
+      await tts.speak(material.ttsLine);
       setStat('pvSpeakResult',
         `played in ${Math.round(performance.now() - t0)} ms — `
         + 'both languages have to be intelligible, and that is an ear judgement');
@@ -164,6 +165,11 @@ export function createProviders() {
     /** @param {import('./main.js').BenchContext} c */
     start(c) {
       ctx = c;
+      material = materialFor(c.config.lang);
+      // ⑪ is "read this one line through each voice in turn", so the line has
+      // to be on screen. Without it the panel is a button that speaks something
+      // you cannot check against.
+      setStat('pvSayLine', material.ttsLine);
       setDisabled('pvRun', false);
       // Prefilled from the stored config so the first listen needs no typing;
       // edited here it goes nowhere near storage.
