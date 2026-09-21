@@ -1,0 +1,16 @@
+# The three instrument pages merged into one on 2026-09-21. These redirects are
+# not politeness to old bookmarks — they are the only way to retire a URL on
+# Pages at all.
+#
+# Deleting a file does not retire its path. Cloudflare serves `foo.html` at the
+# extensionless `/foo`, and an edge copy of `/foo` outlives the deployment that
+# produced it: `cache-control: public, s-maxage=604800`, so a week. There is no
+# purge for it either — the dashboard's Purge Cache works per zone, and
+# *.pages.dev is not a zone in this account. A 301 published here is the one
+# thing that replaces the stale entry.
+/bench            /dev  301
+/bench.html       /dev  301
+/setup            /dev  301
+/setup.html       /dev  301
+/audio-bench      /dev  301
+/audio-bench.html /dev  301

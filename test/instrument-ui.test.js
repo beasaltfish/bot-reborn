@@ -272,3 +272,18 @@ test('nothing still points at the three pages that were merged away', () => {
       `${rel} still points at a page that no longer exists`);
   }
 });
+
+test('every merged-away page has somewhere to land', () => {
+  // Deleting the file does not retire the path: Pages serves `foo.html` at the
+  // extensionless `/foo`, and an edge copy of `/foo` outlives the deployment
+  // that produced it by up to a week (s-maxage=604800). There is no purge — the
+  // dashboard's is per zone and *.pages.dev is not one. A published 301 is what
+  // replaces the stale entry, so these are load-bearing, not courtesy.
+  const redirects = read('web/_redirects');
+  for (const path of ['/bench', '/setup', '/audio-bench']) {
+    for (const suffix of ['', '.html']) {
+      assert.match(redirects, new RegExp(`^\\${path}${suffix}\\s+/dev\\s+301$`, 'm'),
+        `${path}${suffix} has no redirect`);
+    }
+  }
+});
