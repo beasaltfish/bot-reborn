@@ -11,6 +11,24 @@
   <div id="instrumentStatus"></div>
   <h1>Developer options</h1>
 
+  <!-- Six tabs, not a dropdown. A dropdown costs three actions to switch —
+       open, read, pick — and hides what is available until you do; these get
+       switched often enough that the cost was being paid all day. They scroll
+       sideways rather than wrap: a second row would push the panel itself down
+       the screen on every phone, every time.
+
+       The labels are short because they have to sit side by side. The full name
+       is on the card inside, which is where you read it. -->
+  <div id="panelTabs" role="tablist">
+    <button class="tab" data-panel="pins" aria-selected="true">Pins</button>
+    <button class="tab" data-panel="connectivity">Conn</button>
+    <button class="tab" data-panel="residency">Res</button>
+    <button class="tab" data-panel="acoustics">Acou</button>
+    <button class="tab" data-panel="recognition">Recog</button>
+    <button class="tab" data-panel="providers">Prov</button>
+  </div>
+
+
   <section id="panel-pins">
   <section class="card">
     <header><h2>Connection</h2><span class="dot"></span></header>
@@ -494,24 +512,6 @@
        long to find the button" and "the readings are a screen away from the
        control". Inside <main> so it inherits the page, not the viewport edge. -->
   <div id="benchbar">
-    <!-- Six entries, not eighteen: a card is a group, a section is what you can
-         see at once. The two in the first groups never claim the microphone,
-         so they may run while an audio panel does — ⑦ is KWS measured against
-         the motor's own noise. -->
-    <select id="panelPick">
-      <optgroup label="Pins">
-        <option value="pins" selected>Pin bench — ① ② ⑧</option>
-      </optgroup>
-      <optgroup label="Connectivity">
-        <option value="connectivity">Providers, USB and the typed driver</option>
-      </optgroup>
-      <optgroup label="Audio">
-        <option value="residency">Residency — ⑤ ⑫ ⑭ ⑮</option>
-        <option value="acoustics">Acoustics — ⑥ ⑬</option>
-        <option value="recognition">Recognition — ⑦ ⑩ ⑯</option>
-        <option value="providers">Providers — ⑨ ⑪</option>
-      </optgroup>
-    </select>
     <span id="benchbarMain">
       <!-- disabled until the wasm has loaded: pressing Start before that would
            hand the panels a null sherpa. main.js enables it. -->

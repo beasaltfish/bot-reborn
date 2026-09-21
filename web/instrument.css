@@ -368,3 +368,54 @@ section[id^="panel-"].idle { opacity: .55; }
    them yet" is your turn, not an emergency. */
 .knobs > summary[data-state="go"]   { color: var(--go);   opacity: 1; }
 .knobs > summary[data-state="wait"] { color: var(--wait); opacity: 1; }
+
+/* --- the panel tabs ----------------------------------------------------
+ *
+ * Under the status strip and sticky with it: "where am I" belongs at the top,
+ * "what do I do and what came back" at the bottom. A dropdown lived in the
+ * bottom bar until 2026-09-21 and cost three actions per switch while hiding
+ * what was available; these cost one and are always legible.
+ *
+ * They scroll sideways rather than wrap. A second row of tabs would push the
+ * panel itself down the screen on every phone, every time. */
+
+#panelTabs {
+  position: sticky;
+  top: 33px;
+  z-index: 2;
+  display: flex;
+  gap: 4px;
+  margin: 0 calc(var(--gap) * -2) calc(var(--gap) * 2);
+  padding: var(--gap) calc(var(--gap) * 2);
+  background: Canvas;
+  border-bottom: 1px solid var(--edge);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+#panelTabs .tab {
+  flex: none;
+  padding: 8px 12px;
+  min-height: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  font-size: 13px;
+  opacity: .55;
+  cursor: pointer;
+  color: inherit;
+}
+
+#panelTabs .tab[aria-selected="true"] {
+  opacity: 1;
+  font-weight: 600;
+  border-color: var(--edge);
+  background: var(--surface);
+}
+
+#panelTabs .tab:disabled { cursor: default; opacity: .25; }
+
+/* The bar spans the viewport, but its contents belong to the same column the
+   page is in — otherwise on a wide screen the buttons sit alone against the
+   left edge with the content centred somewhere else entirely. */
+#benchbar { padding-inline: max(calc(var(--gap) * 1.5), calc((100% - 640px) / 2)); }

@@ -117,7 +117,11 @@ const knobs = createKnobs({
   onOwner: (owner) => {
     // Switching away from a running panel would hide the thing that is running
     // and take its readings off the bar with it. Stop it first.
-    setDisabled('panelPick', owner !== null);
+    // Every tab locks while something runs: switching away would hide the
+    // thing that is running and take its readings off the bar with it.
+    for (const tab of document.querySelectorAll('#panelTabs .tab')) {
+      /** @type {HTMLButtonElement} */ (tab).disabled = owner !== null;
+    }
     mirror(owner);
     status.set('panel', owner ? 'go' : 'dim', owner ?? 'idle');
   },
@@ -196,11 +200,20 @@ $('stopBtn').addEventListener('click', async () => {
   log('■ emergency stop');
 });
 
-$('panelPick').addEventListener('change', () => {
-  const picked = /** @type {HTMLSelectElement} */ ($('panelPick')).value;
+/** @param {string} picked */
+function pickPanel(picked) {
   showPanel(picked);
+  for (const tab of document.querySelectorAll('#panelTabs .tab')) {
+    const el = /** @type {HTMLElement} */ (tab);
+    el.setAttribute('aria-selected', String(el.dataset.panel === picked));
+  }
   if (NEEDS_MODEL.has(picked)) void ensureSherpa();
-});
+}
+
+for (const tab of document.querySelectorAll('#panelTabs .tab')) {
+  const el = /** @type {HTMLElement} */ (tab);
+  el.addEventListener('click', () => pickPanel(/** @type {string} */ (el.dataset.panel)));
+}
 showPanel('pins');
 
 

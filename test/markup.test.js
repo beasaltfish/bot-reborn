@@ -100,17 +100,21 @@ test('the developer page fits on a phone rather than reading like a paper', () =
     `dev.html carries ${words} words of prose; the why belongs in docs/instruments.md`);
 });
 
-test('the picker has one option per panel', () => {
-  // A panel with no option is a panel nobody can reach; an option naming no
-  // panel is a picker entry that blanks the page.
+test('there is one tab per panel and no tab without one', () => {
+  // A panel with no tab is a panel nobody can reach; a tab naming no panel
+  // blanks the page. It was a <select> until 2026-09-21 — three actions per
+  // switch, and what was available stayed hidden until you opened it.
   const panels = [...dev.matchAll(/<section id="panel-([a-z]+)"/g)].map((m) => m[1]);
-  const picker = dev.slice(dev.indexOf('<select id="panelPick">'));
-  const options = [...picker.slice(0, picker.indexOf('</select>'))
-    .matchAll(/<option value="([a-z]+)"/g)].map((m) => m[1]);
-  assert.match(dev, /id="panelPick"/);
-  assert.deepEqual(panels.sort(), options.sort());
+  const tabs = [...dev.matchAll(/data-panel="([a-z]+)"/g)].map((m) => m[1]);
+  assert.match(dev, /id="panelTabs"/);
+  assert.deepEqual(panels.sort(), tabs.sort());
 });
 
+test('exactly one tab starts selected', () => {
+  // Two would claim two panels at once; none would open on a page whose tabs
+  // all look inactive while a panel is in fact showing.
+  assert.equal([...dev.matchAll(/aria-selected="true"/g)].length, 1);
+});
 test('every headline the bar mirrors exists in the page', () => {
   // The bar reads these ids out of the document. A typo is a bar that stays
   // blank through an entire measurement, with nothing in the console but
