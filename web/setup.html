@@ -12,9 +12,8 @@
   <h1>Connectivity test</h1>
   <p class="hint">
     <b>This is the instrument, not the way in.</b> First-time setup happens in
-    <a href="index.html">the robot</a>. What is here that is not there: fixtures
-    in <b>your own voice</b>, the typed driver, and every field editable at once.
-    <a href="../docs/instruments.md#connectivity-test-setuphtml">why</a>
+    <a href="index.html">the robot</a>.
+    <a href="../docs/instruments.md#connectivity-test-setuphtml">what is here that is not there</a>
   </p>
 
   <form id="cfgForm">
@@ -115,7 +114,7 @@
     <div class="card-do">
       <div class="controls">
         <button id="connectBtn">Connect the FT232H</button>
-        <button data-test="usb">Test USB</button>
+        <button data-test="usb">Make the car twitch</button>
       </div>
     </div>
     <div class="card-read">
@@ -129,8 +128,9 @@
   <section class="card">
     <header><h2>Typed driver</h2><span class="dot"></span></header>
     <p class="hint">
-      Text straight to brain.js — the whole chain except STT. Connect the
-      FT232H above first.
+      The four cards above are one layer each; this is all of them at once
+      except STT. Text goes straight to brain.js, so it needs the LLM, the TTS
+      and the car — no microphone.
     </p>
     <div class="card-do">
       <form id="textForm">
