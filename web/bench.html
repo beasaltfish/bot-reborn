@@ -8,68 +8,99 @@
 </head>
 <body>
 <main>
+  <div id="instrumentStatus"></div>
   <h1>Calibration bench</h1>
-  <button id="connectBtn" class="primary">1. Connect the FT232H</button>
-  <p id="status">Status: not connected</p>
 
-  <!-- Spec §4.1 layer 2. ② hands over 20 seconds of forward bytes in one go,
-       and without this button the only recourse is unplugging the cable. It
-       doubles as a live demonstration of §4.4's purgeTx: the car should stop
-       at once, not 20 seconds later. -->
+  <!-- Spec 4.1 layer 2. Not in a card: it belongs to no group. It is sticky
+       because 2 hands over 20 seconds of forward bytes in one go, and for
+       those 20 seconds JS is doing nothing at all, so this button is the only
+       thing that can interrupt it. It doubles as a live demonstration of
+       4.4's purgeTx: the car should stop at once, not 20 seconds later. -->
   <div class="stopbar">
     <button id="stopBtn" class="danger">■ Emergency stop (purge + pull pins low)</button>
   </div>
 
-  <hr>
-  <h2>① Polarity: is side A left or right?</h2>
-  <p class="hint">Each button holds its pins high for 600 ms. Watch which way the wheels turn, and write the answer into docs/hardware.md.</p>
-  <div class="controls">
-    <button data-pins="0x50">forward + side A (0x50)</button>
-    <button data-pins="0x90">forward + side B (0x90)</button>
-    <button data-pins="0x10">forward, straight (0x10)</button>
-    <button data-pins="0x20">backward, straight (0x20)</button>
-    <button data-pins="0x60">backward + side A (0x60)</button>
-    <button data-pins="0xa0">backward + side B (0xa0)</button>
-  </div>
+  <section class="card">
+    <header><h2>Connection</h2><span class="dot"></span></header>
+    <div class="card-do">
+      <button id="connectBtn" class="primary">Connect the FT232H</button>
+    </div>
+    <div class="card-read">
+      <p id="status">Status: not connected</p>
+    </div>
+  </section>
 
-  <hr>
-  <h2>② Byte rate and road speed</h2>
-  <p class="hint">
-    At 1200 baud, write 3000 forward bytes plus one stop byte, all in one go.
-    Time the motor with a stopwatch; measure how far the car travelled.
-    <b>If the car is about to leave the bench, hit “Emergency stop” above.</b>
-    <a href="../docs/instruments.md#why-there-is-an-emergency-stop-at-the-top">why that is the only thing that can</a>
-  </p>
-  <div class="controls">
-    <button id="byteRateBtn">Write 3000 bytes (≈ 2.5 s in theory)</button>
-  </div>
-  <label>Measured seconds <input id="measuredSeconds" type="number" step="0.1" inputmode="decimal"></label>
-  <label>Measured metres <input id="measuredMetres" type="number" step="0.1" inputmode="decimal"></label>
-  <button id="computeBtn">Compute ms/byte and m/s</button>
-  <p id="byteRateResult"></p>
+  <section class="card">
+    <header><h2>① Polarity</h2><span class="dot"></span></header>
+    <p class="hint">Is side A left or right? Each button holds its pins high for
+      600 ms. Watch which way the wheels turn, and write the answer into
+      docs/hardware.md.</p>
+    <div class="card-do">
+      <div class="controls">
+        <button data-pins="0x50">forward + side A (0x50)</button>
+        <button data-pins="0x90">forward + side B (0x90)</button>
+        <button data-pins="0x10">forward, straight (0x10)</button>
+        <button data-pins="0x20">backward, straight (0x20)</button>
+        <button data-pins="0x60">backward + side A (0x60)</button>
+        <button data-pins="0xa0">backward + side B (0xa0)</button>
+      </div>
+    </div>
+  </section>
 
-  <hr>
-  <h2>⑧ The motor's starting threshold</h2>
-  <p class="hint">Start at 100 ms and add 50 ms each round, ten tries each. The answer is the smallest pulse that moves the car every single time.</p>
-  <div class="controls">
-    <button data-pulse="100">100 ms</button>
-    <button data-pulse="150">150 ms</button>
-    <button data-pulse="200">200 ms</button>
-    <button data-pulse="250">250 ms</button>
-    <button data-pulse="300">300 ms</button>
-    <button data-pulse="350">350 ms</button>
-    <button data-pulse="400">400 ms</button>
-  </div>
+  <section class="card">
+    <header><h2>② Byte rate</h2><span class="dot"></span></header>
+    <p class="hint">
+      At 1200 baud, 3000 forward bytes plus one stop byte in one go. Time the
+      motor with a stopwatch; measure how far it travelled.
+      <b>If the car is about to leave the bench, hit Emergency stop.</b>
+      <a href="../docs/instruments.md#why-there-is-an-emergency-stop-at-the-top">why that is the only thing that can</a>
+    </p>
+    <div class="card-do">
+      <div class="controls">
+        <button id="byteRateBtn">Write 3000 bytes (≈ 2.5 s in theory)</button>
+      </div>
+      <label>Measured seconds <input id="measuredSeconds" type="number" step="0.1" inputmode="decimal"></label>
+      <label>Measured metres <input id="measuredMetres" type="number" step="0.1" inputmode="decimal"></label>
+      <div class="controls">
+        <button id="computeBtn">Compute ms/byte and m/s</button>
+      </div>
+    </div>
+    <div class="card-read">
+      <p id="byteRateResult"></p>
+    </div>
+  </section>
 
-  <hr>
-  <h2>Diagnostics</h2>
-  <div class="controls">
-    <button id="scanAllBtn">Scan every USB device</button>
-    <button id="readPinsBtn">Read the pins</button>
-    <button id="listGrantedBtn">List granted devices</button>
-    <button id="copyLogBtn">Copy the log</button>
-  </div>
-  <pre id="log"></pre>
+  <section class="card">
+    <header><h2>⑧ Motor threshold</h2><span class="dot"></span></header>
+    <p class="hint">Start at 100 ms and add 50 ms each round, ten tries each.
+      The answer is the smallest pulse that moves the car every single time.</p>
+    <div class="card-do">
+      <div class="controls">
+        <button data-pulse="100">100 ms</button>
+        <button data-pulse="150">150 ms</button>
+        <button data-pulse="200">200 ms</button>
+        <button data-pulse="250">250 ms</button>
+        <button data-pulse="300">300 ms</button>
+        <button data-pulse="350">350 ms</button>
+        <button data-pulse="400">400 ms</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <header><h2>Diagnostics</h2><span class="dot"></span></header>
+    <div class="card-do">
+      <div class="controls">
+        <button id="scanAllBtn">Scan every USB device</button>
+        <button id="readPinsBtn">Read the pins</button>
+        <button id="listGrantedBtn">List granted devices</button>
+        <button id="copyLogBtn">Copy the log</button>
+      </div>
+    </div>
+    <div class="card-read">
+      <pre id="log"></pre>
+    </div>
+  </section>
 </main>
 <script type="module" src="bench.js"></script>
 </body>
