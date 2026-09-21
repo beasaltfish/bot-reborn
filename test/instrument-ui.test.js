@@ -49,7 +49,7 @@ test('no red that is not the emergency stop', () => {
 
 const PAGES_SRC = /** @type {[string, string, number][]} */ ([
   ['bench.html', read('web/bench.html'), 5],
-  ['setup.html', read('web/setup.html'), 5],
+  ['setup.html', read('web/setup.html'), 6],
   ['audio-bench.html', read('web/audio-bench.html'), 8],
 ]);
 
@@ -148,4 +148,19 @@ test('the connectivity test knows no provider the preset list does not', () => {
     .filter((v) => /^https?:\/\//.test(v) || /^[a-z0-9]+[-/][a-z0-9.\-/]+$/i.test(v));
   assert.deepEqual(providerish, [],
     'setup.html hard-codes a provider endpoint or model; build it from PRESETS');
+});
+
+test('every provider layer can be saved and tested where it is typed', () => {
+  // A card is one question: fill it in, keep it, try it, read the answer. The
+  // page used to have one Save and one block of four tests, two cards away from
+  // the fields they were about — which is the "the readings are a screen from
+  // the control" complaint wearing a different hat. assertFilled's own error
+  // message used to end "under Configuration above first", pointing up the page.
+  const [, source] = /** @type {[string, string, number]} */ (
+    PAGES_SRC.find(([n]) => n === 'setup.html'));
+  for (const layer of ['stt', 'llm', 'tts']) {
+    assert.match(source, new RegExp(`data-save="${layer}"`), `no Save for ${layer}`);
+    assert.match(source, new RegExp(`data-test="${layer}"`), `no Test for ${layer}`);
+  }
+  assert.match(source, /data-test="usb"/);
 });

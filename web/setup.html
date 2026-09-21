@@ -17,31 +17,67 @@
     <a href="../docs/instruments.md#connectivity-test-setuphtml">why</a>
   </p>
 
-  <section class="card">
-    <header><h2>Configuration</h2><span class="dot"></span></header>
-    <div class="card-do">
   <form id="cfgForm">
-    <fieldset>
-      <legend>STT</legend>
+  <section class="card">
+    <header><h2>STT</h2><span class="dot"></span></header>
+    <p class="hint">
+      Reads the three clips from Fixtures below. All three must come back with
+      a transcript; one that was never recorded fails rather than being skipped
+      quietly.
+    </p>
+    <div class="card-do">
       <label>baseURL <input name="stt.baseURL" list="sttBaseURLs" autocomplete="off"></label>
       <label>apiKey <input name="stt.apiKey" type="password" autocomplete="off"></label>
       <label>model <input name="stt.model" list="sttModels" autocomplete="off"></label>
-    </fieldset>
-    <fieldset>
-      <legend>LLM</legend>
+      <div class="controls">
+        <button type="button" data-save="stt">Save</button>
+        <button type="button" data-test="stt">Test STT</button>
+      </div>
+    </div>
+    <div class="card-read">
+      <span id="sttResult" class="result"></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <header><h2>LLM</h2><span class="dot"></span></header>
+    <p class="hint">It has to answer <b>and</b> to call a tool. Those are two
+      different things, verified separately.</p>
+    <div class="card-do">
       <label>baseURL <input name="llm.baseURL" list="llmBaseURLs" autocomplete="off"></label>
       <label>apiKey <input name="llm.apiKey" type="password" autocomplete="off"></label>
       <label>model <input name="llm.model" list="llmModels" autocomplete="off"></label>
-    </fieldset>
-    <fieldset>
-      <legend>TTS</legend>
+      <div class="controls">
+        <button type="button" data-save="llm">Save</button>
+        <button type="button" data-test="llm">Test LLM</button>
+      </div>
+    </div>
+    <div class="card-read">
+      <span id="llmResult" class="result"></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <header><h2>TTS</h2><span class="dot"></span></header>
+    <p class="hint">Synthesises the check line for the language the robot is set
+      to — code-switched in Chinese, plain in English.
+      <b>Every language in it has to be intelligible.</b></p>
+    <div class="card-do">
       <label>baseURL <input name="tts.baseURL" list="ttsBaseURLs" autocomplete="off"></label>
       <label>apiKey <input name="tts.apiKey" type="password" autocomplete="off"></label>
       <label>model <input name="tts.model" list="ttsModels" autocomplete="off"></label>
       <label>voice <input name="tts.voice" list="ttsVoices" autocomplete="off"></label>
-    </fieldset>
-    <button type="submit" class="primary">Save</button>
+      <div class="controls">
+        <button type="button" data-save="tts">Save</button>
+        <button type="button" data-test="tts">Test TTS</button>
+      </div>
+    </div>
+    <div class="card-read">
+      <span id="ttsResult" class="result"></span>
+    </div>
+  </section>
   </form>
+
   <!-- Suggestions only, and empty here on purpose: setup.js fills them from
        provider-presets.js, the same list the product's setup sheet reads. The
        two surfaces look nothing alike and must not know different things. -->
@@ -49,22 +85,24 @@
   <datalist id="llmBaseURLs"></datalist><datalist id="llmModels"></datalist>
   <datalist id="ttsBaseURLs"></datalist><datalist id="ttsModels"></datalist>
   <datalist id="ttsVoices"></datalist>
-    </div>
-    <div class="card-read">
-      <p id="cfgStatus" class="hint"></p>
-    </div>
-  </section>
 
   <section class="card">
     <header><h2>USB</h2><span class="dot"></span></header>
-    <p class="hint">Both the USB test and the typed driver need the car connected first.</p>
+    <p class="hint">Both the USB test and the typed driver need the car
+      connected first. The test drives 200 ms forward; the car twitches.</p>
     <div class="card-do">
-      <button id="connectBtn">Connect the FT232H</button>
+      <div class="controls">
+        <button id="connectBtn">Connect the FT232H</button>
+        <button data-test="usb">Test USB</button>
+      </div>
     </div>
     <div class="card-read">
       <p id="usbStatus" class="hint">Status: not connected</p>
+      <span id="usbResult" class="result"></span>
     </div>
   </section>
+
+  <p id="cfgStatus" class="hint"></p>
 
   <section class="card">
     <header><h2>Fixtures</h2><span class="dot"></span></header>
@@ -77,40 +115,6 @@
     </p>
     <div class="card-do">
       <ol id="fixtures"></ol>
-    </div>
-  </section>
-
-  <section class="card">
-    <header><h2>Connectivity tests</h2><span class="dot"></span></header>
-    <p class="hint">Every one tests the hardest case on purpose — see spec §9.3.</p>
-    <div class="card-do">
-  <ol id="tests">
-    <li>
-      <button data-test="stt">Test STT</button>
-      <span id="sttResult" class="result"></span>
-      <p class="hint">
-        All three clips must come back with a transcript. A clip that was never
-        recorded fails rather than being skipped quietly.
-      </p>
-    </li>
-    <li>
-      <button data-test="llm">Test LLM</button>
-      <span id="llmResult" class="result"></span>
-      <p class="hint">It has to answer <b>and</b> to call a tool. Those are two different things, verified separately.</p>
-    </li>
-    <li>
-      <button data-test="tts">Test TTS</button>
-      <span id="ttsResult" class="result"></span>
-      <p class="hint">Synthesises the check line for the language the robot is
-        set to — code-switched in Chinese, plain in English.
-        <b>Every language in it has to be intelligible.</b></p>
-    </li>
-    <li>
-      <button data-test="usb">Test USB</button>
-      <span id="usbResult" class="result"></span>
-      <p class="hint">200 ms forward; the car twitches.</p>
-    </li>
-  </ol>
     </div>
   </section>
 

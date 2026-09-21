@@ -112,21 +112,33 @@ function fillForm(cfg) {
 /** @param {Layer} cfg @param {string} label */
 function assertFilled(cfg, label) {
   if (!cfg.baseURL || !cfg.apiKey || !cfg.model) {
-    throw new Error(`fill in ${label}'s baseURL / apiKey / model under Configuration above first`);
+    throw new Error(`fill in ${label}'s baseURL / apiKey / model above first`);
   }
 }
 
-el('cfgForm').addEventListener('submit', (event) => {
-  event.preventDefault();
-  // Merge, never replace: this form only knows the three provider layers, and
-  // overwriting the stored config with it would drop lang / replyLang /
-  // bargeIn / ttsPath. A calibrated `bargeIn: false` silently reverting to the
-  // default is the exact failure config.js's `??` is there to prevent — it
-  // must not come back in through the save path instead.
-  saveConfig({ ...loadConfig(), ...readForm() });
-  el('cfgStatus').textContent = `saved to localStorage (${CONFIG_KEY})`;
-  refreshConfigStatus();
-});
+// One Save per layer, beside that layer's own Test. A card is one question —
+// fill it in, keep it, try it, read the answer — and a single Save two cards
+// away made the answer to "does this layer work" arrive somewhere else.
+//
+// Saving is not what makes a test run: performTest() reads the FORM, so you can
+// type, listen, retype and listen again without ever saving. That is what ⑪
+// needs. Save is the separate act of handing the config to the robot and the
+// audio bench.
+for (const button of document.querySelectorAll('[data-save]')) {
+  const layer = /** @type {keyof ProviderLayers} */ (
+    /** @type {HTMLElement} */ (button).dataset.save);
+  button.addEventListener('click', () => {
+    // Merge, never replace, and now one layer at a time: this form only knows
+    // the three provider layers, and overwriting the stored config with it
+    // would drop lang / replyLang / bargeIn / ttsPath. A calibrated
+    // `bargeIn: false` silently reverting to the default is the exact failure
+    // config.js's `??` is there to prevent — it must not come back in through
+    // the save path instead.
+    saveConfig({ ...loadConfig(), [layer]: readForm()[layer] });
+    el('cfgStatus').textContent = `${layer.toUpperCase()} saved to localStorage (${CONFIG_KEY})`;
+    refreshConfigStatus();
+  });
+}
 
 // Three readings, because this page has three prerequisites and every one of
 // them used to be invisible until something failed.
