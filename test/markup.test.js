@@ -96,3 +96,14 @@ test('the audio bench fits on a phone rather than reading like a paper', () => {
   assert.ok(words < 400,
     `audio-bench.html carries ${words} words of prose; the why belongs in docs/instruments.md`);
 });
+
+test('the audio bench ships a picker with one option per panel', () => {
+  // A panel with no option is a panel nobody can reach; an option naming no
+  // panel is a picker entry that blanks the page.
+  const panels = [...audioBench.matchAll(/<section id="panel-([a-z]+)"/g)].map((m) => m[1]);
+  const picker = audioBench.slice(audioBench.indexOf('<select id="panelPick">'));
+  const options = [...picker.slice(0, picker.indexOf('</select>'))
+    .matchAll(/<option value="([a-z]+)"/g)].map((m) => m[1]);
+  assert.match(audioBench, /id="panelPick"/);
+  assert.deepEqual(panels.sort(), options.sort());
+});

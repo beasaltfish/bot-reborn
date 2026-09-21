@@ -30,20 +30,33 @@ export function keepAliveOptions(mode) {
  * One panel at a time. Every panel shares one microphone, one wasm module and
  * one pair of ears, and two panels measuring at once would each be measuring
  * the other.
+ *
+ * `onChange` fires only on a real transition — never on a refused claim, a
+ * stale release, or the holder re-claiming. The panel picker locks on it and
+ * the bottom bar mirrors the owner's readings; both would flicker, or blank a
+ * running measurement, on events that changed nothing.
+ *
+ * @param {(owner: string | null) => void} [onChange]
  */
-export function createExclusion() {
+export function createExclusion(onChange = () => {}) {
   /** @type {string | null} */ let owner = null;
   return {
     /** @param {string} name @returns {boolean} whether it may run */
     claim(name) {
       if (owner !== null && owner !== name) return false;
+      const changed = owner !== name;
       owner = name;
+      if (changed) onChange(owner);
       return true;
     },
     /** A panel may only release what it holds: a late cleanup must not hand
      *  the microphone away from whoever started in the meantime.
      *  @param {string} name */
-    release(name) { if (owner === name) owner = null; },
+    release(name) {
+      if (owner !== name) return;
+      owner = null;
+      onChange(null);
+    },
     get owner() { return owner; },
   };
 }
@@ -51,10 +64,15 @@ export function createExclusion() {
 const $ = (/** @type {string} */ id) =>
   /** @type {HTMLElement} */ (document.getElementById(id));
 
-/** @param {{ log: (msg: string) => void }} opts */
+/**
+ * @param {{
+ *   log: (msg: string) => void,
+ *   onOwner?: (owner: string | null) => void,
+ * }} opts
+ */
 export function createKnobs(opts) {
   const { log } = opts;
-  const exclusion = createExclusion();
+  const exclusion = createExclusion(opts.onOwner);
 
   // --- keep-alive ---------------------------------------------------------
   /** @type {{ stop(): void } | null} */ let keepAlive = null;

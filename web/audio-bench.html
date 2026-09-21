@@ -30,12 +30,6 @@
     change it, start again.
     <a href="../docs/instruments.md#echocancellation-and-why-it-locks-at-start">why</a>
   </p>
-  <div class="controls">
-    <!-- disabled until the wasm has loaded: pressing Start before that would
-         hand the panels a null sherpa. main.js enables it. -->
-    <button id="start" class="primary" disabled>Start</button>
-    <button id="stop" disabled>Stop</button>
-  </div>
 
   <hr>
   <h2>Cross-cutting</h2>
@@ -240,6 +234,25 @@
   <hr>
   <div class="controls"><button id="copyLog">Copy the log</button></div>
   <pre id="log"></pre>
+
+  <!-- Fixed to the bottom, because the complaint this answers is "I scroll too
+       long to find the button" and "the readings are a screen away from the
+       control". Inside <main> so it inherits the page, not the viewport edge. -->
+  <div id="benchbar">
+    <select id="panelPick">
+      <option value="residency">Residency — ⑤ ⑫ ⑭ ⑮</option>
+      <option value="acoustics">Acoustics — ⑥ ⑬</option>
+      <option value="recognition">Recognition — ⑦ ⑩ ⑯</option>
+      <option value="providers">Providers — ⑨ ⑪</option>
+    </select>
+    <span id="benchbarMain">
+      <!-- disabled until the wasm has loaded: pressing Start before that would
+           hand the panels a null sherpa. main.js enables it. -->
+      <button id="start" class="primary" disabled>Start</button>
+      <button id="stop" disabled>Stop</button>
+    </span>
+    <span id="benchbarRead"></span>
+  </div>
 </main>
 <script type="module" src="audio-bench/main.js"></script>
 </body>

@@ -56,3 +56,45 @@ test('a panel that does not hold it cannot release it', () => {
   ex.release('acoustics');
   assert.equal(ex.owner, 'residency');
 });
+
+test('claiming and releasing announce who holds it', () => {
+  // The panel picker has to lock while something is running, and the bottom bar
+  // has to know whose readings to mirror. Both read this one callback rather
+  // than polling `owner`.
+  /** @type {(string | null)[]} */ const seen = [];
+  const ex = createExclusion((owner) => seen.push(owner));
+  ex.claim('residency');
+  ex.release('residency');
+  assert.deepEqual(seen, ['residency', null]);
+});
+
+test('a refused claim announces nothing', () => {
+  /** @type {(string | null)[]} */ const seen = [];
+  const ex = createExclusion((owner) => seen.push(owner));
+  ex.claim('residency');
+  seen.length = 0;
+  assert.equal(ex.claim('acoustics'), false);
+  assert.deepEqual(seen, [], 'a refusal changed nothing, so it must say nothing');
+});
+
+test('a stale release announces nothing', () => {
+  // A late cleanup must not hand the microphone away from whoever started in
+  // the meantime — and must not tell the bar that it did, either.
+  /** @type {(string | null)[]} */ const seen = [];
+  const ex = createExclusion((owner) => seen.push(owner));
+  ex.claim('residency');
+  seen.length = 0;
+  ex.release('acoustics');
+  assert.deepEqual(seen, []);
+});
+
+test('re-entry by the holder announces nothing', () => {
+  // claim() is re-entrant by design. Firing on a re-claim would restart the
+  // bar's mirror mid-measurement, blanking readings that were already running.
+  /** @type {(string | null)[]} */ const seen = [];
+  const ex = createExclusion((owner) => seen.push(owner));
+  ex.claim('residency');
+  seen.length = 0;
+  ex.claim('residency');
+  assert.deepEqual(seen, []);
+});

@@ -20,7 +20,30 @@ const $ = (/** @type {string} */ id) =>
 
 const log = createLog($('log'));
 const config = loadConfig();
-const knobs = createKnobs({ log });
+
+/**
+ * Exactly one panel is in the document's flow at a time. They used to all be
+ * there with the idle ones dimmed, and dimming saves no scrolling: on a phone
+ * the other three are still several screens you travel through.
+ *
+ * @param {string} name
+ */
+function showPanel(name) {
+  for (const section of document.querySelectorAll('section[id^="panel-"]')) {
+    /** @type {HTMLElement} */ (section).hidden = section.id !== `panel-${name}`;
+  }
+}
+
+const knobs = createKnobs({
+  log,
+  // Switching away from a running panel would hide the thing that is running
+  // and take its readings off the bar with it. Stop it first.
+  onOwner: (owner) => setDisabled('panelPick', owner !== null),
+});
+
+$('panelPick').addEventListener('change', () =>
+  showPanel(/** @type {HTMLSelectElement} */ ($('panelPick')).value));
+showPanel('residency');
 
 /** @type {import('../audio/sherpa.js').Sherpa | null} */ let sherpa = null;
 /** @type {string} */ let keywords = '';
