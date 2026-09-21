@@ -49,9 +49,51 @@ main {
   margin: 0 auto;
 }
 
-hr {
-  margin: 20px 0;
+/* --- the card ---------------------------------------------------------
+ *
+ * One shape, eighteen instances, three pages. Header, then controls, then
+ * readings — never reordered, because the order IS the navigation: looking for
+ * a number you go to the bottom of a card, looking for a button you go to the
+ * middle. <hr> used to do this job, and all it could say was "the thing above
+ * ended". */
+
+.card {
+  margin: calc(var(--gap) * 2) 0;
+  border: 1px solid var(--edge);
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: hidden;
 }
+
+.card > header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--gap);
+  padding: calc(var(--gap) * 1.5) calc(var(--gap) * 1.5) var(--gap);
+}
+
+.card > header h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+/* The state dot. Dim by default: "not running" is the resting state of almost
+   every card almost all of the time, and it must not look like a fault. */
+.card > header .dot { flex: none; font-size: 11px; opacity: .45; }
+.card > header .dot[data-state="go"]   { color: var(--go);   opacity: 1; }
+.card > header .dot[data-state="wait"] { color: var(--wait); opacity: 1; }
+
+.card > .hint { margin: 0 calc(var(--gap) * 1.5) var(--gap); }
+
+.card-do, .card-read { padding: var(--gap) calc(var(--gap) * 1.5); }
+
+/* The seam between doing and reading. It is the only line inside a card, so it
+   carries the whole of the card's internal structure. */
+.card-read { border-top: 1px solid var(--edge); }
 
 button {
   padding: 15px 20px;
