@@ -7,13 +7,41 @@
 
 :root {
   color-scheme: light dark;
+
+  /* The four meanings, from docs/ui.md. Defined here as well as in style.css
+     because the two sheets are deliberately separate (spec 1.2); a test pins
+     the values equal so they cannot drift. */
+  --go: #22c55e;
+  --wait: #f59e0b;
+  --stop: #ef4444;
+  --ink: currentColor;
+
+  /* One spacing unit. Everything below is a multiple of it. */
+  --gap: 8px;
+  --edge: rgba(128, 128, 128, .35);
+  --surface: rgba(128, 128, 128, .06);
 }
 
 body {
   margin: 0;
-  padding: 20px;
+  padding: calc(var(--gap) * 2);
+  padding-bottom: 96px;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  text-align: center;
+  font-size: 15px;
+  /* Left, not centre. An instrument is a form and a table of numbers, and both
+     read from the left edge. The centring this replaces is why four other
+     rules in this file used to exist. */
+  text-align: left;
+}
+
+h1 {
+  margin: 0 0 var(--gap);
+  font-size: 20px;
+}
+
+/* Readings are numbers you compare down a column, so they are tabular. */
+.stat span, #status, #byteRateResult, #acCount {
+  font-variant-numeric: tabular-nums;
 }
 
 main {
@@ -40,16 +68,14 @@ button.primary {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  justify-content: center;
+  /* Left, with everything else. It used to centre itself, which is why the
+     fixture rows needed a rule to put it back. */
+  justify-content: flex-start;
 }
 
 #status {
   margin-top: 20px;
   font-variant-numeric: tabular-nums;
-}
-
-.diagnostics {
-  text-align: left;
 }
 
 .diagnostics h2 {
@@ -123,12 +149,6 @@ form label input {
   line-height: 1.5;
 }
 
-/* .controls centres itself for the voice page's button row; inside a fixture
-   row it sits under a left-aligned sentence and has to line up with it. */
-#fixtures .controls {
-  justify-content: flex-start;
-}
-
 /* Multi-line on purpose, and on the SUCCESS path too: the STT test joins its
    three transcripts with "\n" and three separately legible transcripts is the
    whole point of spec §9.3's three fixtures. Collapsed to one line they are
@@ -143,12 +163,12 @@ form label input {
 
 .result:empty { display: none; }
 
-.result.ok { color: #2e7d32; }
-.result.error { color: #c62828; }
+.result.ok    { color: var(--go); }
+.result.error { color: var(--wait); }
 .result.pending { opacity: 0.6; }
 
 button.danger {
-  background: #c62828;
+  background: var(--stop);
   color: #fff;
   border: none;
 }
@@ -195,8 +215,6 @@ button.danger {
 
 /* A panel that is not the running one dims rather than disappears: the point
    of one page is that you can see what else is available without navigating. */
-section[id^="panel-"] { text-align: left; }
-section[id^="panel-"] h2 { text-align: center; }
 section[id^="panel-"].idle { opacity: .55; }
 
 .verdict { font-weight: bold; }
@@ -219,12 +237,11 @@ section[id^="panel-"].idle { opacity: .55; }
 
 /* Knob rows: two to a line on a phone, one when there is no room. */
 .row { display: flex; flex-wrap: wrap; gap: 10px; }
-.row label { flex: 1 1 40%; font-size: 14px; text-align: left; }
+.row label { flex: 1 1 40%; font-size: 14px; }
 .row label input { width: 100%; box-sizing: border-box; padding: 8px; }
 
-#rcSamples { text-align: left; padding-left: 22px; }
+#rcSamples { padding-left: 22px; }
 #rcSamples li { margin-bottom: 12px; }
-#rcSamples .controls { justify-content: flex-start; }
 
 #pvTurnLog {
   margin-top: 12px; padding: 10px; min-height: 120px; max-height: 45vh;
@@ -259,6 +276,4 @@ section[id^="panel-"].idle { opacity: .55; }
 #benchbar #acCount { font-size: 20px; margin: 0; }
 #benchbar #acSub, #benchbar #acLine { display: none; }
 
-/* So the last panel is not permanently under the bar. */
-body { padding-bottom: 96px; }
 
