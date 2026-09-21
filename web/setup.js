@@ -217,7 +217,7 @@ function setUsbStatus(text) {
 
 /** @returns {Ftdi} */
 function requireFtdi() {
-  if (!ftdi) throw new Error('press “Connect the FT232H” above first');
+  if (!ftdi) throw new Error('press “Connect the FT232H” beside this first');
   return ftdi;
 }
 
@@ -317,9 +317,25 @@ async function testTts(tts) {
 }
 
 /** @param {Ftdi} dev @returns {Promise<string>} */
+/**
+ * The one test whose second half happens outside the computer.
+ *
+ * It proves the bytes got from the browser through WebUSB to the FT232H in
+ * bitbang mode — the same 0x10 the product sends. It cannot prove the car
+ * moved, and it must not pretend to: a mis-soldered pin, a dead motor and a
+ * flat battery all pass this.
+ *
+ * 200 ms is not a threshold anybody measured. ⑧ (bench.html) exists to find the
+ * shortest pulse that starts the motor every time, sweeping from 100 ms to
+ * 400 ms, and it is still blank in docs/hardware.md — so a car that does not
+ * twitch here may simply have been asked too briefly.
+ *
+ * @param {Ftdi} dev
+ */
 async function testUsb(dev) {
   await dev.write(dev.buildStream(0x10, 200));
-  return 'sent 200 ms of forward — did the car move?';
+  return 'sent 200 ms of forward — did the car move? (no movement is not proof '
+    + 'of bad wiring: ⑧ is unmeasured)';
 }
 
 /** @param {HTMLElement} target @param {string} text @param {'ok' | 'error' | 'pending'} state */

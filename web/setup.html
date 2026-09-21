@@ -21,9 +21,8 @@
   <section class="card">
     <header><h2>STT</h2><span class="dot" id="sttDot"></span></header>
     <p class="hint">
-      Reads the three clips recorded below in <b>your own voice</b>: a pass
-      means the chain understands you, not just that the key is valid. All
-      three must come back with a transcript.
+      Reads the three clips below, in <b>your own voice</b>: a pass means the
+      chain understands you, not just that the key is valid.
     </p>
     <div class="card-do">
       <label>baseURL <input name="stt.baseURL" list="sttBaseURLs" autocomplete="off"></label>
@@ -43,8 +42,7 @@
         <p class="hint">
           Say each line as written, then <b>listen back before trusting it</b> —
           a clip that got cut off still transcribes into something plausible.
-          Kept in this browser, never in the repo. The microphone stays open
-          from the first Record until you leave the page.
+          Kept in this browser, never in the repo.
           <a href="../docs/instruments.md#why-the-three-clips-have-to-be-recorded-and-listened-back-to">why your own voice</a>
         </p>
         <ol id="fixtures"></ol>
@@ -109,8 +107,11 @@
 
   <section class="card">
     <header><h2>USB</h2><span class="dot"></span></header>
-    <p class="hint">Both the USB test and the typed driver need the car
-      connected first. The test drives 200 ms forward; the car twitches.</p>
+    <p class="hint">Connect first; the typed driver needs it too. The test
+      writes 200 ms of forward — <b>green only means the bytes reached the
+      chip.</b> Nothing moving is not proof of bad wiring: 200 ms may be under
+      the motor's starting threshold, which is ⑧ on
+      <a href="bench.html">the pin bench</a>, still unmeasured.</p>
     <div class="card-do">
       <div class="controls">
         <button id="connectBtn">Connect the FT232H</button>
