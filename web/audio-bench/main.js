@@ -106,9 +106,15 @@ const knobs = createKnobs({
   onStatus: (id, state, label) => status.set(id, state, label),
 });
 
-$('panelPick').addEventListener('change', () =>
-  showPanel(/** @type {HTMLSelectElement} */ ($('panelPick')).value));
+$('panelPick').addEventListener('change', () => {
+  const picked = /** @type {HTMLSelectElement} */ ($('panelPick')).value;
+  showPanel(picked);
+  if (NEEDS_MODEL.has(picked)) void ensureSherpa();
+});
 showPanel('residency');
+// The page opens on residency, so the model still starts downloading at once
+// here. On dev.html the opening panel is the pin bench and this line goes.
+void ensureSherpa();
 
 /** @type {import('../audio/sherpa.js').Sherpa | null} */ let sherpa = null;
 /** @type {string} */ let keywords = '';
@@ -135,11 +141,29 @@ const PANELS = [
  * }} BenchContext
  */
 
-// --- Boot: the model and the keyword files, before any user gesture --------
+// --- The model, the first time an audio panel is chosen --------------------
 
-(async () => {
-  try {
-    sherpa = await loadSherpa((s) => s && setStat('boot', s));
+/** @type {Promise<import('../audio/sherpa.js').Sherpa> | null} */
+let sherpaLoad = null;
+
+/**
+ * 18 MB, fetched once and never again.
+ *
+ * It used to run at import. That was free while this page was only the audio
+ * bench; on a page that also holds the pin bench and the connectivity test it
+ * would make the two tools you reach for when NOTHING works yet wait for the
+ * heaviest asset in the project.
+ *
+ * Cached as a promise rather than a flag: two panels chosen in quick succession
+ * must not start two downloads, and loadSherpa's failure is permanent — the
+ * glue is a classic script, injecting it twice is a SyntaxError, and after that
+ * onRuntimeInitialized never fires and the page waits in silence
+ * (docs/hardware.md).
+ */
+function ensureSherpa() {
+  if (sherpaLoad) return sherpaLoad;
+  sherpaLoad = (async () => {
+    const loaded = await loadSherpa((msg) => msg && setStat('boot', msg));
     // §5.5 / docs/hardware.md: an unknown token does not fail quietly — it
     // calls SHERPA_ONNX_EXIT(-1) and aborts the whole wasm module, and the page
     // has to be reloaded. Check before anything reaches createKws().
@@ -147,14 +171,19 @@ const PANELS = [
       ['keywords/name.txt', 'keywords/stop.txt']
         .map((p) => fetch(p).then((r) => r.text())),
     )).join('\n');
-    const bad = unknownTokens(keywords, sherpa.tokens);
+    const bad = unknownTokens(keywords, loaded.tokens);
     if (bad.length) throw new Error('unknown tokens in the keyword files: ' + bad.join(' '));
+    sherpa = loaded;
     setStat('boot', 'Model loaded. Press Start.');
     setDisabled('start', false);
-  } catch (err) {
-    setStat('boot', '❌ ' + /** @type {Error} */ (err).message);
-  }
-})();
+    return loaded;
+  })();
+  sherpaLoad.catch((err) => setStat('boot', '❌ ' + /** @type {Error} */ (err).message));
+  return sherpaLoad;
+}
+
+/** The four panels that need it. Pins and connectivity never do. */
+const NEEDS_MODEL = new Set(['residency', 'acoustics', 'recognition', 'providers']);
 
 if (!config.stt.baseURL || !config.llm.baseURL || !config.tts.baseURL) {
   setStat('cfgWarn', 'No providers configured — set them up on setup.html first. '

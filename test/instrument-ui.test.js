@@ -257,3 +257,14 @@ test('the connectivity panel registers every control it used to', () => {
   assert.match(js, /STT_FIXTURES/, 'the fixture rows are no longer built');
   assert.ok(!/^el\(/m.test(js), 'connectivity.js still attaches listeners at module scope');
 });
+
+test('the model is not fetched until an audio panel is chosen', () => {
+  // 18 MB. The pin bench and the connectivity test are what you reach for when
+  // nothing works yet — a fresh clone, a just-soldered board, no key typed —
+  // and making them queue behind the heaviest asset in the project is the one
+  // regression merging the three pages would otherwise introduce.
+  const js = read('web/audio-bench/main.js');
+  assert.ok(!/^\(async \(\) => \{[\s\S]*?loadSherpa/m.test(js),
+    'main.js still loads the model at import time');
+  assert.match(js, /function ensureSherpa/, 'main.js has no lazy loader');
+});
