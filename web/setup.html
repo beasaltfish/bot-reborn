@@ -8,6 +8,7 @@
 </head>
 <body>
 <main>
+  <div id="instrumentStatus"></div>
   <h1>Connectivity test</h1>
   <p class="hint">
     <b>This is the instrument, not the way in.</b> First-time setup happens in
@@ -16,8 +17,9 @@
     <a href="../docs/instruments.md#connectivity-test-setuphtml">why</a>
   </p>
 
-  <hr>
-  <h2>Configuration</h2>
+  <section class="card">
+    <header><h2>Configuration</h2><span class="dot"></span></header>
+    <div class="card-do">
   <form id="cfgForm">
     <fieldset>
       <legend>STT</legend>
@@ -40,28 +42,41 @@
     </fieldset>
     <button type="submit" class="primary">Save</button>
   </form>
-  <p id="cfgStatus" class="hint"></p>
+    </div>
+    <div class="card-read">
+      <p id="cfgStatus" class="hint"></p>
+    </div>
+  </section>
 
-  <hr>
-  <h2>USB</h2>
-  <p class="hint">Both the USB connectivity test and the typed driver below need the car connected first.</p>
-  <button id="connectBtn">Connect the FT232H</button>
-  <p id="usbStatus" class="hint">Status: not connected</p>
+  <section class="card">
+    <header><h2>USB</h2><span class="dot"></span></header>
+    <p class="hint">Both the USB test and the typed driver need the car connected first.</p>
+    <div class="card-do">
+      <button id="connectBtn">Connect the FT232H</button>
+    </div>
+    <div class="card-read">
+      <p id="usbStatus" class="hint">Status: not connected</p>
+    </div>
+  </section>
 
-  <hr>
-  <h2>Fixtures</h2>
-  <p class="hint">
+  <section class="card">
+    <header><h2>Fixtures</h2><span class="dot"></span></header>
+    <p class="hint">
     Say each line as written, then <b>listen back before trusting it</b> — a
     clip that got cut off still transcribes into something plausible. Kept in
     this browser, never in the repo. The microphone stays open from the first
     Record until you leave the page.
     <a href="../docs/instruments.md#why-the-three-clips-have-to-be-recorded-and-listened-back-to">why</a>
-  </p>
-  <ol id="fixtures"></ol>
+    </p>
+    <div class="card-do">
+      <ol id="fixtures"></ol>
+    </div>
+  </section>
 
-  <hr>
-  <h2>Connectivity tests</h2>
-  <p class="hint">Every one of these tests the hardest case on purpose — see spec §9.3.</p>
+  <section class="card">
+    <header><h2>Connectivity tests</h2><span class="dot"></span></header>
+    <p class="hint">Every one tests the hardest case on purpose — see spec §9.3.</p>
+    <div class="card-do">
   <ol id="tests">
     <li>
       <button data-test="stt">Test STT</button>
@@ -89,19 +104,28 @@
       <p class="hint">200 ms forward; the car twitches.</p>
     </li>
   </ol>
+    </div>
+  </section>
 
-  <hr>
-  <h2>Typed driver</h2>
-  <p class="hint">
-    Text straight to brain.js — the whole chain except STT. Connect the FT232H
-    above first.
-  </p>
-  <form id="textForm">
-    <input id="textInput" placeholder="drive forward for two seconds, and tell me a joke" autocomplete="off">
-    <button type="submit">Send</button>
-  </form>
-  <button id="stopBtn" class="danger">Emergency stop</button>
-  <pre id="turnLog"></pre>
+  <section class="card">
+    <header><h2>Typed driver</h2><span class="dot"></span></header>
+    <p class="hint">
+      Text straight to brain.js — the whole chain except STT. Connect the
+      FT232H above first.
+    </p>
+    <div class="card-do">
+      <form id="textForm">
+        <input id="textInput" placeholder="drive forward for two seconds, and tell me a joke" autocomplete="off">
+        <button type="submit">Send</button>
+      </form>
+      <div class="controls">
+        <button id="stopBtn" class="danger">Emergency stop</button>
+      </div>
+    </div>
+    <div class="card-read">
+      <pre id="turnLog"></pre>
+    </div>
+  </section>
 </main>
 <script type="module" src="setup.js"></script>
 </body>
