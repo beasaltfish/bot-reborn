@@ -21,6 +21,7 @@ import { matchFixture, saveFixture, recordedAt } from './fixture-store.js';
 import { checkLlm, checkTts, fetchClip, transcribeClip } from './checks.js';
 import { materialFor } from './instrument-material.js';
 import { createStatus } from './instrument-status.js';
+import { PRESETS, voicesFor } from './provider-presets.js';
 
 /**
  * @typedef {import('./config.js').Config} Config
@@ -141,8 +142,44 @@ function refreshConfigStatus() {
   status.set('config', n === 3 ? 'go' : 'wait', `${n}/3 configured`);
 }
 
+/**
+ * Suggestions for the free-text fields, from the one list that also feeds the
+ * product's setup sheet.
+ *
+ * The two surfaces deliberately look nothing alike — the sheet is "pick a
+ * provider and type only the key", this form is "every field editable at once",
+ * which is what comparing providers (spec §12 ⑪) needs. Looking different is
+ * not licence to know different things: these were hard-coded placeholders
+ * until 2026-09-21, and one of them suggested a model name that exists nowhere
+ * else in the repo. A model an ordinary key cannot reach answers 404 "no such
+ * model", which on a page about connectivity reads as a bad key.
+ *
+ * They stay suggestions. A datalist offers without constraining, and ⑪ needs to
+ * be able to type an endpoint this list has never heard of.
+ */
+function fillSuggestions() {
+  /** @param {string} id @param {string[]} values */
+  const fill = (id, values) => {
+    const list = el(id);
+    list.textContent = '';
+    for (const value of [...new Set(values)]) {
+      const option = document.createElement('option');
+      option.value = value;
+      list.append(option);
+    }
+  };
+  for (const layer of /** @type {const} */ (['stt', 'llm', 'tts'])) {
+    const presets = PRESETS[layer];
+    fill(`${layer}BaseURLs`, presets.map((preset) => preset.baseURL));
+    fill(`${layer}Models`, presets.flatMap((preset) => preset.models));
+  }
+  fill('ttsVoices', PRESETS.tts.flatMap(
+    (preset) => preset.models.flatMap((model) => voicesFor(preset, model))));
+}
+
 fillForm(loadConfig());
 refreshConfigStatus();
+fillSuggestions();
 
 // --- USB connect ------------------------------------------------------------
 //

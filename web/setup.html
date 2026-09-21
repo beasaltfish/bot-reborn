@@ -23,25 +23,32 @@
   <form id="cfgForm">
     <fieldset>
       <legend>STT</legend>
-      <label>baseURL <input name="stt.baseURL" placeholder="https://api.groq.com/openai/v1" autocomplete="off"></label>
+      <label>baseURL <input name="stt.baseURL" list="sttBaseURLs" autocomplete="off"></label>
       <label>apiKey <input name="stt.apiKey" type="password" autocomplete="off"></label>
-      <label>model <input name="stt.model" placeholder="whisper-large-v3-turbo" autocomplete="off"></label>
+      <label>model <input name="stt.model" list="sttModels" autocomplete="off"></label>
     </fieldset>
     <fieldset>
       <legend>LLM</legend>
-      <label>baseURL <input name="llm.baseURL" placeholder="https://api.deepseek.com" autocomplete="off"></label>
+      <label>baseURL <input name="llm.baseURL" list="llmBaseURLs" autocomplete="off"></label>
       <label>apiKey <input name="llm.apiKey" type="password" autocomplete="off"></label>
-      <label>model <input name="llm.model" placeholder="deepseek-flash" autocomplete="off"></label>
+      <label>model <input name="llm.model" list="llmModels" autocomplete="off"></label>
     </fieldset>
     <fieldset>
       <legend>TTS</legend>
-      <label>baseURL <input name="tts.baseURL" autocomplete="off"></label>
+      <label>baseURL <input name="tts.baseURL" list="ttsBaseURLs" autocomplete="off"></label>
       <label>apiKey <input name="tts.apiKey" type="password" autocomplete="off"></label>
-      <label>model <input name="tts.model" autocomplete="off"></label>
-      <label>voice <input name="tts.voice" autocomplete="off"></label>
+      <label>model <input name="tts.model" list="ttsModels" autocomplete="off"></label>
+      <label>voice <input name="tts.voice" list="ttsVoices" autocomplete="off"></label>
     </fieldset>
     <button type="submit" class="primary">Save</button>
   </form>
+  <!-- Suggestions only, and empty here on purpose: setup.js fills them from
+       provider-presets.js, the same list the product's setup sheet reads. The
+       two surfaces look nothing alike and must not know different things. -->
+  <datalist id="sttBaseURLs"></datalist><datalist id="sttModels"></datalist>
+  <datalist id="llmBaseURLs"></datalist><datalist id="llmModels"></datalist>
+  <datalist id="ttsBaseURLs"></datalist><datalist id="ttsModels"></datalist>
+  <datalist id="ttsVoices"></datalist>
     </div>
     <div class="card-read">
       <p id="cfgStatus" class="hint"></p>

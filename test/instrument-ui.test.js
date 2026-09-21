@@ -129,3 +129,23 @@ test('the audio bench has an emergency stop at all', () => {
     PAGES_SRC.find(([n]) => n === 'audio-bench.html'));
   assert.match(source, /id="benchbarStop"/);
 });
+
+test('the connectivity test knows no provider the preset list does not', () => {
+  // The two surfaces that configure the three layers must agree on what exists.
+  // They deliberately look nothing alike — the product's sheet is "pick a
+  // provider, type only the key", this page is "every field editable at once",
+  // which is what ⑪ needs — but looking different is not licence to know
+  // different things.
+  //
+  // What this caught: setup.html suggested `deepseek-flash`, a model name that
+  // appears nowhere else in the repo. A model an ordinary key cannot reach
+  // answers 404 "no such model", which on a page about connectivity reads as a
+  // bad key — the exact failure provider-presets.js exists to prevent.
+  const [, source] = /** @type {[string, string, number]} */ (
+    PAGES_SRC.find(([n]) => n === 'setup.html'));
+  const providerish = [...source.matchAll(/placeholder="([^"]*)"/g)]
+    .map((m) => m[1])
+    .filter((v) => /^https?:\/\//.test(v) || /^[a-z0-9]+[-/][a-z0-9.\-/]+$/i.test(v));
+  assert.deepEqual(providerish, [],
+    'setup.html hard-codes a provider endpoint or model; build it from PRESETS');
+});
