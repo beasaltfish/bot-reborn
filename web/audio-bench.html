@@ -13,7 +13,7 @@
     <b>Measuring the background or the battery means no adb, no cable and no
     charger.</b> A debug connection keeps the phone awake and contaminates the
     reading.
-    <a href="../docs/instruments.md#audio-bench--audio-benchhtml">what this measures</a>
+    <a href="../docs/instruments.md#audio-bench-audio-benchhtml">what this measures</a>
   </p>
   <p id="boot">Loading the model…</p>
   <p id="cfgWarn" class="result error"></p>
@@ -59,7 +59,7 @@
       stop together, the capture path was closed</b> — not the main thread
       frozen. ⑫: 5 minutes, screen off, `hidden` against `always`.
       ⑮: 30 minutes, no cable and no adb.
-      <a href="../docs/instruments.md#residency--⑤-⑫-⑭-⑮">why</a>
+      <a href="../docs/instruments.md#residency-⑤-⑫-⑭-⑮">why</a>
     </p>
     <label>Engines
       <select id="resEngines">
@@ -90,7 +90,7 @@
       <b>⑥</b>: run it once with echoCancellation on and once off (a stop/start
       each way). <b>⑬</b>: keep-alive on <code>always</code>, read row ① — the
       baseline without it is −75.5 dBFS.
-      <a href="../docs/instruments.md#acoustics--⑥-⑬">why</a>
+      <a href="../docs/instruments.md#acoustics-⑥-⑬">why</a>
     </p>
     <div class="controls">
       <button id="acRun" class="primary" disabled>Barge-in self-test (follow the prompts)</button>
@@ -125,7 +125,7 @@
       <b>⑩</b>: record the samples below and replay them.
       <b>⑯</b>: record once, then sweep bufferSeconds 30 → 15 → 10 → 5 over the
       same recordings.
-      <a href="../docs/instruments.md#recognition--⑦-⑩-⑯">why</a>
+      <a href="../docs/instruments.md#recognition-⑦-⑩-⑯">why</a>
     </p>
     <div class="row">
       <label>KWS threshold<input id="rcKwsThreshold" type="number" step="0.05" value="0.25" inputmode="decimal"></label>
@@ -206,7 +206,7 @@
     <p class="hint">
       Talk to it twenty times and count the replies that are pure restatement.
       Needs the FT232H connected above.
-      <a href="../docs/instruments.md#providers--⑨-⑪">why</a>
+      <a href="../docs/instruments.md#providers-⑨-⑪">why</a>
     </p>
     <div class="controls">
       <button id="pvRun" disabled>Start the voice loop</button>
@@ -218,7 +218,7 @@
     <h3>⑪ — the same code-switched line, one provider at a time</h3>
     <p class="hint">
       Fill it in, listen, change it, listen again. Nothing here is saved.
-      <a href="../docs/instruments.md#providers--⑨-⑪">why it can overturn §8.3</a>
+      <a href="../docs/instruments.md#providers-⑨-⑪">why it can overturn §8.3</a>
     </p>
     <p class="say" id="pvSayLine"></p>
     <label>baseURL<input id="pvTtsBase" autocomplete="off"></label>

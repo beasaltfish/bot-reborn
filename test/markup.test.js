@@ -173,3 +173,28 @@ test('the other two instruments were already short, and stay short', () => {
   assert.ok(setupWords < 220, `setup.html carries ${setupWords} words of prose`);
   assert.ok(benchWords < 140, `bench.html carries ${benchWords} words of prose`);
 });
+
+test('every "why" link lands on a heading that exists', () => {
+  // The pages now hand their reasoning to docs/instruments.md and point at it.
+  // A link to a heading that was renamed is worse than no link: it looks like
+  // the argument is one tap away, and the tap goes nowhere.
+  //
+  // The slug rule is GitHub's: lower-case, punctuation dropped, spaces to
+  // hyphens. An em dash is punctuation, so "Acoustics — ⑥ ⑬" is
+  // "acoustics-⑥-⑬" with ONE hyphen, not two.
+  const doc = readFileSync(new URL('../docs/instruments.md', import.meta.url), 'utf8');
+  /** @param {string} heading */
+  const slug = (heading) => heading.trim().toLowerCase()
+    .replace(/[^\w\s\-一-鿿①-⓿]/g, '')
+    .replace(/\s+/g, '-');
+  const headings = new Set([...doc.matchAll(/^#{2,4}\s+(.*)$/gm)].map((m) => slug(m[1])));
+
+  for (const [name, source] of /** @type {[string, string][]} */ ([
+    ['audio-bench', audioBench], ['setup', setup], ['bench', bench],
+  ])) {
+    for (const m of source.matchAll(/docs\/instruments\.md#([^"']+)/g)) {
+      assert.ok(headings.has(m[1]),
+        `${name}.html links to docs/instruments.md#${m[1]}, which is not a heading there`);
+    }
+  }
+});
