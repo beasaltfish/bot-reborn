@@ -48,6 +48,17 @@ status.set('panel', 'dim', 'idle');
 const config = loadConfig();
 
 /**
+ * The two panels that never claim the microphone, and never need the model.
+ *
+ * Declared up here because showPanel() reads it and showPanel runs during this
+ * module's own evaluation. It used to sit two hundred lines down, which is a
+ * temporal dead zone and therefore a ReferenceError that aborted the module —
+ * silently, because a module that throws simply stops: every listener after the
+ * throw is never attached, and the page looks fine and does nothing.
+ */
+const PASSIVE = new Set(['pins', 'connectivity']);
+
+/**
  * Exactly one panel is in the document's flow at a time. They used to all be
  * there with the idle ones dimmed, and dimming saves no scrolling: on a phone
  * the other three are still several screens you travel through.
@@ -243,7 +254,6 @@ const AUDIO_PANELS = [
  * have to be able to run WHILE an audio panel does: ⑦ is KWS measured against
  * the motor's own noise.
  */
-const PASSIVE = new Set(['pins', 'connectivity']);
 
 
 // --- The model, the first time an audio panel is chosen --------------------
