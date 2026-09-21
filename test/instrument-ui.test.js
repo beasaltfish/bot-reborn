@@ -240,6 +240,7 @@ test('the pins panel registers every control it used to', () => {
   // connectBtn, stopBtn and copyLogBtn are gone from here on purpose: the page
   // owns the one cable, the one emergency stop and the one log.
   for (const id of ['byteRateBtn', 'computeBtn',
+                    'pulseMoved', 'pulseStill', 'pulseReset',
                     'scanAllBtn', 'readPinsBtn', 'listGrantedBtn']) {
     assert.match(js, new RegExp(`'${id}'`), `pins.js no longer touches #${id}`);
   }

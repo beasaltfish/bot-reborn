@@ -56,18 +56,70 @@ calibrated measures itself. The bench's six buttons are lower than that: they
 address pins directly, with no Executor in the path at all, which is what you
 want when the question is whether the solder joints are where you think.
 
-### ② Byte rate and road speed
+### ② Byte rate — what one ms of driving costs
 
-At 1200 baud, 3000 forward bytes plus one stop byte in a single write. Time the
-motor with a stopwatch and measure how far the car travelled. The result is
-`bytesPerMs`, which is re-calibrated whenever the hardware changes — which is
-why this page is permanent rather than a throwaway demo.
+The chip times itself: `readPins()` every 20 ms, and a run is the span from the
+first read that comes back high to the last one. What comes out is `bytesPerMs`
+— how many bytes buy one millisecond of the pins being held — which is
+re-calibrated whenever the hardware changes, and is why this page is permanent
+rather than a throwaway demo.
 
-### ⑧ The motor's starting threshold
+Two passes behind one button, because neither settles it alone. The byte counts
+(1500, 3000, 6000) separate a rate from a cap: a rate doubles when the bytes
+double, a truncated write does not move. The bauds (600, 1200, 2400) separate a
+rate that follows the request from a chip that ignores it and free-runs. They
+are one button rather than two on purpose — offered separately they read as
+"either of these will do", over a procedure where neither will.
+
+Both log the whole pin trace and the byte count the host claims to have written,
+because a reading whose evidence is thrown away cannot be argued with — and on
+2026-09-21 that is exactly what had to be argued with. The verdict is then
+compared against the `DEFAULT_BYTES_PER_MS` that `ftdi.js` is actually using,
+and says where to write the number when they disagree: a bench that prints a
+figure and leaves the comparison to whoever remembers the constant is a bench
+that gets believed for a day.
+
+It used to be timed with a stopwatch, and the stopwatch was wrong by 5×: the run
+is 0.5 s, not 2.5, and hand-timing a 0.5 s event off a motor that keeps turning
+after the pins drop reads as "about 2 s" — which agreed with what the code
+assumed, so it stood. The stopwatch is still there, folded away, for a part
+whose read-back does not work; it is a fallback, not the method.
+
+**Road speed is no longer measured here.** It took no part in ②'s verdict, and
+what it produced was the average over a run that starts from standstill —
+biased low against the one thing it was for, spec §4.3's claim that a
+`MAX_COAST_MS` slice is about 1.5 m. A safety number that errs towards "safer
+than it is" is worse than an absent one. If that claim is to be checked, it
+wants its own procedure: a measured distance on the floor, crossed at speed.
+
+### ⑧ Motor threshold — the shortest pulse the car obeys
+
+② says what the chip delivers; this says what the car does with it. Below some
+length the motor gets its current and the wheels never break loose, so the pins
+are held for exactly as long as asked and nothing happens.
 
 Start at 100 ms and add 50 ms each round, ten tries each. The answer is the
 smallest pulse that moves the car **every single time**, not the smallest pulse
-that has ever moved it.
+that has ever moved it: near the threshold the outcome is a probability rather
+than a yes, and a length that works nine times in ten is a length the product
+cannot use.
+
+The card keeps the tally. It used to ask for seventy presses and count none of
+them — the score lived in somebody's head until it was written into
+docs/hardware.md from memory. Now each press arms a ✓ / ✗, the ladder locks
+until one of them is pressed (a trial with no verdict is a tally that has
+quietly stopped meaning ten), and the verdict names both the threshold and any
+shorter length that has not been tried enough times to be ruled out.
+
+**Why it has teeth.** `MIN_DURATION_MS` is the floor in the LLM's tool schema
+(`brain.js`), the value the prompt offers for "just a little", and the bound
+step validation enforces. Set below the real threshold, the model can ask for a
+move that the pins genuinely make and the car genuinely ignores — the robot
+says yes, nothing moves, and no layer reports a fault. It is a guess of 300 ms
+until ⑧ replaces it.
+
+Also: it could not be run at all before 2026-09-21. ② was wrong by 5×, so every
+pulse this card fired was a fifth of its label.
 
 ---
 

@@ -277,8 +277,11 @@ section[id^="panel-"].idle { opacity: .55; }
   padding: 8px; border-radius: 4px; background: rgba(128, 128, 128, .2);
 }
 
-/* Knob rows: two to a line on a phone, one when there is no room. */
-.row { display: flex; flex-wrap: wrap; gap: 10px; }
+/* Knob rows: two to a line on a phone, one when there is no room.
+   The margin is the row's own: these sit between buttons inside .card-do, and
+   a field pressed against the button above it reads as part of the button. */
+.row { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0; }
+.row label { display: block; }
 .row label { flex: 1 1 40%; font-size: 14px; }
 .row label input { width: 100%; box-sizing: border-box; padding: 8px; }
 

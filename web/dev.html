@@ -58,22 +58,31 @@
   </section>
 
   <section class="card">
-    <header><h2>② Byte rate</h2><span class="dot"></span></header>
+    <header><h2>② Byte rate — what one ms of driving costs</h2><span class="dot"></span></header>
     <p class="hint">
-      At 1200 baud, 3000 forward bytes plus one stop byte in one go. Time the
-      motor with a stopwatch; measure how far it travelled.
+      What comes out is <b>bytesPerMs</b>: how many bytes buy one millisecond of
+      the pins being held. Six runs in two passes — the byte counts tell a rate
+      from a truncated write, the bauds tell it from a chip that ignores what it
+      was asked. The verdict is checked against what <code>ftdi.js</code> uses.
       <b>If the car is about to leave the bench, hit Emergency stop.</b>
-      <a href="../docs/instruments.md#why-there-is-an-emergency-stop-at-the-top">why that is the only thing that can</a>
+      <a href="../docs/instruments.md#②-byte-rate-what-one-ms-of-driving-costs">why two passes</a>
     </p>
     <div class="card-do">
       <div class="controls">
-        <button id="byteRateBtn">Write 3000 bytes (≈ 2.5 s in theory)</button>
+        <button id="byteRateBtn">Measure the byte rate (5 runs, ≈ 3 s of driving)</button>
       </div>
-      <label>Measured seconds <input id="measuredSeconds" type="number" step="0.1" inputmode="decimal"></label>
-      <label>Measured metres <input id="measuredMetres" type="number" step="0.1" inputmode="decimal"></label>
-      <div class="controls">
-        <button id="computeBtn">Compute ms/byte and m/s</button>
-      </div>
+      <!-- The fallback, not the method: a part whose read-back does not work
+           still has to give a reading, and ±200 ms of hand still separates the
+           ratios that matter. -->
+      <details class="knobs">
+        <summary>time it by hand instead</summary>
+        <div class="row">
+          <label>Stopwatch seconds<input id="measuredSeconds" type="number" step="0.1" inputmode="decimal"></label>
+        </div>
+        <div class="controls">
+          <button id="computeBtn">Compute ms/byte from that</button>
+        </div>
+      </details>
     </div>
     <div class="card-read">
       <p id="byteRateResult"></p>
@@ -81,9 +90,13 @@
   </section>
 
   <section class="card">
-    <header><h2>⑧ Motor threshold</h2><span class="dot"></span></header>
-    <p class="hint">Start at 100 ms and add 50 ms each round, ten tries each.
-      The answer is the smallest pulse that moves the car every single time.</p>
+    <header><h2>⑧ Motor threshold — the shortest pulse the car obeys</h2><span class="dot"></span></header>
+    <p class="hint">② says what the chip delivers; this says what the <b>car</b>
+      does with it. Below some length the motor gets current and the wheels never
+      break loose. Tap a length, watch the car, then tap ✓ or ✗ — ten tries each,
+      and the answer is the smallest pulse that moves it <b>every single time</b>.
+      <a href="../docs/instruments.md#⑧-motor-threshold-the-shortest-pulse-the-car-obeys">why it has teeth</a>
+    </p>
     <div class="card-do">
       <div class="controls">
         <button data-pulse="100">100 ms</button>
@@ -93,7 +106,20 @@
         <button data-pulse="300">300 ms</button>
         <button data-pulse="350">350 ms</button>
         <button data-pulse="400">400 ms</button>
+        <button data-pulse="500">500 ms</button>
+        <button data-pulse="600">600 ms</button>
       </div>
+      <!-- Disabled until a pulse has actually been fired, and the ladder is
+           disabled until one of these has answered: a trial with no verdict, or
+           a verdict with no trial, is a tally that quietly stops meaning ten. -->
+      <div class="controls">
+        <button id="pulseMoved" disabled>✓ it moved</button>
+        <button id="pulseStill" disabled>✗ nothing</button>
+        <button id="pulseReset">clear the tally</button>
+      </div>
+    </div>
+    <div class="card-read">
+      <p id="pulseResult">No trials yet.</p>
     </div>
   </section>
 
