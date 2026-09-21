@@ -3,6 +3,28 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
+const audioBench = readFileSync(new URL('../web/audio-bench.html', import.meta.url), 'utf8');
+
+/**
+ * How much PROSE a page puts in front of somebody holding a phone — paragraphs
+ * only, which is what you scroll past to reach a button.
+ *
+ * Deliberately not "all the text": a stat row's label, a knob's caption and a
+ * dropdown's options are the instrument itself, and counting them would mean a
+ * page trips this ratchet for adding a reading. Comments do not count either —
+ * they cost the reader nothing and the maintainer everything, which is the
+ * trade this whole rule is built on.
+ *
+ * @param {string} source
+ */
+function proseWords(source) {
+  const body = source.slice(source.indexOf('<body>'));
+  return [...body.replace(/<!--[\s\S]*?-->/g, ' ').matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/g)]
+    .map((m) => m[1].replace(/<[^>]+>/g, ' '))
+    .join(' ')
+    .split(/\s+/)
+    .filter(Boolean).length;
+}
 /** @param {string} id */
 const hasId = (id) => new RegExp(`id=["']${id}["']`).test(html);
 
@@ -62,4 +84,15 @@ test('nothing ships wearing red — the fab earns it at runtime', () => {
   // is red, which would make the one button that must be found instantly into
   // one of several red things.
   assert.ok(!/class=["'][^"']*\bdanger\b/.test(html), 'no element may ship with .danger');
+});
+
+test('the audio bench fits on a phone rather than reading like a paper', () => {
+  // It was 1734 words, which is ten-odd screens of prose before the first
+  // button. The argument did not get thrown away — it is in docs/instruments.md
+  // — and this is the ratchet that keeps it there. Raising this number is a
+  // decision, not a fix: the page is read by somebody standing in a quiet room
+  // holding nothing but the phone.
+  const words = proseWords(audioBench);
+  assert.ok(words < 400,
+    `audio-bench.html carries ${words} words of prose; the why belongs in docs/instruments.md`);
 });

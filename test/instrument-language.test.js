@@ -24,9 +24,8 @@ const INSTRUMENTS = [
 // The ratchet. Each entry is a file that still has Chinese in it and the task
 // that takes it off this list. Shrink it; never grow it. When it is empty this
 // test becomes the plain rule and stays that way.
-const ALLOWED = new Set([
-  'web/audio-bench.html',           // Task 7
-]);
+/** @type {Set<string>} */
+const ALLOWED = new Set();
 
 /** @param {string} rel */
 const read = (rel) =>
@@ -43,14 +42,15 @@ test('no instrument source carries Chinese of its own', () => {
   }
 });
 
-test('the allow-list only ever shrinks', () => {
-  // A file on the list that is already clean means somebody finished the work
-  // and left the exemption behind — the next person to add Chinese there would
-  // get no warning at all.
-  for (const rel of ALLOWED) {
-    assert.ok(CJK.test(read(rel)),
-      `${rel} is clean now — take it off ALLOWED instead of leaving a dead exemption`);
-  }
+test('the allow-list is empty, and stays that way', () => {
+  // Every entry has been retired. Adding one back needs a reason in the commit
+  // message: an instrument carries no Chinese of its own, and
+  // web/instrument-material.js is the single exemption.
+  //
+  // This replaced a test that walked ALLOWED checking each entry was still
+  // dirty. Against an empty set that test passes vacuously — it would have gone
+  // on passing while somebody quietly re-added an exemption.
+  assert.equal(ALLOWED.size, 0);
 });
 
 test('the material table is the one place Chinese is allowed', () => {

@@ -17,6 +17,7 @@ import { classifyLabel, WAKE } from '../audio/keyword-lines.js';
 import { toInt16 } from '../audio/pcm.js';
 import { RATE, FRAME_MS } from '../audio/pipeline.js';
 import { wantedSubscriptions } from '../audio/session.js';
+import { materialFor } from '../instrument-material.js';
 import { OpenAiCompatStt } from '../providers/stt-openai-compat.js';
 import {
   rms, dbs, fmt, setStat, setDisabled, aboveFloor, DB_FLOOR_OFF,
@@ -424,6 +425,11 @@ export function createRecognition() {
     /** @param {import('./main.js').BenchContext} c */
     start(c) {
       ctx = c;
+      // ⑯ is "say these words and see whether the head survives", so the words
+      // have to be on screen — in the language this robot is set to.
+      const material = materialFor(c.config.lang);
+      setStat('rcSayCommands', material.commands.join(' / '));
+      setStat('rcSayRunOn', material.runOn);
       stt = c.config.stt.baseURL ? new OpenAiCompatStt(c.config.stt) : null;
       recorder = createRecorder({ pipeline: c.pipeline, log: c.log });
       earcon = createEarcon(c.pipeline.audioContext);

@@ -10,17 +10,10 @@
 <main>
   <h1>Audio bench</h1>
   <p class="hint">
-    The permanent instrument for every audio-side calibration spec §12 still
-    wants. <b>Not a throwaway probe</b>: ⑤ ⑥ ⑩ were each answered on one phone
-    and every one of those answers expires when the phone changes, so the
-    apparatus stays. Every engine here is the product's own module — the
-    numbers are only worth taking back to <code>web/audio/</code> if they were
-    measured on the code that runs there.
-  </p>
-  <p class="hint">
-    <b>Measuring anything about the background or the battery means no adb, no
-    cable and no charger.</b> A live debug connection stops android from
-    letting the phone sleep — that is how ⑤'s freeze result was contaminated.
+    <b>Measuring the background or the battery means no adb, no cable and no
+    charger.</b> A debug connection keeps the phone awake and contaminates the
+    reading.
+    <a href="../docs/instruments.md#audio-bench--audio-benchhtml">what this measures</a>
   </p>
   <p id="boot">Loading the model…</p>
   <p id="cfgWarn" class="result error"></p>
@@ -31,35 +24,11 @@
     <button id="nsToggle">Flip noiseSuppression on the live track (measure the gap)</button>
   </div>
   <p class="hint">
-    The checkbox above is read once, at Start. <b>This button changes the same
-    setting on the track that is already running</b>, and reports two things
-    the plan for it depends on: whether Chrome honours the request at all
-    (<code>applyConstraints</code> is allowed to resolve having done nothing),
-    and how many 100 ms frames went missing while it happened. The second
-    number is the one that matters: the state machine would flip this at the
-    SLEEPING → LISTENING edge, which is the instant the wake word fires, so a
-    hole there falls on 「往」 in "hey steven 往前走" — and §5.3 leaves the VAD
-    unsubscribed through SLEEPING, so there is no buffer behind it to soften
-    the loss. <b>gap 0</b> means the switch is free.
-  </p>
-  <p class="hint">
-    <b>noiseSuppression</b> was forbidden outright until 2026-09-17, and the
-    reason still stands: the suppressor eats the consonant onsets the wake word
-    is built from, and <code>HH EY1 S T IY1 V AH0 N</code> is nearly all onset.
-    It is here because AEC turned out to hand the VAD spurious bursts in
-    silence — −44 dB down to −96, against −40 and up for real speech — and five
-    minutes with AEC off produced none. The suppressor is the stage built to
-    absorb that residue. The product default has not moved; this asks whether
-    it should. The cost side is ⑦'s twenty shouts per keyword, and it cannot be
-    replayed from stored samples: a microphone constraint changes what gets
-    recorded, so there is no identical audio to A/B.
-  </p>
-  <p class="hint">
-    ⑥ measures what this does, and it is the one thing that has to be settled
-    <b>before</b> Start: changing it changes the getUserMedia constraints,
-    which means a new AudioContext, which means rebuilding the TTS and the
-    earcons hanging off it. So it locks while anything is running — stop,
-    change it, start again. ⑥ is two separate runs anyway.
+    The checkboxes are read once, at Start; the button changes the live track
+    and reports how many 100 ms frames went missing doing it — <b>gap 0</b>
+    means the switch is free. echoCancellation locks while anything runs: stop,
+    change it, start again.
+    <a href="../docs/instruments.md#echocancellation-and-why-it-locks-at-start">why</a>
   </p>
   <div class="controls">
     <!-- disabled until the wasm has loaded: pressing Start before that would
@@ -71,11 +40,8 @@
   <hr>
   <h2>Cross-cutting</h2>
   <p class="hint">
-    These two are <b>not</b> panels, and they are set <b>after</b> Start:
-    unlike echoCancellation they can be changed mid-run, and they stay on
-    across whichever panel is running. That is the point — the measurements
-    that need them are crossings: ⑬ ⑭ ⑮ are each "keep-alive × some reading",
-    and ⑦ is "KWS × motor noise".
+    Set these <b>after</b> Start; they stay on across whichever panel runs.
+    <a href="../docs/instruments.md#why-the-two-cross-cutting-knobs-are-not-a-panel">why they are not a panel</a>
   </p>
   <label>Keep-alive tone
     <select id="kaMode">
@@ -84,10 +50,7 @@
       <option value="always">always (⑫'s control arm)</option>
     </select>
   </label>
-  <p class="hint">
-    ⑫ compares the middle against the last. ⑬ ⑭ ⑮ all want one of the two
-    playing arms on while another panel runs.
-  </p>
+  <p class="hint">⑫ compares the middle option against the last.</p>
   <div class="controls">
     <button id="usbConnect">Connect the FT232H</button>
     <button id="motorToggle" disabled>Make the car circle (noise for ⑦)</button>
@@ -98,16 +61,11 @@
   <section id="panel-residency">
     <h2>Residency — ⑤ ⑫ ⑭ ⑮</h2>
     <p class="hint">
-      One resident run, four readings. <b>The three clocks are ⑫'s verdict:</b>
-      the wall clock always runs, and if the audio clock and the fed count stop
-      TOGETHER then the capture path was closed — not the main thread frozen.
-      That is what ⑤'s three reproductions (59 / 60 / 65 s) separated.
-    </p>
-    <p class="hint">
-      ⑫: set the keep-alive above to <code>only while the screen is off</code>,
-      run for 5 minutes with the screen off, and compare against
-      <code>always</code>. ⑭: <code>KWS + VAD</code> with the keep-alive on.
-      ⑮: the same run, 30 minutes, <b>no cable and no adb</b>.
+      One resident run, four readings. <b>If the audio clock and the fed count
+      stop together, the capture path was closed</b> — not the main thread
+      frozen. ⑫: 5 minutes, screen off, `hidden` against `always`.
+      ⑮: 30 minutes, no cable and no adb.
+      <a href="../docs/instruments.md#residency--⑤-⑫-⑭-⑮">why</a>
     </p>
     <label>Engines
       <select id="resEngines">
@@ -134,17 +92,11 @@
   <section id="panel-acoustics">
     <h2>Acoustics — ⑥ ⑬</h2>
     <p class="hint">
-      One window cannot separate three sources — the robot's echo that AEC
-      missed, your voice, and the room — so this runs to a script and the page
-      says the lines. Only the comparison between windows means anything:
-      <code>quiet − floor</code> is the echo residue, <code>talk − quiet</code>
-      is the only positive evidence that barge-in can work here.
-    </p>
-    <p class="hint">
-      <b>⑥</b>: run it once with echoCancellation on and once with it off (the
-      checkbox is above, and changing it needs a stop/start).
-      <b>⑬</b>: set the keep-alive to <code>always</code> and read row ① —
-      the baseline without it is −75.5 dBFS.
+      Follow the prompts; only the comparison between windows means anything.
+      <b>⑥</b>: run it once with echoCancellation on and once off (a stop/start
+      each way). <b>⑬</b>: keep-alive on <code>always</code>, read row ① — the
+      baseline without it is −75.5 dBFS.
+      <a href="../docs/instruments.md#acoustics--⑥-⑬">why</a>
     </p>
     <div class="controls">
       <button id="acRun" class="primary" disabled>Barge-in self-test (follow the prompts)</button>
@@ -171,28 +123,16 @@
   <section id="panel-recognition">
     <h2>Recognition — ⑦ ⑩ ⑯</h2>
     <p class="hint">
-      <b>⑯ is the one item here that can overturn product code.</b> §5.4 hands
-      the pre-roll to sherpa's own CircularBuffer on the strength of docs and a
-      silent test; if <code>vad.front()</code> loses the head of a real
-      sentence, the 500 ms hand-rolled ring goes back in.
+      Say twenty short commands that start with a consonant
+      (<span id="rcSayCommands"></span>) and check the first character survives
+      in the transcript. <b>At least five as the run-on form
+      <span id="rcSayRunOn"></span></b>.
+      <b>⑦</b>: motor on, 20 shouts per keyword, then count false triggers.
+      <b>⑩</b>: record the samples below and replay them.
+      <b>⑯</b>: record once, then sweep bufferSeconds 30 → 15 → 10 → 5 over the
+      same recordings.
+      <a href="../docs/instruments.md#recognition--⑦-⑩-⑯">why</a>
     </p>
-    <p class="hint">
-      Say twenty short commands that <b>start with a consonant</b>
-      (「往前走」「把灯关了」) and check the first character survives in the
-      transcript. <b>At least five of them as the run-on form
-      「hey steven 往前走」</b> — that one presses on two things at once: §5.5
-      not clearing the VAD, and §5.6's earcon gate, which is why
-      <code>wake</code> was squeezed to 80 ms.
-    </p>
-    <p class="hint">
-      <b>⑦</b>: turn the motor on above, then shout each keyword 20 times and
-      count misses; then talk Chinese at it and count <code>all stop</code>
-      false triggers. <b>⑩</b>: record the three sample classes below and
-      replay them. <b>⑯</b>: record once, then sweep bufferSeconds 30 → 15 →
-      10 → 5 over the same recordings, and finally record one clip longer than
-      the buffer and see what comes out.
-    </p>
-
     <div class="row">
       <label>KWS threshold<input id="rcKwsThreshold" type="number" step="0.05" value="0.25" inputmode="decimal"></label>
       <label>KWS score<input id="rcKwsScore" type="number" step="0.5" value="1" inputmode="decimal"></label>
@@ -209,15 +149,10 @@
       <label>STT floor, dBFS<input id="rcMinLevel" type="number" step="1" value="-120" inputmode="decimal"></label>
     </div>
     <p class="hint">
-      Every segment carries its level, and nothing under the
-      <b>STT floor</b> is sent to be transcribed. It ships at −120, which
-      refuses nothing, because the value that belongs here is a measurement
-      nobody has taken yet — run it open first and read the dB figures off the
-      log. Length cannot do this job: in one run 「回来」and「帮你」came out at
-      0.3 and 0.4 s while an empty room produced 0.4, 0.5, 0.6 — and 6.4, and
-      10.6. Skipped segments are still logged and still counted under
-      <b>Segments cut</b>; the floor decides who pays to look at one, not what
-      the VAD did.
+      Nothing under the <b>STT floor</b> is transcribed. It ships at −120, which
+      refuses nothing: run it open first and read the dB figures off the log.
+      Skipped segments are still counted under <b>Segments cut</b>.
+      <a href="../docs/instruments.md#the-stt-floor">why not length</a>
     </p>
     <label>wiring
       <select id="rcWiring">
@@ -226,21 +161,10 @@
       </select>
     </label>
     <p class="hint">
-      <b>These two are not the same pipeline, and until now only the first one
-      existed here.</b> §5.3 leaves the VAD <b>unsubscribed through
-      SLEEPING</b>, so on the product's wake path the detector never hears the
-      keyword at all and picks up from whichever frame lands after the earcon
-      window shuts. 「hey steven 往前走」 said in one breath loses far more than
-      the single frame the gate drops — it loses everything up to roughly
-      100 ms past the hit, and 「往」 lives in there. Every ⑯ reading so far was
-      taken on <code>both</code>, which feeds the VAD from the start and so
-      cannot see this at all.
-      <code>product</code> imports <code>wantedSubscriptions</code> from
-      session.js rather than reimplementing it, registers the two subscriptions
-      in the same order, and so inherits the Map-iterator behaviour described
-      below instead of simulating it. It returns to SLEEPING after each
-      utterance, because saying the sentence twenty times means starting from
-      SLEEPING twenty times.
+      <b>These are not the same pipeline.</b> Every ⑯ reading taken before this
+      switch existed was taken on <code>both</code>, which cannot see what the
+      product's wake path loses.
+      <a href="../docs/instruments.md#the-wiring-switch">why</a>
     </p>
     <label>wake earcon
       <select id="rcWakeMode">
@@ -250,21 +174,10 @@
       </select>
     </label>
     <p class="hint">
-      Run the run-on sentence at all three and the readings separate two
-      different causes of a lost head, which want opposite fixes.
-      <b>none</b> is the VAD's own decision latency — if the head goes missing
-      here, §5.4 is wrong and the 500 ms ring comes back.
-      <b>gated</b> is the shipped behaviour, and what it costs is one whole
-      frame: §5.6 gates for 80 ms, but the unsubscribe lands mid-fan-out, so
-      the VAD misses the entire 100 ms frame the keyword was found in — the one
-      carrying the end of "steven" and the start of 「往」.
-      <b>ungated</b> plays the tone and keeps feeding, which asks whether the
-      gate was ever needed: §5.6 already argues a pure tone has no formants for
-      the VAD to read as speech, and ⑥ measured the AEC removing the robot's
-      own voice entirely. If nothing is lost here, the fix is to delete the
-      gate — one line, and §5.4 is left alone.
+      Run the run-on sentence at all three: they separate two causes of a lost
+      head that want opposite fixes.
+      <a href="../docs/instruments.md#the-wake-earcon-switch">why</a>
     </p>
-
     <h3>Live</h3>
     <div class="controls">
       <button id="rcRun" disabled>Run</button>
@@ -279,10 +192,9 @@
 
     <h3>Samples</h3>
     <p class="hint">
-      Recorded into this browser under <code>calib/</code>, never into the
-      repo. <b>One recording, every sweep</b>: comparing bufferSeconds across
-      twenty freshly-spoken sentences would be comparing different inputs
-      against different parameters.
+      Kept in this browser, never in the repo. <b>One recording, every
+      sweep.</b>
+      <a href="../docs/instruments.md#samples">why</a>
     </p>
     <div class="controls">
       <input id="rcSampleName" placeholder="kws-01" autocomplete="off">
@@ -298,14 +210,9 @@
 
     <h3>⑨ — twenty turns, with what the model said in full</h3>
     <p class="hint">
-      Talk to it twenty times and count how many replies are pure restatement
-      carrying zero information. High enough to be annoying and §6.3 goes back
-      to discarding <code>content</code> — one <code>if</code>. The log below
-      shows the transcript, the model's sentence and every dispatched action,
-      because with only <code>♪ done</code> there is nothing to count.
-    </p>
-    <p class="hint">
-      Needs the FT232H connected above (the car is what the tool calls drive).
+      Talk to it twenty times and count the replies that are pure restatement.
+      Needs the FT232H connected above.
+      <a href="../docs/instruments.md#providers--⑨-⑪">why</a>
     </p>
     <div class="controls">
       <button id="pvRun" disabled>Start the voice loop</button>
@@ -316,10 +223,8 @@
 
     <h3>⑪ — the same code-switched line, one provider at a time</h3>
     <p class="hint">
-      <b>This is the item that can overturn a choice rather than a constant</b>
-      (§8.3's default TTS). setup.html's TTS test only ever tries the one you
-      have configured; ⑪ is the comparison. Nothing here is saved — fill it in,
-      listen, change it, listen again.
+      Fill it in, listen, change it, listen again. Nothing here is saved.
+      <a href="../docs/instruments.md#providers--⑨-⑪">why it can overturn §8.3</a>
     </p>
     <p class="say" id="pvSayLine"></p>
     <label>baseURL<input id="pvTtsBase" autocomplete="off"></label>
