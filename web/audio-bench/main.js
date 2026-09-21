@@ -54,8 +54,11 @@ function mirror(owner) {
   // is where it sits in the markup.
   const hoisted = bar.firstElementChild;
   if (hoisted && hoisted.id === 'acBar') {
-    $('panel-acoustics').insertBefore(
-      hoisted, /** @type {HTMLElement} */ ($('acFloor').parentElement));
+    // Back to the top of the card's readings, which is where it sits in the
+    // markup. The old target was #acFloor's parent, which stopped being the
+    // right neighbour when the panel grew a .card-read around its stat rows.
+    const home = $('panel-acoustics').querySelector('.card-read');
+    /** @type {HTMLElement} */ (home).prepend(hoisted);
   }
   bar.textContent = '';
   if (!owner) return;

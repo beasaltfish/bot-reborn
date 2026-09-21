@@ -8,6 +8,7 @@
 </head>
 <body>
 <main>
+  <div id="instrumentStatus"></div>
   <h1>Audio bench</h1>
   <p class="hint">
     <b>Measuring the background or the battery means no adb, no cable and no
@@ -15,45 +16,56 @@
     reading.
     <a href="../docs/instruments.md#audio-bench-audio-benchhtml">what this measures</a>
   </p>
-  <p id="boot">Loading the model…</p>
-  <p id="cfgWarn" class="result error"></p>
+  <section class="card">
+    <header><h2>Microphone</h2><span class="dot"></span></header>
+    <p class="hint">
+      The checkboxes are read once, at Start; the button changes the live track
+      and reports how many 100 ms frames went missing doing it — <b>gap 0</b>
+      means the switch is free. echoCancellation locks while anything runs:
+      stop, change it, start again.
+      <a href="../docs/instruments.md#echocancellation-and-why-it-locks-at-start">why</a>
+    </p>
+    <div class="card-do">
+      <label><input id="aec" type="checkbox" checked> echoCancellation</label>
+      <label><input id="ns" type="checkbox" checked> noiseSuppression</label>
+      <div class="controls">
+        <button id="nsToggle">Flip noiseSuppression on the live track</button>
+      </div>
+    </div>
+    <div class="card-read">
+      <p id="boot">Loading the model…</p>
+      <p id="cfgWarn" class="result error"></p>
+    </div>
+  </section>
 
-  <label><input id="aec" type="checkbox" checked> echoCancellation on the microphone</label>
-  <label><input id="ns" type="checkbox" checked> noiseSuppression on the microphone</label>
-  <div class="controls">
-    <button id="nsToggle">Flip noiseSuppression on the live track (measure the gap)</button>
-  </div>
-  <p class="hint">
-    The checkboxes are read once, at Start; the button changes the live track
-    and reports how many 100 ms frames went missing doing it — <b>gap 0</b>
-    means the switch is free. echoCancellation locks while anything runs: stop,
-    change it, start again.
-    <a href="../docs/instruments.md#echocancellation-and-why-it-locks-at-start">why</a>
-  </p>
+  <section class="card">
+    <header><h2>Cross-cutting</h2><span class="dot"></span></header>
+    <p class="hint">
+      Set these <b>after</b> Start; they stay on across whichever panel runs.
+      ⑫ compares the middle keep-alive option against the last.
+      <a href="../docs/instruments.md#why-the-two-cross-cutting-knobs-are-not-a-panel">why they are not a panel</a>
+    </p>
+    <div class="card-do">
+      <label>Keep-alive tone
+        <select id="kaMode">
+          <option value="off" selected>off</option>
+          <option value="hidden">only while the screen is off (what ships)</option>
+          <option value="always">always (⑫'s control arm)</option>
+        </select>
+      </label>
+      <div class="controls">
+        <button id="usbConnect">Connect the FT232H</button>
+        <button id="motorToggle" disabled>Make the car circle (noise for ⑦)</button>
+      </div>
+    </div>
+    <div class="card-read">
+      <p id="usbStatus" class="hint">USB: not connected</p>
+    </div>
+  </section>
 
-  <hr>
-  <h2>Cross-cutting</h2>
-  <p class="hint">
-    Set these <b>after</b> Start; they stay on across whichever panel runs.
-    <a href="../docs/instruments.md#why-the-two-cross-cutting-knobs-are-not-a-panel">why they are not a panel</a>
-  </p>
-  <label>Keep-alive tone
-    <select id="kaMode">
-      <option value="off" selected>off</option>
-      <option value="hidden">only while the screen is off (what ships)</option>
-      <option value="always">always (⑫'s control arm)</option>
-    </select>
-  </label>
-  <p class="hint">⑫ compares the middle option against the last.</p>
-  <div class="controls">
-    <button id="usbConnect">Connect the FT232H</button>
-    <button id="motorToggle" disabled>Make the car circle (noise for ⑦)</button>
-  </div>
-  <p id="usbStatus" class="hint">USB: not connected</p>
-
-  <hr>
   <section id="panel-residency">
-    <h2>Residency — ⑤ ⑫ ⑭ ⑮</h2>
+   <section class="card">
+    <header><h2>Residency — ⑤ ⑫ ⑭ ⑮</h2><span class="dot"></span></header>
     <p class="hint">
       One resident run, four readings. <b>If the audio clock and the fed count
       stop together, the capture path was closed</b> — not the main thread
@@ -61,16 +73,19 @@
       ⑮: 30 minutes, no cable and no adb.
       <a href="../docs/instruments.md#residency-⑤-⑫-⑭-⑮">why</a>
     </p>
-    <label>Engines
-      <select id="resEngines">
-        <option value="kws">KWS only (⑤ measured 8.55 ms/frame this way)</option>
-        <option value="both" selected>KWS + VAD (⑭)</option>
-      </select>
-    </label>
-    <div class="controls">
-      <button id="resRun" disabled>Run</button>
-      <button id="resStop" disabled>Stop</button>
+    <div class="card-do">
+      <label>Engines
+        <select id="resEngines">
+          <option value="kws">KWS only (⑤ measured 8.55 ms/frame this way)</option>
+          <option value="both" selected>KWS + VAD (⑭)</option>
+        </select>
+      </label>
+      <div class="controls">
+        <button id="resRun" disabled>Run</button>
+        <button id="resStop" disabled>Stop</button>
+      </div>
     </div>
+    <div class="card-read">
     <div class="stat"><b>Wall clock</b><span id="resWall">—</span></div>
     <div class="stat"><b>Audio clock</b><span id="resAudio">—</span></div>
     <div class="stat"><b>Fed (frames × 100 ms)</b><span id="resFed">—</span></div>
@@ -80,11 +95,13 @@
     <div class="stat"><b>Total per frame</b><span id="resTotal">—</span></div>
     <div class="stat"><b>Keyword hits</b><span id="resHits">0</span></div>
     <div class="stat"><b>Battery</b><span id="resBattery">—</span></div>
+    </div>
+   </section>
   </section>
 
-  <hr>
   <section id="panel-acoustics">
-    <h2>Acoustics — ⑥ ⑬</h2>
+   <section class="card">
+    <header><h2>Acoustics — ⑥ ⑬</h2><span class="dot"></span></header>
     <p class="hint">
       Follow the prompts; only the comparison between windows means anything.
       <b>⑥</b>: run it once with echoCancellation on and once off (a stop/start
@@ -92,10 +109,13 @@
       baseline without it is −75.5 dBFS.
       <a href="../docs/instruments.md#acoustics-⑥-⑬">why</a>
     </p>
-    <div class="controls">
-      <button id="acRun" class="primary" disabled>Barge-in self-test (follow the prompts)</button>
-      <button id="acStop" disabled>Abort</button>
+    <div class="card-do">
+      <div class="controls">
+        <button id="acRun" class="primary" disabled>Barge-in self-test</button>
+        <button id="acStop" disabled>Abort</button>
+      </div>
     </div>
+    <div class="card-read">
     <div id="acBar" hidden>
       <div id="acCue"></div>
       <div id="acSub"></div>
@@ -111,11 +131,13 @@
     <div class="stat"><b>⑤ transcript over playback</b><span id="acSttTalk">—</span></div>
     <div class="stat"><b>transcription verdict</b><span id="acSttVerdict" class="verdict">—</span></div>
     <div class="stat"><b>Verdict</b><span id="acVerdict" class="verdict">—</span></div>
+    </div>
+   </section>
   </section>
 
-  <hr>
   <section id="panel-recognition">
-    <h2>Recognition — ⑦ ⑩ ⑯</h2>
+   <section class="card">
+    <header><h2>Recognition · Live — ⑦ ⑩ ⑯</h2><span class="dot"></span></header>
     <p class="hint">
       Say twenty short commands that start with a consonant
       (<span id="rcSayCommands"></span>) and check the first character survives
@@ -127,6 +149,7 @@
       same recordings.
       <a href="../docs/instruments.md#recognition-⑦-⑩-⑯">why</a>
     </p>
+    <div class="card-do">
     <div class="row">
       <label>KWS threshold<input id="rcKwsThreshold" type="number" step="0.05" value="0.25" inputmode="decimal"></label>
       <label>KWS score<input id="rcKwsScore" type="number" step="0.5" value="1" inputmode="decimal"></label>
@@ -172,66 +195,85 @@
       head that want opposite fixes.
       <a href="../docs/instruments.md#the-wake-earcon-switch">why</a>
     </p>
-    <h3>Live</h3>
     <div class="controls">
       <button id="rcRun" disabled>Run</button>
       <button id="rcStop" disabled>Stop</button>
       <button id="rcReset">Reset the counters</button>
     </div>
+    </div>
+    <div class="card-read">
     <div class="stat"><b>Keyword hits</b><span id="rcHits">0</span></div>
     <div class="stat"><b>Segments cut</b><span id="rcSegs">0</span></div>
     <div class="stat"><b>Under the floor</b><span id="rcSkipped">0</span></div>
     <div class="stat"><b>Last segment</b><span id="rcLastSeg">—</span></div>
     <div class="stat"><b>Last transcript</b><span id="rcLastText">—</span></div>
+    </div>
+   </section>
 
-    <h3>Samples</h3>
+   <section class="card">
+    <header><h2>Recognition · Samples</h2><span class="dot"></span></header>
     <p class="hint">
       Kept in this browser, never in the repo. <b>One recording, every
       sweep.</b>
       <a href="../docs/instruments.md#samples">why</a>
     </p>
-    <div class="controls">
-      <input id="rcSampleName" placeholder="kws-01" autocomplete="off">
-      <button id="rcRecord" disabled>● Record</button>
-      <button id="rcReplayAll" disabled>Replay all at the settings above</button>
+    <div class="card-do">
+      <div class="controls">
+        <input id="rcSampleName" placeholder="kws-01" autocomplete="off">
+        <button id="rcRecord" disabled>● Record</button>
+        <button id="rcReplayAll" disabled>Replay all at the settings above</button>
+      </div>
     </div>
-    <ol id="rcSamples"></ol>
+    <div class="card-read">
+      <ol id="rcSamples"></ol>
+    </div>
+   </section>
   </section>
 
-  <hr>
   <section id="panel-providers">
-    <h2>Providers — ⑨ ⑪</h2>
-
-    <h3>⑨ — twenty turns, with what the model said in full</h3>
+   <section class="card">
+    <header><h2>Providers · ⑨ twenty turns</h2><span class="dot"></span></header>
     <p class="hint">
       Talk to it twenty times and count the replies that are pure restatement.
       Needs the FT232H connected above.
       <a href="../docs/instruments.md#providers-⑨-⑪">why</a>
     </p>
-    <div class="controls">
-      <button id="pvRun" disabled>Start the voice loop</button>
-      <button id="pvStop" disabled>Stop</button>
+    <div class="card-do">
+      <div class="controls">
+        <button id="pvRun" disabled>Start the voice loop</button>
+        <button id="pvStop" disabled>Stop</button>
+      </div>
     </div>
-    <div class="stat"><b>State</b><span id="pvState">—</span></div>
-    <pre id="pvTurnLog"></pre>
+    <div class="card-read">
+      <div class="stat"><b>State</b><span id="pvState">—</span></div>
+      <pre id="pvTurnLog"></pre>
+    </div>
+   </section>
 
-    <h3>⑪ — the same code-switched line, one provider at a time</h3>
+   <section class="card">
+    <header><h2>Providers · ⑪ one line, each voice</h2><span class="dot"></span></header>
     <p class="hint">
       Fill it in, listen, change it, listen again. Nothing here is saved.
       <a href="../docs/instruments.md#providers-⑨-⑪">why it can overturn §8.3</a>
     </p>
-    <p class="say" id="pvSayLine"></p>
-    <label>baseURL<input id="pvTtsBase" autocomplete="off"></label>
-    <label>apiKey<input id="pvTtsKey" type="password" autocomplete="off"></label>
-    <label>model<input id="pvTtsModel" autocomplete="off"></label>
-    <label>voice<input id="pvTtsVoice" autocomplete="off"></label>
-    <div class="controls">
-      <button id="pvSpeak">Speak it</button>
+    <div class="card-do">
+      <p class="say" id="pvSayLine"></p>
+      <label>baseURL<input id="pvTtsBase" autocomplete="off"></label>
+      <label>apiKey<input id="pvTtsKey" type="password" autocomplete="off"></label>
+      <label>model<input id="pvTtsModel" autocomplete="off"></label>
+      <label>voice<input id="pvTtsVoice" autocomplete="off"></label>
+      <div class="controls">
+        <button id="pvSpeak">Speak it</button>
+      </div>
     </div>
-    <p id="pvSpeakResult" class="result"></p>
+    <div class="card-read">
+      <p id="pvSpeakResult" class="result"></p>
+    </div>
+   </section>
   </section>
 
-  <hr>
+  <!-- The page log, and the bar. Neither is in a card: the log belongs to the
+       whole page rather than to any one measurement, and the bar is fixed. -->
   <div class="controls"><button id="copyLog">Copy the log</button></div>
   <pre id="log"></pre>
 

@@ -52,8 +52,7 @@ const PAGES_SRC = /** @type {[string, string, number][]} */ ([
   ['audio-bench.html', read('web/audio-bench.html'), 8],
 ]);
 
-test('no instrument page still separates its sections with a rule',
-  { skip: 'the pages get their cards in Tasks 3–5' }, () => {
+test('no instrument page still separates its sections with a rule', () => {
   // <hr> says "the thing above ended". A card says "these belong together",
   // which is the question somebody scrolling actually has.
   for (const [name, source] of PAGES_SRC) {
@@ -61,16 +60,14 @@ test('no instrument page still separates its sections with a rule',
   }
 });
 
-test('every page carries exactly the cards the spec lists',
-  { skip: 'the pages get their cards in Tasks 3–5' }, () => {
+test('every page carries exactly the cards the spec lists', () => {
   for (const [name, source, count] of PAGES_SRC) {
     const cards = [...source.matchAll(/<section class="card"/g)];
     assert.equal(cards.length, count, `${name} has ${cards.length} cards, expected ${count}`);
   }
 });
 
-test('a card is a header, then what you do, then what came back',
-  { skip: 'the pages get their cards in Tasks 3–5' }, () => {
+test('a card is a header, then what you do, then what came back', () => {
   // The order is the whole answer to "I do not know what to look at first": the
   // third block is always the result and the second is always the controls, in
   // all eighteen cards on all three pages. A card may omit the readings (some
