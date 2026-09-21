@@ -11,6 +11,7 @@ import { unknownTokens } from '../audio/keyword-lines.js';
 import { createLog, setStat, setDisabled } from './readout.js';
 import { createKnobs } from './knobs.js';
 import { HEADLINES } from './headlines.js';
+import { createStatus } from '../instrument-status.js';
 import { createResidency } from './residency.js';
 import { createAcoustics } from './acoustics.js';
 import { createRecognition } from './recognition.js';
@@ -20,6 +21,16 @@ const $ = (/** @type {string} */ id) =>
   /** @type {HTMLElement} */ (document.getElementById(id));
 
 const log = createLog($('log'));
+
+// Five readings, and every one of them was already known somewhere in this
+// file or in knobs.js — none of it was ever shown in one place.
+const status = createStatus($('instrumentStatus'),
+  ['mic', 'usb', 'keepalive', 'motor', 'panel']);
+status.set('mic', 'dim', 'mic closed');
+status.set('usb', 'dim', 'USB not connected');
+status.set('keepalive', 'dim', 'keep-alive off');
+status.set('motor', 'dim', 'motor off');
+status.set('panel', 'dim', 'idle');
 const config = loadConfig();
 
 /**
@@ -90,7 +101,9 @@ const knobs = createKnobs({
     // and take its readings off the bar with it. Stop it first.
     setDisabled('panelPick', owner !== null);
     mirror(owner);
+    status.set('panel', owner ? 'go' : 'dim', owner ?? 'idle');
   },
+  onStatus: (id, state, label) => status.set(id, state, label),
 });
 
 $('panelPick').addEventListener('change', () =>
@@ -163,7 +176,10 @@ $('start').addEventListener('click', async () => {
     pipeline = await AudioPipeline.start({
       echoCancellation,
       noiseSuppression,
-      onRate: (hz) => log(`AudioContext ${hz} Hz`),
+      onRate: (hz) => {
+        log(`AudioContext ${hz} Hz`);
+        status.set('mic', 'go', `mic ${hz / 1000} kHz`);
+      },
     });
     log(`▶︎ microphone open, echoCancellation ${echoCancellation ? 'on' : 'off'}`
       + `, noiseSuppression ${noiseSuppression ? 'on' : 'off'}`);
@@ -190,6 +206,7 @@ $('stop').addEventListener('click', () => {
   setDisabled('stop', true);
   setDisabled('start', false);
   setDisabled('aec', false);
+  status.set('mic', 'dim', 'mic closed');
   log('■ stopped');
 });
 

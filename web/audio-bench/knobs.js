@@ -65,13 +65,19 @@ const $ = (/** @type {string} */ id) =>
   /** @type {HTMLElement} */ (document.getElementById(id));
 
 /**
+ * `onStatus` has the same shape as the strip's own `set`, and for the same
+ * reason `onOwner` exists: this module owns the keep-alive and the motor, but
+ * it must not reach for the page's strip. The entry file owns that wiring.
+ *
  * @param {{
  *   log: (msg: string) => void,
  *   onOwner?: (owner: string | null) => void,
+ *   onStatus?: (id: string, state: 'go' | 'wait' | 'dim', label: string) => void,
  * }} opts
  */
 export function createKnobs(opts) {
   const { log } = opts;
+  const status = opts.onStatus ?? (() => {});
   const exclusion = createExclusion(opts.onOwner);
 
   // --- keep-alive ---------------------------------------------------------
@@ -83,7 +89,11 @@ export function createKnobs(opts) {
     const mode = /** @type {KeepAliveMode} */
       (/** @type {HTMLSelectElement} */ ($('kaMode')).value);
     const kaOpts = keepAliveOptions(mode);
-    if (!kaOpts) { log('keep-alive: off'); return; }
+    if (!kaOpts) {
+      log('keep-alive: off');
+      status('keepalive', 'dim', 'keep-alive off');
+      return;
+    }
     const ka = createKeepAlive({ ...kaOpts, onLog: log });
     keepAlive = ka;
     // NOT awaited: autoplay needs the gesture this handler is running inside,
@@ -91,6 +101,7 @@ export function createKnobs(opts) {
     // to bank the permission; the rejection handler is all we need back.
     ka.armFromGesture().catch((err) => log('keep-alive: ' + err.message));
     log(`keep-alive: ${mode}`);
+    status('keepalive', 'go', `keep-alive ${mode}`);
   });
 
   // --- motor noise (⑦) ----------------------------------------------------
@@ -113,10 +124,12 @@ export function createKnobs(opts) {
         },
       });
       setStat('usbStatus', 'USB: connected');
+      status('usb', 'go', 'USB connected');
       setDisabled('motorToggle', false);
       log('USB connected');
     } catch (err) {
       setStat('usbStatus', 'USB: ' + /** @type {Error} */ (err).message);
+      status('usb', 'wait', 'USB connect failed');
     }
   });
 
@@ -126,6 +139,7 @@ export function createKnobs(opts) {
       executor.stop();
       circling = false;
       $('motorToggle').textContent = 'Make the car circle (noise for ⑦)';
+      status('motor', 'dim', 'motor off');
       log('■ motor stopped');
       return;
     }
@@ -136,6 +150,7 @@ export function createKnobs(opts) {
     executor.cruise('forward', 'left');
     circling = true;
     $('motorToggle').textContent = '■ Stop the car';
+    status('motor', 'go', 'motor running');
     log('▶︎ motor circling — this is the noise floor ⑦ is measured against');
   });
 

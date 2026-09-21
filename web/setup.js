@@ -20,6 +20,7 @@ import { matchFixture, saveFixture, recordedAt } from './fixture-store.js';
 // sheet ask the same questions of different audio. See web/checks.js.
 import { checkLlm, checkTts, fetchClip, transcribeClip } from './checks.js';
 import { materialFor } from './instrument-material.js';
+import { createStatus } from './instrument-status.js';
 
 /**
  * @typedef {import('./config.js').Config} Config
@@ -123,9 +124,25 @@ el('cfgForm').addEventListener('submit', (event) => {
   // must not come back in through the save path instead.
   saveConfig({ ...loadConfig(), ...readForm() });
   el('cfgStatus').textContent = `saved to localStorage (${CONFIG_KEY})`;
+  refreshConfigStatus();
 });
 
+// Three readings, because this page has three prerequisites and every one of
+// them used to be invisible until something failed.
+const status = createStatus(el('instrumentStatus'), ['usb', 'mic', 'config']);
+status.set('usb', 'dim', 'USB not connected');
+status.set('mic', 'dim', 'mic closed');
+
+/** How many of the three provider layers have somewhere to talk to. */
+function refreshConfigStatus() {
+  const cfg = loadConfig();
+  const n = /** @type {const} */ (['stt', 'llm', 'tts'])
+    .filter((k) => cfg[k].baseURL).length;
+  status.set('config', n === 3 ? 'go' : 'wait', `${n}/3 configured`);
+}
+
 fillForm(loadConfig());
+refreshConfigStatus();
 
 // --- USB connect ------------------------------------------------------------
 //
@@ -163,14 +180,17 @@ el('connectBtn').addEventListener('click', async () => {
     executor = new Executor(opened, {
       onError: (err) => {
         setUsbStatus(`!! ${err.message}`);
+        status.set('usb', 'dim', 'USB disconnected');
         logTurn(`!! executor: ${err.message}`);
       },
     });
     setUsbStatus('connected');
+    status.set('usb', 'go', 'USB connected');
     logTurn('USB connected');
   } catch (err) {
     const e = /** @type {Error} */ (err);
     setUsbStatus(`connect failed: ${e.message}`);
+    status.set('usb', 'wait', 'USB connect failed');
   }
 });
 
@@ -329,7 +349,19 @@ let micPipeline = null;
  */
 function microphone() {
   if (!micPipeline) {
-    micPipeline = AudioPipeline.start().catch((err) => { micPipeline = null; throw err; });
+    micPipeline = AudioPipeline.start()
+      .then((p) => {
+        // The strip says the microphone is open because the page keeps it open
+        // from the first Record until you leave — which is itself a thing worth
+        // being told rather than discovering from a hot phone.
+        status.set('mic', 'go', 'mic open');
+        return p;
+      })
+      .catch((err) => {
+        micPipeline = null;
+        status.set('mic', 'wait', 'mic refused');
+        throw err;
+      });
   }
   return micPipeline;
 }

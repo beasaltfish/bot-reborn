@@ -11,6 +11,7 @@
 // §10's exception).
 
 import { Ftdi, encodeBaudRate, PIN_MASK, FTDI_VID, FT232H_PID } from './ftdi.js';
+import { createStatus } from './instrument-status.js';
 
 const BENCH_BAUD = 1200; // the calibration baud rate spec §12 ② specifies
 const BYTE_RATE_TEST_BYTES = 3000;
@@ -27,6 +28,11 @@ const inputEl = (/** @type {string} */ id) =>
   /** @type {HTMLInputElement} */ (document.getElementById(id));
 
 const statusEl = el('status');
+
+// The strip at the top. One reading here: whether the cable is in. Everything
+// else this page does needs that first, which is why it earns the line.
+const status = createStatus(el('instrumentStatus'), ['usb']);
+status.set('usb', 'dim', 'USB not connected');
 const logEl = el('log');
 
 /** The log's real content lives in this string. `logEl.textContent` is typed
@@ -168,6 +174,7 @@ el('connectBtn').addEventListener('click', async () => {
       ftdi = null;
       log(`!! device disconnected: ${err.message}`);
       setStatus('disconnected');
+      status.set('usb', 'dim', 'USB disconnected');
     };
     ftdi = opened;
 
@@ -183,10 +190,12 @@ el('connectBtn').addEventListener('click', async () => {
     await logPinState(opened);
 
     setStatus('FT232H connected');
+    status.set('usb', 'go', 'USB connected');
   } catch (err) {
     const e = /** @type {Error} */ (err);
     log(`!! ${e.name}: ${e.message}`);
     setStatus(`connect failed: ${e.message}`);
+    status.set('usb', 'wait', 'USB connect failed');
   }
 });
 
