@@ -576,9 +576,20 @@ async function playFixture(path) {
 async function refreshFixtureSummary() {
   const found = await Promise.all(STT_FIXTURES.map((f) => loadFixture(f.path)));
   const n = found.filter(Boolean).length;
-  el('fixtureSummary').textContent = n === STT_FIXTURES.length
+  const done = n === STT_FIXTURES.length;
+
+  // Amber, not red. docs/ui.md reserves red for the emergency stop, and amber
+  // is exactly this meaning: your turn, something is waiting for you. Two clips
+  // short is not a fault, it is work you have not done yet.
+  const state = done ? 'go' : 'wait';
+  el('fixtureSummary').dataset.state = state;
+  el('fixtureSummary').textContent = done
     ? `recordings ${n}/${n}`
     : `recordings ${n}/${STT_FIXTURES.length} — Test STT will fail`;
+
+  // The card's own dot, so the answer is visible with the recordings folded
+  // away — which is how they sit for all of a session but the first minute.
+  el('sttDot').dataset.state = state;
 }
 
 for (const fixture of STT_FIXTURES) refreshFixtureRow(fixture.path);

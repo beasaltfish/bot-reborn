@@ -362,3 +362,9 @@ section[id^="panel-"].idle { opacity: .55; }
   font-variant-numeric: tabular-nums;
 }
 .knobs[open] > summary { margin-bottom: var(--gap); }
+
+/* A folded summary that carries a verdict says so in colour. Amber, never red:
+   docs/ui.md reserves red for the emergency stop, and "you have not recorded
+   them yet" is your turn, not an emergency. */
+.knobs > summary[data-state="go"]   { color: var(--go);   opacity: 1; }
+.knobs > summary[data-state="wait"] { color: var(--wait); opacity: 1; }
