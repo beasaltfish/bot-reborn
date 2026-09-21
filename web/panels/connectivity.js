@@ -35,7 +35,7 @@ import { PRESETS, voicesFor } from '../provider-presets.js';
  */
 
 // --- Typed DOM helpers (Ruling P2: keep strict, no @ts-nocheck) -----------
-// Same convention as bench.js.
+// Same convention as the pin bench.
 
 
 const NAME = 'connectivity';

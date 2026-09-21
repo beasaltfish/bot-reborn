@@ -3,7 +3,7 @@
 //
 // ⑨ counts, over twenty real turns, how many replies are pure restatement. It
 // needs the model's own sentence and its dispatched actions visible, which is
-// what the decorators below are for — the same shape setup.js uses for the
+// what the decorators below are for — the same shape the connectivity panel uses for the
 // typed driver, with speech on the front instead of a text box.
 //
 // ⑪ plays one code-switched line through whichever TTS you paste in. It is the

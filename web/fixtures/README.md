@@ -11,7 +11,7 @@
 The third one is the point. Per §9.3, any old Chinese sentence will pass the
 test while leaving code-switching entirely unverified — and code-switching is
 the most common shape of input in the language-learning case this project is
-partly for. The sentences themselves live in `STT_FIXTURES` in `setup.js`;
+partly for. The sentences themselves live in `web/instrument-material.js`;
 this table follows it.
 
 ## The two clips that do ship

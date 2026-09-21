@@ -82,7 +82,7 @@ export const MATERIAL = {
     // show a lost onset at all.
     commands: ['往前走', '把灯关了'],
     runOn: 'hey steven 往前走',
-    // Verbatim from setup.js's STT_FIXTURES.
+    // Verbatim from what was setup.js's STT_FIXTURES.
     fixtures: [
       { path: 'fixtures/zh.wav', label: 'Chinese', say: '往前开两秒然后左转' },
       { path: 'fixtures/en.wav', label: 'English', say: 'keep going forward until I say stop' },
