@@ -187,27 +187,45 @@ test('the gear has no dead link behind it', () => {
 
 
 test('every "why" link lands on a heading that exists', () => {
-  // The pages now hand their reasoning to docs/instruments.md and point at it.
+  // The pages hand their reasoning to docs/instruments.md and point at it.
   // A link to a heading that was renamed is worse than no link: it looks like
   // the argument is one tap away, and the tap goes nowhere.
   //
-  // The slug rule is GitHub's: lower-case, punctuation dropped, spaces to
-  // hyphens. An em dash is punctuation, so "Acoustics — ⑥ ⑬" is
-  // "acoustics-⑥-⑬" with ONE hyphen, not two.
+  // They point at GitHub, absolutely, and not at `../docs/instruments.md`.
+  // `docs/` is outside pages_build_output_dir, so that relative path was never
+  // deployed — and Pages answers a missing asset with the root index.html at
+  // 200, so the dead link rendered as the robot page with its stylesheet
+  // resolved against /docs/ and lost. A raw .md would not have helped: the
+  // browser shows it as plain text, where a #heading anchor does not exist.
+  //
+  // The slug rule is GitHub's, and GitHub's is blunter than it looks:
+  // everything outside [a-z0-9 -] is DROPPED — the circled numbers included —
+  // and then each remaining space becomes one hyphen, with no collapsing. So
+  // "② Byte rate — what one ms" is "-byte-rate--what-one-ms": a leading hyphen
+  // where ② was, two hyphens where the em dash was. Ugly, and verified against
+  // a rendered README on github.com rather than guessed.
+  //
+  // It holds only while the headings stay ASCII + circled numbers, which the
+  // instruments' English-only rule already guarantees.
   const doc = readFileSync(new URL('../docs/instruments.md', import.meta.url), 'utf8');
   /** @param {string} heading */
   const slug = (heading) => heading.trim().toLowerCase()
-    .replace(/[^\w\s\-一-鿿①-⓿]/g, '')
-    .replace(/\s+/g, '-');
+    .replace(/[^a-z0-9 -]/g, '')
+    .replace(/ /g, '-');
   const headings = new Set([...doc.matchAll(/^#{2,4}\s+(.*)$/gm)].map((m) => slug(m[1])));
+  const BASE = 'https://github.com/beasaltfish/bot-reborn/blob/main/docs/instruments.md#';
 
   for (const [name, source] of /** @type {[string, string][]} */ ([['dev', dev]])) {
-    for (const m of source.matchAll(/docs\/instruments\.md#([^"']+)/g)) {
-      assert.ok(headings.has(m[1]),
-        `${name}.html links to docs/instruments.md#${m[1]}, which is not a heading there`);
+    for (const m of source.matchAll(/href="([^"]*instruments\.md#[^"]+)"/g)) {
+      assert.ok(m[1].startsWith(BASE),
+        `${name}.html links to ${m[1]}; docs/ is not deployed, so the link has to be ${BASE}…`);
+      const anchor = m[1].slice(BASE.length);
+      assert.ok(headings.has(anchor),
+        `${name}.html links to instruments.md#${anchor}, which is not a heading there`);
     }
   }
 });
+
 
 test('both stylesheets declare color-scheme', () => {
   // The split lost this once already. It lived at the top of the single
