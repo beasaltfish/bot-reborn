@@ -8,7 +8,8 @@
   },
   "scripts": {
     "test": "node --test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "deploy": "node --test && npx wrangler pages deploy web --branch production"
   },
   "keywords": [],
   "author": "",

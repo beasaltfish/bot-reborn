@@ -2,5 +2,20 @@
   "name": "bot-reborn",
   "compatibility_date": "2026-09-04",
   // Static assets served by Cloudflare Pages. No build step is required.
+  //
+  // `docs/` is deliberately outside this directory and is NOT deployed. Pages
+  // answers a missing asset with the root index.html at 200, so a link to
+  // /docs/anything renders as the robot page with its stylesheet resolved
+  // against /docs/ and lost. The instrument page's "why" links point at
+  // github.com for that reason; test/markup.test.js holds them there.
+  //
+  // This project's production branch is `production` — not `main`, and not
+  // whatever branch you happen to be standing on. `wrangler pages deploy` with
+  // no --branch reads the current git branch, and anything that is not the
+  // production branch lands as a preview: its own URL, a <branch>.pages.dev
+  // alias, and NO effect on bot-reborn.pages.dev or the custom domain
+  // bot-reborn.agentlenshq.com, which track production only. Two weeks of work
+  // went out that way without the domain moving. `npm run deploy` is the one
+  // that publishes; it passes --branch production explicitly.
   "pages_build_output_dir": "web"
 }
