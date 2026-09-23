@@ -153,8 +153,12 @@ const settings = createSettings({
 
 /**
  * Begin a gating step. The robot's bands and the amber button both land here,
- * so a tap on the wheels and a press of a button reading "Teach me left" can
- * never turn out to mean two different things.
+ * so a tap on the wheels and a press of a button reading "Teach me which way"
+ * can never turn out to mean two different things.
+ *
+ * Only ever reached for the step that is NEXT: the fab offers that one, and
+ * ui.js leaves that one band live and marks the other two inert. A finished
+ * step is not a door — see nextPart().
  *
  * @param {import('./steps.js').Step | 'listen' | 'stop'} step
  */
@@ -164,8 +168,9 @@ function startStep(step) {
   if (step === 'keys') return void setupSheet.open();
 }
 
-// The robot is the checklist: a band of the drawing is pressed, and the step it
-// stands for happens.
+// The robot is the checklist: the band the ring is on is pressed, and the step
+// it stands for happens. The other two bands are inert, so this listener sits
+// on all three and can still only ever hear one.
 ui.onPart(startStep);
 
 /** The settings list reads this synchronously while it renders, and
@@ -173,6 +178,19 @@ ui.onPart(startStep);
 let lastDone = { keys: false, car: false, steer: false };
 async function refresh() { lastDone = await offerNextStep(); }
 void refresh();
+
+// The cable IS the control for this step. getDevices() only answers with
+// devices that are currently plugged in, so pulling the cable puts the car's
+// step back by itself and plugging it in again takes it away — no picker, no
+// button, because the permission outlives the unplug. Without these two lines
+// that is all true but invisible: nothing would ask again until some other
+// event happened to call refresh(), and the robot would sit there showing a
+// body it no longer has.
+//
+// This is also why the body is not a door once the step is done. Re-opening
+// the picker was the only way to change cars; it is not, and it was startling.
+navigator.usb.addEventListener('connect', () => void refresh());
+navigator.usb.addEventListener('disconnect', () => void refresh());
 
 /**
  * Pairing, from its own gesture.

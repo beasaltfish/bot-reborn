@@ -194,11 +194,24 @@ body {
    a sixth face. */
 /* --- the robot as the checklist --------------------------------------
 
-   Three transparent bands over the drawing, one per gating step. They tile the
-   robot's full height rather than tracing its outline: a finger needs about
-   44px and the wheels are seventeen, so hugging the shapes would produce three
-   targets nobody can hit. The bands are ordered head, body, wheels, which is
-   also the order the steps come in.
+   Three transparent bands over the drawing, one per gating step, tiling the
+   robot's full height rather than tracing its outline: the wheels are
+   seventeen pixels tall and a finger is forty-four, so hugging the shapes
+   would produce targets nobody can hit. Head, body, wheels — the order the
+   steps come in.
+
+   ONLY THE NEXT STEP IS A DOOR. ui.js marks the other two `inert`, which is
+   what lets these numbers be chosen for the drawing instead of for the finger:
+   one live band at a time can be as short as the part it covers, because
+   nothing next to it is competing for the same tap. It also settles what a
+   finished step does when it is pressed, which is nothing — unplugging the car
+   brings its step back by itself, and re-teaching a rewired car is a row in
+   settings, not a region that has to sit on the main screen for ever.
+
+   The boundaries are the drawing's own gaps, in viewBox units of 134: 65% is
+   y=87, between the head (ends 84) and the body (starts 90); 85% is y=114, the
+   body's bottom edge. They were 55% and 78% and cut straight through the mouth
+   and the body — a tap on the mouth opened the USB picker.
 
    The step that is next gets a soft ring. Nothing else advertises that the
    robot can be touched, and a drawing that silently rewards a tap is a
@@ -209,9 +222,9 @@ body {
   border-radius: 16px; cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-.robot .part[data-part="keys"]  { top: 0;   height: 55%; }
-.robot .part[data-part="car"]   { top: 55%; height: 23%; }
-.robot .part[data-part="steer"] { top: 78%; height: 22%; }
+.robot .part[data-part="keys"]  { top: 0;   height: 65%; }
+.robot .part[data-part="car"]   { top: 65%; height: 20%; }
+.robot .part[data-part="steer"] { top: 85%; height: 15%; }
 .robot .part:active { background: rgba(128,128,128,.12); }
 .robot .part:focus-visible { outline: 2px solid var(--tintc); outline-offset: 2px; }
 

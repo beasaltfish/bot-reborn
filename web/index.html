@@ -110,11 +110,18 @@
 
              Real buttons rather than clicks on the SVG: the dashed arcs are
              two pixels wide and a finger is not, and a shape inside an SVG is
-             not something a screen reader can be handed. They are transparent
-             and each is at least a finger tall; ui.js labels them. -->
-        <button class="part" data-part="keys" type="button"></button>
-        <button class="part" data-part="car" type="button"></button>
-        <button class="part" data-part="steer" type="button"></button>
+             not something a screen reader can be handed. They are transparent;
+             ui.js labels them.
+
+             They ship `inert` and exactly one is switched on, by ui.js's
+             nextPart() — the same call that draws the ring, so the band that
+             can be pressed and the band that looks pressable are one decision.
+             Inert in the markup rather than live: the first nextPart() is a
+             tick away behind getDevices(), and for that tick all three would
+             otherwise be doors. -->
+        <button class="part" data-part="keys" type="button" inert></button>
+        <button class="part" data-part="car" type="button" inert></button>
+        <button class="part" data-part="steer" type="button" inert></button>
       </div>
 
       <!-- Asleep with the microphone shut and asleep waiting to hear its name

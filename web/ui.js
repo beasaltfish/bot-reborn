@@ -146,9 +146,32 @@ export function createUi(lang) {
      * Which step the robot is offering to start if it is touched. The same
      * rung the button is showing, so the ring and the button never point at
      * two different steps.
+     *
+     * And it is the ONLY one that can be touched. The other two are marked
+     * `inert` — not there, rather than there and refusing — because every
+     * reason to press them has a better door:
+     *
+     *   - a step that is not next yet is a step the button is not offering
+     *     either, and jumping the queue was never advertised;
+     *   - a FINISHED step pressed again used to be the surprise. The car's
+     *     band re-opened the USB picker on a car that was already plugged in,
+     *     and the wheels' band offered to re-teach a car that already knew.
+     *     Unplugging brings the car's step back on its own, and re-teaching a
+     *     rewired car is a row in settings — neither needs a permanent region
+     *     on the main screen.
+     *
+     * One live band at a time is also what lets the bands be sized for the
+     * drawing rather than for the finger: see the geometry note in style.css.
+     *
      * @param {import('./steps.js').Step | null} step
      */
-    nextPart(step) { robot.dataset.next = step ?? ''; },
+    nextPart(step) {
+      robot.dataset.next = step ?? '';
+      for (const el of document.querySelectorAll('.part')) {
+        /** @type {HTMLElement} */ (el).inert =
+          /** @type {HTMLElement} */ (el).dataset.part !== step;
+      }
+    },
 
     /**
      * The robot is the checklist. A band is pressed, and the step it stands

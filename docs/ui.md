@@ -158,15 +158,41 @@ read it.
 
 Each region of the drawing is the door to the step it stands for. Press the
 head and the setup sheet opens; press the body and the USB picker opens; press
-the wheels and it offers to learn which way is which. There is no list in between,
-and the step that is next carries a soft ring — nothing else would tell anybody
-that a drawing can be touched.
+the wheels and it offers to learn which way is which. There is no list in
+between, and the step that is next carries a soft ring — nothing else would
+tell anybody that a drawing can be touched.
 
 They are real `<button>` elements laid over the SVG, not clicks on the shapes.
 The dashed arcs are two pixels wide and a finger is not, and a shape inside an
 SVG is not something a screen reader can be handed. The three bands tile the
 robot's full height rather than tracing its outline, for the same reason: the
 wheels are seventeen pixels tall and a touch target is forty-four.
+
+**Only the ringed band is a door.** The other two ship `inert`, and `nextPart()`
+— the same call that draws the ring — switches exactly one on. A drawing where
+the ring says "here" and every other inch answers to a tap as well is a drawing
+that taught the ring means nothing.
+
+It also settles what a *finished* step does, which is nothing, and both of the
+things it used to do were surprises:
+
+- Pressing the body re-opened the USB picker on a car that was already plugged
+  in. The cable is the control for that step — `getDevices()` only answers with
+  devices currently plugged in, so pulling the cable brings the step back by
+  itself and plugging the same car in again takes it away without a picker,
+  because the permission outlives the unplug. `app.js` listens for `connect`
+  and `disconnect` so that happens while you watch.
+- Pressing the wheels offered to re-teach a car that already knew. That is a
+  once-a-car job after a resolder, and settings already has a row for it; it
+  does not need a permanent region on the main screen.
+
+Because one band is live at a time, the boundaries can be chosen for the
+drawing instead of for the finger — nothing next to a live band is competing
+for the same tap. They sit in the drawing's own gaps: 65% is y=87 of the 134
+viewBox, the space between the head and the body; 85% is y=114, the body's
+bottom edge. They used to be 55% and 78%, which cut through the mouth and
+through the body, so a tap aimed at the mouth opened the USB picker and a tap
+aimed at the body offered to teach directions.
 
 The ring and the button's word are set from one `fabRung()` result in one line
 of `app.js`, and both land in the same `startStep()`. A tap on the wheels and a
