@@ -147,29 +147,40 @@ export function createUi(lang) {
      * rung the button is showing, so the ring and the button never point at
      * two different steps.
      *
-     * And it is the ONLY one that can be touched. The other two are marked
-     * `inert` — not there, rather than there and refusing — because every
-     * reason to press them has a better door:
-     *
-     *   - a step that is not next yet is a step the button is not offering
-     *     either, and jumping the queue was never advertised;
-     *   - a FINISHED step pressed again used to be the surprise. The car's
-     *     band re-opened the USB picker on a car that was already plugged in,
-     *     and the wheels' band offered to re-teach a car that already knew.
-     *     Unplugging brings the car's step back on its own, and re-teaching a
-     *     rewired car is a row in settings — neither needs a permanent region
-     *     on the main screen.
-     *
-     * One live band at a time is also what lets the bands be sized for the
-     * drawing rather than for the finger: see the geometry note in style.css.
+     * The ring only. Which bands can be PRESSED is openParts(), and the two
+     * are not the same answer — see the note there.
      *
      * @param {import('./steps.js').Step | null} step
      */
-    nextPart(step) {
-      robot.dataset.next = step ?? '';
+    nextPart(step) { robot.dataset.next = step ?? ''; },
+
+    /**
+     * Which bands are doors. Everything else is `inert` — not there, rather
+     * than there and refusing.
+     *
+     * A band is a door when the region it covers is SHOWING something missing:
+     * a ghosted part, or the plug. That is the same thing that makes the
+     * region worth pressing, because the ghost is the only advertisement a
+     * drawing has. Which is why this is not simply the ring: the mouth can be
+     * missing while no gating step is left — a voice is optional — and under
+     * the ring alone a dashed mouth was a picture that did nothing.
+     *
+     * A finished step is therefore not a door, and both of the things that
+     * used to happen when one was pressed were surprises rather than features:
+     * the car's band re-opened the USB picker on a car already plugged in, and
+     * the wheels' band offered to re-teach a car that already knew. Pulling
+     * the cable brings the car's step back on its own, and re-teaching a
+     * rewired car is a row in settings.
+     *
+     * Few live bands at a time is also what lets them be sized for the drawing
+     * rather than for the finger: see the geometry note in style.css.
+     *
+     * @param {Set<import('./steps.js').Step>} steps
+     */
+    openParts(steps) {
       for (const el of document.querySelectorAll('.part')) {
-        /** @type {HTMLElement} */ (el).inert =
-          /** @type {HTMLElement} */ (el).dataset.part !== step;
+        const step = /** @type {any} */ (/** @type {HTMLElement} */ (el).dataset.part);
+        /** @type {HTMLElement} */ (el).inert = !steps.has(step);
       }
     },
 

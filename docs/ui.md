@@ -168,10 +168,18 @@ SVG is not something a screen reader can be handed. The three bands tile the
 robot's full height rather than tracing its outline, for the same reason: the
 wheels are seventeen pixels tall and a touch target is forty-four.
 
-**Only the ringed band is a door.** The other two ship `inert`, and `nextPart()`
-— the same call that draws the ring — switches exactly one on. A drawing where
-the ring says "here" and every other inch answers to a tap as well is a drawing
-that taught the ring means nothing.
+**A band is a door only while it covers something missing** — a ghosted part,
+or the plug. The rest ship `inert`, and `openParts()` switches on the ones that
+are showing an absence. A drawing where every inch answers to a tap is a
+drawing that taught the ring means nothing.
+
+Doors are drawn from the ghosts rather than from the ring because the two are
+not the same answer. The **mouth** is the case that proves it: a voice is
+optional, `done.keys` asks only about the ears and the mind, so no step will
+ever ring over a missing mouth — and yet a dashed mouth is exactly the thing
+somebody will press to ask about it. Under the ring alone it was a picture
+that did nothing. `PART_STEP` in `robot.js` is where a part says which sheet
+it opens.
 
 It also settles what a *finished* step does, which is nothing, and both of the
 things it used to do were surprises:

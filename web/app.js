@@ -8,7 +8,7 @@ import { createSettings } from './settings.js';
 import { createCalibration } from './calibrate.js';
 import { createSetupSheet } from './setup-sheet.js';
 import { fabRung } from './steps.js';
-import { missingParts } from './robot.js';
+import { missingParts, PART_STEP } from './robot.js';
 import { Ftdi , USB_FILTERS } from './ftdi.js';
 import { Executor } from './executor.js';
 import { Brain } from './brain.js';
@@ -89,11 +89,23 @@ async function offerNextStep(running = false) {
   ui.needCar(!done.car);
   // What is still missing, drawn on the robot rather than listed anywhere: a
   // part it has not been given yet is a part that is not there yet.
-  ui.assembly(missingParts(config));
+  const missing = missingParts(config);
+  ui.assembly(missing);
   const rung = fabRung(done, running);
   // The ring on the robot and the word on the button come from the same rung,
   // so they can never point at two different steps.
   ui.nextPart(rung.step === 'listen' || rung.step === 'stop' ? null : rung.step);
+  // The doors are drawn from what the robot is SHOWING, not from the rung: a
+  // ghost is the only advertisement a drawing has, so every ghost opens. That
+  // is one part wider than the checklist — the mouth, because a voice is
+  // optional and no step will ever ring over it — and the plug, which is a
+  // missing car rather than a missing part and so is added here.
+  //
+  // While the car is running none of them is a door: the one button is the
+  // brake, and the robot is not a place to start an errand from.
+  const doors = new Set(running ? [] : missing.map((part) => PART_STEP[part]));
+  if (!running && !done.car) doors.add('car');
+  ui.openParts(doors);
   ui.fabFace(rung.tone, rung.key);
   return done;
 }

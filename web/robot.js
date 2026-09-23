@@ -86,6 +86,24 @@ export function missingParts(config) {
 }
 
 /**
+ * Which gating step a missing part is the door to.
+ *
+ * Finer on one side and coarser on the other, which is the whole reason this
+ * table exists rather than being assumed: three of the four parts lead to the
+ * same sheet, and the mouth leads there even though the VOICE is not a gating
+ * step at all. A car drives fine without one — `done.keys` deliberately asks
+ * only about the ears and the mind — so nothing would ever ring over a missing
+ * mouth. The dashed mouth is the advertisement instead, and an advertisement
+ * that does not open when it is pressed is worse than no mouth at all.
+ *
+ * The plug has no entry: it is not a missing PART, it is a missing car, and
+ * app.js adds `car` from the same answer that draws it.
+ *
+ * @type {Record<Part, import('./steps.js').Step>}
+ */
+export const PART_STEP = { ears: 'keys', mind: 'keys', voice: 'keys', wheels: 'steer' };
+
+/**
  * Written as one attribute holding a token list, so the stylesheet asks
  * `[data-missing~="ears"]` and no part needs an attribute of its own.
  *

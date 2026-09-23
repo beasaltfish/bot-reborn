@@ -113,12 +113,11 @@
              not something a screen reader can be handed. They are transparent;
              ui.js labels them.
 
-             They ship `inert` and exactly one is switched on, by ui.js's
-             nextPart() — the same call that draws the ring, so the band that
-             can be pressed and the band that looks pressable are one decision.
-             Inert in the markup rather than live: the first nextPart() is a
-             tick away behind getDevices(), and for that tick all three would
-             otherwise be doors. -->
+             They ship `inert` and ui.js's openParts() switches on the ones
+             covering something the robot is showing as missing — a ghosted
+             part, or the plug. Inert in the markup rather than live: the
+             first openParts() is a tick away behind getDevices(), and for
+             that tick all three would otherwise be doors. -->
         <button class="part" data-part="keys" type="button" inert></button>
         <button class="part" data-part="car" type="button" inert></button>
         <button class="part" data-part="steer" type="button" inert></button>

@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { STATES, faceFor, applyFace, missingParts, applyAssembly, hintVisible } from '../web/robot.js';
+import { STATES, faceFor, applyFace, missingParts, applyAssembly, hintVisible, PART_STEP }
+  from '../web/robot.js';
+import { GATING } from '../web/steps.js';
 import { STRINGS } from '../web/strings.js';
 
 test('the five states are session.js\'s five, in its own order', () => {
@@ -170,6 +172,30 @@ test('nothing missing clears the attribute rather than leaving the last value', 
   const fake = { dataset: /** @type {Record<string, string>} */ ({ missing: 'ears mind' }) };
   applyAssembly(/** @type {any} */ (fake), []);
   assert.equal(fake.dataset.missing, '');
+});
+
+
+// --- every ghost is a door -------------------------------------------------
+
+test('every part the robot can draw as missing knows which sheet it opens', () => {
+  // A ghost is the only advertisement a drawing has. One that is pressed and
+  // does nothing is worse than not drawing it: the next ghost gets ignored
+  // too. So a part added to missingParts() without a row here is a bug this
+  // catches rather than something to be discovered by pressing it.
+  const every = missingParts(cfg());
+  assert.equal(every.length, 4, 'cfg() is meant to be missing every part');
+  for (const part of every) {
+    assert.ok(PART_STEP[part], `part "${part}" is drawn as missing but opens nothing`);
+    assert.ok(GATING.includes(PART_STEP[part]),
+      `part "${part}" opens "${PART_STEP[part]}", which is not a step`);
+  }
+});
+
+test('the mouth opens the setup sheet even though a voice is not a step', () => {
+  // The case the ring cannot cover. done.keys asks only about the ears and the
+  // mind — a car drives fine with nothing to say — so nothing will ever ring
+  // over a missing mouth, and pressing it has to work anyway.
+  assert.equal(PART_STEP.voice, 'keys');
 });
 
 
