@@ -51,6 +51,7 @@ test('every string the UI needs exists in both languages', () => {
     'micOn', 'micOff', 'settings', 'close', 'sayThis',
     'stepKeys', 'stepCar', 'stepSteer',
     'calTitle', 'calIntro', 'calGo', 'calAsk', 'calLeft', 'calRight',
+    'calDriveIntro', 'calDriveAsk', 'calForward', 'calBack',
     'calAgain', 'calDone', 'calNoCar',
     'emergencyStop', 'booting', 'micDenied',
     'keywordsInvalid', 'screenOffMissed', 'usbNotPaired', 'pairNow',

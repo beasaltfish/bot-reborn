@@ -110,7 +110,7 @@ const cfg = (over = {}) => ({
   stt: { baseURL: '', apiKey: '', model: '' },
   llm: { baseURL: '', apiKey: '', model: '' },
   tts: { baseURL: '', apiKey: '', model: '', voice: '' },
-  calibration: { steerSwapped: null, bytesPerMs: null },
+  calibration: { steerSwapped: null, driveSwapped: null, bytesPerMs: null },
   ...over,
 });
 
@@ -142,10 +142,20 @@ test('a car that measured as NOT reversed has still been taught', () => {
   // `false` is a measurement. Only `null` means nobody has asked the question,
   // and treating the two alike would leave the wheels pale forever on half the
   // cars in the world.
-  assert.ok(!missingParts(cfg({ calibration: { steerSwapped: false, bytesPerMs: null } }))
+  const taught = { steerSwapped: false, driveSwapped: false, bytesPerMs: null };
+  assert.ok(!missingParts(cfg({ calibration: taught })).includes('wheels'));
+  assert.ok(missingParts(cfg({ calibration: { ...taught, steerSwapped: true } })).length === 3);
+});
+
+test('the wheels stay pale until BOTH directions have been taught', () => {
+  // Half a calibration is the dangerous state: the drawing would say the car
+  // knows its directions while the answer that decides forward from backward
+  // has never been asked, and the first command drives it into the wall
+  // behind it.
+  const half = { steerSwapped: false, driveSwapped: null, bytesPerMs: null };
+  assert.ok(missingParts(cfg({ calibration: half })).includes('wheels'));
+  assert.ok(missingParts(cfg({ calibration: { ...half, steerSwapped: null, driveSwapped: false } }))
     .includes('wheels'));
-  assert.ok(missingParts(cfg({ calibration: { steerSwapped: true, bytesPerMs: null } }))
-    .length === 3);
 });
 
 test('applyAssembly writes a token list the stylesheet can match one part at a time', () => {

@@ -28,7 +28,15 @@ export const LEAD_MS = 300;
  */
 export const MIN_DURATION_MS = 300;
 
-/** Spec §3.2. There is deliberately no `none` — see §3.3. */
+/**
+ * Spec §3.2. There is deliberately no `none` — see §3.3.
+ *
+ * Which of these two is forward is calibration item ①b, and it is the same
+ * unknown as ① on the other driver: which of D4/D5 reaches IN1 depends on how
+ * the motor's leads were soldered, and nothing on the bench can tell from
+ * outside. A car wired the other way is recorded as `calibration.driveSwapped`,
+ * not by editing this line.
+ */
 export const DRIVE_BITS = /** @type {const} */ ({ forward: 0x10, backward: 0x20 });
 
 /**
@@ -43,20 +51,26 @@ export const DRIVE_BITS = /** @type {const} */ ({ forward: 0x10, backward: 0x20 
  */
 export const STEER_BITS = /** @type {const} */ ({ left: 0x40, right: 0x80, straight: 0x00 });
 
-/** @typedef {{ steerSwapped?: boolean | null }} Calibration */
+/** @typedef {{ steerSwapped?: boolean | null, driveSwapped?: boolean | null }} Calibration */
 
 /**
  * @param {string} drive
  * @param {string} steer
- * @param {Calibration} [cal] calibration item one. `null` and `undefined` both
- *   mean "never measured", which behaves exactly as the constants describe.
+ * @param {Calibration} [cal] calibration items ① and ①b. `null` and
+ *   `undefined` both mean "never measured", which behaves exactly as the
+ *   constants describe.
  * @returns {number}
  */
 export function pinsFor(drive, steer, cal = {}) {
-  const d = DRIVE_BITS[/** @type {keyof typeof DRIVE_BITS} */ (drive)];
+  // Both swaps happen at the lookup, each on its own name, so neither can
+  // reach the other's driver: `straight` has no side to be on, and forward and
+  // backward have no side at all. Swapping bytes after the OR would need a
+  // mask, and a mask that was one bit wrong would be a shoot-through.
+  const way = cal.driveSwapped === true
+    ? { forward: 'backward', backward: 'forward' }[drive] ?? drive
+    : drive;
+  const d = DRIVE_BITS[/** @type {keyof typeof DRIVE_BITS} */ (way)];
   if (d === undefined) throw new RangeError(`unknown drive "${drive}"`);
-  // Swapped at the lookup, so `straight` — which has no side to be on — and
-  // the drive bits, which are a different coil, cannot be touched by it.
   const side = cal.steerSwapped === true
     ? { left: 'right', right: 'left', straight: 'straight' }[steer] ?? steer
     : steer;
@@ -65,12 +79,30 @@ export function pinsFor(drive, steer, cal = {}) {
   return d | s;
 }
 
+/**
+ * The name of the drive that actually moves this car forwards.
+ *
+ * Calibration needs it: it measures ① on a `raw` executor — one built with no
+ * calibration, so that the steering answer is measured rather than confirmed —
+ * and a raw executor will not correct the drive half either. So the caller has
+ * to name the other bit itself, and this is the one place that decides which.
+ *
+ * @param {Calibration} [cal]
+ * @returns {'forward' | 'backward'}
+ */
+export function aheadDrive(cal = {}) {
+  return cal.driveSwapped === true ? 'backward' : 'forward';
+}
+
 const defaultSleep = (/** @type {number} */ ms) =>
   new Promise((resolve) => setTimeout(resolve, ms));
+
+const defaultNow = () => performance.now();
 
 export class Executor {
   #ftdi;
   #sleep;
+  #now;
   #onError;
   #gen = 0;
   #connected = true;
@@ -91,13 +123,14 @@ export class Executor {
 
   /**
    * @param {Ftdi} ftdi
-   * @param {{ sleep?: (ms: number) => Promise<void>, onError?: (err: Error) => void,
-   *           calibration?: Calibration }} [opts]
+   * @param {{ sleep?: (ms: number) => Promise<void>, now?: () => number,
+   *           onError?: (err: Error) => void, calibration?: Calibration }} [opts]
    */
   constructor(ftdi, opts = {}) {
     this.#ftdi = ftdi;
     this.#cal = opts.calibration ?? {};
     this.#sleep = opts.sleep ?? defaultSleep;
+    this.#now = opts.now ?? defaultNow;
     this.#onError = opts.onError ?? (() => {});
     ftdi.onDisconnect = (err) => this.#fail(err);
   }
@@ -170,6 +203,7 @@ export class Executor {
     while (remaining === null || remaining > 0) {
       if (gen !== this.#gen) return;
       const slice = remaining === null ? MAX_COAST_MS : Math.min(remaining, MAX_COAST_MS);
+      const startedAt = this.#now();
       try {
         // One transferOut, stop byte already inside — spec §4.2.
         await this.#ftdi.write(this.#ftdi.buildStream(pins, slice));
@@ -184,7 +218,23 @@ export class Executor {
       // oversleeps by exactly that much. The check at the top of the loop cannot
       // catch it: the preemption happened after that check had already run.
       if (gen !== this.#gen) return;
-      this.#queuedMs += slice;
+      // The write is not free, and on the real car it is not even fast. A bulk
+      // OUT transfer resolves when the DEVICE has taken every byte, and an
+      // FT232H takes them at the rate it clocks them out once its 1 kB FIFO is
+      // full — a MAX_COAST_MS slice is six times that at 1200 baud. So by the
+      // time this line runs, most of the slice has already been PLAYED, and
+      // crediting the whole of it as write-ahead is booking a queue that is
+      // gone. The loop then slept against that imaginary queue, the chip ran
+      // dry, and the stop byte at the end of every stream held the pins low for
+      // the rest of the sleep: the car moved for a second and stood still for
+      // most of another, over and over.
+      //
+      // Debiting the time the write actually took is what makes the books
+      // match the chip. It is measured rather than assumed in either direction:
+      // a device that swallows the whole slice at once reports ~0 here and the
+      // pacing below is exactly what it always was.
+      const spent = this.#now() - startedAt;
+      this.#queuedMs = Math.max(0, this.#queuedMs + slice - spent);
       if (remaining !== null) remaining -= slice;
 
       // Renew LEAD_MS before the QUEUE runs dry — not LEAD_MS before the slice

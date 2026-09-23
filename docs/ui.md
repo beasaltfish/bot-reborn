@@ -117,7 +117,7 @@ before anybody went looking for a place to put them:
 | **Ears** | the sound waves beside the head | `CAPTURING` — hearing you |
 | **Mind** | the antenna | `THINKING` — the dot orbits |
 | **Voice** | the mouth | `SPEAKING` — the mouth opens |
-| — | the wheels | (no face; left and right are taught, not felt) |
+| — | the wheels | (no face; directions are taught, not felt) |
 
 So an unconfigured layer is drawn as **the part that is not there yet**: dashed
 and pale, in the place that part will occupy once it works. Filling in a key
@@ -145,13 +145,20 @@ decides the other question.
 **The wheels go pale from the moment calibration has not been done**, including
 while there is no car at all. Both are true then, and the plug and the pale
 wheels say different things: nothing is plugged in, and nothing has been taught
-left from right.
+which way is which.
+
+Calibration is **two** answers — forward from backward (①b) and left from right
+(①) — and the wheels stay pale until both are in. Half an answer is the
+dangerous state: a car that knows its sides but not its ends looks ready and
+reverses into the wall behind it on the first command. `directionsTaught()` in
+`config.js` is the one place that decides, and both the drawing and the button
+read it.
 
 ### The robot is the checklist
 
 Each region of the drawing is the door to the step it stands for. Press the
 head and the setup sheet opens; press the body and the USB picker opens; press
-the wheels and it offers to learn left from right. There is no list in between,
+the wheels and it offers to learn which way is which. There is no list in between,
 and the step that is next carries a soft ring — nothing else would tell anybody
 that a drawing can be touched.
 
@@ -163,8 +170,8 @@ wheels are seventeen pixels tall and a touch target is forty-four.
 
 The ring and the button's word are set from one `fabRung()` result in one line
 of `app.js`, and both land in the same `startStep()`. A tap on the wheels and a
-press of a button reading "Teach me left" cannot turn out to mean two different
-things.
+press of a button reading "Teach me which way" cannot turn out to mean two
+different things.
 
 ---
 
@@ -210,7 +217,7 @@ outside, and they never stack:
 | | opened by | answers |
 |---|---|---|
 | **Setup** | the head, or the amber button | the three keys |
-| **Teach left and right** | the wheels, or the amber button | which way did it go |
+| **Teach it directions** | the wheels, or the amber button | which way did it go — twice |
 | **Settings** | the gear | language, what it picked up by voice, the instruments |
 
 A sheet closes itself before opening another. Two bottom sheets on one phone

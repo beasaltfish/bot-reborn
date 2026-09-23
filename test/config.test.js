@@ -108,15 +108,32 @@ test('calibration starts as "never measured", which is null and not false', () =
   // exactly the step people skip.
   const d = defaultConfig();
   assert.equal(d.calibration.steerSwapped, null);
+  assert.equal(d.calibration.driveSwapped, null);
   assert.equal(d.calibration.bytesPerMs, null);
 });
 
 test('calibration survives a save and load', () => {
   const storage = fakeStorage();
   const cfg = { ...defaultConfig() };
-  cfg.calibration = { steerSwapped: true, bytesPerMs: 0.42 };
+  cfg.calibration = { steerSwapped: true, driveSwapped: false, bytesPerMs: 0.42 };
   saveConfig(cfg, storage);
-  assert.deepEqual(loadConfig(storage).calibration, { steerSwapped: true, bytesPerMs: 0.42 });
+  assert.deepEqual(
+    loadConfig(storage).calibration,
+    { steerSwapped: true, driveSwapped: false, bytesPerMs: 0.42 },
+  );
+});
+
+test('a config saved when only ① existed loads ①b as "never measured"', () => {
+  // The real migration: anybody who calibrated before today has a stored
+  // calibration object with steerSwapped in it and no driveSwapped. The spread
+  // has to reach inside the object, not just supply it when it is absent
+  // altogether — otherwise driveSwapped reads undefined, which is neither
+  // null nor a measurement, and the checklist compares it against null.
+  const storage = fakeStorage();
+  const old = { ...defaultConfig(), calibration: { steerSwapped: true, bytesPerMs: null } };
+  storage.setItem(CONFIG_KEY, JSON.stringify(old));
+  assert.equal(loadConfig(storage).calibration.driveSwapped, null);
+  assert.equal(loadConfig(storage).calibration.steerSwapped, true);
 });
 
 test('a config saved before calibration existed still loads', () => {
@@ -127,5 +144,8 @@ test('a config saved before calibration existed still loads', () => {
   const old = { ...defaultConfig() };
   delete (/** @type {any} */ (old).calibration);
   storage.setItem(CONFIG_KEY, JSON.stringify(old));
-  assert.deepEqual(loadConfig(storage).calibration, { steerSwapped: null, bytesPerMs: null });
+  assert.deepEqual(
+    loadConfig(storage).calibration,
+    { steerSwapped: null, driveSwapped: null, bytesPerMs: null },
+  );
 });

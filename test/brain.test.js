@@ -46,6 +46,20 @@ test('every tool description is written in English (spec §6.2)', () => {
   }
 });
 
+test('the prompt makes the robot the subject, not a car it drives', () => {
+  // Reported from the real car: the model kept calling itself 小车 ("the little
+  // car"). The only place it can learn what it is, is this prompt and these
+  // four tool descriptions — and every one of them used to say "the car",
+  // with the model cast as something that operates one. The product's whole
+  // shell (docs/ui.md) is a robot with a face, and the wheels are its body.
+  assert.match(SYSTEM_PROMPT, /You are a small robot/);
+  assert.match(SYSTEM_PROMPT, /Never call yourself a car/);
+  for (const tool of TOOLS) {
+    assert.ok(!/\bcars?\b/i.test(tool.function.description),
+      `tool ${tool.function.name} still calls it a car`);
+  }
+});
+
 test('the system prompt states that calling a tool cannot be substituted for', () => {
   // Spec §6.8: since §6.3 stopped discarding `content`, this clause is the ONLY
   // defence against "sure, going forward now" with no tool call. It must be
@@ -107,6 +121,41 @@ test('validate: a huge duration is NOT clamped (spec §6.6)', () => {
   const a0 = /** @type {any} */ (r.actions[0]);
   assert.equal(a0.steps[0].duration_ms, 60000);
   assert.equal(r.dropped, 0);
+});
+
+test('a move with no steps array is a drop, and says so', () => {
+  // The shape a smaller model produces most often: it flattens the schema and
+  // sends the step's fields at the top level. `raw` came out empty, the loop
+  // never ran, and the turn was counted as ZERO drops — so the one number that
+  // could have said "it tried and I refused" said nothing happened at all.
+  const r = validate([call('move', { drive: 'forward', steer: 'straight', duration_ms: 600 })]);
+  assert.deepEqual(r.actions, []);
+  assert.ok(r.hadMoveIntent, 'it was still a move');
+  assert.equal(r.dropped, 1);
+  assert.match(r.reasons.join('\n'), /steps/);
+});
+
+test('every drop carries a reason, because a silent drop cannot be debugged', () => {
+  // Reported from the real car: "it reads the parameters out loud and then
+  // does not move". Every path below produces exactly that — the sentence is
+  // spoken, the action is not dispatched — and until now they were
+  // indistinguishable from each other and from the model never calling a tool
+  // at all.
+  const tooShort = validate([call('move', { steps: [
+    { drive: 'forward', steer: 'straight', duration_ms: 100 },
+  ] })]);
+  assert.match(tooShort.reasons.join('\n'), /duration_ms/);
+
+  const badEnum = validate([call('cruise', { drive: 'sideways', steer: 'straight' })]);
+  assert.match(badEnum.reasons.join('\n'), /cruise/);
+
+  const unparsable = validate([
+    { id: 'c1', name: 'move', args: null, rawArguments: '{"steps": [' },
+  ]);
+  assert.match(unparsable.reasons.join('\n'), /JSON/i);
+
+  const unknown = validate([call('fly', {})]);
+  assert.match(unknown.reasons.join('\n'), /fly/);
 });
 
 test('validate rule 1: a duration below the floor drops the step', () => {
@@ -253,11 +302,14 @@ function brainHarness({ connected = true, reply, gateMotion = false } = {}) {
   const langChanges = [];
   /** @type {Array<[string, string]>} */
   const faults = [];
-  return { events, executor, llm, tts, config, motionGates, langChanges, faults,
+  /** @type {string[]} */
+  const traced = [];
+  return { events, executor, llm, tts, config, motionGates, langChanges, faults, traced,
     brain: new Brain({
       llm, executor, tts, earcon, config,
       onReplyLangChange: (lang) => langChanges.push(lang),
       onFault: (part, err) => faults.push([part, err.message]),
+      trace: (line) => traced.push(line),
     }) };
 }
 
@@ -271,6 +323,30 @@ const say = (content, tool_calls) => ({
   text: content ?? '',
   toolCalls: (tool_calls ?? []).map((c) => ({ ...c, rawArguments: JSON.stringify(c.args) })),
   rawMessage: { role: 'assistant', content, ...(tool_calls ? { tool_calls: tool_calls.map((c) => ({ id: c.id, type: 'function', function: { name: c.name, arguments: JSON.stringify(c.args) } })) } : {}) },
+});
+
+test('a turn that narrates the move instead of calling it leaves a trace', async () => {
+  // The reported symptom, written down: the model says the parameters out loud
+  // and calls nothing. On screen this is indistinguishable from an ordinary
+  // chat reply — no error earcon fires, because nothing was refused — and the
+  // car is equally silent about it. The trace is the only place the difference
+  // exists, so it is the only place that can be tested.
+  const h = brainHarness({ reply: say('Going forward for 600 milliseconds.') });
+  await h.brain.handle('往前走');
+
+  assert.deepEqual(h.events.filter((e) => e.op === 'move'), [], 'it did not move');
+  assert.match(h.traced.join('\n'), /calls \[\]/,
+    'the trace must say the model called nothing');
+});
+
+test('a refused call is traced with the field that was refused', async () => {
+  const h = brainHarness({ reply: say('Just a nudge.', [
+    { id: 'c1', name: 'move', args: { steps: [{ drive: 'forward', steer: 'straight', duration_ms: 50 }] } },
+  ]) });
+  await h.brain.handle('往前走一点点');
+
+  assert.deepEqual(h.events.filter((e) => e.op === 'move'), []);
+  assert.match(h.traced.join('\n'), /dropped — move: step rejected.*duration_ms/s);
 });
 
 test('handle: USB not connected is intercepted BEFORE the LLM (spec §6.5)', async () => {

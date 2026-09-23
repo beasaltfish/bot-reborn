@@ -51,13 +51,21 @@ FT232H GND ─► board GND
 ## Action bytes (spec §3.2)
 
 ```
-drive   forward  = 0x10      backward = 0x20      stop   = 0x00
+drive   way A    = 0x10      way B    = 0x20      stop   = 0x00
 steer   side A   = 0x40      side B   = 0x80      centre = 0x00
 ```
 
-A combined action is the bitwise OR: `forward + side A = 0x50`. Everything off
+A combined action is the bitwise OR: `way A + side A = 0x50`. Everything off
 is `0x00`, which is the stop byte the executor appends to every buffer
 (spec §4.2).
+
+**Neither pair is labelled, and that is the honest state.** Which side is left
+is calibration ①; which way is forward is ①b, and it is the same unknown on the
+other driver — whether D4 or D5 reaches IN1 depends on how the motor's two
+leads were soldered. `executor.js` names way A `forward` and side A `left`
+because code needs a name, not because either was measured. A car wired the
+other way is recorded in the config (`calibration.driveSwapped`,
+`calibration.steerSwapped`), never by editing those constants.
 
 Steering is a polarised electromagnet that swings the axle; a spring recentres
 it when the coil is de-energised. There is no "turn in place" — `drive` has no
@@ -75,7 +83,8 @@ yet**; do not treat a blank row as "fine".
 
 | # | What | Measured | Feeds |
 |---|---|---|---|
-| ① | Which steer byte is left: `0x40` or `0x80` | | `STEER_BITS` in `web/executor.js` |
+| ① | Which steer byte is left: `0x40` or `0x80` | | `calibration.steerSwapped`, measured in the app — the robot's wheels, or Settings → Teach it directions |
+| ①b | Which drive byte is forward: `0x10` or `0x20` | | `calibration.driveSwapped`, same sheet, **asked first**: ① is judged by watching a car that is driving forwards, so on a car wired backwards the turn would be watched in reverse and ① recorded the wrong way round |
 | ② | Bitbang byte rate at 1200 baud | **5:1 — five bytes per baud tick, 6000 bytes/s at 1200 baud** (2026-09-21, timed off the chip's own pin read-back over three byte counts and three bauds). The 1:1 that stood before it was a stopwatch on a 0.5 s run. See the note below | `DEFAULT_BYTES_PER_MS` in `web/ftdi.js`, now 6.0 |
 | ②b | Road speed in m/s, to check spec §4.3's `MAX_COAST_MS ≈ 1.5 m` | Not measured, and no longer measured by ② — see docs/instruments.md § ② | Wants its own procedure: a measured distance on the floor, crossed at speed |
 | ③ | Pull-down resistors on U3/U5 inputs? (power off, measure input-to-GND: tens of kΩ = yes, open = no) | | Spec §4.7's gap. No pull-downs → solder 2 × 10 kΩ to GND, or layer 0 does not hold when USB is unplugged |

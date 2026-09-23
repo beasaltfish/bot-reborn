@@ -1,7 +1,7 @@
 // Entry point: wiring only (spec §10). Every decision here is made somewhere
 // else; if a branch shows up in this file it belongs in session.js.
 
-import { loadConfig, saveConfig, layerReady, resetSticky } from './config.js';
+import { loadConfig, saveConfig, layerReady, directionsTaught, resetSticky } from './config.js';
 import { t, FAULT_LABEL } from './strings.js';
 import { createUi } from './ui.js';
 import { createSettings } from './settings.js';
@@ -82,8 +82,9 @@ async function offerNextStep(running = false) {
     keys: layerReady(config.stt) && layerReady(config.llm),
     car: (await navigator.usb.getDevices()).length > 0,
     // Measured, not its value: a car that turned out NOT to be reversed has
-    // been calibrated just as much as one that was.
-    steer: config.calibration.steerSwapped !== null,
+    // been calibrated just as much as one that was. Both answers, because the
+    // step is one sheet that asks two questions.
+    steer: directionsTaught(config.calibration),
   };
   ui.needCar(!done.car);
   // What is still missing, drawn on the robot rather than listed anywhere: a
@@ -121,11 +122,14 @@ const setupSheet = createSetupSheet({
 const calibration = createCalibration({
   lang: config.lang,
   openCar: (opts) => openCar(opts),
-  onCalibrated: (swapped) => {
-    config.calibration.steerSwapped = swapped;
+  onCalibrated: (patch) => {
+    // Assigned into the same object, one answer at a time: the sheet settles
+    // ①b before it asks ①, and a car unplugged between the two questions must
+    // keep the answer it already gave.
+    Object.assign(config.calibration, patch);
     saveConfig(config);
-    lastDone = { ...lastDone, steer: true };
-    step(`calibration: steerSwapped = ${swapped}`);
+    lastDone = { ...lastDone, steer: directionsTaught(config.calibration) };
+    step('calibration: ' + JSON.stringify(patch));
   },
   onChange: () => void refresh(),
   log: ui.log,

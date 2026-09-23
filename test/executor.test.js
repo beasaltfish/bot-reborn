@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  Executor, pinsFor, DRIVE_BITS, STEER_BITS,
+  Executor, pinsFor, aheadDrive, DRIVE_BITS, STEER_BITS,
   MAX_COAST_MS, LEAD_MS, MIN_DURATION_MS,
 } from '../web/executor.js';
 
@@ -13,11 +13,14 @@ import {
  * exact and instant — and, more importantly, lets a test preempt a running
  * renewal loop at a precisely known point.
  */
-function harness({ bytesPerMs = 0.5 } = {}) {
+function harness({ bytesPerMs = 0.5, writeBlocks = false } = {}) {
   /** @type {any[]} */
   const log = [];
   /** @type {((v?: any) => void) | null} */
   let pending = null;
+  /** Fake wall clock, in ms. Only moves when something says it took time. */
+  const clock = { t: 0 };
+  let pendingMs = 0;
 
   // A plain duck-typed fake: Ftdi is a class with private fields, so this can
   // never structurally satisfy the `Ftdi` type tsc expects — cast it once here
@@ -35,6 +38,13 @@ function harness({ bytesPerMs = 0.5 } = {}) {
     /** @param {any} bytes */
     async write(bytes) {
       log.push({ op: 'write', pin: bytes[0], length: bytes.length, tail: bytes[bytes.length - 1] });
+      // `writeBlocks` is the real car. A bulk OUT transfer does not return
+      // until the device has ACCEPTED every byte, and an FT232H accepts them
+      // at the rate it clocks them out once its 1 kB FIFO is full — so a write
+      // of a MAX_COAST_MS slice takes about MAX_COAST_MS to resolve. Without
+      // this the fake resolves instantly, which is a chip with an infinite
+      // buffer: a machine nobody has.
+      if (writeBlocks) clock.t += (bytes.length - 1) / bytesPerMs;
     },
     async purgeTx() { log.push({ op: 'purgeTx' }); },
   };
@@ -42,6 +52,7 @@ function harness({ bytesPerMs = 0.5 } = {}) {
   /** @param {number} ms */
   const sleep = (ms) => {
     log.push({ op: 'sleep', ms });
+    pendingMs = ms;
     return new Promise((resolve) => { pending = resolve; });
   };
 
@@ -53,12 +64,23 @@ function harness({ bytesPerMs = 0.5 } = {}) {
   const flush = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
 
   return {
-    log, ftdi, flush,
+    log, ftdi, flush, clock,
     /** Let the executor past its current sleep, then run it to the next one. */
-    async tick() { const r = pending; pending = null; r?.(); await flush(); },
+    async tick() {
+      const r = pending; pending = null;
+      clock.t += pendingMs; pendingMs = 0;
+      r?.(); await flush();
+    },
+    /** Tick until nothing is waiting — for tests about a whole move rather
+     *  than about one slice boundary. Bounded so a loop that never ends fails
+     *  as a test rather than as a hang. */
+    async runToEnd(max = 20) {
+      await flush();
+      for (let i = 0; i < max && pending; i++) await this.tick();
+    },
     /** @param {{ sleep?: (ms: number) => Promise<void>, onError?: (err: Error) => void,
-     *            calibration?: { steerSwapped?: boolean | null } }} [opts] */
-    make(opts = {}) { return new Executor(ftdi, { sleep, ...opts }); },
+     *            calibration?: import('../web/executor.js').Calibration }} [opts] */
+    make(opts = {}) { return new Executor(ftdi, { sleep, now: () => clock.t, ...opts }); },
   };
 }
 
@@ -123,8 +145,13 @@ function chipHarness({ bytesPerMs = 0.5 } = {}) {
     ftdi, sleep, backlogs, sleeps,
     /** @param {() => void} fn */
     setOnWrite(fn) { onWrite = fn; },
-    /** @param {{ sleep?: (ms: number) => Promise<void> }} [opts] */
-    make(opts = {}) { return new Executor(ftdi, { sleep, ...opts }); },
+    /** The executor reads the clock now (it debits the time a write took), so
+     *  it has to read THIS one. Given the real one it would measure a few
+     *  tenths of a millisecond of node against a chip model whose seconds are
+     *  imaginary, and the two would drift apart for no reason a reader could
+     *  see.
+     *  @param {{ sleep?: (ms: number) => Promise<void> }} [opts] */
+    make(opts = {}) { return new Executor(ftdi, { sleep, now: () => now, ...opts }); },
   };
 }
 
@@ -413,6 +440,11 @@ test('a slice written by a preempted loop does not pollute the queue accounting'
   const ex = new Executor(ftdi, {
     /** @param {number} ms */
     sleep: (ms) => { sleeps.push(ms); return Promise.resolve(); },
+    // Frozen: this test is about what the books say, not about time passing.
+    // The real clock would debit a fraction of a millisecond of node's own
+    // scheduling from the write-ahead and turn an exact expectation into an
+    // approximate one.
+    now: () => 0,
   });
   const flush = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
 
@@ -469,6 +501,105 @@ test('the swap touches steering and nothing else', () => {
       'the drive half moved',
     );
   }
+});
+
+// --- the write is not free ------------------------------------------------
+
+test('a write that blocks until the chip has played the slice leaves no gap', async () => {
+  // The bug this pins, seen on the car as "it moves, stops, moves, stops":
+  //
+  // transferOut does not resolve until the device has accepted every byte, and
+  // an FT232H accepts them at the rate it clocks them out once its 1 kB FIFO is
+  // full. A MAX_COAST_MS slice is six times that, so the write resolves roughly
+  // when the slice has finished PLAYING. The loop then credited a whole slice
+  // of write-ahead it no longer had and slept MAX_COAST_MS - LEAD_MS on top —
+  // and because the stop byte is the last byte of every stream, the pins were
+  // low for all of it. The car stood still for 700 ms out of every 1700.
+  const h = harness({ writeBlocks: true });
+  const ex = h.make();
+  void ex.move([{ drive: 'forward', steer: 'straight', duration_ms: MAX_COAST_MS * 3 }]);
+  await h.runToEnd();
+  const gaps = h.log.filter((e) => e.op === 'sleep' && e.ms > 0).map((e) => e.ms);
+  assert.deepEqual(gaps, [], `the car stood still for ${gaps.join(' + ')} ms`);
+});
+
+test('a write that returns instantly still keeps a slice of write-ahead', async () => {
+  // The other direction, and the reason the fix debits measured time rather
+  // than assuming the write always blocks: on a chip whose buffer swallows the
+  // whole slice, the renewal loop must still pace itself against MAX_COAST_MS,
+  // or it queues the car's whole future and §4.3's bound stops bounding
+  // anything.
+  const h = harness();
+  const ex = h.make();
+  void ex.move([{ drive: 'forward', steer: 'straight', duration_ms: MAX_COAST_MS * 2 }]);
+  await h.flush();
+  const sleeps = h.log.filter((e) => e.op === 'sleep').map((e) => e.ms);
+  assert.deepEqual(sleeps, [MAX_COAST_MS - LEAD_MS]);
+});
+
+// --- calibration ①b : which byte is forward -------------------------------
+//
+// Same unknown as ①, on the other driver. Which of D4/D5 is IN1 depends on how
+// the motor's two leads were soldered, and docs/hardware.md's "forward = 0x10"
+// was never measured — it was the wiring diagram's hope.
+
+test('pinsFor swaps forward and backward when ①b says the car drives the wrong way', () => {
+  assert.equal(
+    pinsFor('forward', 'straight', { driveSwapped: true }),
+    DRIVE_BITS.backward | STEER_BITS.straight,
+  );
+  assert.equal(
+    pinsFor('backward', 'straight', { driveSwapped: true }),
+    DRIVE_BITS.forward | STEER_BITS.straight,
+  );
+});
+
+test('the drive swap touches driving and nothing else', () => {
+  for (const steer of /** @type {const} */ (['left', 'right', 'straight'])) {
+    assert.equal(
+      pinsFor('forward', steer, { driveSwapped: true }) & ~0x30,
+      pinsFor('forward', steer) & ~0x30,
+      'the steering half moved',
+    );
+  }
+});
+
+test('the two swaps are independent and compose', () => {
+  // A car can be wired backwards on both drivers, and each answer has to
+  // survive the other being set. Reversing one axis must never un-reverse the
+  // other.
+  assert.equal(
+    pinsFor('forward', 'left', { driveSwapped: true, steerSwapped: true }),
+    DRIVE_BITS.backward | STEER_BITS.right,
+  );
+});
+
+test('aheadDrive names the bit a raw executor needs to go forwards', () => {
+  // The invariant the two-question calibration rests on: the second question
+  // watches a car that is going FORWARDS, and it runs on a raw executor, so it
+  // has to ask for the other name itself. Driving aheadDrive(cal) with no
+  // calibration must put the same byte on the wire as driving 'forward' with
+  // it. If these ever drift apart, ① gets measured on a reversing car and is
+  // recorded backwards — silently, because the car does move and the person
+  // does answer.
+  for (const cal of /** @type {const} */ ([{ driveSwapped: false }, { driveSwapped: true }])) {
+    assert.equal(
+      pinsFor(aheadDrive(cal), 'left'),
+      pinsFor('forward', 'left', cal),
+    );
+  }
+});
+
+test('a drive-swapped executor puts the swapped byte on the wire', async () => {
+  const h = harness();
+  const ex = h.make({ calibration: { driveSwapped: true } });
+  void ex.move([{ drive: 'forward', steer: 'straight', duration_ms: MIN_DURATION_MS }]);
+  await h.flush();
+  const written = h.log.filter((e) => e.op === 'write').map((e) => e.pin);
+  assert.ok(
+    written.includes(DRIVE_BITS.backward | STEER_BITS.straight),
+    `expected the backward byte on the wire, saw ${JSON.stringify(written)}`,
+  );
 });
 
 test('a swapped executor puts the swapped byte on the wire', async () => {

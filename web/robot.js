@@ -10,7 +10,7 @@
 // opaque classes would let that pair drift apart silently — see the test that
 // pins them together.
 
-import { layerReady } from './config.js';
+import { layerReady, directionsTaught } from './config.js';
 
 /** @typedef {import('./audio/session.js').State} State */
 /** @typedef {import('./strings.js').StringKey} StringKey */
@@ -67,7 +67,7 @@ const FACES = {
  * The wheels are listed from the moment calibration has not been done,
  * including while there is no car at all. Both are true then, and the plug and
  * the pale wheels say two different things: nothing is plugged in, and nothing
- * has been taught left from right.
+ * has been taught which way is which.
  *
  * @typedef {'ears' | 'mind' | 'voice' | 'wheels'} Part
  * @param {import('./config.js').Config} config
@@ -79,9 +79,9 @@ export function missingParts(config) {
   if (!layerReady(config.stt)) missing.push('ears');
   if (!layerReady(config.llm)) missing.push('mind');
   if (!layerReady(config.tts)) missing.push('voice');
-  // Measured, not its value — same rule as the checklist's. A car that turned
-  // out NOT to be reversed has been taught just as much as one that was.
-  if (config.calibration.steerSwapped === null) missing.push('wheels');
+  // Both answers, from the same function the checklist reads — see
+  // directionsTaught(). A car taught only half of it is not a car with wheels.
+  if (!directionsTaught(config.calibration)) missing.push('wheels');
   return missing;
 }
 

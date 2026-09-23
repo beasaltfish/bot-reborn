@@ -28,7 +28,7 @@ export const TOOLS = [
     type: 'function',
     function: {
       name: 'move',
-      description: 'Move the car for a fixed duration. If the user wants the car to move you MUST call a tool — saying something does not substitute for calling it.',
+      description: 'Drive yourself for a fixed duration. If the user wants you to move you MUST call a tool — saying something does not substitute for calling it.',
       parameters: {
         type: 'object',
         required: ['steps'],
@@ -68,7 +68,7 @@ export const TOOLS = [
     type: 'function',
     function: {
       name: 'stop',
-      description: 'Stop the car immediately.',
+      description: 'Stop moving immediately.',
       parameters: { type: 'object', properties: {} },
     },
   },
@@ -88,11 +88,17 @@ export const TOOLS = [
 
 // --- System prompt (spec §6.8) ---------------------------------------------
 
-export const SYSTEM_PROMPT = `You control a small toy car.
+export const SYSTEM_PROMPT = `You are a small robot with a face and a voice,
+and wheels for a body. The wheels are you. They are not a car you are driving
+and not a machine you are operating: when they move, YOU are moving.
+
+Never call yourself a car, a vehicle, or "the robot". Speak in the first
+person — "I'm going forward", never "the car is going forward".
+
 drive ∈ {forward, backward}, steer ∈ {left, right, straight}, combined.
 There is no turning in place — steering must accompany forward or backward motion.
 
-- If the user wants the car to move, you MUST call a tool. You may add a short
+- If the user wants you to move, you MUST call a tool. You may add a short
   sentence alongside the call, but that sentence does not substitute for calling it.
 - Use \`move\` for a stated distance or duration; use \`cruise\` for open-ended
   instructions ("keep going", "drive slowly"). If there is no natural endpoint,
@@ -141,15 +147,27 @@ export function buildSystemPrompt(cfg) {
  */
 
 /**
+ * Every drop says why.
+ *
+ * `dropped` used to be a bare count, and the count was the whole report: a
+ * turn that spoke its sentence and never moved looked, from outside, exactly
+ * like a turn where the model simply chose not to call anything. The reasons
+ * are diagnostics and go to the console in English — nobody is meant to read
+ * them on the screen, and the one thing worth knowing about a refused command
+ * is WHICH field this robot refused.
+ *
  * @param {Array<{ id: string, name: string, args: object | null, rawArguments: string }>} toolCalls
- * @returns {{ actions: Action[], replyLang: 'zh'|'en'|'auto'|null, dropped: number, hadMoveIntent: boolean }}
+ * @returns {{ actions: Action[], replyLang: 'zh'|'en'|'auto'|null, dropped: number,
+ *             reasons: string[], hadMoveIntent: boolean }}
  */
 export function validate(toolCalls) {
   /** @type {Action[]} */
   const actions = [];
   /** @type {'zh'|'en'|'auto'|null} */
   let replyLang = null;
-  let dropped = 0;
+  /** @type {string[]} */
+  const reasons = [];
+  const drop = (/** @type {string} */ why) => { reasons.push(why); };
   let hadMoveIntent = false;
 
   for (const call of toolCalls) {
@@ -157,18 +175,30 @@ export function validate(toolCalls) {
       hadMoveIntent = true;
     }
     const args = /** @type {any} */ (call.args);
-    if (args === null) { dropped++; continue; }
+    if (args === null) {
+      drop(`${call.name}: arguments were not valid JSON — ${call.rawArguments}`);
+      continue;
+    }
 
     switch (call.name) {
       case 'move': {
-        const raw = Array.isArray(args.steps) ? args.steps : [];
+        // Not an array is its own failure, and it was the one going unreported:
+        // the loop below simply never ran, so a model that flattened the schema
+        // — drive/steer/duration_ms at the top level, no wrapper — produced a
+        // turn with zero actions AND zero drops.
+        if (!Array.isArray(args.steps)) {
+          drop(`move: no steps array — got ${JSON.stringify(args)}`);
+          break;
+        }
         const steps = [];
         // Rule 3: truncate rather than reject.
-        for (const step of raw.slice(0, MAX_STEPS)) {
+        for (const step of args.steps.slice(0, MAX_STEPS)) {
           if (isValidStep(step)) steps.push({
             drive: step.drive, steer: step.steer, duration_ms: step.duration_ms,
           });
-          else dropped++;
+          else drop(`move: step rejected — ${JSON.stringify(step)}; drive must be one of `
+            + `${DRIVE_VALUES.join('/')}, steer one of ${STEER_VALUES.join('/')}, `
+            + `duration_ms an integer >= ${MIN_DURATION_MS}`);
         }
         // Rule 4: if every step died, dispatch nothing.
         if (steps.length > 0) actions.push({ kind: 'move', steps });
@@ -177,7 +207,10 @@ export function validate(toolCalls) {
       case 'cruise': {
         if (DRIVE_VALUES.includes(args.drive) && STEER_VALUES.includes(args.steer)) {
           actions.push({ kind: 'cruise', drive: args.drive, steer: args.steer });
-        } else dropped++;
+        } else {
+          drop(`cruise: rejected — ${JSON.stringify(args)}; drive must be one of `
+            + `${DRIVE_VALUES.join('/')}, steer one of ${STEER_VALUES.join('/')}`);
+        }
         break;
       }
       case 'stop':
@@ -186,15 +219,15 @@ export function validate(toolCalls) {
       case 'set_reply_language': {
         // Rule 5: it writes config, so it never becomes an action (spec §6.2).
         if (['zh', 'en', 'auto'].includes(args.lang)) replyLang = args.lang;
-        else dropped++;
+        else drop(`set_reply_language: rejected — ${JSON.stringify(args)}`);
         break;
       }
       default:
-        dropped++;
+        drop(`${call.name}: no such tool`);
     }
   }
 
-  return { actions, replyLang, dropped, hadMoveIntent };
+  return { actions, replyLang, dropped: reasons.length, reasons, hadMoveIntent };
 }
 
 /** @param {any} step */
@@ -209,7 +242,7 @@ function isValidStep(step) {
 // --- One turn --------------------------------------------------------------
 
 export class Brain {
-  #llm; #executor; #tts; #earcon; #config; #onReplyLangChange; #onFault;
+  #llm; #executor; #tts; #earcon; #config; #onReplyLangChange; #onFault; #trace;
   /** Whether this turn has already sounded its failure. See #fail. */
   #beeped = false;
   /** @type {AbortController | null} */
@@ -225,6 +258,7 @@ export class Brain {
    *   config: { lang: 'en' | 'zh', replyLang: 'zh' | 'en' | null, bargeIn: boolean },
    *   onReplyLangChange?: (lang: 'en' | 'zh' | null) => void,
    *   onFault?: (part: import('./strings.js').FaultPart, err: Error) => void,
+   *   trace?: (line: string) => void,
    * }} deps
    */
   constructor(deps) {
@@ -235,6 +269,11 @@ export class Brain {
     this.#config = deps.config;
     this.#onReplyLangChange = deps.onReplyLangChange ?? (() => {});
     this.#onFault = deps.onFault ?? (() => {});
+    // Console by default, injectable so the tests are not a wall of turns.
+    // This is the only channel that can answer "it said the words and did not
+    // move": on screen there is a robot and one sentence, by design, and the
+    // three ways that turn can end look identical from there.
+    this.#trace = deps.trace ?? ((line) => console.log(line));
   }
 
   get history() { return this.#history; }
@@ -298,7 +337,15 @@ export class Brain {
     }
     this.#trimHistory();
 
-    const { actions, replyLang, hadMoveIntent } = validate(reply.toolCalls);
+    const { actions, replyLang, reasons, hadMoveIntent } = validate(reply.toolCalls);
+
+    // One line per turn, whatever happened. `calls: []` next to a sentence
+    // about going forward is the whole diagnosis of "it read the parameters
+    // out loud and did not move": the model narrated the call instead of
+    // making it, and no amount of looking at the car can tell you that.
+    this.#trace(`[turn] said ${JSON.stringify(reply.text)} calls `
+      + JSON.stringify(reply.toolCalls.map((c) => `${c.name}(${c.rawArguments})`)));
+    for (const why of reasons) this.#trace(`[turn] dropped — ${why}`);
 
     if (replyLang !== null) {
       // 'auto' is the escape hatch: it means "no recorded preference", i.e. null.

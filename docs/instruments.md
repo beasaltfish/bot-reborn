@@ -50,7 +50,7 @@ Each button holds its pins high for 600 ms. Watch which way the wheels turn and
 write the answer into `docs/hardware.md`.
 
 **The in-app calibration asks a different question and both are kept.** The
-robot's own "teach it left and right" (`web/calibrate.js`) runs an Executor
+robot's own "teach it directions" (`web/calibrate.js`) runs an Executor
 *without* calibration applied, because calibrating through the setting being
 calibrated measures itself. The bench's six buttons are lower than that: they
 address pins directly, with no Executor in the path at all, which is what you

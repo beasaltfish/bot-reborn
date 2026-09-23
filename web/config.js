@@ -33,6 +33,25 @@ export function layerReady(layer) {
 }
 
 /**
+ * Whether the car has been taught which way is which — both answers, not one.
+ *
+ * Measured, not its value: `false` is a result ("I checked, it is not
+ * reversed") and only `null` means nobody asked. Half an answer is the
+ * dangerous state, so this is `&&` — a car that knows left from right but not
+ * forward from backward drives into the wall behind it on the first command,
+ * with the drawing and the checklist both saying it was ready.
+ *
+ * One function because two readers need the same answer: the parts the robot
+ * is drawn without (robot.js) and the step the button offers (app.js).
+ *
+ * @param {Calibration} cal
+ * @returns {boolean}
+ */
+export function directionsTaught(cal) {
+  return cal.steerSwapped !== null && cal.driveSwapped !== null;
+}
+
+/**
  * @param {string} [_navLang] ignored since 2026-09-17; kept so the signature
  *   and its tests survive until a language switcher exists to justify reading
  *   it again.
@@ -75,10 +94,12 @@ export function defaultConfig(_navLang = globalThis.navigator?.language) {
      *
      * steerSwapped is a boolean and never a byte: "is it reversed" is all ①
      * can answer, and 0x40 in a settings file is a protocol detail nobody
-     * reading it could check.
+     * reading it could check. driveSwapped is the same answer about the other
+     * driver — see ①b in docs/hardware.md.
      */
     calibration: {
       /** @type {boolean | null} */ steerSwapped: null,
+      /** @type {boolean | null} */ driveSwapped: null,
       /** @type {number | null} */ bytesPerMs: null,
     },
   };
@@ -108,6 +129,9 @@ export function loadConfig(storage = globalThis.localStorage) {
       // loads as "never measured" rather than as undefined. Reading
       // undefined.steerSwapped throws at startup, and the product would refuse
       // to open over a field whose entire meaning is "nothing is known yet".
+      // The spread reaches inside the object too, which is what carries a
+      // config calibrated before ①b existed: steerSwapped kept, driveSwapped
+      // null rather than undefined.
       calibration: { ...d.calibration, ...p.calibration },
     };
   } catch {
@@ -148,6 +172,7 @@ export function resetSticky(cfg) {
  *
  * @typedef {{
  *   steerSwapped: boolean | null,
+ *   driveSwapped: boolean | null,
  *   bytesPerMs: number | null,
  * }} Calibration
  */
