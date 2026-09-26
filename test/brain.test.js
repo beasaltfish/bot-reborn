@@ -51,13 +51,32 @@ test('the prompt makes the robot the subject, not a car it drives', () => {
   // car"). The only place it can learn what it is, is this prompt and these
   // four tool descriptions — and every one of them used to say "the car",
   // with the model cast as something that operates one. The product's whole
-  // shell (docs/ui.md) is a robot with a face, and the wheels are its body.
-  assert.match(SYSTEM_PROMPT, /You are a small robot/);
+  // shell (docs/ui.md) is a creature with a face, and the wheels are its body.
+  // "Robot" was the next wrong answer: a robot is still a machine, and a
+  // machine does not get teased or run off. It is cast as alive.
+  assert.match(SYSTEM_PROMPT, /You are a small living creature/);
+  assert.match(SYSTEM_PROMPT, /You are not a robot, a car, or a machine/);
   assert.match(SYSTEM_PROMPT, /Never call yourself a car/);
   for (const tool of TOOLS) {
     assert.ok(!/\bcars?\b/i.test(tool.function.description),
       `tool ${tool.function.name} still calls it a car`);
   }
+});
+
+test('the prompt lets chat end in a movement, but only one that stops itself', () => {
+  // Barked at twice, a creature runs off. The old "chatting: do not call a
+  // tool" forbade exactly that. The bound that replaces it is not a length
+  // (the model picks the durations) but an end: cruise runs until someone
+  // says stop, and nobody asked it to move.
+  assert.doesNotMatch(SYSTEM_PROMPT, /Do not call a tool/);
+  assert.match(SYSTEM_PROMPT, /react with your body/);
+  assert.match(SYSTEM_PROMPT, /never use `cruise` for one/);
+});
+
+test('the prompt asks for a changed reaction when the user repeats themselves', () => {
+  // A few-shot script would be copied verbatim — bark, bark back, forever.
+  // The example is phrased as "might", and the rule is to escalate or vary.
+  assert.match(SYSTEM_PROMPT, /do not repeat your reaction/);
 });
 
 test('the system prompt states that calling a tool cannot be substituted for', () => {
