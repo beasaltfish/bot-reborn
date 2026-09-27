@@ -44,6 +44,7 @@
  *   models: string[],
  *   openModels?: boolean,
  *   voices?: Record<string, string[]>,
+ *   body?: Record<string, unknown>,
  * }} Preset
  */
 
@@ -103,7 +104,16 @@ export const PRESETS = {
       id: 'deepseek',
       label: 'DeepSeek',
       baseURL: 'https://api.deepseek.com',
-      models: ['deepseek-chat', 'deepseek-reasoner'],
+      // The 2026-09 names. deepseek-chat and deepseek-reasoner are legacy
+      // aliases now — the non-thinking and thinking halves of an older Flash —
+      // and reasoner, being thinking-only, was never one to offer here.
+      models: ['deepseek-flash', 'deepseek-v4-pro'],
+      // Both models think by default, at high effort, and every second of it
+      // is spent before the robot can say a word or move the car. A toy
+      // answering out loud wants the answer, not the deliberation; the tool
+      // calls it makes are simple enough not to need it. OpenAI-format
+      // spelling — the Anthropic endpoint spells it differently.
+      body: { thinking: { type: 'disabled' } },
     },
     {
       id: 'groq',
@@ -251,6 +261,22 @@ export function presetIdFor(layer, cfg) {
   const hit = PRESETS[layer].find(
     (p) => p.baseURL.replace(/\/+$/, '') === url);
   return hit ? hit.id : CUSTOM;
+}
+
+/**
+ * Fields a provider needs in every request beyond the standard ones.
+ *
+ * Found by address, the same way the setup sheet finds the preset, so a layer
+ * typed by hand under "Other" gets them too if it points at the same service.
+ * Everybody else gets nothing: a field a provider never defined is at best
+ * ignored and at worst a 400.
+ *
+ * @param {LayerName} layer
+ * @param {{ baseURL: string }} cfg
+ * @returns {Record<string, unknown>}
+ */
+export function presetBody(layer, cfg) {
+  return presetById(layer, presetIdFor(layer, cfg))?.body ?? {};
 }
 
 /**

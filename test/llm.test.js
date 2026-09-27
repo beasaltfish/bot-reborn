@@ -156,3 +156,18 @@ test("chat(): the caller's signal aborts a request still in flight", async () =>
   ]);
   assert.equal(outcome, 'AbortError');
 });
+
+test('chat(): DeepSeek is asked not to think — a toy answering aloud cannot wait', async () => {
+  // Thinking is DeepSeek's default, at high effort, and every turn of it is
+  // spent before the robot can say a word.
+  const { seen, fetchImpl } = respond({ role: 'assistant', content: 'ok' });
+  const cfg = { ...CFG, baseURL: 'https://api.deepseek.com', model: 'deepseek-flash' };
+  await new OpenAiCompatLlm(cfg, { fetch: fetchImpl }).chat([], []);
+  assert.deepEqual(seen.body.thinking, { type: 'disabled' });
+});
+
+test('chat(): nobody else is sent a field they never defined', async () => {
+  const { seen, fetchImpl } = respond({ role: 'assistant', content: 'ok' });
+  await new OpenAiCompatLlm(CFG, { fetch: fetchImpl }).chat([], []);
+  assert.equal(seen.body.thinking, undefined);
+});

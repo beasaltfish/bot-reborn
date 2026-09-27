@@ -5,6 +5,8 @@
 // the validator has to live somewhere every provider shares. What comes out of
 // here is what the model said, parsed just far enough to be inspectable.
 
+import { presetBody } from '../provider-presets.js';
+
 const DEFAULT_TIMEOUT_MS = 15_000;
 
 /**
@@ -47,7 +49,11 @@ export class OpenAiCompatLlm {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${this.#cfg.apiKey}`,
         },
-        body: JSON.stringify({ model: this.#cfg.model, messages, tools }),
+        // The provider's own fields first, so they can never overwrite the
+        // three this module exists to send.
+        body: JSON.stringify({
+          ...presetBody('llm', this.#cfg), model: this.#cfg.model, messages, tools,
+        }),
         signal,
       });
       if (!response.ok) {

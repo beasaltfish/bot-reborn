@@ -108,3 +108,9 @@ test('ids are unique within a layer', () => {
     assert.equal(new Set(ids).size, ids.length, `${layer} has a duplicate id`);
   }
 });
+
+test('DeepSeek offers its current models, and not the thinking-only alias', () => {
+  const models = presetById('llm', 'deepseek')?.models ?? [];
+  assert.equal(models[0], 'deepseek-flash');
+  assert.ok(!models.includes('deepseek-reasoner'));
+});
