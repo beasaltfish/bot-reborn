@@ -80,7 +80,7 @@ export function wantedSubscriptions(state, bargeIn, earconPlaying) {
 
 export class Session {
   #pipeline; #kws; #vad; #stt; #tts; #executor; #rawEarcon; #config;
-  #now; #after; #onState; #onFault;
+  #now; #after; #onState; #onFault; #wakeWord;
   /** @type {any} */ #brain = null;
   /** @type {State} */ #state = 'SLEEPING';
   #lastVoiceAt = 0;
@@ -104,7 +104,8 @@ export class Session {
    *          cancel(): void },
    *   executor: { stop(): Promise<void> | void },
    *   earcon: (name: EarconName) => number,
-   *   config: { lang: 'en' | 'zh', replyLang: 'en' | 'zh' | null, bargeIn: boolean },
+   *   config: { lang: 'en' | 'zh', replyLang: 'en' | 'zh' | null, bargeIn: boolean,
+   *             wakeWord: boolean },
    *   now?: () => number,
    *   after?: (ms: number, fn: () => void) => void,
    *   onState?: (state: State) => void,
@@ -120,6 +121,9 @@ export class Session {
     this.#executor = deps.executor;
     this.#rawEarcon = deps.earcon;
     this.#config = deps.config;
+    // Read once. Switched off mid-session from SLEEPING, nothing could wake
+    // it again; a change in settings belongs to the next time it listens.
+    this.#wakeWord = deps.config.wakeWord;
     this.#now = deps.now ?? (() => Date.now());
     this.#after = deps.after
       ?? ((/** @type {number} */ ms, /** @type {() => void} */ fn) =>
@@ -141,9 +145,12 @@ export class Session {
    *  rather than only the ones the session plays itself. */
   get earcon() { return (/** @type {EarconName} */ name) => this.#playEarcon(name); }
 
+  /** Without a wake word there is nothing to wait for: opening the
+   *  microphone IS the robot being called, so it starts awake. */
   start() {
     this.#lastVoiceAt = this.#now();
     this.#reconcile();
+    if (!this.#wakeWord) this.wake();
   }
 
   /** Enter a session. Public because the UI's start button and §7.3's
@@ -194,7 +201,22 @@ export class Session {
     // for ten seconds is not the user being silent.
     if (this.#state !== 'LISTENING') return;
     if (this.#now() - this.#lastVoiceAt <= IDLE_TO_SLEEP_MS) return;
-    this.#sleep();
+    if (this.#wakeWord) return this.#sleep();
+    this.#settle();
+  }
+
+  /**
+   * §5.2 without anywhere to sleep to. The thirty seconds were never only
+   * about the face: they are also the longest a cruise can run, and with no
+   * wake word there is no SLEEPING to enforce it on the way in. So the car
+   * stops and the conversation starts over, and the robot stays awake — it
+   * goes on listening until the screen goes off. Silent: nothing changed that
+   * anybody can see, and a beep every thirty seconds of quiet is a nag.
+   */
+  #settle() {
+    this.#executor.stop();
+    this.#brain?.resetHistory();
+    this.#lastVoiceAt = this.#now();
   }
 
   #sleep() {
@@ -366,6 +388,9 @@ export class Session {
     // A label no shipped keyword file produces means somebody renamed one.
     // Guessing at it is how a stop word quietly becomes a no-op.
     if (kind === STOP) return this.onEmergencyStop();
+    // Switched off, the name is just a word somebody said. The spotter still
+    // runs, because the stop word lives in the same model and is the brake.
+    if (kind === WAKE && !this.#wakeWord) return;
     // The stop word is answered in every state, above: it is the brake, and the
     // car can be rolling in all of them. The wake word is not, and CAPTURING is
     // where answering it does harm. #onWake plays the `wake` earcon there
@@ -399,6 +424,19 @@ export class Session {
   }
 
   /**
+   * A tap on the robot: the wake word's interruption, without the wake word.
+   * Shut it up, drop the turn, keep the car as it is — exactly #onWake's
+   * SPEAKING and THINKING rows and nothing more. Anywhere else there is
+   * nothing to interrupt, and CAPTURING especially is the user mid-sentence.
+   */
+  interrupt() {
+    if (this.#state !== 'SPEAKING' && this.#state !== 'THINKING') return;
+    this.#abortTurn();
+    this.#tts.cancel();
+    this.#setState('LISTENING');
+  }
+
+  /**
    * Spec §4.1 layer 1 and layer 2 both arrive here. The order is not
    * negotiable: stop the car FIRST, without going through any intermediate
    * layer, then let the state machine tidy itself. If the machine is wedged on
@@ -415,7 +453,9 @@ export class Session {
     this.#vad.clear();
     this.#brain?.resetHistory();
     this.#playEarcon('sleep');
-    this.#setState('SLEEPING');
+    // Without a wake word nothing could bring it back from SLEEPING short of
+    // closing the microphone, so the brake leaves it braked and awake.
+    this.#setState(this.#wakeWord ? 'SLEEPING' : 'LISTENING');
   }
 
   /** §4.5's third use: not merely ignore a stale result — cancel the request

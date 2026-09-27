@@ -20,12 +20,11 @@ import { loadSherpa } from './audio/sherpa.js';
 import { createSpotter } from './audio/kws.js';
 import { createVoiceDetector } from './audio/vad.js';
 import { createEarcon } from './audio/earcon.js';
-import { createKeepAlive, isBehind } from './audio/keepalive.js';
 import { unknownTokens } from './audio/keyword-lines.js';
 import { Session } from './audio/session.js';
 
 const config = loadConfig();
-const ui = createUi(config.lang);
+const ui = createUi(config.lang, () => config.wakeWord);
 
 // Start pulling the model down the moment the page opens. Nothing about
 // downloading needs a user gesture — only getUserMedia and the AudioContext do
@@ -36,8 +35,13 @@ const warming = loadSherpa((s) => s && step(s));
 warming.catch(() => {});
 
 /** @type {AudioPipeline | null} */ let pipeline = null;
-/** @type {{ stop(): void } | null} */ let keepAlive = null;
 /** @type {Session | null} */ let session = null;
+/** Between start() and stop(), including the boot in between — `session` is
+ *  only set near the end of it, and a screen going off during the boot still
+ *  has to be told the microphone is on its way. */
+let live = false;
+/** The screen went off with the microphone open, so it opens again with it. */
+let resumeOnShow = false;
 
 // One button with two meanings in stage 1: wake it, then stop it. It routes on
 // the tone painted on the button at the moment it was pressed, so what runs is
@@ -60,6 +64,11 @@ ui.onFab((tone) => {
   void start();
 });
 ui.onMic(stop);
+// The wake word's other job, done by hand: a tap on the robot while it is
+// thinking or talking shuts it up. session.js decides whether there is
+// anything to interrupt; before start() there is no session and this is a
+// tap on a picture.
+ui.onRobot(() => session?.interrupt());
 
 /**
  * What the one button offers when nothing is running.
@@ -267,17 +276,13 @@ function step(msg) {
 }
 
 async function start() {
+  live = true;
   ui.running(true);
   step('start');
   // One sentence, held until the whole chain is up. The detail is in the
   // console; what the screen owes the user is "something is happening".
   ui.notice(t(config.lang, 'booting'));
   try {
-    // Before any await: autoplay needs the user gesture, and one await spends it.
-    const ka = createKeepAlive({ onLog: ui.log });
-    keepAlive = ka;
-    const armed = ka.armFromGesture();
-
     const sherpa = await warming;
     step('✓ model');
 
@@ -296,6 +301,7 @@ async function start() {
       onRate: (hz) => ui.log(`AudioContext ${hz} Hz`),
     });
     step('✓ microphone');
+    await running(pipeline.audioContext);
     const earcon = createEarcon(pipeline.audioContext);
 
     const stt = new OpenAiCompatStt(config.stt);
@@ -365,12 +371,10 @@ async function start() {
     }));
     session.start();
 
-    await armed;
     step('… wake lock');
     await requestWakeLock();
-    watchForMissedFrames();
     ui.notice('');
-    ui.log('▶︎ hey steven');
+    ui.log('▶︎ ' + (config.wakeWord ? 'hey steven' : 'listening'));
   } catch (err) {
     const e = /** @type {Error} */ (err);
     const why = e.name === 'NotAllowedError' ? t(config.lang, 'micDenied') : e.message;
@@ -387,31 +391,64 @@ async function start() {
 }
 
 function stop() {
+  live = false;
   session?.onEmergencyStop();
-  keepAlive?.stop();
   pipeline?.stop();
   session = null;
   pipeline = null;
-  keepAlive = null;
   ui.running(false);
   void refresh();
 }
 
-/** §5.7: the lock only covers "screen on, page in front". It cannot keep the
- *  page alive in the background — no Web API can — which is what §5.8 is for. */
+/**
+ * An AudioContext made without a user gesture does not fail, it is born
+ * suspended and hears nothing — a robot with its eyes open and its ears shut.
+ * That only happens on the way back from a screen-off, and only if the browser
+ * has stopped counting the page's earlier gesture. resume() then neither
+ * resolves nor rejects, so it gets a second, and after that the failure is
+ * made loud: start() reports it and the Listen button comes back.
+ *
+ * @param {AudioContext} ctx
+ */
+async function running(ctx) {
+  if (ctx.state === 'running') return;
+  await Promise.race([ctx.resume(), new Promise((r) => setTimeout(r, 1000))]);
+  if (/** @type {string} */ (ctx.state) !== 'running') {
+    throw new Error(t(config.lang, 'needsTap'));
+  }
+}
+
+/** §5.7: the lock keeps the screen from timing out while the robot listens.
+ *  It is released whenever the page leaves the front, and start() asks again
+ *  on the way back. */
 async function requestWakeLock() {
   try { await navigator.wakeLock?.request('screen'); }
   catch (err) { ui.log('Wake Lock: ' + /** @type {Error} */ (err).message); }
 }
 
-/** §5.8's passive detection. It can only report once the page is in front
- *  again — nobody can be told anything while the phone is asleep — and that is
- *  exactly the moment the user is looking at the screen. No earcon: they were
- *  not in the room. */
-function watchForMissedFrames() {
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden || !pipeline) return;
-    const elapsed = Date.now() - pipeline.startedAt;
-    if (isBehind(pipeline.fedFrames, elapsed)) ui.notice(t(config.lang, 'screenOffMissed'));
-  });
-}
+/**
+ * The screen is the robot's eyes: off, it is not listening; on again, it is.
+ *
+ * This replaced the keep-alive tone (2026-09-27). Android takes the microphone
+ * away about a minute after the screen goes off, and the tone kept it by
+ * borrowing a media session — behaviour, not a contract, and a different
+ * Android could take it away silently. Now the page lets go of everything
+ * itself, on the one event that says when, and a robot the user cannot see
+ * cannot be driving a car they cannot see either: stop() brakes first.
+ *
+ * Coming back reopens the microphone without a tap. The page has already had
+ * its gesture, and Chrome counts that for the AudioContext; if some browser
+ * does not, running() makes start() fail and the Listen button is back.
+ */
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    if (!live) return;
+    resumeOnShow = true;
+    step('screen off — stopping');
+    stop();
+    return;
+  }
+  if (!resumeOnShow) return;
+  resumeOnShow = false;
+  void start();
+});

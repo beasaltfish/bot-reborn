@@ -77,7 +77,9 @@ export function harness(over = {}) {
     stt: { transcribeDetailed: async () => ({ text: 'hello', logprob: null }) },
     executor: { stop: rec('executor.stop') },
     earcon: (/** @type {string} */ name) => { calls.push(['earcon', name]); return 80; },
-    config: { ...defaultConfig('en') },
+    // The wake word on: most of this file is §5's machine, which has a
+    // SLEEPING to test. The default-off machine has its own section below.
+    config: { ...defaultConfig('en'), wakeWord: true },
     now: () => now,
     after: (/** @type {number} */ ms, /** @type {() => void} */ fn) =>
       void timers.push({ ms, fn }),
@@ -367,12 +369,13 @@ const settle = () => new Promise((r) => setImmediate(r));
 /** A session driven through a real turn until the reply is playing. There is no
  *  shortcut into SPEAKING: it is a state the turn puts you in, and a test entry
  *  point for it would be testing a path the product does not have. */
-async function speakingSession() {
-  const h = harness();
+/** @param {Record<string, any>} [over] */
+async function speakingSession(over) {
+  const h = harness(over);
   const brain = fakeBrain(h.session, h.calls);
   h.session.attach(brain);
   h.session.start();
-  h.wake();
+  if (h.deps.config.wakeWord) h.wake(); else h.tick(80);
   h.stallSpeak();
   h.vad.segments.push(loud(16));
   h.feed('vad');
@@ -829,4 +832,74 @@ test('a reply that never plays does not quietly end the turn', async () => {
   h.feed('vad');
   await settle();
   assert.equal(h.calls.filter((c) => c[0] === 'tts.playing').length, 0);
+});
+
+// --- no wake word: the screen being on is the call (2026-09-27) --------------
+
+const awake = () => harness({ config: { ...defaultConfig('en'), wakeWord: false } });
+
+test('without a wake word it starts awake, ears open', () => {
+  const h = awake();
+  h.session.start();
+  assert.equal(h.session.state, 'LISTENING');
+  assert.deepEqual(h.calls.filter((c) => c[0] === 'earcon').map((c) => c[1]), ['wake']);
+  h.tick(80);
+  assert.deepEqual(h.names(), ['kws', 'vad'], 'the stop word is still heard');
+});
+
+test('without a wake word, 30 s of silence still stops the car — and stays awake', () => {
+  // The idle clock was never only about sleeping: it is also the longest a
+  // cruise can run. Losing SLEEPING must not lose that.
+  const h = awake();
+  let reset = 0;
+  h.session.attach({ handle: async () => {}, cancel() {}, resetHistory() { reset++; } });
+  h.session.start();
+  h.tick(80);
+  h.tick(IDLE_TO_SLEEP_MS + 1);
+  h.feed('vad');
+  assert.equal(h.session.state, 'LISTENING');
+  assert.equal(h.took('executor.stop'), 1);
+  assert.equal(reset, 1, 'a pause that long is a new conversation');
+  assert.ok(!h.calls.some((c) => c[0] === 'earcon' && c[1] === 'sleep'), 'nothing went to sleep');
+  // And the clock starts over, rather than firing on every frame from now on.
+  h.feed('vad');
+  assert.equal(h.took('executor.stop'), 1);
+});
+
+test('without a wake word, saying its name does nothing', async () => {
+  const h = await speakingSession({ config: { ...defaultConfig('en'), wakeWord: false } });
+  h.kws.hits.push('hey_steven');
+  h.feed('kws');
+  assert.equal(h.took('tts.cancel'), 0);
+  assert.equal(h.session.state, 'SPEAKING');
+});
+
+test('without a wake word, the stop word brakes and it stays awake', () => {
+  const h = awake();
+  h.session.start();
+  h.tick(80);
+  h.kws.hits.push('all_stop');
+  h.feed('kws');
+  assert.equal(h.took('executor.stop'), 1);
+  assert.equal(h.session.state, 'LISTENING');
+});
+
+test('a tap during the reply shuts it up and does nothing else', async () => {
+  const h = await speakingSession({ config: { ...defaultConfig('en'), wakeWord: false } });
+  h.session.interrupt();
+  assert.ok(h.took('tts.cancel') > 0);
+  assert.equal(h.took('executor.stop'), 0, 'the car is not part of this');
+  assert.equal(h.session.state, 'LISTENING');
+});
+
+test('a tap while it is only listening changes nothing', () => {
+  const h = awake();
+  h.session.start();
+  h.tick(80);
+  h.vad.detected = true;
+  h.feed('vad');
+  assert.equal(h.session.state, 'CAPTURING');
+  h.session.interrupt();
+  assert.equal(h.session.state, 'CAPTURING', 'a sentence in progress is not cut');
+  assert.equal(h.took('tts.cancel'), 0);
 });

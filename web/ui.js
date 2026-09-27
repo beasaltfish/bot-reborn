@@ -9,8 +9,12 @@ import { applyFace, applyAssembly, hintVisible } from './robot.js';
 const $ = (/** @type {string} */ id) =>
   /** @type {HTMLElement} */ (document.getElementById(id));
 
-/** @param {'en' | 'zh'} lang */
-export function createUi(lang) {
+/**
+ * @param {'en' | 'zh'} lang
+ * @param {() => boolean} wakeWord read when the microphone opens — the same
+ *   moment the session reads it, so the hint and the robot agree
+ */
+export function createUi(lang, wakeWord) {
   /** @type {string[]} */ const lines = [];
   const robot = $('robot');
   const fab = /** @type {HTMLButtonElement} */ ($('fab'));
@@ -22,13 +26,14 @@ export function createUi(lang) {
   // hang around all through a conversation: running(true) put it up, and
   // nothing ever took it back down.
   let live = false;
+  let named = false;   // wakeWord(), as it was when the microphone opened
   /** @type {import('./audio/session.js').State} */ let state = 'SLEEPING';
   const paintHint = () => {
     const el = $('hint');
     // Built here rather than stored joined: a STRINGS entry containing the wake
     // word is a line TTS could read aloud, and the robot would answer itself.
     el.textContent = `${t(lang, 'sayThis')} 「${KEYWORDS[0]}」`;
-    el.hidden = !hintVisible(live, state);
+    el.hidden = !hintVisible(live, state, named);
   };
 
   $('settings').setAttribute('aria-label', t(lang, 'settings'));
@@ -66,6 +71,7 @@ export function createUi(lang) {
     // instead, and the stylesheet lights the antenna for the second one.
     robot.dataset.live = String(on);
     live = on;
+    named = wakeWord();
     // A fresh session starts in SLEEPING, and onState only fires on a CHANGE —
     // so the first one may never arrive, and this cannot wait for it.
     if (on) state = 'SLEEPING';
@@ -209,6 +215,17 @@ export function createUi(lang) {
      * @param {(tone: string) => void} fn
      */
     onFab(fn) { fab.addEventListener('click', () => fn(fab.dataset.tone ?? '')); },
+
+    /**
+     * A tap anywhere on the robot. While it is running every band is inert,
+     * and an inert element is not a click target, so the tap lands here
+     * rather than on a door. While it is not, a band that is a door gets the
+     * click first and this hears it second — the caller has no session then
+     * and does nothing.
+     *
+     * @param {() => void} fn
+     */
+    onRobot(fn) { robot.addEventListener('click', fn); },
 
     /**
      * Shutting the microphone. Gated on what is painted on the element rather

@@ -127,12 +127,16 @@ export function applyAssembly(root, parts) {
  * It comes back when the session times out to SLEEPING (§5.2), which is
  * exactly when it is true again.
  *
+ * With the wake word switched off there is no name to say at all: the robot
+ * starts awake and has no SLEEPING to be woken from.
+ *
  * @param {boolean} live whether the microphone is open at all
  * @param {State} state
+ * @param {boolean} wakeWord whether saying its name does anything
  * @returns {boolean}
  */
-export function hintVisible(live, state) {
-  return live && state === 'SLEEPING';
+export function hintVisible(live, state, wakeWord) {
+  return wakeWord && live && state === 'SLEEPING';
 }
 
 /** @param {State} state @returns {Face} */

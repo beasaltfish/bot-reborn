@@ -205,19 +205,25 @@ test('the hint is only up while saying the name would do something', () => {
   // It is an instruction, and SLEEPING is the only state where carrying it out
   // has any effect (§5.3 keeps KWS subscribed there). From LISTENING onwards
   // it tells the user to do a thing they have already done.
-  assert.equal(hintVisible(true, 'SLEEPING'), true);
+  assert.equal(hintVisible(true, 'SLEEPING', true), true);
   for (const s of STATES.filter((s) => s !== 'SLEEPING')) {
-    assert.equal(hintVisible(true, s), false, `${s} must not carry the hint`);
+    assert.equal(hintVisible(true, s, true), false, `${s} must not carry the hint`);
   }
 });
 
 test('a shut microphone carries no hint, asleep or not', () => {
   // SLEEPING covers both "the mic is shut" and "waiting to hear its name", and
   // only the second one can be acted on.
-  for (const s of STATES) assert.equal(hintVisible(false, s), false);
+  for (const s of STATES) assert.equal(hintVisible(false, s, true), false);
 });
 
 test('the hint comes back when the session times out (§5.2)', () => {
-  assert.equal(hintVisible(true, 'SPEAKING'), false);
-  assert.equal(hintVisible(true, 'SLEEPING'), true);
+  assert.equal(hintVisible(true, 'SPEAKING', true), false);
+  assert.equal(hintVisible(true, 'SLEEPING', true), true);
+});
+
+test('with the wake word switched off there is no name to ask for', () => {
+  // The robot starts awake and never sleeps, so the line would be an
+  // instruction with nothing behind it (2026-09-27).
+  for (const s of STATES) assert.equal(hintVisible(true, s, false), false);
 });

@@ -11,7 +11,8 @@ The design spec is a private working document and is not in this repo, so the
 file is the published record: everything in it was measured on the actual
 hardware.
 
-The voice loop works end to end: a wake word opens a session, a VAD cuts each
+The voice loop works end to end: the robot listens while the screen is on (a
+wake word is optional, off by default), a VAD cuts each
 utterance, STT and an LLM turn it into car actions and a spoken reply, and a
 local emergency stop word can interrupt any of it. What is **not** built yet is
 the settings page, the first-run wizard and the barge-in calibration (spec §7.3)
@@ -47,7 +48,7 @@ ones get measured.
     │   ├── kws.js      # keyword spotter: frames in, labels out
     │   ├── vad.js      # voice detector, plus the 512-sample window carry
     │   ├── earcon.js   # the five prompt sounds
-    │   ├── keepalive.js# the keep-alive tone, and the detector for when it fails
+    │   ├── keepalive.js# the keep-alive tone — instruments only since 2026-09-27
     │   ├── keyword-lines.js # validates keywords before the wasm can abort on them
     │   └── pcm.js      # Float32 ↔ Int16
     ├── keywords/       # the two keyword files (ARPAbet + pinyin)

@@ -10,7 +10,7 @@
 // getting started — that path is the robot and the one button — so nothing
 // here is ordered, numbered, or ticked.
 
-import { t } from './strings.js';
+import { t, KEYWORDS } from './strings.js';
 import { STICKY } from './config.js';
 
 const $ = (/** @type {string} */ id) =>
@@ -67,6 +67,7 @@ export function createSettings(deps) {
     rows.append(door('stepKeys', () => { close(); deps.openKeys(open); }));
     rows.append(door('stepSteer', () => { close(); deps.calibrate(open); }));
     rows.append(language());
+    rows.append(wakeWord());
     rows.append(sticky());
     rows.append(tools());
   }
@@ -110,6 +111,35 @@ export function createSettings(deps) {
       location.reload();
     });
     row.append(picker);
+    return row;
+  }
+
+  /**
+   * Off by default: the screen being on is the robot being called. On brings
+   * back SLEEPING and the name that ends it. Read when the microphone opens,
+   * so a change lands on the next Listen rather than mid-conversation.
+   */
+  function wakeWord() {
+    const row = document.createElement('label');
+    row.className = 'setting';
+    row.append(caption('settingsWakeWord'));
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.checked = deps.config.wakeWord;
+    const shown = document.createElement('p');
+    shown.className = 'setting-value';
+    // The name is composed here, never stored joined — see sayThis.
+    const paint = () => {
+      shown.textContent = box.checked
+        ? `「${KEYWORDS[0]}」` : t(deps.lang, 'settingsWakeWordOff');
+    };
+    box.addEventListener('change', () => {
+      deps.config.wakeWord = box.checked;
+      deps.save();
+      paint();
+    });
+    paint();
+    row.append(box, shown);
     return row;
   }
 

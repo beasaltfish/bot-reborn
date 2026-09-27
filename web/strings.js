@@ -69,7 +69,10 @@ export const STRINGS = {
     // Kept for the fab's aria-label: the face says STOP, the screen reader
     // gets the whole phrase.
     emergencyStop: 'EMERGENCY STOP',
-    booting: 'Loading the wake-word model…',
+    booting: 'Waking up…',
+    // After the screen comes back on, if the browser wants a fresh tap before
+    // it will let the robot hear again.
+    needsTap: 'Tap Listen and I will hear you again.',
     micDenied: 'Microphone access was refused. Nothing can be heard without it.',
     keywordsInvalid: 'A keyword uses a token this model does not know: ',
     // The three instruments, named the way the setup sheet and the drawing
@@ -83,8 +86,6 @@ export const STRINGS = {
     faultUnknown: 'Something went wrong: ',
     usbNotPaired: 'This phone and the car have not met yet.',
     pairNow: 'Introduce them →',
-    screenOffMissed: 'Your phone could not hear me while the screen was off. '
-      + 'Keep the screen on if you want me listening.',
     // --- The setup sheet (spec §8 of the 2026-09-17 design) --------------
     // The three layers are named by what they do for the robot, not by their
     // acronyms. Somebody setting this up is giving a toy a sense; STT, LLM and
@@ -93,6 +94,9 @@ export const STRINGS = {
     settingsSticky: 'What it picked up by voice',
     settingsForget: 'Forget it',
     settingsTools: 'Instruments',
+    // Composed with KEYWORDS[0] at render time, like sayThis.
+    settingsWakeWord: 'Sleep until it hears',
+    settingsWakeWordOff: 'Off: it listens whenever the screen is on.',
     setupTitle: 'Give it a brain',
     setupEars: 'Ears',
     setupMind: 'Mind',
@@ -158,7 +162,8 @@ export const STRINGS = {
     calDone: '记住了。前后左右我都分得清了。',
     calNoCar: '先把车插上。',
     emergencyStop: '急停',
-    booting: '正在加载唤醒词模型…',
+    booting: '正在醒来…',
+    needsTap: '点一下「开始听」，我就又能听见了。',
     micDenied: '麦克风被拒绝了。没有它什么都听不见。',
     keywordsInvalid: '关键词里有这个模型不认识的 token：',
     faultEars: '耳朵出问题了：',
@@ -167,11 +172,12 @@ export const STRINGS = {
     faultUnknown: '出了点问题：',
     usbNotPaired: '手机还没见过这台小车。',
     pairNow: '去认识一下 →',
-    screenOffMissed: '你的手机黑屏之后听不见我。想让我一直听着，就别锁屏。',
     settingsLanguage: '语言',
     settingsSticky: '它从语音里记下的',
     settingsForget: '忘掉',
     settingsTools: '仪器',
+    settingsWakeWord: '睡着，直到听见',
+    settingsWakeWordOff: '关着：屏幕亮着就一直在听。',
     setupTitle: '给它一个大脑',
     setupEars: '耳朵',
     setupMind: '脑子',

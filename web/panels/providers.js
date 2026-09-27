@@ -128,7 +128,9 @@ export function createProviders() {
     session = s;
     setDisabled('pvRun', true);
     setDisabled('pvStop', false);
-    logTurn('▶︎ say "hey steven", then talk. Twenty turns.');
+    logTurn(ctx.config.wakeWord
+      ? '▶︎ say "hey steven", then talk. Twenty turns.'
+      : '▶︎ talk — the wake word is off. Twenty turns.');
   }
 
   function stopLoop() {

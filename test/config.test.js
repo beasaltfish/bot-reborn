@@ -23,6 +23,15 @@ test('defaults are the ones spec §8.2 fixed', () => {
   // Measured by waiting item ⑥, not guessed (§8.2).
   assert.equal(d.bargeIn, true);
   assert.equal(d.ttsPath, 'webaudio');
+  // Off: turning the screen on is already the robot being called (2026-09-27).
+  assert.equal(d.wakeWord, false);
+});
+
+test('a stored wakeWord of true survives the read, and an old config gets the default', () => {
+  const on = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ wakeWord: true }) }));
+  assert.equal(on.wakeWord, true);
+  const old = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ bargeIn: false }) }));
+  assert.equal(old.wakeWord, false);
 });
 
 test('lang is English whatever the handset says', () => {

@@ -27,7 +27,7 @@ gear.
 │        │ ●● │           │
 │        ╰┬──┬╯           │
 │         ○  ○            │
-│    say "hey steven"     │  hint — only while the microphone is open
+│    say "hey steven"     │  hint — only with the wake word switched on
 │                         │
 │                  ╭────╮ │
 │                  │STOP│ │  one button, always the most urgent thing
@@ -50,10 +50,63 @@ does not take the stop away — the car may still be rolling.
 
 ---
 
+## The screen is the robot's eyes
+
+**Screen on, it is listening; screen off, it is not.** Turning the screen on is
+already the robot being called, the way opening an app is, so by default there
+is no wake word: "Listen" opens the microphone and the robot opens its eyes with
+it. While it listens the screen is held on (Wake Lock). When the screen goes off
+anyway — the power button — `app.js` brakes the car and closes the microphone,
+and when it comes back on the microphone reopens by itself.
+
+This replaced the keep-alive tone (2026-09-27). Android takes a background
+tab's microphone about a minute after the screen goes off; the tone kept it by
+borrowing a media session, which is behaviour rather than a contract, and it
+could be taken away by any Android update without a word. A robot whose eyes are
+shut not hearing you is not a fault to detect; it is the character.
+
+The wake word is still there, off, as a switch in settings. On, it brings back
+`SLEEPING`, the thirty-second doze and the hint. The switch is read when the
+microphone opens, by the session and the hint alike, so flipping it lands on the
+next Listen — never on a robot that is asleep with no name left to wake it.
+
+The stop word is not part of that switch. It lives in the same keyword model,
+and it is the brake.
+
+---
+
 ## The robot's five faces
 
 `session.js` owns five states. The face is the display for all of them, so the
-screen needs no words for any of it.
+screen needs no words for any of it. With the wake word off (the default) only
+the four awake ones are ever reached:
+
+```mermaid
+stateDiagram-v2
+    [*] --> LISTENING: Listen pressed, or the screen comes back on
+    LISTENING --> CAPTURING: voice heard, above the floor
+    CAPTURING --> THINKING: the sentence ends
+    THINKING --> SPEAKING: the reply starts
+    SPEAKING --> LISTENING: the turn ends
+    SPEAKING --> LISTENING: a tap on the robot
+    THINKING --> LISTENING: a tap on the robot
+    LISTENING --> LISTENING: 30 s with nothing said — car stops, conversation forgotten
+    LISTENING --> LISTENING: stop word — brake, stay awake
+    LISTENING --> [*]: the screen goes off
+```
+
+**The thirty seconds did not go away with `SLEEPING`.** They were never only
+about the face: they are also the longest a cruise can run. With nowhere to
+sleep to, the car stops and the conversation starts over, silently, and the
+robot stays awake.
+
+**A tap on the robot is the wake word's other job.** Saying its name during a
+reply used to be the way to cut it off; with no name to say, the tap does the
+same — shuts it up, drops the turn, leaves the car alone. While it is only
+listening or hearing you, a tap does nothing: a sentence in progress is not
+cut.
+
+With the wake word switched on:
 
 ```mermaid
 stateDiagram-v2
@@ -103,7 +156,8 @@ with whichever face is current.
 | `data-missing` | a token list of parts not configured yet | each named part is drawn dashed and pale |
 
 The first exists because *asleep with the microphone shut* and *asleep waiting
-to hear its name* are one state and two entirely different situations. §5.3
+to hear its name* are one state and two entirely different situations (with the
+wake word switched on — off, an open microphone is never asleep). §5.3
 keeps the keyword spotter subscribed all through `SLEEPING`, so the second one
 really is listening, and the screen should say so.
 
@@ -231,9 +285,10 @@ only thing a person can do. The requirement it states is that at the moment the
 car is about to get away, the button has to be where the eyes already are — and
 a disc that never moves beats a red rectangle among other rectangles.
 
-**"Listen" opens the microphone; it does not wake the robot.** Whether the
-robot wakes is up to whoever says its name. The button said "Wake it" for one
-afternoon and that was a lie people acted on.
+**"Listen" opens the microphone.** With the wake word off, that is also the
+robot waking — the two are one act. With it on, whether the robot wakes is up to
+whoever says its name; the button said "Wake it" for one afternoon under that
+rule and it was a lie people acted on, which is why it still says Listen.
 
 **Pairing is its own rung because a gesture cannot be saved.**
 `navigator.usb.requestDevice()` needs a user gesture, and by the time `start()`

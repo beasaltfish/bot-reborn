@@ -54,7 +54,8 @@ test('every string the UI needs exists in both languages', () => {
     'calDriveIntro', 'calDriveAsk', 'calForward', 'calBack',
     'calAgain', 'calDone', 'calNoCar',
     'emergencyStop', 'booting', 'micDenied',
-    'keywordsInvalid', 'screenOffMissed', 'usbNotPaired', 'pairNow',
+    'keywordsInvalid', 'usbNotPaired', 'pairNow', 'needsTap',
+    'settingsWakeWord', 'settingsWakeWordOff',
     'stSleeping', 'stListening', 'stCapturing', 'stThinking', 'stSpeaking',
   ]);
   for (const key of needed) {
@@ -64,10 +65,3 @@ test('every string the UI needs exists in both languages', () => {
   }
 });
 
-test('the screen-off notice says what to do, not just what went wrong', () => {
-  // Spec §5.8: it is shown when the user comes back to a phone that stopped
-  // listening. It has to carry the recovery, because the recovery is the whole
-  // reason this is a notice and not a log line.
-  assert.match(STRINGS.zh.screenOffMissed, /锁屏|屏幕/);
-  assert.match(STRINGS.en.screenOffMissed, /screen/i);
-});

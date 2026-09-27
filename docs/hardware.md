@@ -560,6 +560,11 @@ thread, and it points at the one lever that does work.
 
 ### The keep-alive: a tab that is playing audio keeps its microphone
 
+> **The product stopped using this on 2026-09-27.** It now stops listening when
+> the screen goes off and starts again when it comes back on (`docs/ui.md`, "The
+> screen is the robot's eyes"). What follows is still true and still measured;
+> the tone lives on in the instruments.
+
 A tab producing audio makes Chrome hold a media session, which is enough
 foreground standing to keep the mic. Measured 2026-09-14 on the kws page with a
 keep-alive sound playing: **all three clocks full over a 5 minute screen-off
