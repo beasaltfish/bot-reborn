@@ -50,10 +50,15 @@ body {
    body padding the benches need, and that padding now lives in instrument.css
    with them; `margin: 0` is what body says above anyway. */
 
-/* Single screen, never scrolls. dvh rather than vh: on a phone the URL bar
-   collapses and vh would leave the fab under it. */
+/* Single screen, never scrolls — and made unable to, rather than trusted
+   not to. Installed full screen on the phone it did scroll, before anything
+   was pressed: 100dvh there measures a viewport a few pixels taller than the
+   window actually is, and no desktop size reproduced it. So the height is the
+   window's own (html → body → .screen, 100% each) and the page itself cannot
+   scroll; the sheets scroll inside their own panels. */
+html, body { height: 100%; overflow: hidden; }
 .screen {
-  height: 100dvh;
+  height: 100%;
   max-width: 520px;
   margin: 0 auto;
   padding: 0 16px;
