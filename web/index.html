@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Voice robot</title>
+  <title>Bot Reborn</title>
   <!-- Installed from the home screen it opens full screen and sideways: the
        phone rides on the car lying on its side, and the address bar was a
        quarter of that height. In a plain tab neither applies. -->
@@ -85,17 +85,23 @@
 
           <rect class="mouth" x="50" y="66" width="20" height="12" rx="4"/>
 
-          <rect class="ink" x="33" y="90" width="54" height="24" rx="7"/>
-          <circle class="ink wheel" cx="33" cy="120" r="10"/>
-          <circle class="ink wheel" cx="87" cy="120" r="10"/>
+          <!-- Everything below the head. Drawn while it is being put
+               together, gone once it listens: the phone rides on a real body
+               with real wheels, and a robot inside the robot's head is one
+               too many. robot.js's FACE_VIEWBOX crops to what is left. -->
+          <g class="torso">
+            <rect class="ink" x="33" y="90" width="54" height="24" rx="7"/>
+            <circle class="ink wheel" cx="33" cy="120" r="10"/>
+            <circle class="ink wheel" cx="87" cy="120" r="10"/>
 
-          <!-- Shown only when no car is paired. It moves rather than sits
-               still because "plug this in" is an instruction, and an
-               instruction reads faster as a gesture than as a label. -->
-          <g class="plug">
-            <rect x="-4" y="96" width="16" height="12" rx="2"/>
-            <line x1="12" y1="99" x2="30" y2="99"/>
-            <line x1="12" y1="105" x2="30" y2="105"/>
+            <!-- Shown only when no car is paired. It moves rather than sits
+                 still because "plug this in" is an instruction, and an
+                 instruction reads faster as a gesture than as a label. -->
+            <g class="plug">
+              <rect x="-4" y="96" width="16" height="12" rx="2"/>
+              <line x1="12" y1="99" x2="30" y2="99"/>
+              <line x1="12" y1="105" x2="30" y2="105"/>
+            </g>
           </g>
 
           <!-- SLEEPING's own part. The plug moves rather than sits still

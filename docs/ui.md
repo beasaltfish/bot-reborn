@@ -73,6 +73,29 @@ next Listen — never on a robot that is asleep with no name left to wake it.
 The stop word is not part of that switch. It lives in the same keyword model,
 and it is the brake.
 
+### Once it listens, the screen is its face
+
+The phone rides on the car on its side, on a real body with real wheels, so a
+drawing of a whole robot on its screen is a robot inside the robot's head.
+While the microphone is open the drawing is cropped to the head —
+`VIEWBOX.face` in `robot.js`, 120 × 84, which is landscape — and sized to the
+screen from both axes. The body, the wheels and the plug are hidden.
+
+While it is being put together the whole robot stays: the body and the wheels
+are two of the checklist's doors, and a ghosted part has to be somewhere. That
+is the split — **assemble it, then play with it** — and the microphone being
+open is the line between the two, because nothing can open it before the
+gating steps are done.
+
+The transcript, the hint and the notice float over the face instead of
+stacking around it, so a transcript arriving does not shrink the face
+mid-sentence. The part bands are all inert while it runs and are hidden, so a
+tap reaches the robot itself: that is how a reply is interrupted.
+
+Installed from the home screen (`manifest.webmanifest`) it opens full screen
+and locked to landscape. In a browser tab the top bar offers "Install as app"
+whenever Chrome says the page can be installed.
+
 ---
 
 ## The robot's five faces

@@ -310,6 +310,42 @@ body {
 }
 @media (prefers-reduced-motion: reduce) { .fab { animation: none !important; } }
 
+/* --- once it listens, the screen is its face ---------------------------
+
+   The phone rides on a real body with real wheels, usually on its side, so
+   while the microphone is open the drawing is the head alone (ui.js crops
+   the viewBox) and as big as the screen allows. Sized from both axes: the
+   face box is 120 × 84, so its height is capped by the screen's height less
+   the top bar, and its width by the screen's width.
+
+   What used to stack around the robot floats over it instead, so a
+   transcript arriving does not shrink the face mid-sentence. The bands are
+   all inert while it runs; gone here so a tap reaches the robot itself,
+   which is how a reply is interrupted. */
+.screen:has(.robot[data-live="true"]) { max-width: none; }
+.screen:has(.robot[data-live="true"]) .stage { position: relative; }
+.robot[data-live="true"] .torso,
+.robot[data-live="true"] .part { display: none; }
+.robot[data-live="true"] .robot-svg {
+  width: min(92vw, calc((100dvh - 64px) * 120 / 84));
+}
+.robot[data-live="true"] { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.screen:has(.robot[data-live="true"]) .bubble {
+  position: absolute; top: 0; left: 0; max-width: min(60%, 320px);
+  text-align: left; z-index: 1;
+}
+/* The halo is drawn on the wrapper, which is now as wide as the face box; a
+   circle stretched to that is an ellipse around the whole screen. Kept round
+   and around the head. */
+.robot[data-live="true"][data-face="LISTENING"]::before {
+  inset: 8% 18% 1%; border-radius: 40%;
+}
+.screen:has(.robot[data-live="true"]) .hint,
+.screen:has(.robot[data-live="true"]) .notice {
+  position: absolute; bottom: calc(12px + env(safe-area-inset-bottom));
+  left: 0; max-width: calc(100% - 110px); z-index: 1;
+}
+
 .quiet { width: 100%; padding: 12px; border-radius: 12px; background: none;
          border: 1.5px solid rgba(128,128,128,.4); color: inherit;
          font-size: 14px; cursor: pointer; }

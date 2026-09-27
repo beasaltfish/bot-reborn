@@ -4,7 +4,7 @@
 
 import { t, KEYWORDS } from './strings.js';
 import { STEP_LABEL } from './steps.js';
-import { applyFace, applyAssembly, hintVisible } from './robot.js';
+import { applyFace, applyAssembly, hintVisible, VIEWBOX } from './robot.js';
 
 const $ = (/** @type {string} */ id) =>
   /** @type {HTMLElement} */ (document.getElementById(id));
@@ -70,6 +70,9 @@ export function createUi(lang, wakeWord) {
     // "shut" and "waiting to hear its name" — so it rides on the element
     // instead, and the stylesheet lights the antenna for the second one.
     robot.dataset.live = String(on);
+    // The stylesheet hides the torso; the crop has to be an attribute.
+    robot.querySelector('.robot-svg')
+      ?.setAttribute('viewBox', on ? VIEWBOX.face : VIEWBOX.whole);
     live = on;
     named = wakeWord();
     // A fresh session starts in SLEEPING, and onState only fires on a CHANGE —

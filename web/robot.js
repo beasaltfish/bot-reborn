@@ -28,6 +28,18 @@ import { layerReady, directionsTaught } from './config.js';
  * }} Face
  */
 
+/**
+ * What the drawing is cropped to. The whole robot while it is being assembled —
+ * the body and the wheels are two of the checklist's doors — and the head alone
+ * once it listens, because then the phone IS the head, sitting on a real body.
+ *
+ * The face box is the head plus everything that happens around it: the antenna
+ * dot at the top (y 8), the sound waves at either side (x 1…119), the doze
+ * letters at the top right. Its 120 × 84 is landscape, which is how the phone
+ * rides.
+ */
+export const VIEWBOX = { whole: '0 0 120 134', face: '0 4 120 84' };
+
 /** session.js's own five, in its own order. */
 export const STATES = /** @type {const} */ ([
   'SLEEPING', 'LISTENING', 'CAPTURING', 'THINKING', 'SPEAKING',
