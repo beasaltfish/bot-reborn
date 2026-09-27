@@ -69,6 +69,12 @@ body {
    it — including the one element here whose whole job is to be a colour. */
 #settings, .link { opacity: .6; }
 .icon { background: none; border: 0; font-size: 20px; cursor: pointer; color: inherit; }
+/* Outlined, not filled: an offer, not a step. The one button stays the only
+   solid thing on the screen. */
+.install { background: none; color: inherit; border: 1px solid currentColor;
+           border-radius: 999px; padding: 6px 14px; font: inherit; opacity: .8;
+           cursor: pointer; }
+.install[hidden] { display: none; }
 
 /* Drawn rather than set as an emoji: the two states differ by colour, and an
    emoji is whatever colour the platform decided. */

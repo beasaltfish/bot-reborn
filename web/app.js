@@ -22,9 +22,14 @@ import { createVoiceDetector } from './audio/vad.js';
 import { createEarcon } from './audio/earcon.js';
 import { unknownTokens } from './audio/keyword-lines.js';
 import { Session } from './audio/session.js';
+import { offerInstall } from './install.js';
 
 const config = loadConfig();
 const ui = createUi(config.lang, () => config.wakeWord);
+
+const installButton = /** @type {HTMLElement} */ (document.getElementById('install'));
+installButton.textContent = t(config.lang, 'install');
+offerInstall(installButton);
 
 // Start pulling the model down the moment the page opens. Nothing about
 // downloading needs a user gesture — only getUserMedia and the AudioContext do

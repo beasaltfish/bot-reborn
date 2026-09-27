@@ -23,6 +23,11 @@
       <button id="settings" class="icon" aria-label="Settings">⚙</button>
       <span id="link" class="link" hidden></span>
 
+      <!-- Only in a browser tab that could be installed — install.js shows it
+           when Chrome says so. Installed, the app opens full screen and
+           sideways, which is how the phone rides on the car. -->
+      <button id="install" class="install" type="button" hidden></button>
+
       <!-- The only thing on screen that persistently answers "is the ear
            open". The lit antenna says it too, but the antenna means other
            things as well, and SLEEPING wears the same face whether the

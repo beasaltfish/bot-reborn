@@ -45,6 +45,8 @@ export const STRINGS = {
     micOn: 'Listening — tap to stop',
     micOff: 'Not listening',
     settings: 'Settings',
+    // In a tab only. Installed, it opens full screen and sideways.
+    install: 'Install as app',
     close: 'Close',
     back: 'Back',
     stepKeys: 'Give it a brain',
@@ -142,6 +144,7 @@ export const STRINGS = {
     fabStop: '停',
     micOn: '在听——点一下收工',
     micOff: '没在听',
+    install: '安装成应用',
     settings: '设置',
     close: '关闭',
     back: '返回',
