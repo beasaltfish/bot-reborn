@@ -1,0 +1,16 @@
+<!-- The app icon: the robot's head, awake. Full-bleed background and the face
+     inside the central 80%, so the same file serves as a maskable icon —
+     Android crops it to whatever shape the launcher uses.
+     Rendered to PNG by: rsvg-convert -w N -h N icon.svg -o icon-N.png -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#121212"/>
+  <g fill="none" stroke="#f2e9ff" stroke-width="18" stroke-linecap="round">
+    <line x1="256" y1="132" x2="256" y2="178"/>
+    <rect x="126" y="178" width="260" height="196" rx="52"/>
+    <rect x="221" y="318" width="70" height="28" rx="10"/>
+  </g>
+  <circle cx="256" cy="112" r="22" fill="#22c55e"/>
+  <g fill="#f2e9ff">
+    <circle cx="200" cy="262" r="26"/><circle cx="312" cy="262" r="26"/>
+  </g>
+</svg>
