@@ -6,6 +6,7 @@
 // browser and a provider can be swapped without touching it.
 
 import { MIN_DURATION_MS } from './executor.js';
+import { SOUNDS } from './audio/sfx.js';
 import { t } from './strings.js';
 
 const DRIVE_VALUES = ['forward', 'backward'];
@@ -84,6 +85,18 @@ export const TOOLS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'play_sound',
+      description: 'Make a sound with your own voice: bark (answering a bark, excited), yip (happy), whimper (hurt, sulking), growl (annoyed). A sound can go with a move or stand alone.',
+      parameters: {
+        type: 'object',
+        required: ['name'],
+        properties: { name: { enum: [...SOUNDS] } },
+      },
+    },
+  },
 ];
 
 // --- System prompt (spec §6.8) ---------------------------------------------
@@ -156,7 +169,8 @@ export function buildSystemPrompt(cfg) {
 
 /**
  * @typedef {{ drive: string, steer: string, duration_ms: number }} Step
- * @typedef {{ kind: 'move', steps: Step[] } | { kind: 'cruise', drive: string, steer: string } | { kind: 'stop' }} Action
+ * @typedef {{ kind: 'move', steps: Step[] } | { kind: 'cruise', drive: string, steer: string }
+ *   | { kind: 'stop' } | { kind: 'sound', name: import('./audio/sfx.js').SoundName }} Action
  */
 
 /**
@@ -235,6 +249,11 @@ export function validate(toolCalls) {
         else drop(`set_reply_language: rejected — ${JSON.stringify(args)}`);
         break;
       }
+      case 'play_sound': {
+        if (SOUNDS.includes(args.name)) actions.push({ kind: 'sound', name: args.name });
+        else drop(`play_sound: rejected — ${JSON.stringify(args)}; name must be one of ${SOUNDS.join('/')}`);
+        break;
+      }
       default:
         drop(`${call.name}: no such tool`);
     }
@@ -255,7 +274,7 @@ function isValidStep(step) {
 // --- One turn --------------------------------------------------------------
 
 export class Brain {
-  #llm; #executor; #tts; #earcon; #config; #onReplyLangChange; #onFault; #trace;
+  #llm; #executor; #tts; #earcon; #sound; #config; #onReplyLangChange; #onFault; #trace;
   /** Whether this turn has already sounded its failure. See #fail. */
   #beeped = false;
   /** @type {AbortController | null} */
@@ -268,6 +287,7 @@ export class Brain {
    *   executor: { connected: boolean, move(steps: Step[]): Promise<void>, cruise(d: string, s: string): Promise<void>, stop(): Promise<void> },
    *   tts: { speak(text: string, opts?: { signal?: AbortSignal }): Promise<void> },
    *   earcon: (name: import('./audio/earcon.js').EarconName) => void,
+   *   sound?: (name: import('./audio/sfx.js').SoundName) => Promise<void>,
    *   config: { lang: 'en' | 'zh', replyLang: 'zh' | 'en' | null, bargeIn: boolean },
    *   onReplyLangChange?: (lang: 'en' | 'zh' | null) => void,
    *   onFault?: (part: import('./strings.js').FaultPart, err: Error) => void,
@@ -279,6 +299,8 @@ export class Brain {
     this.#executor = deps.executor;
     this.#tts = deps.tts;
     this.#earcon = deps.earcon;
+    // Resolves when the sound ends, so a move queued behind it starts after.
+    this.#sound = deps.sound ?? (async () => {});
     this.#config = deps.config;
     this.#onReplyLangChange = deps.onReplyLangChange ?? (() => {});
     this.#onFault = deps.onFault ?? (() => {});
@@ -375,7 +397,9 @@ export class Brain {
     // WHICH one, and that difference is how a misheard command gets caught.
     if (actions.length > 0) {
       this.#dispatch(actions);
-      this.#earcon('done');
+      // done says "an instruction for the car ran". A turn that only made a
+      // sound has already answered out loud, and a beep would land on it.
+      if (actions.some((a) => a.kind !== 'sound')) this.#earcon('done');
     } else if (hadMoveIntent) {
       // Rule 4: a movement was attempted and nothing survived validation.
       this.#beep();
@@ -495,6 +519,7 @@ export class Brain {
 
   /** @param {Action} action @returns {Promise<void>} */
   #run(action) {
+    if (action.kind === 'sound') return this.#sound(action.name);
     if (action.kind === 'move') return this.#executor.move(action.steps);
     if (action.kind === 'cruise') return this.#executor.cruise(action.drive, action.steer);
     return this.#executor.stop();

@@ -7,9 +7,14 @@ import { KEYWORDS } from '../web/strings.js';
 /** @param {string} name @returns {any} */
 const byName = (name) => TOOLS.find((t) => t.function.name === name);
 
-test('there are exactly the four tools of spec §6.2', () => {
+test('there are exactly the five tools: spec §6.2 plus play_sound', () => {
   assert.deepEqual(TOOLS.map((t) => t.function.name).sort(),
-    ['cruise', 'move', 'set_reply_language', 'stop']);
+    ['cruise', 'move', 'play_sound', 'set_reply_language', 'stop']);
+});
+
+test('play_sound offers exactly the four sounds', () => {
+  assert.deepEqual(byName('play_sound').function.parameters.properties.name.enum,
+    ['bark', 'yip', 'whimper', 'growl']);
 });
 
 test('move: steps maxItems 5, duration_ms has a minimum and NO maximum (spec §6.6)', () => {
@@ -250,6 +255,18 @@ test('validate: an unknown tool name is dropped', () => {
   assert.deepEqual(validate([call('launch_missiles', {})]).actions, []);
 });
 
+test('validate: play_sound with a known name becomes a sound action', () => {
+  const r = validate([{ id: 'a', name: 'play_sound', args: { name: 'bark' }, rawArguments: '' }]);
+  assert.deepEqual(r.actions, [{ kind: 'sound', name: 'bark' }]);
+  assert.equal(r.hadMoveIntent, false);
+});
+
+test('validate: play_sound with an unknown name is dropped, with a reason', () => {
+  const r = validate([{ id: 'a', name: 'play_sound', args: { name: 'moo' }, rawArguments: '' }]);
+  assert.deepEqual(r.actions, []);
+  assert.match(r.reasons[0], /play_sound: rejected.*moo/);
+});
+
 /**
  * A promise this test controls the settling of, so a test can prove
  * "X happened before the motion finished" instead of just "X happened before
@@ -315,6 +332,7 @@ function brainHarness({ connected = true, reply, gateMotion = false } = {}) {
     async speak(text, _opts) { events.push({ op: 'speak', text }); },
   };
   const earcon = (/** @type {any} */ name) => events.push({ op: 'earcon', name });
+  const sound = async (/** @type {any} */ name) => { events.push({ op: 'sound', name }); };
   /** @type {{ lang: 'en' | 'zh', replyLang: 'en' | 'zh' | null, bargeIn: boolean }} */
   const config = { lang: 'zh', replyLang: null, bargeIn: true };
   /** @type {Array<'en' | 'zh' | null>} */
@@ -325,7 +343,7 @@ function brainHarness({ connected = true, reply, gateMotion = false } = {}) {
   const traced = [];
   return { events, executor, llm, tts, config, motionGates, langChanges, faults, traced,
     brain: new Brain({
-      llm, executor, tts, earcon, config,
+      llm, executor, tts, earcon, sound, config,
       onReplyLangChange: (lang) => langChanges.push(lang),
       onFault: (part, err) => faults.push([part, err.message]),
       trace: (line) => traced.push(line),
@@ -389,6 +407,31 @@ test('handle: pure chat speaks and drives nothing', async () => {
   const h = brainHarness({ reply: say('北京是中国的首都。') });
   await h.brain.handle('中国的首都是哪');
   assert.deepEqual(h.events, [{ op: 'speak', text: '北京是中国的首都。' }]);
+});
+
+test('handle: a sound-only reply plays it and does not beep done', async () => {
+  // done means "an instruction for the car ran"; a bark is its own answer.
+  const h = brainHarness({ reply: say('', [{ id: 's1', name: 'play_sound', args: { name: 'yip' } }]) });
+  await h.brain.handle('好乖');
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(h.events, [{ op: 'sound', name: 'yip' }]);
+});
+
+test('handle: a sound then a move run in order, and done still beeps for the move', async () => {
+  const steps = [{ drive: 'backward', steer: 'left', duration_ms: 600 }];
+  const h = brainHarness({ reply: say('', [
+    { id: 's1', name: 'play_sound', args: { name: 'bark' } },
+    { id: 'm1', name: 'move', args: { steps } },
+  ]) });
+  await h.brain.handle('汪汪');
+  await new Promise((r) => setTimeout(r, 0));
+  // #dispatch's loop runs synchronously up to its first await, so the sound
+  // starts before handle() reaches the done beep; the move waits for the sound.
+  assert.deepEqual(h.events, [
+    { op: 'sound', name: 'bark' },
+    { op: 'earcon', name: 'done' },
+    { op: 'move', steps },
+  ]);
 });
 
 test('handle: a move dispatches, beeps, and does NOT wait for the car to finish', async () => {
