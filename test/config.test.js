@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CONFIG_KEY, STICKY, defaultConfig, loadConfig, saveConfig, resetSticky }
+import { CONFIG_KEY, STICKY, defaultConfig, loadConfig, saveConfig, resetSticky, layerReady }
   from '../web/config.js';
 
 /** A localStorage stand-in. The real one is not available in node, and every
@@ -64,6 +64,22 @@ test('a config saved before the preference fields existed still reads back', () 
   assert.equal(cfg.bargeIn, true);
   assert.equal(cfg.ttsPath, 'webaudio');
   assert.equal(cfg.replyLang, null);
+  // Saved before stt.prompt existed: it reads back empty, which sends none.
+  assert.equal(cfg.stt.prompt, '');
+});
+
+test('stt.prompt is empty by default, and a stored one survives the read', () => {
+  assert.equal(defaultConfig().stt.prompt, '');
+  const storage = fakeStorage({
+    [CONFIG_KEY]: JSON.stringify({ stt: { baseURL: 'a', apiKey: 'b', model: 'c', prompt: 'p' } }),
+  });
+  assert.equal(loadConfig(storage).stt.prompt, 'p');
+});
+
+test('an stt layer without a prompt is still ready', () => {
+  // The prompt is optional. Requiring it would mark every existing setup as
+  // unconfigured the moment this field shipped.
+  assert.equal(layerReady({ baseURL: 'a', apiKey: 'b', model: 'c', prompt: '' }), true);
 });
 
 test('a stored bargeIn of false survives the read', () => {

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  OpenAiCompatStt, encodeWav, BILINGUAL_PROMPT, summariseSegments,
+  OpenAiCompatStt, encodeWav, summariseSegments,
 } from '../web/providers/stt-openai-compat.js';
 
 const CFG = { baseURL: 'https://api.example.com/v1', apiKey: 'sk-test', model: 'whisper-large-v3-turbo' };
@@ -68,27 +68,23 @@ test('transcribe(): NEVER sends `language` (spec §11.1)', async () => {
   assert.equal(seen.form.has('language'), false);
 });
 
-test('transcribe(): DOES send a bilingual prompt, and it reads like a sentence', async () => {
-  const { seen, fetchImpl } = captureFetch();
-  const stt = new OpenAiCompatStt(CFG, { fetch: fetchImpl });
-  await stt.transcribe(Int16Array.from([1]), 16000);
-
-  assert.equal(seen.form.get('prompt'), BILINGUAL_PROMPT);
-  // Spec §11.1: the prompt can leak into the transcript, so it must be short
-  // and phrased as an ordinary sentence, never as an instruction.
-  assert.ok(BILINGUAL_PROMPT.length < 60, 'prompt should be short');
-  assert.ok(/[一-鿿]/.test(BILINGUAL_PROMPT), 'prompt should contain Chinese');
-  assert.ok(/[A-Za-z]/.test(BILINGUAL_PROMPT), 'prompt should contain English');
+test('transcribe(): sends no prompt unless the config has one', async () => {
+  // Measured 2026-09-28: without a prompt, whisper transcribed the mixed
+  // 「这个 sentence 里的 transition word」 fixture just as well, and English
+  // better — the old Chinese prompt turned "go forward" into 「去吧」.
+  for (const cfg of [CFG, { ...CFG, prompt: '' }]) {
+    const { seen, fetchImpl } = captureFetch();
+    await new OpenAiCompatStt(cfg, { fetch: fetchImpl }).transcribe(Int16Array.from([1]), 16000);
+    assert.equal(seen.form.has('prompt'), false);
+  }
 });
 
-test('the prompt names the animal noises people make at it, in both languages', () => {
-  // Without them whisper spells a bark as 忘忘 or "Wong Wong" — a word, or not
-  // Chinese at all — and nothing downstream can tell it was a bark. English
-  // speakers bark too, and without "woof" theirs came back as "Woofoof!" at a
-  // logprob below LOGPROB_FLOOR: thrown away as not heard.
-  for (const noise of ['汪汪', '喵喵', 'woof', 'meow']) {
-    assert.ok(BILINGUAL_PROMPT.includes(noise), `prompt should name ${noise}`);
-  }
+test('transcribe(): sends the configured prompt as written', async () => {
+  const prompt = 'We talk about Rust and borrow checkers.';
+  const { seen, fetchImpl } = captureFetch();
+  await new OpenAiCompatStt({ ...CFG, prompt }, { fetch: fetchImpl })
+    .transcribe(Int16Array.from([1]), 16000);
+  assert.equal(seen.form.get('prompt'), prompt);
 });
 
 test('transcribe(): a trimmed-empty transcript comes back as an empty string', async () => {
@@ -190,11 +186,11 @@ test('transcribeDetailed(): hands back the text and both numbers', async () => {
   assert.deepEqual(got, { text: '谢谢大家。', noSpeech: 0.97, logprob: -1.1, parts: 1 });
 });
 
-test('transcribeDetailed(): still sends the bilingual prompt', async () => {
+test('transcribeDetailed(): sends the same prompt, and still no language', async () => {
   // §11.1 is not suspended by asking for more fields back.
   const { seen, fetchImpl } = captureFetch({ text: 'x', segments: [] });
-  await new OpenAiCompatStt(CFG, { fetch: fetchImpl })
+  await new OpenAiCompatStt({ ...CFG, prompt: 'p' }, { fetch: fetchImpl })
     .transcribeDetailed(Int16Array.from([1]), 16000);
-  assert.equal(seen.form.get('prompt'), BILINGUAL_PROMPT);
+  assert.equal(seen.form.get('prompt'), 'p');
   assert.equal(seen.form.get('language'), null);
 });

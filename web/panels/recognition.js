@@ -142,7 +142,8 @@ export function createRecognition() {
    * The level is on the line because the transcript cannot be trusted to say
    * whether there was anything to transcribe. Handed an empty room, whisper
    * does not answer with silence — it answers with memorised end-card
-   * boilerplate, or with this file's own BILINGUAL_PROMPT continued, both of
+   * boilerplate, or with the STT prompt continued (a fixed one, until
+   * 2026-09-28; now only one the user configured), both of
    * which read as a transcript. The transcripts are in docs/hardware.md.
    * A dB figure next to the duration is the one part of the line that comes
    * from the audio rather than from the model.

@@ -24,7 +24,7 @@ export const STICKY = /** @type {const} */ (['ttsPath', 'replyLang']);
  * fourth field (§8.2) and is recognised by having one, so the check does not
  * need to be told which layer it is looking at.
  *
- * @param {{ baseURL: string, apiKey: string, model: string, voice?: string }} layer
+ * @param {{ baseURL: string, apiKey: string, model: string, voice?: string, prompt?: string }} layer
  * @returns {boolean}
  */
 export function layerReady(layer) {
@@ -59,7 +59,10 @@ export function directionsTaught(cal) {
  */
 export function defaultConfig(_navLang = globalThis.navigator?.language) {
   return {
-    stt: { baseURL: '', apiKey: '', model: '' },
+    // `prompt` is optional vocabulary for whisper, and empty means none is
+    // sent — see the comment on #post in stt-openai-compat.js for why that is
+    // the default. layerReady() does not ask for it.
+    stt: { baseURL: '', apiKey: '', model: '', prompt: '' },
     llm: { baseURL: '', apiKey: '', model: '' },
     tts: { baseURL: '', apiKey: '', model: '', voice: '' },
     // English, always, as of 2026-09-17. This is an open-source project and the
@@ -165,7 +168,7 @@ export function resetSticky(cfg) {
  *
  * @typedef {{ baseURL: string, apiKey: string, model: string }} Layer
  * @typedef {{
- *   stt: Layer,
+ *   stt: Layer & { prompt: string },
  *   llm: Layer,
  *   tts: Layer & { voice: string },
  *   lang: 'en' | 'zh',

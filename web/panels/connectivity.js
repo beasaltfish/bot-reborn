@@ -32,6 +32,8 @@ import { PRESETS, voicesFor } from '../provider-presets.js';
  * The form only knows the three provider layers; the four preferences beside
  * them (§8.2) are produced by voice and by §7.3's calibration, not typed in.
  * @typedef {Pick<Config, 'stt' | 'llm' | 'tts'>} ProviderLayers
+ * What the form itself holds: no field for stt.prompt, so no prompt.
+ * @typedef {{ stt: Layer, llm: Layer, tts: Layer & { voice: string } }} FormLayers
  */
 
 // --- Typed DOM helpers (Ruling P2: keep strict, no @ts-nocheck) -----------
@@ -89,7 +91,7 @@ export function createConnectivity() {
 
   // --- Config form: read the live values, fill from a loaded config ---------
 
-  /** @returns {ProviderLayers} */
+  /** @returns {FormLayers} */
   function readForm() {
     return {
       stt: {
@@ -158,8 +160,11 @@ export function createConnectivity() {
         // would drop lang / replyLang / bargeIn / ttsPath. A calibrated
         // `bargeIn: false` silently reverting to the default is the exact failure
         // config.js's `??` is there to prevent — it must not come back in through
-        // the save path instead.
-        saveConfig({ ...loadConfig(), [layer]: readForm()[layer] });
+        // the save path instead. The same holds inside a layer: the form has no
+        // field for stt.prompt, so the stored layer is the base and the form
+        // only overwrites what it shows.
+        const stored = loadConfig();
+        saveConfig({ ...stored, [layer]: { ...stored[layer], ...readForm()[layer] } });
         el('cfgStatus').textContent = `${layer.toUpperCase()} saved to localStorage (${CONFIG_KEY})`;
         refreshConfigStatus();
       });
