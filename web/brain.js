@@ -414,15 +414,15 @@ export class Brain {
     // Spec §6.3: actions and content are not mutually exclusive. Dispatch
     // first, then speak — the beep says an instruction ran, the sentence says
     // WHICH one, and that difference is how a misheard command gets caught.
-    if (actions.length > 0) {
-      this.#dispatch(actions);
-      // done says "an instruction for the car ran". A turn that only made a
-      // sound has already answered out loud, and a beep would land on it.
-      if (actions.some((a) => a.kind !== 'sound')) this.#earcon('done');
-    } else if (hadMoveIntent) {
-      // Rule 4: a movement was attempted and nothing survived validation.
-      this.#beep();
-    }
+    const moved = actions.some((a) => a.kind !== 'sound');
+    if (actions.length > 0) this.#dispatch(actions, turn.signal);
+    // done says "an instruction for the car ran". A turn that only made a
+    // sound has already answered out loud, and a beep would land on it.
+    if (moved) this.#earcon('done');
+    // Rule 4: a movement was attempted and nothing survived validation. Asked
+    // about motion, not about `actions`: a sound beside a refused move used to
+    // make the list non-empty and the refusal silent.
+    else if (hadMoveIntent) this.#beep();
 
     if (reply.text) await this.#say(reply.text, turn);
   }
@@ -487,7 +487,7 @@ export class Brain {
     this.#history.push({ role: 'assistant', content: null, tool_calls: calls });
     for (const call of calls) this.#history.push({ role: 'tool', tool_call_id: call.id, content: 'ok' });
     this.#trimHistory();
-    if (actions.length > 0) this.#dispatch(actions);
+    if (actions.length > 0) this.#dispatch(actions, this.#turn?.signal);
   }
 
   /**
@@ -525,8 +525,13 @@ export class Brain {
    * a post-mortem.
    *
    * @param {Action[]} actions
+   * @param {AbortSignal} [signal] the turn's. Checked before each action, so a
+   *   cancel — the stop button, the wake word, the user talking over it —
+   *   drops what is still queued. Found in review: with a bark first, the loop
+   *   sat on the sound, nothing cancelled that, and the move behind it drove
+   *   the car after the emergency stop.
    */
-  #dispatch(actions) {
+  #dispatch(actions, signal) {
     // A `stop` anywhere in the turn is the whole turn. Spec §6.2 argues for
     // `move.steps` over parallel tool calls but never says what happens when a
     // provider emits parallel calls anyway — and they do. The loop used to
@@ -572,8 +577,12 @@ export class Brain {
     // because it is unawaited the 'error' earcon can land AFTER the 'done'
     // earcon and after the spoken reply, whenever the rejection surfaces. That
     // is fine: a last-resort guard, not the normal error path.
-    (async () => { for (const action of ordered) await this.#run(action); })()
-      .catch(() => this.#earcon('error'));
+    (async () => {
+      for (const action of ordered) {
+        if (signal?.aborted) return;
+        await this.#run(action);
+      }
+    })().catch(() => this.#earcon('error'));
   }
 
   /** @param {Action} action @returns {Promise<void>} */

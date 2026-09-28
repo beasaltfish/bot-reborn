@@ -935,3 +935,20 @@ test('without an sfx player, sound() is a no-op', async () => {
   h.session.start();
   await h.session.sound('yip');
 });
+
+test('an earcon during a sound does not reopen the ears early', () => {
+  // Found in review: [play_sound, move] plays the bark, then `done` (80 ms)
+  // overwrote the bark's 500 ms window, the VAD heard the rest of the bark,
+  // and the reflex barked back at itself.
+  const h = harness({ sfx: () => 500 });
+  h.session.start();
+  h.wake();
+  void h.session.sound('bark');
+  h.session.earcon('done');
+  // tick() fires every pending timer whatever its delay, so this is the done
+  // beep's 80 ms timer AND the bark's 500 ms one, run at t+80. Reopening at
+  // the end of a sound is pinned by 'a sound closes the ears for exactly its
+  // length'; this pins that the shorter window does not win.
+  h.tick(80);
+  assert.deepEqual(h.names(), [], 'still barking at 80 ms: nothing listens');
+});

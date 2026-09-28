@@ -115,3 +115,19 @@ test('judge: the caller cancelling aborts the request too', async () => {
   assert.equal(v.verdict, 'failed');
   assert.equal(got.aborted, true);
 });
+
+test('judge never rejects, even where AbortSignal.any does not exist', async () => {
+  // Found in review: an older WebView without AbortSignal.any (Chrome < 116)
+  // threw before the try, judge() rejected, and every short transcript failed
+  // its whole turn instead of falling through to the LLM.
+  const any = AbortSignal.any;
+  // @ts-ignore — simulating an older engine
+  AbortSignal.any = undefined;
+  try {
+    const { fetch } = answering(tease(0.9));
+    const v = await new Reflex(CFG, { fetch }).judge('汪汪', '', new AbortController().signal);
+    assert.equal(v.verdict, 'failed');
+  } finally {
+    AbortSignal.any = any;
+  }
+});

@@ -509,7 +509,9 @@ export class Session {
    * @param {number} ms
    */
   #closeEarsFor(ms) {
-    this.#earconUntil = this.#now() + ms;
+    // The later of the two ends, never the newer: a `done` beep landing on a
+    // bark used to cut the bark's window to 80 ms, and the robot heard itself.
+    this.#earconUntil = Math.max(this.#earconUntil, this.#now() + ms);
     this.#reconcile();
     this.#after(ms, () => this.#reconcile());
   }

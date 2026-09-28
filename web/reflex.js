@@ -85,9 +85,12 @@ export class Reflex {
     const ms = () => this.#now() - start;
     if (!shortEnough(heard)) return { verdict: 'skipped', detail: 'too long', ms: 0 };
 
-    const timeout = AbortSignal.timeout(this.#timeoutMs);
-    const both = signal ? AbortSignal.any([signal, timeout]) : timeout;
+    // Inside the try, both: AbortSignal.any is Chrome 116+, and an engine
+    // without it must fail this verdict, not reject — handle() does not catch.
+    /** @type {AbortSignal | null} */ let timeout = null;
     try {
+      timeout = AbortSignal.timeout(this.#timeoutMs);
+      const both = signal ? AbortSignal.any([signal, timeout]) : timeout;
       const response = await this.#fetch(`${this.#cfg.baseURL}/systemone`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${this.#cfg.apiKey}`, 'Content-Type': 'application/json' },
@@ -108,7 +111,7 @@ export class Reflex {
       const fired = intent.choice === 'tease' && p >= FIRE_AT;
       return { verdict: fired ? 'fired' : 'passed', detail, ms: ms() };
     } catch (err) {
-      const why = timeout.aborted && !signal?.aborted ? 'timeout' : /** @type {Error} */ (err).message;
+      const why = timeout?.aborted && !signal?.aborted ? 'timeout' : /** @type {Error} */ (err).message;
       return { verdict: 'failed', detail: why, ms: ms() };
     }
   }

@@ -282,8 +282,8 @@ function deferred() {
   return { promise, resolve };
 }
 
-/** @param {{ connected?: boolean, reply?: any, gateMotion?: boolean, reflex?: any, ladder?: any }} [opts] */
-function brainHarness({ connected = true, reply, gateMotion = false, reflex = null, ladder = undefined } = {}) {
+/** @param {{ connected?: boolean, reply?: any, gateMotion?: boolean, reflex?: any, ladder?: any, holdSound?: boolean }} [opts] */
+function brainHarness({ connected = true, reply, gateMotion = false, reflex = null, ladder = undefined, holdSound = false } = {}) {
   /** @type {any[]} */
   const events = [];
   // Only populated when gateMotion is true. Every move/cruise call then gets
@@ -332,7 +332,17 @@ function brainHarness({ connected = true, reply, gateMotion = false, reflex = nu
     async speak(text, _opts) { events.push({ op: 'speak', text }); },
   };
   const earcon = (/** @type {any} */ name) => events.push({ op: 'earcon', name });
-  const sound = async (/** @type {any} */ name) => { events.push({ op: 'sound', name }); };
+  // holdSound: every sound stays "playing" until the test resolves its gate —
+  // the window in which somebody can hit the stop button mid-bark.
+  /** @type {Array<{ promise: Promise<void>, resolve: (value?: any) => void }>} */
+  const soundGates = [];
+  const sound = async (/** @type {any} */ name) => {
+    events.push({ op: 'sound', name });
+    if (!holdSound) return;
+    const gate = deferred();
+    soundGates.push(gate);
+    await gate.promise;
+  };
   /** @type {{ lang: 'en' | 'zh', replyLang: 'en' | 'zh' | null, bargeIn: boolean }} */
   const config = { lang: 'zh', replyLang: null, bargeIn: true };
   /** @type {Array<'en' | 'zh' | null>} */
@@ -341,7 +351,7 @@ function brainHarness({ connected = true, reply, gateMotion = false, reflex = nu
   const faults = [];
   /** @type {string[]} */
   const traced = [];
-  return { events, executor, llm, tts, config, motionGates, langChanges, faults, traced,
+  return { events, executor, llm, tts, config, motionGates, soundGates, langChanges, faults, traced,
     brain: new Brain({
       llm, executor, tts, earcon, sound, config, reflex, ladder,
       onReplyLangChange: (lang) => langChanges.push(lang),
@@ -910,4 +920,44 @@ test('resetHistory() also resets the ladder', () => {
   const h = brainHarness({ reflex: judgeSaying('passed'), ladder: { next: () => [], reset() { resets++; } } });
   h.brain.resetHistory();
   assert.equal(resets, 1);
+});
+
+test('a stop during a bark drops the move queued behind it (reflex turn)', async () => {
+  // Found in review: the dispatch loop waited on the sound, which nothing
+  // cancelled, and then drove the car after the emergency stop. The stop
+  // button reaches brain through cancel() (session.onEmergencyStop).
+  const steps = [{ drive: 'backward', steer: 'left', duration_ms: 600 }];
+  const h = brainHarness({ reply: say('never'), reflex: judgeSaying('fired'), holdSound: true,
+    ladder: { next: () => [{ kind: 'sound', name: 'bark' }, { kind: 'move', steps }], reset() {} } });
+  await h.brain.handle('汪汪');
+  assert.deepEqual(h.events, [{ op: 'sound', name: 'bark' }]);
+  h.brain.cancel();
+  h.soundGates[0].resolve();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(h.events.filter((e) => e.op === 'move'), [], 'it must not move after the stop');
+});
+
+test('a stop during a bark drops the move queued behind it (LLM turn)', async () => {
+  const steps = [{ drive: 'backward', steer: 'left', duration_ms: 600 }];
+  const h = brainHarness({ holdSound: true, reply: say('', [
+    { id: 's1', name: 'play_sound', args: { name: 'bark' } },
+    { id: 'm1', name: 'move', args: { steps } },
+  ]) });
+  await h.brain.handle('汪汪');
+  h.brain.cancel();
+  h.soundGates[0].resolve();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(h.events.filter((e) => e.op === 'move'), []);
+});
+
+test('a refused move beside a sound still beeps the error (rule 4)', async () => {
+  // Found in review: actions = [sound] was non-empty, so the hadMoveIntent
+  // branch never ran and the refusal was silent behind the bark.
+  const h = brainHarness({ reply: say('', [
+    { id: 's1', name: 'play_sound', args: { name: 'bark' } },
+    { id: 'm1', name: 'move', args: { steps: [{ drive: 'sideways', steer: 'left', duration_ms: 600 }] } },
+  ]) });
+  await h.brain.handle('汪汪');
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(h.events, [{ op: 'sound', name: 'bark' }, { op: 'earcon', name: 'error' }]);
 });
