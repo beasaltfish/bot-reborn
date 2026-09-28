@@ -59,3 +59,15 @@ test('load() survives a fetch that throws', async () => {
   await sfx.load();
   assert.equal(sfx.play('yip'), 0);
 });
+
+test('every sound has its file, and every file is credited', async () => {
+  // play_sound is offered to the LLM whatever loaded. A name with no file is
+  // a turn that answers in silence, which is how this branch could not merge
+  // until the files existed.
+  const { existsSync, readFileSync } = await import('node:fs');
+  const credits = readFileSync(new URL('../web/sounds/CREDITS.md', import.meta.url), 'utf8');
+  for (const name of SOUNDS) {
+    assert.ok(existsSync(new URL(`../web/sounds/${name}.mp3`, import.meta.url)), `${name}.mp3 is missing`);
+    assert.match(credits, new RegExp(`\\| ${name}\\.mp3 \\|.*\\| CC0 \\|`), `${name}.mp3 is not credited`);
+  }
+});
