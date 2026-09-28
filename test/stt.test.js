@@ -81,11 +81,14 @@ test('transcribe(): DOES send a bilingual prompt, and it reads like a sentence',
   assert.ok(/[A-Za-z]/.test(BILINGUAL_PROMPT), 'prompt should contain English');
 });
 
-test('the prompt names the animal noises people make at it', () => {
+test('the prompt names the animal noises people make at it, in both languages', () => {
   // Without them whisper spells a bark as 忘忘 or "Wong Wong" — a word, or not
-  // Chinese at all — and nothing downstream can tell it was a bark.
-  assert.ok(BILINGUAL_PROMPT.includes('汪汪'), 'prompt should name 汪汪');
-  assert.ok(BILINGUAL_PROMPT.includes('喵喵'), 'prompt should name 喵喵');
+  // Chinese at all — and nothing downstream can tell it was a bark. English
+  // speakers bark too, and without "woof" theirs came back as "Woofoof!" at a
+  // logprob below LOGPROB_FLOOR: thrown away as not heard.
+  for (const noise of ['汪汪', '喵喵', 'woof', 'meow']) {
+    assert.ok(BILINGUAL_PROMPT.includes(noise), `prompt should name ${noise}`);
+  }
 });
 
 test('transcribe(): a trimmed-empty transcript comes back as an empty string', async () => {

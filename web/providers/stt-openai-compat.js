@@ -11,13 +11,16 @@
  * models occasionally continue the prompt into the transcript. Never write it
  * as an instruction.
  *
- * The pets clause is vocabulary, not topic. Without it a bark comes back as
- * 忘忘 or "Wong Wong" and a meow as "Miau Miau"; with it, the same clips came
- * back as 汪汪 and 喵喵, and 往前走 / 明白 / 我忘了 were untouched
- * (2026-09-28, 28 synthetic clips, Groq whisper-large-v3-turbo).
+ * The pets clause is vocabulary, not topic, and it names each noise in both
+ * languages because people bark in their own. Without it a bark comes back as
+ * 忘忘 or "Wong Wong" and a meow as "Miau Miau"; with only the Chinese names,
+ * an English "woof woof" came back as "Woofoof!" at −1.10, under
+ * LOGPROB_FLOOR. With both, all of them came back as said, and 往前走 / 明白 /
+ * 我忘了 / "got it" were untouched (2026-09-28, 46 synthetic clips, Groq
+ * whisper-large-v3-turbo).
  */
 export const BILINGUAL_PROMPT =
-  '这是一段关于开车和 English learning 的对话，有时也会学小狗汪汪叫、小猫喵喵叫。';
+  '这是一段关于开车和 English learning 的对话，有时学狗叫汪汪 woof、猫叫喵喵 meow。';
 
 /**
  * Fold verbose_json's per-slice numbers into one reading.
