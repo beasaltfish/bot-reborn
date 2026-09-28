@@ -29,7 +29,12 @@
 // provider classes speak OpenAI-compatible endpoints and nothing else, so a
 // service with its own API shape cannot be listed however good it is.
 
-/** @typedef {'stt' | 'llm' | 'tts'} LayerName */
+/**
+ * `reflex` is listed here so the instrument page can suggest it from the same
+ * table (reflex spec §7); the setup sheet never asks for it, because it walks
+ * its own three layers, not this table's keys.
+ * @typedef {'stt' | 'llm' | 'tts' | 'reflex'} LayerName
+ */
 
 /**
  * `voices` is keyed by model id, not held once per provider, because on some
@@ -224,6 +229,18 @@ export const PRESETS = {
         'fishaudio/fish-speech-1.5': prefixed('fishaudio/fish-speech-1.5'),
         'FunAudioLLM/CosyVoice2-0.5B': prefixed('FunAudioLLM/CosyVoice2-0.5B'),
       },
+    },
+  ],
+  reflex: [
+    {
+      // JEV is not OpenAI-compatible — it answers typed questions at
+      // /systemone, not chat — which is why it is its own layer with its own
+      // client (reflex.js) rather than an LLM row. OpenRouter serves it at the
+      // same address as everything else it serves.
+      id: 'openrouter',
+      label: 'OpenRouter',
+      baseURL: 'https://openrouter.ai/api/v1',
+      models: ['jev-1.13'],
     },
   ],
 };

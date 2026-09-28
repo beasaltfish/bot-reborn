@@ -114,3 +114,11 @@ test('DeepSeek offers its current models, and not the thinking-only alias', () =
   assert.equal(models[0], 'deepseek-flash');
   assert.ok(!models.includes('deepseek-reasoner'));
 });
+
+test('the reflex layer offers JEV on OpenRouter', () => {
+  // Reflex spec §7. Here, not typed into dev.html, because this list is the one
+  // place the repo names providers (test/instrument-ui.test.js enforces it).
+  const jev = presetById('reflex', 'openrouter');
+  assert.equal(jev?.baseURL, 'https://openrouter.ai/api/v1');
+  assert.deepEqual(jev?.models, ['jev-1.13']);
+});

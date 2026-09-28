@@ -174,3 +174,23 @@ test('a config saved before calibration existed still loads', () => {
     { steerSwapped: null, driveSwapped: null, bytesPerMs: null },
   );
 });
+
+test('reflex is off by default: an empty layer is not ready', () => {
+  const d = defaultConfig();
+  assert.deepEqual(d.reflex, { baseURL: '', apiKey: '', model: '' });
+  assert.equal(layerReady(d.reflex), false);
+});
+
+test('a config saved before reflex existed loads with it off', () => {
+  // Review focus 5.
+  const storage = fakeStorage({ [CONFIG_KEY]: JSON.stringify({ stt: { baseURL: 'a' } }) });
+  const cfg = loadConfig(storage);
+  assert.deepEqual(cfg.reflex, { baseURL: '', apiKey: '', model: '' });
+});
+
+test('a stored reflex layer survives the read', () => {
+  const reflex = { baseURL: 'https://openrouter.ai/api/v1', apiKey: 'k', model: 'jev-1.13' };
+  const storage = fakeStorage({ [CONFIG_KEY]: JSON.stringify({ reflex }) });
+  assert.deepEqual(loadConfig(storage).reflex, reflex);
+  assert.equal(layerReady(loadConfig(storage).reflex), true);
+});

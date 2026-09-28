@@ -15,6 +15,7 @@ import { MIN_DURATION_MS } from '../executor.js';
 import { OpenAiCompatStt } from '../providers/stt-openai-compat.js';
 import { OpenAiCompatLlm } from '../providers/llm-openai-compat.js';
 import { WebAudioTts } from '../providers/tts-webaudio.js';
+import { Reflex } from '../reflex.js';
 import { Brain, TOOLS, buildSystemPrompt } from '../brain.js';
 import { AudioPipeline, RATE } from '../audio/pipeline.js';
 import { joinFrames, toInt16 } from '../audio/pcm.js';
@@ -31,9 +32,9 @@ import { PRESETS, voicesFor } from '../provider-presets.js';
  * @typedef {import('../config.js').Layer} Layer
  * The form only knows the three provider layers; the four preferences beside
  * them (§8.2) are produced by voice and by §7.3's calibration, not typed in.
- * @typedef {Pick<Config, 'stt' | 'llm' | 'tts'>} ProviderLayers
+ * @typedef {Pick<Config, 'stt' | 'llm' | 'tts' | 'reflex'>} ProviderLayers
  * What the form itself holds: no field for stt.prompt, so no prompt.
- * @typedef {{ stt: Layer, llm: Layer, tts: Layer & { voice: string } }} FormLayers
+ * @typedef {{ stt: Layer, llm: Layer, tts: Layer & { voice: string }, reflex: Layer }} FormLayers
  */
 
 // --- Typed DOM helpers (Ruling P2: keep strict, no @ts-nocheck) -----------
@@ -110,6 +111,11 @@ export function createConnectivity() {
         model: namedInput('tts.model').value.trim(),
         voice: namedInput('tts.voice').value.trim(),
       },
+      reflex: {
+        baseURL: namedInput('reflex.baseURL').value.trim(),
+        apiKey: namedInput('reflex.apiKey').value.trim(),
+        model: namedInput('reflex.model').value.trim(),
+      },
     };
   }
 
@@ -125,6 +131,9 @@ export function createConnectivity() {
     namedInput('tts.apiKey').value = cfg.tts.apiKey;
     namedInput('tts.model').value = cfg.tts.model;
     namedInput('tts.voice').value = cfg.tts.voice;
+    namedInput('reflex.baseURL').value = cfg.reflex.baseURL;
+    namedInput('reflex.apiKey').value = cfg.reflex.apiKey;
+    namedInput('reflex.model').value = cfg.reflex.model;
   }
 
   /** @param {Layer} cfg @param {string} label */
@@ -207,7 +216,7 @@ export function createConnectivity() {
         list.append(option);
       }
     };
-    for (const layer of /** @type {const} */ (['stt', 'llm', 'tts'])) {
+    for (const layer of /** @type {const} */ (['stt', 'llm', 'tts', 'reflex'])) {
       const presets = PRESETS[layer];
       fill(`${layer}BaseURLs`, presets.map((preset) => preset.baseURL));
       fill(`${layer}Models`, presets.flatMap((preset) => preset.models));
@@ -355,6 +364,14 @@ export function createConnectivity() {
         // needs its own check or an empty one would reach the API silently.
         if (!cfg.tts.voice) throw new Error('fill in the TTS voice under Configuration above first');
         return testTts(new WebAudioTts(cfg.tts, { audioContext: audioContext() }));
+      case 'reflex': {
+        assertFilled(cfg.reflex, 'the reflex');
+        // English on purpose: this page's source carries no CJK
+        // (test/instrument-language.test.js), and barking is not Chinese.
+        const v = await new Reflex(cfg.reflex).judge('woof woof', '');
+        if (v.verdict === 'failed') throw new Error(`${v.detail} after ${v.ms} ms`);
+        return `"woof woof" → ${v.verdict} (${v.detail}, ${v.ms} ms) — fired is the expected answer`;
+      }
       case 'usb':
         return testUsb(requireFtdi());
       default:

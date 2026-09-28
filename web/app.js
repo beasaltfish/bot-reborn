@@ -20,6 +20,9 @@ import { loadSherpa } from './audio/sherpa.js';
 import { createSpotter } from './audio/kws.js';
 import { createVoiceDetector } from './audio/vad.js';
 import { createEarcon } from './audio/earcon.js';
+import { createSfx } from './audio/sfx.js';
+import { Reflex } from './reflex.js';
+import { Ladder } from './ladder.js';
 import { unknownTokens } from './audio/keyword-lines.js';
 import { Session } from './audio/session.js';
 import { offerInstall } from './install.js';
@@ -308,6 +311,10 @@ async function start() {
     step('✓ microphone');
     await running(pipeline.audioContext);
     const earcon = createEarcon(pipeline.audioContext);
+    // Loaded before the session starts so the first bark is not the one that
+    // is still downloading. A missing file plays as silence (sfx.js).
+    const sfx = createSfx(pipeline.audioContext);
+    await sfx.load();
 
     const stt = new OpenAiCompatStt(config.stt);
     const llm = new OpenAiCompatLlm(config.llm);
@@ -348,6 +355,7 @@ async function start() {
       tts,
       executor,
       earcon,
+      sfx: sfx.play,
       config,
       // THINKING is the start of an attempt, which is the honest moment to
       // clear the last one's verdict: the notice then means "the turn you
@@ -367,6 +375,10 @@ async function start() {
       executor,
       tts: session.speakingTts,
       earcon: session.earcon,
+      sound: session.sound,
+      // Reflex spec §1: no JEV configured, no reflex — every turn is the LLM's.
+      reflex: layerReady(config.reflex) ? new Reflex(config.reflex) : null,
+      ladder: new Ladder(),
       config,
       // §11.1: set by voice, invisible afterwards. If it is not written down
       // here it is not sticky at all, and the settings page (part 3) would have

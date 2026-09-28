@@ -65,6 +65,9 @@ export function defaultConfig(_navLang = globalThis.navigator?.language) {
     stt: { baseURL: '', apiKey: '', model: '', prompt: '' },
     llm: { baseURL: '', apiKey: '', model: '' },
     tts: { baseURL: '', apiKey: '', model: '', voice: '' },
+    // Reflex spec §7. Empty is off: the reflex runs only when layerReady()
+    // says all three are filled in, so no key means today's robot exactly.
+    reflex: { baseURL: '', apiKey: '', model: '' },
     // English, always, as of 2026-09-17. This is an open-source project and the
     // default has to be the language its readers share; a Chinese phone landing
     // on a Chinese UI made the source's default and the running default two
@@ -126,6 +129,7 @@ export function loadConfig(storage = globalThis.localStorage) {
       stt: { ...d.stt, ...p.stt },
       llm: { ...d.llm, ...p.llm },
       tts: { ...d.tts, ...p.tts },
+      reflex: { ...d.reflex, ...p.reflex },
       // `??`, never `||`: a stored `false` for bargeIn is a calibration result,
       // and `||` would silently promote it back to true.
       lang: p.lang ?? d.lang,
@@ -171,6 +175,7 @@ export function resetSticky(cfg) {
  *   stt: Layer & { prompt: string },
  *   llm: Layer,
  *   tts: Layer & { voice: string },
+ *   reflex: Layer,
  *   lang: 'en' | 'zh',
  *   replyLang: 'en' | 'zh' | null,
  *   bargeIn: boolean,

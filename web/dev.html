@@ -214,6 +214,24 @@
       <span id="ttsResult" class="result"></span>
     </div>
   </section>
+
+  <section class="card">
+    <header><h2>Reflex (JEV)</h2><span class="dot"></span></header>
+    <p class="hint">Optional. Recognises somebody barking at the robot before the
+      LLM is asked. Leave empty to turn it off.</p>
+    <div class="card-do">
+      <label>baseURL <input name="reflex.baseURL" list="reflexBaseURLs" autocomplete="off"></label>
+      <label>apiKey <input name="reflex.apiKey" type="password" autocomplete="off"></label>
+      <label>model <input name="reflex.model" list="reflexModels" autocomplete="off"></label>
+      <div class="controls">
+        <button type="button" data-save="reflex">Save</button>
+        <button type="button" data-test="reflex">Test reflex</button>
+      </div>
+    </div>
+    <div class="card-read">
+      <span id="reflexResult" class="result"></span>
+    </div>
+  </section>
   </form>
 
   <!-- Suggestions only, and empty here on purpose: connectivity.js fills them from
@@ -223,6 +241,7 @@
   <datalist id="llmBaseURLs"></datalist><datalist id="llmModels"></datalist>
   <datalist id="ttsBaseURLs"></datalist><datalist id="ttsModels"></datalist>
   <datalist id="ttsVoices"></datalist>
+  <datalist id="reflexBaseURLs"></datalist><datalist id="reflexModels"></datalist>
 
   <section class="card">
     <header><h2>USB</h2><span class="dot"></span></header>

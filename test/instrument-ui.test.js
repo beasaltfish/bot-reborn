@@ -47,9 +47,10 @@ test('no red that is not the emergency stop', () => {
 });
 
 // One page now. The count is the three pages' cards added up: merging them was
-// not licence to grow or shed one.
+// not licence to grow or shed one. 19 since 2026-09-29: the reflex spec (§7)
+// added the JEV card beside the other provider layers.
 const PAGES_SRC = /** @type {[string, string, number][]} */ ([
-  ['dev.html', read('web/dev.html'), 18],
+  ['dev.html', read('web/dev.html'), 19],
 ]);
 
 test('no instrument page still separates its sections with a rule', () => {
