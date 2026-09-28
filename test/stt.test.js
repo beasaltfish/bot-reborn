@@ -81,6 +81,13 @@ test('transcribe(): DOES send a bilingual prompt, and it reads like a sentence',
   assert.ok(/[A-Za-z]/.test(BILINGUAL_PROMPT), 'prompt should contain English');
 });
 
+test('the prompt names the animal noises people make at it', () => {
+  // Without them whisper spells a bark as 忘忘 or "Wong Wong" — a word, or not
+  // Chinese at all — and nothing downstream can tell it was a bark.
+  assert.ok(BILINGUAL_PROMPT.includes('汪汪'), 'prompt should name 汪汪');
+  assert.ok(BILINGUAL_PROMPT.includes('喵喵'), 'prompt should name 喵喵');
+});
+
 test('transcribe(): a trimmed-empty transcript comes back as an empty string', async () => {
   const { fetchImpl } = captureFetch({ text: '   \n ' });
   const stt = new OpenAiCompatStt(CFG, { fetch: fetchImpl });

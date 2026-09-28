@@ -10,8 +10,14 @@
  * This one is deliberately short and phrased as an ordinary sentence, because
  * models occasionally continue the prompt into the transcript. Never write it
  * as an instruction.
+ *
+ * The pets clause is vocabulary, not topic. Without it a bark comes back as
+ * 忘忘 or "Wong Wong" and a meow as "Miau Miau"; with it, the same clips came
+ * back as 汪汪 and 喵喵, and 往前走 / 明白 / 我忘了 were untouched
+ * (2026-09-28, 28 synthetic clips, Groq whisper-large-v3-turbo).
  */
-export const BILINGUAL_PROMPT = '这是一段关于开车和 English learning 的对话。';
+export const BILINGUAL_PROMPT =
+  '这是一段关于开车和 English learning 的对话，有时也会学小狗汪汪叫、小猫喵喵叫。';
 
 /**
  * Fold verbose_json's per-slice numbers into one reading.
