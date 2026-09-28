@@ -79,7 +79,7 @@ export function wantedSubscriptions(state, bargeIn, earconPlaying) {
 }
 
 export class Session {
-  #pipeline; #kws; #vad; #stt; #tts; #executor; #rawEarcon; #config;
+  #pipeline; #kws; #vad; #stt; #tts; #executor; #rawEarcon; #rawSfx; #config;
   #now; #after; #onState; #onFault; #wakeWord;
   /** @type {any} */ #brain = null;
   /** @type {State} */ #state = 'SLEEPING';
@@ -104,6 +104,7 @@ export class Session {
    *          cancel(): void },
    *   executor: { stop(): Promise<void> | void },
    *   earcon: (name: EarconName) => number,
+   *   sfx?: (name: import('./sfx.js').SoundName) => number,
    *   config: { lang: 'en' | 'zh', replyLang: 'en' | 'zh' | null, bargeIn: boolean,
    *             wakeWord: boolean },
    *   now?: () => number,
@@ -120,6 +121,7 @@ export class Session {
     this.#tts = deps.tts;
     this.#executor = deps.executor;
     this.#rawEarcon = deps.earcon;
+    this.#rawSfx = deps.sfx ?? (() => 0);
     this.#config = deps.config;
     // Read once. Switched off mid-session from SLEEPING, nothing could wake
     // it again; a change in settings belongs to the next time it listens.
@@ -144,6 +146,18 @@ export class Session {
   /** The earcon brain.js must be given, so §5.6's gate covers its beeps too
    *  rather than only the ones the session plays itself. */
   get earcon() { return (/** @type {EarconName} */ name) => this.#playEarcon(name); }
+
+  /** The sound player brain.js must be given, for the same reason as `earcon`:
+   *  what the robot plays, the robot must not hear. Resolves when it ends, so
+   *  a movement queued behind a bark starts after the bark. */
+  get sound() {
+    return (/** @type {import('./sfx.js').SoundName} */ name) => {
+      const ms = this.#rawSfx(name);
+      if (ms <= 0) return Promise.resolve();
+      this.#closeEarsFor(ms);
+      return new Promise((resolve) => this.#after(ms, () => resolve(undefined)));
+    };
+  }
 
   /** Without a wake word there is nothing to wait for: opening the
    *  microphone IS the robot being called, so it starts awake. */
@@ -484,10 +498,20 @@ export class Session {
   /** @param {EarconName} name @returns {number} */
   #playEarcon(name) {
     const ms = this.#rawEarcon(name);
+    this.#closeEarsFor(ms);
+    return ms;
+  }
+
+  /**
+   * §5.6's gate, for anything the robot itself makes audible. Earcons were the
+   * only such thing until the reflex spec's sounds, which have formants and are
+   * therefore MORE likely than an earcon to be heard back as speech.
+   * @param {number} ms
+   */
+  #closeEarsFor(ms) {
     this.#earconUntil = this.#now() + ms;
     this.#reconcile();
     this.#after(ms, () => this.#reconcile());
-    return ms;
   }
 
   #reconcile() {

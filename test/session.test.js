@@ -903,3 +903,35 @@ test('a tap while it is only listening changes nothing', () => {
   assert.equal(h.session.state, 'CAPTURING', 'a sentence in progress is not cut');
   assert.equal(h.took('tts.cancel'), 0);
 });
+
+test('a sound closes the ears for exactly its length, like an earcon', async () => {
+  // Without this the robot hears its own bark and answers it.
+  const h = harness({ sfx: () => 500 });
+  h.session.start();
+  h.wake();
+  assert.deepEqual(h.names(), ['kws', 'vad']);
+
+  let ended = false;
+  const done = h.session.sound('bark').then(() => { ended = true; });
+  assert.deepEqual(h.names(), [], 'nothing listens while it barks');
+  assert.equal(ended, false);
+
+  h.tick(500);
+  await done;
+  assert.equal(ended, true);
+  assert.deepEqual(h.names(), ['kws', 'vad'], 'and it listens again afterwards');
+});
+
+test('a sound that is not loaded resolves at once and gates nothing', async () => {
+  const h = harness({ sfx: () => 0 });
+  h.session.start();
+  h.wake();
+  await h.session.sound('growl');
+  assert.deepEqual(h.names(), ['kws', 'vad']);
+});
+
+test('without an sfx player, sound() is a no-op', async () => {
+  const h = harness();
+  h.session.start();
+  await h.session.sound('yip');
+});
