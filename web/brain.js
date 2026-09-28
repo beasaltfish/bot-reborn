@@ -275,6 +275,9 @@ function isValidStep(step) {
 
 export class Brain {
   #llm; #executor; #tts; #earcon; #sound; #config; #onReplyLangChange; #onFault; #trace;
+  #reflex; #ladder;
+  /** Ids for the tool calls a reflex turn writes into history. */
+  #reflexIds = 0;
   /** Whether this turn has already sounded its failure. See #fail. */
   #beeped = false;
   /** @type {AbortController | null} */
@@ -288,6 +291,9 @@ export class Brain {
    *   tts: { speak(text: string, opts?: { signal?: AbortSignal }): Promise<void> },
    *   earcon: (name: import('./audio/earcon.js').EarconName) => void,
    *   sound?: (name: import('./audio/sfx.js').SoundName) => Promise<void>,
+   *   reflex?: { judge(heard: string, robotSaid: string, signal?: AbortSignal):
+   *              Promise<import('./reflex.js').Verdict> } | null,
+   *   ladder?: { next(): Action[], reset(): void },
    *   config: { lang: 'en' | 'zh', replyLang: 'zh' | 'en' | null, bargeIn: boolean },
    *   onReplyLangChange?: (lang: 'en' | 'zh' | null) => void,
    *   onFault?: (part: import('./strings.js').FaultPart, err: Error) => void,
@@ -301,6 +307,10 @@ export class Brain {
     this.#earcon = deps.earcon;
     // Resolves when the sound ends, so a move queued behind it starts after.
     this.#sound = deps.sound ?? (async () => {});
+    // Optional, both: without a configured JEV the app passes null and every
+    // turn goes to the LLM exactly as before (reflex spec §1).
+    this.#reflex = deps.reflex ?? null;
+    this.#ladder = deps.ladder ?? { next: () => [], reset() {} };
     this.#config = deps.config;
     this.#onReplyLangChange = deps.onReplyLangChange ?? (() => {});
     this.#onFault = deps.onFault ?? (() => {});
@@ -321,7 +331,7 @@ export class Brain {
   cancel() { this.#turn?.abort(); }
 
   /** Spec §6.4: cleared when the session times out back to SLEEPING. */
-  resetHistory() { this.#history = []; }
+  resetHistory() { this.#history = []; this.#ladder.reset(); }
 
   /** @param {string} userText */
   async handle(userText) {
@@ -343,6 +353,15 @@ export class Brain {
       this.#beep();
       await this.#say(t(this.#config.lang, 'usbNotConnected'), turn);
       return;
+    }
+
+    // Reflex spec §2: asked before the LLM, never beside it. Anything but a
+    // confident "tease" falls through to the LLM below, untouched.
+    if (this.#reflex) {
+      const v = await this.#reflex.judge(text, this.#lastRobotLine(), turn.signal);
+      this.#trace(`[reflex] ${text} → ${v.verdict} ${v.detail} (${v.ms}ms)`);
+      if (turn.signal.aborted) return;
+      if (v.verdict === 'fired') return this.#reflexTurn(text);
     }
 
     this.#history.push({ role: 'user', content: text });
@@ -429,6 +448,46 @@ export class Brain {
       if (turn.signal.aborted) return;
       this.#fail('tts', /** @type {Error} */ (err));
     }
+  }
+
+  /**
+   * The robot's last spoken line, for the reflex's context. Tool-only turns
+   * have null content and are skipped: the question is what it SAID.
+   * @returns {string}
+   */
+  #lastRobotLine() {
+    for (let i = this.#history.length - 1; i >= 0; i--) {
+      const m = /** @type {any} */ (this.#history[i]);
+      if (m.role === 'assistant' && typeof m.content === 'string' && m.content) return m.content;
+    }
+    return '';
+  }
+
+  /**
+   * Reflex spec §6: the turn is written down as the model's OWN tool calls,
+   * with their paired tool messages, so the next request is accepted and the
+   * LLM remembers having barked and run — no convention to explain to it.
+   * No `done` beep: the bark is the answer (spec §5).
+   * @param {string} text
+   */
+  #reflexTurn(text) {
+    const actions = this.#ladder.next();
+    const calls = actions.map((a) => ({
+      id: `reflex-${++this.#reflexIds}`,
+      type: 'function',
+      // The ladder never produces cruise or stop; the last branch only keeps
+      // the mapping total.
+      function: a.kind === 'sound'
+        ? { name: 'play_sound', arguments: JSON.stringify({ name: a.name }) }
+        : a.kind === 'move'
+          ? { name: 'move', arguments: JSON.stringify({ steps: a.steps }) }
+          : { name: a.kind, arguments: '{}' },
+    }));
+    this.#history.push({ role: 'user', content: text });
+    this.#history.push({ role: 'assistant', content: null, tool_calls: calls });
+    for (const call of calls) this.#history.push({ role: 'tool', tool_call_id: call.id, content: 'ok' });
+    this.#trimHistory();
+    if (actions.length > 0) this.#dispatch(actions);
   }
 
   /**

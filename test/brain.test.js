@@ -282,8 +282,8 @@ function deferred() {
   return { promise, resolve };
 }
 
-/** @param {{ connected?: boolean, reply?: any, gateMotion?: boolean }} [opts] */
-function brainHarness({ connected = true, reply, gateMotion = false } = {}) {
+/** @param {{ connected?: boolean, reply?: any, gateMotion?: boolean, reflex?: any, ladder?: any }} [opts] */
+function brainHarness({ connected = true, reply, gateMotion = false, reflex = null, ladder = undefined } = {}) {
   /** @type {any[]} */
   const events = [];
   // Only populated when gateMotion is true. Every move/cruise call then gets
@@ -343,7 +343,7 @@ function brainHarness({ connected = true, reply, gateMotion = false } = {}) {
   const traced = [];
   return { events, executor, llm, tts, config, motionGates, langChanges, faults, traced,
     brain: new Brain({
-      llm, executor, tts, earcon, sound, config,
+      llm, executor, tts, earcon, sound, config, reflex, ladder,
       onReplyLangChange: (lang) => langChanges.push(lang),
       onFault: (part, err) => faults.push([part, err.message]),
       trace: (line) => traced.push(line),
@@ -817,4 +817,97 @@ test('cancel(): a TTS abort is not a fault (spec §8.1)', async () => {
   await turn;
   assert.deepEqual(h.faults, []);
   assert.deepEqual(h.events, []);
+});
+
+// --- Reflex layer (reflex spec §2, §6) ---------------------------------------
+
+/** A judge that answers with a fixed verdict and records what it was asked.
+ *  @param {string} verdict */
+function judgeSaying(verdict) {
+  /** @type {any[]} */ const asked = [];
+  return {
+    asked,
+    judge: async (/** @type {string} */ heard, /** @type {string} */ robotSaid) => {
+      asked.push({ heard, robotSaid });
+      return { verdict, detail: verdict === 'fired' ? 'tease 0.94' : 'reply 0.01', ms: 5 };
+    },
+  };
+}
+const oneRung = { next: () => [{ kind: 'sound', name: 'bark' }], reset() {} };
+
+test('reflex fired: no LLM, the rung runs, no done beep, and it is traced', async () => {
+  const h = brainHarness({ reply: say('never'), reflex: judgeSaying('fired'), ladder: oneRung });
+  await h.brain.handle('忘忘');
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(h.llm.calls.length, 0);
+  assert.deepEqual(h.events, [{ op: 'sound', name: 'bark' }]);
+  assert.match(h.traced.join('\n'), /\[reflex\] 忘忘 → fired tease 0\.94 \(5ms\)/);
+});
+
+test('reflex fired: history holds the turn as a native, paired tool call', async () => {
+  // Review focus 4: the NEXT request is rejected if a tool call has no tool
+  // message. Written as the model's own turn, so the LLM remembers barking.
+  const steps = [{ drive: 'backward', steer: 'left', duration_ms: 600 }];
+  const h = brainHarness({ reply: say('ok'), reflex: judgeSaying('fired'),
+    ladder: { next: () => [{ kind: 'sound', name: 'bark' }, { kind: 'move', steps }], reset() {} } });
+  await h.brain.handle('忘忘');
+  const [user, assistant, ...tools] = /** @type {any[]} */ (h.brain.history);
+  assert.deepEqual(user, { role: 'user', content: '忘忘' });
+  assert.equal(assistant.role, 'assistant');
+  assert.deepEqual(assistant.tool_calls.map((/** @type {any} */ c) => [c.function.name, JSON.parse(c.function.arguments)]),
+    [['play_sound', { name: 'bark' }], ['move', { steps }]]);
+  assert.deepEqual(tools.map((t) => t.tool_call_id), assistant.tool_calls.map((/** @type {any} */ c) => c.id));
+  assert.ok(tools.every((t) => t.role === 'tool' && t.content === 'ok'));
+});
+
+test('reflex passed: the LLM turn runs exactly as without a reflex', async () => {
+  const h = brainHarness({ reply: say('明白就好。'), reflex: judgeSaying('passed'), ladder: oneRung });
+  await h.brain.handle('明白');
+  assert.equal(h.llm.calls.length, 1);
+  assert.deepEqual(h.events, [{ op: 'speak', text: '明白就好。' }]);
+});
+
+test('reflex failed or skipped: the LLM answers', async () => {
+  for (const verdict of ['failed', 'skipped']) {
+    const h = brainHarness({ reply: say('嗯？'), reflex: judgeSaying(verdict), ladder: oneRung });
+    await h.brain.handle('汪汪');
+    assert.equal(h.llm.calls.length, 1, verdict);
+  }
+});
+
+test('the judge is told what the robot last said', async () => {
+  // Review focus 1: context is what separates 明白 the answer from a noise.
+  const judge = judgeSaying('passed');
+  const h = brainHarness({ reply: say('你明白吗？'), reflex: judge, ladder: oneRung });
+  await h.brain.handle('跟我解释一下');
+  await h.brain.handle('明白');
+  assert.deepEqual(judge.asked.map((a) => a.robotSaid), ['', '你明白吗？']);
+});
+
+test('USB not connected is still intercepted before the reflex', async () => {
+  const judge = judgeSaying('fired');
+  const h = brainHarness({ connected: false, reply: say('x'), reflex: judge, ladder: oneRung });
+  await h.brain.handle('汪汪');
+  assert.equal(judge.asked.length, 0);
+});
+
+test('cancel() during the JEV call ends the turn with nothing dispatched', async () => {
+  // Review focus 2: the stop button must work on a reflex turn too.
+  /** @type {(v: any) => void} */ let answer = () => {};
+  const reflex = { judge: () => new Promise((r) => { answer = r; }) };
+  const h = brainHarness({ reply: say('never'), reflex, ladder: oneRung });
+  const turn = h.brain.handle('汪汪');
+  h.brain.cancel();
+  answer({ verdict: 'fired', detail: 'tease 0.9', ms: 1 });
+  await turn;
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(h.events, []);
+  assert.equal(h.llm.calls.length, 0);
+});
+
+test('resetHistory() also resets the ladder', () => {
+  let resets = 0;
+  const h = brainHarness({ reflex: judgeSaying('passed'), ladder: { next: () => [], reset() { resets++; } } });
+  h.brain.resetHistory();
+  assert.equal(resets, 1);
 });
