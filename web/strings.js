@@ -106,6 +106,8 @@ export const STRINGS = {
     setupEarsWhat: 'hears what you say',
     setupMindWhat: 'decides what to do',
     setupVoiceWhat: 'says it back',
+    setupReflex: 'Reflex',
+    setupReflexWhat: 'answers a bark before it thinks',
     setupProvider: 'Provider',
     setupBaseUrl: 'Address',
     setupModel: 'Model',
@@ -117,6 +119,7 @@ export const STRINGS = {
     // app.js always builds the cloud provider. Leaving this empty does not
     // start a fallback, it starts a robot with nothing to speak with.
     setupVoiceOptional: 'It starts without this — and stays silent.',
+    setupReflexOptional: 'Optional. Without it the Mind answers a bark too, only slower.',
     setupTest: 'Test',
     setupNeedKey: 'Paste a key first',
     setupSave: 'Save',
@@ -188,6 +191,8 @@ export const STRINGS = {
     setupEarsWhat: '听见你说的话',
     setupMindWhat: '决定做什么',
     setupVoiceWhat: '说给你听',
+    setupReflex: '反射',
+    setupReflexWhat: '被逗时不假思索地回应',
     setupProvider: '服务商',
     setupBaseUrl: '地址',
     setupModel: '模型',
@@ -195,6 +200,7 @@ export const STRINGS = {
     setupKey: '密钥',
     setupCustom: '其它…',
     setupVoiceOptional: '不填也能启动，只是它不会出声。',
+    setupReflexOptional: '可以不填。不填的话，学狗叫也由脑子来回应，只是慢一点。',
     setupTest: '测一下',
     setupNeedKey: '先把密钥贴进来',
     setupSave: '保存',

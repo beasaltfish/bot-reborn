@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   MATERIAL,
-  fetchClip, toInt16Pcm, checkStt, checkLlm, checkTts,
+  fetchClip, toInt16Pcm, checkStt, checkLlm, checkTts, checkReflex,
 } from '../web/checks.js';
 
 /** @param {{ status?: number, type?: string }} opts */
@@ -173,4 +173,15 @@ test('checkStt reads the clip belonging to the language it was given', async () 
     await checkStt({ transcribe: async () => 'ok' }, ctx, 'zh');
   });
   assert.deepEqual(asked, [MATERIAL.en.clip, MATERIAL.zh.clip]);
+});
+
+test('checkReflex passes a key that gets a verdict, and says which', async () => {
+  const reflex = { judge: async () => ({ verdict: 'fired', detail: 'tease 0.99', ms: 600 }) };
+  assert.equal(await checkReflex(reflex), '“woof woof” → fired (tease 0.99, 600 ms)');
+});
+
+test('checkReflex fails when no verdict came back', async () => {
+  // judge() never rejects; `failed` is how a bad key or a timeout arrives.
+  const reflex = { judge: async () => ({ verdict: 'failed', detail: 'HTTP 401', ms: 300 }) };
+  await assert.rejects(() => checkReflex(reflex), /HTTP 401 after 300 ms/);
 });

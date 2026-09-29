@@ -57,6 +57,7 @@ test('every string the UI needs exists in both languages', () => {
     'keywordsInvalid', 'usbNotPaired', 'pairNow', 'needsTap',
     'settingsWakeWord', 'settingsWakeWordOff',
     'stSleeping', 'stListening', 'stCapturing', 'stThinking', 'stSpeaking',
+    'setupReflex', 'setupReflexWhat', 'setupReflexOptional',
   ]);
   for (const key of needed) {
     for (const lang of /** @type {const} */ (['en', 'zh'])) {

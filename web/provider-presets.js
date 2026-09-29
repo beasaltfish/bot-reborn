@@ -30,9 +30,8 @@
 // service with its own API shape cannot be listed however good it is.
 
 /**
- * `reflex` is listed here so the instrument page can suggest it from the same
- * table (reflex spec §7); the setup sheet never asks for it, because it walks
- * its own three layers, not this table's keys.
+ * `reflex` is listed here so both the setup sheet and the instrument page
+ * offer it from the same table (reflex spec §7).
  * @typedef {'stt' | 'llm' | 'tts' | 'reflex'} LayerName
  */
 

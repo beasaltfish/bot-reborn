@@ -23,7 +23,7 @@ import { encodeWav } from '../audio/wav.js';
 import { matchFixture, saveFixture, recordedAt } from '../fixture-store.js';
 // The three checks have one definition; this page and the product's setup
 // sheet ask the same questions of different audio. See web/checks.js.
-import { checkLlm, checkTts, fetchClip, transcribeClip } from '../checks.js';
+import { checkLlm, checkTts, checkReflex, fetchClip, transcribeClip } from '../checks.js';
 import { materialFor } from '../instrument-material.js';
 import { PRESETS, voicesFor } from '../provider-presets.js';
 
@@ -366,11 +366,7 @@ export function createConnectivity() {
         return testTts(new WebAudioTts(cfg.tts, { audioContext: audioContext() }));
       case 'reflex': {
         assertFilled(cfg.reflex, 'the reflex');
-        // English on purpose: this page's source carries no CJK
-        // (test/instrument-language.test.js), and barking is not Chinese.
-        const v = await new Reflex(cfg.reflex).judge('woof woof', '');
-        if (v.verdict === 'failed') throw new Error(`${v.detail} after ${v.ms} ms`);
-        return `"woof woof" → ${v.verdict} (${v.detail}, ${v.ms} ms) — fired is the expected answer`;
+        return `${await checkReflex(new Reflex(cfg.reflex))} — fired is the expected answer`;
       }
       case 'usb':
         return testUsb(requireFtdi());

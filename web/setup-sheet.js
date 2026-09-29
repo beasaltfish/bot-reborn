@@ -4,7 +4,8 @@
 // voice, the typed driver, comparing one TTS provider against another. Those
 // are instrument questions, asked by somebody who already has a working robot.
 // This asks the one question standing between a person and their first turn of
-// the wheels: what are your three keys.
+// the wheels: what are your three keys. (A fourth, the reflex, is optional
+// and comes last.)
 //
 // Three things follow from that, and they are the whole design:
 //
@@ -28,11 +29,12 @@
 
 import { t } from './strings.js';
 import { PRESETS, CUSTOM, presetIdFor, presetById, voicesFor } from './provider-presets.js';
-import { checkStt, checkLlm, checkTts } from './checks.js';
+import { checkStt, checkLlm, checkTts, checkReflex } from './checks.js';
 import { layerReady } from './config.js';
 import { OpenAiCompatStt } from './providers/stt-openai-compat.js';
 import { OpenAiCompatLlm } from './providers/llm-openai-compat.js';
 import { WebAudioTts } from './providers/tts-webaudio.js';
+import { Reflex } from './reflex.js';
 import { TOOLS, buildSystemPrompt } from './brain.js';
 
 const $ = (/** @type {string} */ id) =>
@@ -40,9 +42,10 @@ const $ = (/** @type {string} */ id) =>
 
 /**
  * @typedef {{
- *   name: 'stt' | 'llm' | 'tts',
+ *   name: 'stt' | 'llm' | 'tts' | 'reflex',
  *   label: import('./strings.js').StringKey,
  *   what: import('./strings.js').StringKey,
+ *   note: import('./strings.js').StringKey,
  *   optional: boolean,
  * }} LayerRow
  */
@@ -50,14 +53,16 @@ const $ = (/** @type {string} */ id) =>
 /**
  * In the order the robot uses them: it hears, then decides, then answers.
  * `optional` is not a judgement about importance — it is whether steps.js
- * counts the layer as gating, and only STT and LLM are.
+ * counts the layer as gating, and only STT and LLM are. The reflex comes last
+ * because it is the one layer the robot is whole without (reflex spec §1).
  *
  * @type {LayerRow[]}
  */
 const LAYERS = [
-  { name: 'stt', label: 'setupEars', what: 'setupEarsWhat', optional: false },
-  { name: 'llm', label: 'setupMind', what: 'setupMindWhat', optional: false },
-  { name: 'tts', label: 'setupVoice', what: 'setupVoiceWhat', optional: true },
+  { name: 'stt', label: 'setupEars', what: 'setupEarsWhat', note: 'setupEarsNote', optional: false },
+  { name: 'llm', label: 'setupMind', what: 'setupMindWhat', note: 'setupEarsNote', optional: false },
+  { name: 'tts', label: 'setupVoice', what: 'setupVoiceWhat', note: 'setupVoiceOptional', optional: true },
+  { name: 'reflex', label: 'setupReflex', what: 'setupReflexWhat', note: 'setupReflexOptional', optional: true },
 ];
 
 /**
@@ -88,7 +93,7 @@ export function createSetupSheet(deps) {
    */
   const ui = {};
 
-  /** @type {'stt' | 'llm' | 'tts'} */
+  /** @type {LayerRow['name']} */
   let active = 'stt';
 
   /**
@@ -128,8 +133,10 @@ export function createSetupSheet(deps) {
     }
     // Opens on the first layer that is not finished, not always on the first
     // tab. Somebody who came back to fix their Voice key should not have to
-    // walk past two ticked layers to reach it.
-    active = (LAYERS.find((l) => !layerReady(deps.config[l.name])) ?? LAYERS[0]).name;
+    // walk past two ticked layers to reach it. Never the reflex, though: an
+    // empty one is a choice, and landing on it every time would nag.
+    active = (LAYERS.find((l) => l.name !== 'reflex' && !layerReady(deps.config[l.name]))
+      ?? LAYERS[0]).name;
     render();
     sheet.hidden = false;
   }
@@ -149,7 +156,7 @@ export function createSetupSheet(deps) {
     rows.textContent = '';
     const layer = /** @type {LayerRow} */ (LAYERS.find((l) => l.name === active));
     rows.append(renderLayer(layer));
-    note.textContent = t(deps.lang, layer.optional ? 'setupVoiceOptional' : 'setupEarsNote');
+    note.textContent = t(deps.lang, layer.note);
     renderFoot();
   }
 
@@ -350,7 +357,7 @@ export function createSetupSheet(deps) {
     }
   }
 
-  /** @param {'stt' | 'llm' | 'tts'} name @returns {Promise<string>} */
+  /** @param {LayerRow['name']} name @returns {Promise<string>} */
   async function perform(name) {
     if (name === 'stt') {
       const heard = await checkStt(
@@ -365,6 +372,7 @@ export function createSetupSheet(deps) {
         systemPrompt: buildSystemPrompt({ replyLang: null, bargeIn: true }),
       });
     }
+    if (name === 'reflex') return checkReflex(new Reflex(deps.config.reflex));
     return checkTts(new WebAudioTts(deps.config.tts,
       { audioContext: deps.audioContext() }), deps.lang);
   }
