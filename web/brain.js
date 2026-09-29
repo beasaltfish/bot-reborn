@@ -276,8 +276,6 @@ function isValidStep(step) {
 export class Brain {
   #llm; #executor; #tts; #earcon; #sound; #config; #onReplyLangChange; #onFault; #trace;
   #reflex; #ladder;
-  /** Ids for the tool calls a reflex turn writes into history. */
-  #reflexIds = 0;
   /** Whether this turn has already sounded its failure. See #fail. */
   #beeped = false;
   /** @type {AbortController | null} */
@@ -364,7 +362,7 @@ export class Brain {
       if (v.verdict === 'fired') return this.#reflexTurn(text);
     }
 
-    this.#history.push({ role: 'user', content: text });
+    this.#pushUser(text);
 
     let reply;
     try {
@@ -464,30 +462,36 @@ export class Brain {
   }
 
   /**
-   * Reflex spec §6: the turn is written down as the model's OWN tool calls,
-   * with their paired tool messages, so the next request is accepted and the
-   * LLM remembers having barked and run — no convention to explain to it.
+   * Reflex spec §6: the turn is written down as plain text on the user's side
+   * — what was heard, then a bracketed note of what the body did. Not as the
+   * model's own tool calls: those tie the next request to each provider's id
+   * and pairing rules. Not as assistant text either, or the model learns to
+   * narrate its actions instead of calling them.
    * No `done` beep: the bark is the answer (spec §5).
    * @param {string} text
    */
   #reflexTurn(text) {
     const actions = this.#ladder.next();
-    const calls = actions.map((a) => ({
-      id: `reflex-${++this.#reflexIds}`,
-      type: 'function',
-      // The ladder never produces cruise or stop; the last branch only keeps
-      // the mapping total.
-      function: a.kind === 'sound'
-        ? { name: 'play_sound', arguments: JSON.stringify({ name: a.name }) }
-        : a.kind === 'move'
-          ? { name: 'move', arguments: JSON.stringify({ steps: a.steps }) }
-          : { name: a.kind, arguments: '{}' },
-    }));
-    this.#history.push({ role: 'user', content: text });
-    this.#history.push({ role: 'assistant', content: null, tool_calls: calls });
-    for (const call of calls) this.#history.push({ role: 'tool', tool_call_id: call.id, content: 'ok' });
+    const did = actions.map((a) => a.kind === 'sound'
+      ? `play_sound ${a.name}`
+      : a.kind === 'move'
+        ? `move ${a.steps.map((s) => `${s.drive}/${s.steer} ${s.duration_ms}ms`).join(', ')}`
+        // The ladder never produces cruise or stop; this only keeps it total.
+        : a.kind);
+    this.#pushUser(`${text}\n[Before you could think, your reflexes answered: ${did.join('; ')}]`);
     this.#trimHistory();
     if (actions.length > 0) this.#dispatch(actions, this.#turn?.signal);
+  }
+
+  /**
+   * A reflex turn ends on a user message, so the next one would make two in a
+   * row — which chat templates that insist on alternation reject. Merged.
+   * @param {string} content
+   */
+  #pushUser(content) {
+    const last = /** @type {any} */ (this.#history.at(-1));
+    if (last?.role === 'user') last.content += `\n${content}`;
+    else this.#history.push({ role: 'user', content });
   }
 
   /**

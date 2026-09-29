@@ -854,20 +854,33 @@ test('reflex fired: no LLM, the rung runs, no done beep, and it is traced', asyn
   assert.match(h.traced.join('\n'), /\[reflex\] 忘忘 → fired tease 0\.94 \(5ms\)/);
 });
 
-test('reflex fired: history holds the turn as a native, paired tool call', async () => {
-  // Review focus 4: the NEXT request is rejected if a tool call has no tool
-  // message. Written as the model's own turn, so the LLM remembers barking.
+test('reflex fired: history holds the turn as a plain user line, no tool calls', async () => {
+  // Synthesised tool calls tied the next request to each provider's id and
+  // pairing rules (Mistral wants 9-char ids). Plain text every provider
+  // accepts; on the user's side, so the model does not learn to write its
+  // actions as prose instead of calling them.
   const steps = [{ drive: 'backward', steer: 'left', duration_ms: 600 }];
   const h = brainHarness({ reply: say('ok'), reflex: judgeSaying('fired'),
     ladder: { next: () => [{ kind: 'sound', name: 'bark' }, { kind: 'move', steps }], reset() {} } });
   await h.brain.handle('忘忘');
-  const [user, assistant, ...tools] = /** @type {any[]} */ (h.brain.history);
-  assert.deepEqual(user, { role: 'user', content: '忘忘' });
-  assert.equal(assistant.role, 'assistant');
-  assert.deepEqual(assistant.tool_calls.map((/** @type {any} */ c) => [c.function.name, JSON.parse(c.function.arguments)]),
-    [['play_sound', { name: 'bark' }], ['move', { steps }]]);
-  assert.deepEqual(tools.map((t) => t.tool_call_id), assistant.tool_calls.map((/** @type {any} */ c) => c.id));
-  assert.ok(tools.every((t) => t.role === 'tool' && t.content === 'ok'));
+  const history = /** @type {any[]} */ (h.brain.history);
+  assert.equal(history.length, 1);
+  assert.equal(history[0].role, 'user');
+  assert.match(history[0].content, /^忘忘\n\[.*play_sound bark; move backward\/left 600ms.*\]$/);
+});
+
+test('the next LLM request after a reflex never has two user messages in a row', async () => {
+  let verdict = 'fired';
+  const reflex = { judge: async () => ({ verdict, detail: verdict, ms: 1 }) };
+  const h = brainHarness({ reply: say('刚才吓我一跳。'), reflex, ladder: oneRung });
+  await h.brain.handle('忘忘');
+  await h.brain.handle('旺旺');
+  verdict = 'passed';
+  await h.brain.handle('你刚才怎么了？');
+  const [system, user, ...rest] = h.llm.calls[0].messages;
+  assert.equal(system.role, 'system');
+  assert.equal(rest.length, 0);
+  assert.match(user.content, /^忘忘\n\[.*\]\n旺旺\n\[.*\]\n你刚才怎么了？$/);
 });
 
 test('reflex passed: the LLM turn runs exactly as without a reflex', async () => {
