@@ -1,152 +1,89 @@
 # bot-reborn
 
-A voice-controlled toy car. A phone rides on the car and drives an **FT232H**
-breakout over WebUSB in FTDI async bitbang mode; the car's own line-following
-brain is gone. Pins `D4`–`D7` (pin mask `0xF0`) carry the two motor-driver
-inputs and the two steering-coil inputs — see [`docs/hardware.md`](docs/hardware.md),
-and read the D6/D7 soldering warning there before wiring anything.
+**Turn a $4 toy robot into an AI robot, with an old phone as its brain.**
 
-The design spec is a private working document and is not in this repo, so the
-`§` references in `docs/hardware.md` point at something you cannot open. That
-file is the published record: everything in it was measured on the actual
-hardware.
+[![The robot keeping a child company while the real dog eats](docs/media/demo.gif)](https://youtube.com/shorts/SNA9ok1j0Sg)
 
-The voice loop works end to end: the robot listens while the screen is on (a
-wake word is optional, off by default), a VAD cuts each
-utterance, STT and an LLM turn it into car actions and a spoken reply, and a
-local emergency stop word can interrupt any of it. What is **not** built yet is
-the settings page, the first-run wizard and the barge-in calibration (spec §7.3)
-— for now the providers are configured on `setup.html`. Five hardware
-calibration figures are also still unmeasured, and so is most of the audio
-side; `docs/hardware.md` marks both, and `audio-bench.html` is where the audio
-ones get measured.
+*Real dog: busy eating. Robot dog: on duty.* — [watch the Short, with sound](https://youtube.com/shorts/SNA9ok1j0Sg)
 
-## Project layout
+<table>
+  <tr>
+    <td align="center"><img src="docs/media/before.jpg" height="320" alt="The toy as sold: a Silverlit Maze Breaker in its box"></td>
+    <td align="center"><img src="docs/media/phone-mount.jpg" height="320" alt="A phone held on the headless robot by a cardboard saddle and rubber bands, showing the robot's face"></td>
+  </tr>
+  <tr>
+    <td align="center">Before: a line-following toy</td>
+    <td align="center">After: the head is gone, the phone is the face</td>
+  </tr>
+</table>
 
-```
-.
-├── README.md
-├── package.json        # `npm test`, `npm run typecheck` — no build step
-├── tsconfig.json       # JSDoc types checked with tsc --checkJs, strict
-├── wrangler.jsonc      # Cloudflare Pages project config
-├── docs/
-│   └── hardware.md     # pin map, wiring, calibration results, measurements
-├── test/               # node:test, no browser needed
-└── web/                # Pages output directory (deployed as-is)
-    ├── index.html      # the robot itself
-    ├── app.js          # entry point: wiring only, no logic
-    ├── ui.js           # log, state lamp, start/stop, the emergency button
-    ├── config.js       # the only module that touches localStorage
-    ├── strings.js      # UI copy and fixed spoken lines (en / zh)
-    ├── ftdi.js         # FTDI protocol: bitmode, baud rate, byte streams, purgeTx
-    ├── executor.js     # actions → byte buffers, renewal loop, generation preemption
-    ├── brain.js        # tool definitions, system prompt, validator, one turn
-    ├── audio/
-    │   ├── session.js  # the session state machine — every policy decision
-    │   ├── pipeline.js # one getUserMedia, 100 ms frames, many subscribers
-    │   ├── sherpa.js   # loads the wasm and isolates what it puts on the global
-    │   ├── kws.js      # keyword spotter: frames in, labels out
-    │   ├── vad.js      # voice detector, plus the 512-sample window carry
-    │   ├── earcon.js   # the five prompt sounds
-    │   ├── keepalive.js# the keep-alive tone — instruments only since 2026-09-27
-    │   ├── keyword-lines.js # validates keywords before the wasm can abort on them
-    │   └── pcm.js      # Float32 ↔ Int16
-    ├── keywords/       # the two keyword files (ARPAbet + pinyin)
-    ├── models/         # the vendored sherpa-onnx KWS+VAD wasm bundle
-    ├── providers/      # STT / LLM / TTS, all OpenAI-compatible endpoints
-    ├── bench.html/.js  # hardware bench: polarity, byte rate, start threshold
-    ├── audio-bench.html, audio-bench/
-    │                   # audio bench: residency, acoustics, recognition, providers
-    ├── setup.html/.js  # provider config, four connectivity tests, typed drive
-    ├── fixtures/       # your own STT test audio (not in git — see its README)
-    └── style.css
-```
+## What it does
 
-## Reading the code
+- **You talk, it drives and answers.** "Go forward two seconds, then turn
+  left".
+- **Bark at it and it barks back.** A bark is caught before any chat model is
+  asked, and it answers from a fixed routine: bark, then bark and turn tail,
+  then whimper and retreat. Optional.
+- **It listens while its screen is on.** No wake word needed. Say the stop word
+  or hit the stop button and the car stops, whatever it was doing.
 
-About 2100 lines of product code and 2600 lines of tests. Read it in this
-order — it follows the safety argument the design is built around, not the
-order the data flows.
+## What you need
 
-**Start with the test names, not the code.** `npm test` prints all 173 of them
-and they are written as sentences, so the output is a behaviour inventory you
-can read in fifteen minutes. It is the cheapest map of the codebase there is.
+- **A cheap toy robot or car** with a drive motor and steering. Ours is a
+  Silverlit Maze Breaker. It is the only one tested so far, but
+  any toy driven by the same kind of motor driver should work the same way.
+- **An FT232H breakout board** — the bridge between the phone's USB port and
+  the toy's motor driver.
+- **An Android phone with Chrome.** The phone talks to the board over WebUSB,
+  which iPhones do not have. Plus a USB-C cable to the board.
+- **API keys** for speech-to-text, a chat model and text-to-speech. Any
+  OpenAI-compatible provider works.
+- A soldering iron, some wire, cardboard and rubber bands.
 
-1. **`ftdi.js` + `executor.js`** — the only code here that moves a physical
-   object. `buildStream()` appends the stop byte *inside* the same buffer as the
-   drive bytes, so the car stops even if the JS that was driving it dies; the
-   renewal loop in `#renew()` exists to keep that guarantee bounded. If you read
-   one thing, read these two functions.
-2. **`brain.js`** — one conversational turn, start to finish: tool definitions,
-   the system prompt, the validator that only ever accepts or discards (it never
-   silently rewrites what the model asked for), then `handle()`.
-3. **`audio/session.js`** — the state machine, and the only file allowed to make
-   a decision. Start at `wantedSubscriptions()`, which is spec §5.3's table
-   written as a table.
-4. **`audio/sherpa.js`, `kws.js`, `vad.js`, `pipeline.js`** — four wrappers with
-   no branches anywhere in them, on purpose: none of this is reachable from
-   `node:test`, so a decision hidden in here would be untestable by
-   construction. Read them fast; the point is how little they contain.
-5. **`app.js`** — how it is all wired together. Every decision in it was made
-   somewhere else.
+## How it works
 
-`bench.js` and `setup.js` are instruments rather than product, and `spike/` is
-throwaway probe code kept because it is already calibrated against one specific
-phone. Skip all three until you need them.
+![The toy's own board with the FT232H wired onto its motor and steering inputs](docs/media/wiring.jpg)
 
-Two habits that pay off here. **The comments carry the argument, not a
-description of the code** — where one says why some other approach was rejected,
-that rejection is usually load-bearing. And when you want to know what a guard
-is for, **delete it and run the tests**: the three nastiest defects found so far
-were all found exactly that way.
+The toy's own line-following chip is cut out of the loop. Four wires from the
+FT232H go straight to the inputs of the toy's motor driver and steering coil,
+and the phone switches those four pins over USB. Everything else — listening,
+understanding, deciding, talking — happens in a web page on the phone.
 
-## Local development
+## Build your own
 
-WebUSB requires a secure context, which includes `http://localhost`:
+1. **Wire it.** Pin map, wiring and measurements are in
+   [`docs/hardware.md`](docs/hardware.md). Read its D6/D7 soldering warning
+   before you start.
+2. **Open it on the phone** in Chrome: **https://bot-reborn.agentlenshq.com**
+   is a ready-hosted copy of this repo, so there is nothing to deploy. The
+   robot shows what it is still missing, and each missing part is a step: your
+   keys, plugging in the board, and teaching it which way is left.
 
-```bash
-npx serve web        # or: python3 -m http.server -d web 8000
-```
+Your keys stay on the phone, in plain text in the browser's storage, and are
+sent only to the providers you chose. There is no server in between. Using
+the hosted copy still means trusting whoever serves the page, so if you would
+rather not, serve your own: it is a folder of static files with no build step
+(`npx wrangler pages deploy web`, or any HTTPS static host — the phone only
+allows USB access from a secure page). See
+[Security](docs/development.md#security).
 
-Then open the printed URL in Chrome or Edge. `index.html` is the robot;
-`setup.html` configures the providers and drives the whole chain by typing, and
-`bench.html` is the hardware bench.
+## Status
 
-Note that `localhost` is enough for WebUSB but **not** for testing on a phone:
-the phone needs a real secure context, so deploy first (see below).
+It works end to end on one robot and one phone. Some hardware numbers are
+still unmeasured, and the barking routine's timings are first guesses that
+still need tuning on the car.
 
-```bash
-npm test             # node --test — the whole suite, no browser
-npm run typecheck    # tsc --noEmit, strict, over web/ and test/
-```
+## More
 
-## Security
+- [`docs/hardware.md`](docs/hardware.md) — wiring, pin map, every measurement
+- [`docs/development.md`](docs/development.md) — reading the code, running it
+  locally, tests, security, deployment
+- [`docs/instruments.md`](docs/instruments.md) — the calibration page behind
+  the gear
+- [`docs/ui.md`](docs/ui.md) — the robot's face and what each state means
+- [`docs/promo-video.md`](docs/promo-video.md) — what making the video taught us
 
-**Your API keys are stored in plaintext in the browser's `localStorage`** on
-the device you configure — this is a bring-your-own-key app with no server and
-no proxy, so the keys have nowhere else to live. Anything with access to that
-browser profile can read them.
+## License
 
-A hosted copy of this page carries the trust problem inherent to every BYOK web
-app: you type your keys into a page someone else serves, and whoever serves it
-could ship a version that sends them somewhere. That cannot be fixed
-technically. The mitigation is that this project is open source and deploys as
-a folder of static files — read the code, then serve it yourself (`npx wrangler
-pages deploy web`, or any static host) and use your own copy.
-
-## Deploy to Cloudflare Pages
-
-Direct upload:
-
-```bash
-npx wrangler pages project create bot-reborn   # first time only
-npx wrangler pages deploy web
-```
-
-Git integration (dashboard): leave the build command empty and set the
-**build output directory** to `web`.
-
-## Browser support
-
-WebUSB is available in Chromium-based browsers (Chrome, Edge, Opera) only.
-Firefox and Safari do not implement it.
+[MIT](LICENSE). The sounds in `web/sounds/` are CC0 — see their
+[credits](web/sounds/CREDITS.md).
