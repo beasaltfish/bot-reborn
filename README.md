@@ -6,6 +6,10 @@
 
 *Real dog: busy eating. Robot dog: on duty.* — [watch the Short, with sound](https://youtube.com/shorts/SNA9ok1j0Sg)
 
+[![The robot on a desk answering a child's science questions during homework](docs/media/homework.gif)](https://youtube.com/shorts/3Y984t1W6nc)
+
+*Kid: has questions. Robot: has attitude.* — [watch the Short, with sound](https://youtube.com/shorts/3Y984t1W6nc)
+
 <table>
   <tr>
     <td align="center"><img src="docs/media/before.jpg" height="320" alt="The toy as sold: a Silverlit Maze Breaker in its box"></td>
