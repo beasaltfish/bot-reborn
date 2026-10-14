@@ -43,3 +43,8 @@ button, input, select { font: inherit; }
 .result { margin: 0; font-size: 13px; white-space: pre-wrap; }
 .result.ok { color: var(--ok); }
 .result.bad { color: var(--bad); }
+.token { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--line); }
+.token-label { color: var(--muted); font-size: 13px; }
+.token code { font-family: ui-monospace, Menlo, monospace; padding: 4px 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+.token button { padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: inherit; cursor: pointer; }
+.danger { margin-top: 24px; padding: 8px 14px; border-radius: 6px; border: 1px solid var(--bad); background: none; color: var(--bad); cursor: pointer; }

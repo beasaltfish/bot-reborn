@@ -82,4 +82,17 @@ describe('Editor', () => {
     render(<Editor {...props({ initialTab: 'reflex' })} />);
     expect(await screen.findByText(/Optional/)).toBeInTheDocument();
   });
+
+  it('shows the token box and deletes only after confirming', async () => {
+    const fake = installFakeApi([{ name: 'A' }]);
+    const p = props();
+    vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
+    render(<Editor {...p} />);
+    expect(await screen.findByTestId('token')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Delete this character' }));
+    expect(fake.chars.has('A')).toBe(true);
+    await userEvent.click(screen.getByRole('button', { name: 'Delete this character' }));
+    await waitFor(() => expect(p.onDeleted).toHaveBeenCalled());
+    expect(fake.chars.has('A')).toBe(false);
+  });
 });
