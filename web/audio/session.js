@@ -513,8 +513,23 @@ export class Session {
     // bark used to cut the bark's window to 80 ms, and the robot heard itself.
     this.#earconUntil = Math.max(this.#earconUntil, this.#now() + ms);
     this.#reconcile();
-    this.#after(ms, () => this.#reconcile());
+    this.#after(ms, this.#reopen);
   }
+
+  /**
+   * The gate's timer, which must not be the last word. A timer can fire a
+   * fraction of a millisecond before the clock it is measured against says
+   * the deadline has passed (Node's setTimeout against Date.now does, about
+   * one time in three hundred). The reconcile then still sees the earcon
+   * playing, and if nothing asked again the session would stay deaf for
+   * good — to the stop word as well, with no frames reaching #checkIdle to
+   * end a cruise. So an early wake-up books another.
+   */
+  #reopen = () => {
+    const left = this.#earconUntil - this.#now();
+    if (left > 0) return void this.#after(left + 1, this.#reopen);
+    this.#reconcile();
+  };
 
   #reconcile() {
     const want = wantedSubscriptions(

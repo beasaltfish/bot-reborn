@@ -952,3 +952,16 @@ test('an earcon during a sound does not reopen the ears early', () => {
   h.tick(80);
   assert.deepEqual(h.names(), [], 'still barking at 80 ms: nothing listens');
 });
+
+test('a gate timer that fires a hair early still reopens the ears', () => {
+  // Node's setTimeout can run a fraction of a millisecond before a Date.now
+  // deadline. Found in the brain-server review: the one reconcile it ran saw
+  // the earcon "still playing", nothing scheduled another, and the session
+  // stayed deaf — to the stop word too — with a cruise running.
+  const h = harness();
+  h.session.wake();
+  h.tick(79.5);
+  assert.deepEqual(h.names(), []);
+  h.tick(1);
+  assert.deepEqual(h.names(), ['kws', 'vad']);
+});
