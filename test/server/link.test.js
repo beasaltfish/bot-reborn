@@ -9,7 +9,13 @@ import { PROTOCOL } from '../../web/protocol.js';
 async function rig(opts = {}) {
   const http = createServer();
   /** @type {import('../../server/link.js').BodyConn[]} */ const bodies = [];
-  const link = createLink({ server: http, onBody: (c) => bodies.push(c), log: () => {}, ...opts });
+  const link = createLink({
+    server: http,
+    admit: (/** @type {string} */ t) => (t === 'bad' ? 'token' : { id: t, name: `n-${t}` }),
+    onBody: (c) => bodies.push(c),
+    log: () => {},
+    ...opts,
+  });
   await new Promise((r) => http.listen(0, () => r(undefined)));
   const port = /** @type {import('node:net').AddressInfo} */ (http.address()).port;
   return {
@@ -20,12 +26,12 @@ async function rig(opts = {}) {
 }
 
 /** Connect, say hello, resolve with the first reply and the socket. */
-async function hello(/** @type {string} */ url, protocol = PROTOCOL) {
+async function hello(/** @type {string} */ url, protocol = PROTOCOL, token = 'a') {
   const ws = new WebSocket(url);
   /** @type {any[]} */ const msgs = [];
   ws.on('message', (d, bin) => { if (!bin) msgs.push(JSON.parse(String(d))); });
   await new Promise((r) => ws.once('open', r));
-  ws.send(JSON.stringify({ type: 'hello', protocol, caps: { motors: true } }));
+  ws.send(JSON.stringify({ type: 'hello', protocol, token, caps: { motors: true } }));
   await until(() => msgs.length > 0);
   return { ws, msgs };
 }
@@ -41,7 +47,7 @@ async function until(/** @type {() => boolean} */ pred, ms = 2000) {
 test('hello is answered with welcome and the body is handed over with its caps', async () => {
   const r = await rig();
   const { ws, msgs } = await hello(r.url);
-  assert.deepEqual(msgs[0], { type: 'welcome' });
+  assert.deepEqual(msgs[0], { type: 'welcome', name: 'n-a' });
   assert.deepEqual(r.bodies[0].caps, { motors: true });
   ws.close(); r.close();
 });
@@ -57,7 +63,7 @@ test('a wrong protocol version is rejected with the reason', async () => {
   r.close();
 });
 
-test('a second body is turned away and the first keeps working', async () => {
+test('a second body for the same character is turned away and the first keeps working', async () => {
   const r = await rig({ heartbeatMs: 50 });
   const first = await hello(r.url);
   const second = await hello(r.url);
@@ -90,7 +96,7 @@ test('a body that goes silent is dropped after the watchdog and the slot frees',
   r.bodies[0].send({ type: 'stop' });          // must not throw
   r.bodies[0].sendAudio(new Uint8Array(2));    // must not throw
   const again = await hello(r.url);
-  assert.deepEqual(again.msgs[0], { type: 'welcome' });
+  assert.deepEqual(again.msgs[0], { type: 'welcome', name: 'n-a' });
   ws.close(); again.ws.close(); r.close();
 });
 
@@ -137,7 +143,7 @@ async function helloWith(url, headers) {
   /** @type {any[]} */ const msgs = [];
   ws.on('message', (d, bin) => { if (!bin) msgs.push(JSON.parse(String(d))); });
   await new Promise((r) => ws.once('open', r));
-  ws.send(JSON.stringify({ type: 'hello', protocol: PROTOCOL, caps: {} }));
+  ws.send(JSON.stringify({ type: 'hello', protocol: PROTOCOL, token: 'a', caps: {} }));
   await until(() => msgs.length > 0);
   return { ws, msgs };
 }
@@ -155,7 +161,7 @@ test('a web page the user happens to open cannot become the body', async () => {
 test('an allowed origin is welcomed', async () => {
   const r = await rig({ allowedOrigins: ['https://bot.example'] });
   const phone = await helloWith(r.url, { Origin: 'https://bot.example' });
-  assert.deepEqual(phone.msgs[0], { type: 'welcome' });
+  assert.deepEqual(phone.msgs[0], { type: 'welcome', name: 'n-a' });
   phone.ws.close(); r.close();
 });
 
@@ -166,4 +172,31 @@ test('an oversized frame closes the connection instead of being buffered', async
   ws.send(new Uint8Array(1 << 20));
   await until(() => ws.readyState === WebSocket.CLOSED);
   r.close();
+});
+
+test('a wrong token is rejected with the reason admit gave', async () => {
+  const r = await rig();
+  const { ws, msgs } = await hello(r.url, PROTOCOL, 'bad');
+  assert.deepEqual(msgs[0], { type: 'reject', reason: 'token' });
+  assert.equal(r.bodies.length, 0);
+  ws.close(); r.close();
+});
+
+test('two characters are online at once', async () => {
+  const r = await rig();
+  const a = await hello(r.url, PROTOCOL, 'a');
+  const b = await hello(r.url, PROTOCOL, 'b');
+  assert.deepEqual([a.msgs[0].name, b.msgs[0].name], ['n-a', 'n-b']);
+  assert.equal(r.bodies.length, 2);
+  a.ws.close(); b.ws.close(); r.close();
+});
+
+test('when a character\'s body leaves, another body may take its place', async () => {
+  const r = await rig();
+  const first = await hello(r.url);
+  first.ws.close();
+  await until(() => r.bodies[0].open === false);
+  const second = await hello(r.url);
+  assert.equal(second.msgs[0].type, 'welcome');
+  second.ws.close(); r.close();
 });

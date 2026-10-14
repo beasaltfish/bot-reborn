@@ -3,6 +3,10 @@
 
 import { defaultConfig } from '../../web/config.js';
 import { encodeWav } from '../../web/providers/stt-openai-compat.js';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createCharacter, saveCharacter, listCharacters } from '../../server/characters.js';
 
 export function readyConfig() {
   const cfg = defaultConfig('en');
@@ -46,10 +50,34 @@ export function fakeFetch(opts = {}) {
   return f;
 }
 
-export async function until(/** @type {() => boolean} */ pred, ms = 3000) {
+/**
+ * @param {() => boolean} pred
+ * @param {number} [ms]
+ * @param {() => string} [why] what to report on timeout. robot.test has timed
+ *   out here about once in twenty full-suite runs without a reproduction;
+ *   the next one should say where it was stuck.
+ */
+export async function until(pred, ms = 3000, why) {
   const end = Date.now() + ms;
   while (!pred()) {
-    if (Date.now() > end) throw new Error('timed out waiting');
+    if (Date.now() > end) throw new Error(`timed out waiting${why ? ` — ${why()}` : ''}`);
     await new Promise((r) => setTimeout(r, 10));
   }
+}
+
+/** A characters directory of its own, filled with ready-to-run characters. */
+export function tempCharacters() {
+  const dir = join(mkdtempSync(join(tmpdir(), 'chars-')), 'characters');
+  return {
+    dir,
+    /** @param {string} name @param {(cfg: any) => void} [edit] */
+    add(name, edit = () => {}) {
+      const c = createCharacter(name, dir);
+      c.config = readyConfig();
+      edit(c.config);
+      saveCharacter(c);
+      return c;
+    },
+    list: () => listCharacters(dir).characters,
+  };
 }

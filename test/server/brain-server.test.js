@@ -4,36 +4,105 @@ import WebSocket from 'ws';
 import { createBrainServer } from '../../server/brain-server.js';
 import { renderEarcons } from '../../server/audio/render.js';
 import { PROTOCOL } from '../../web/protocol.js';
-import { readyConfig, fakeFetch, until } from './helpers.js';
+import { fakeFetch, until, tempCharacters } from './helpers.js';
 
-test('a body connects, is welcomed, and is told its state', async () => {
-  const server = createBrainServer({
-    config: readyConfig(), fetch: fakeFetch(), sfx: new Map(), earcons: renderEarcons(),
-    makeEars: () => ({
-      kws: { accept: () => [] },
-      vad: { accept() {}, detected: false, drain: () => [], clear() {} },
-    }),
-    log: () => {},
-  });
-  const port = await server.listen(0);
+/** Ears that hear one loud second after `frames` frames, once. */
+function onceEars(frames = 5) {
+  let n = 0;
+  return {
+    kws: { accept: () => [] },
+    vad: {
+      accept() { n++; }, detected: false, clear() {},
+      drain: () => (n === frames ? [new Float32Array(16000).map((_, i) => 0.3 * Math.sin(i / 5))] : []),
+    },
+  };
+}
+
+/** @param {number} port @param {string} token */
+async function body(port, token) {
   const ws = new WebSocket(`ws://127.0.0.1:${port}/body`);
   /** @type {any[]} */ const msgs = [];
-  ws.on('message', (d, bin) => { if (!bin) msgs.push(JSON.parse(String(d))); });
+  ws.on('message', (d, bin) => {
+    if (bin) return;
+    const m = JSON.parse(String(d));
+    if (m.type === 'ping') return ws.send(JSON.stringify({ type: 'pong' }));
+    msgs.push(m);
+  });
   await new Promise((r) => ws.once('open', r));
-  ws.send(JSON.stringify({ type: 'hello', protocol: PROTOCOL, caps: { motors: true } }));
-  await until(() => msgs.some((m) => m.type === 'state' && m.state === 'LISTENING'));
-  assert.equal(msgs.find((m) => m.type === 'welcome')?.type, 'welcome');
-  ws.close();
+  ws.send(JSON.stringify({ type: 'hello', protocol: PROTOCOL, token, caps: { motors: true } }));
+  await until(() => msgs.length > 0);
+  return { ws, msgs };
+}
+
+test('a body with its character\'s token is welcomed by name and told its state', async () => {
+  const chars = tempCharacters();
+  const a = chars.add('a');
+  const server = createBrainServer({
+    characters: chars.list, fetch: fakeFetch(), sfx: new Map(), earcons: renderEarcons(),
+    makeEars: () => onceEars(), log: () => {},
+  });
+  const port = await server.listen(0);
+  const b = await body(port, a.token);
+  assert.deepEqual(b.msgs[0], { type: 'welcome', name: 'a' });
+  await until(() => b.msgs.some((m) => m.type === 'state' && m.state === 'LISTENING'));
+  b.ws.close();
+  await server.close();
+});
+
+test('a wrong token and an unfinished character are told why', async () => {
+  const chars = tempCharacters();
+  const half = chars.add('half', (cfg) => { cfg.tts.apiKey = ''; });
+  const server = createBrainServer({
+    characters: chars.list, sfx: new Map(), earcons: renderEarcons(), log: () => {},
+    makeEars: () => { throw new Error('no robot expected'); },
+  });
+  const port = await server.listen(0);
+  const wrong = await body(port, '0'.repeat(32));
+  assert.deepEqual(wrong.msgs[0], { type: 'reject', reason: 'token' });
+  const unfinished = await body(port, half.token);
+  assert.deepEqual(unfinished.msgs[0], { type: 'reject', reason: 'unconfigured' });
+  wrong.ws.close(); unfinished.ws.close();
+  await server.close();
+});
+
+test('two characters talk at once, each with its own voice and key', async () => {
+  const chars = tempCharacters();
+  const a = chars.add('a', (cfg) => { cfg.tts.voice = 'alloy'; cfg.llm.apiKey = 'key-a'; });
+  const b = chars.add('b', (cfg) => { cfg.tts.voice = 'nova'; cfg.llm.apiKey = 'key-b'; });
+  const fetch = fakeFetch();
+  /** @type {string[]} */ const auth = [];
+  const spy = /** @type {typeof fetch} */ (async (url, init) => {
+    if (String(url).endsWith('/chat/completions')) auth.push(String(/** @type {any} */ (init?.headers)?.Authorization));
+    return fetch(url, init);
+  });
+  const server = createBrainServer({
+    characters: chars.list, fetch: spy, sfx: new Map(), earcons: renderEarcons(),
+    makeEars: () => onceEars(), log: () => {}, slackMs: 0,
+  });
+  const port = await server.listen(0);
+  const ba = await body(port, a.token);
+  const bb = await body(port, b.token);
+  for (const x of [ba, bb]) await until(() => x.msgs.some((m) => m.state === 'LISTENING'));
+  await new Promise((r) => setTimeout(r, 150));      // the wake earcon's gate
+  const frame = new Uint8Array(3200);
+  await until(() => {
+    ba.ws.send(frame); bb.ws.send(frame);
+    return fetch.calls.filter((c) => c.url.endsWith('/audio/speech')).length === 2;
+  }, 5000);
+  const voices = fetch.calls.filter((c) => c.url.endsWith('/audio/speech')).map((c) => c.body.voice).sort();
+  assert.deepEqual(voices, ['alloy', 'nova']);
+  assert.deepEqual(auth.sort(), ['Bearer key-a', 'Bearer key-b']);
+  ba.ws.close(); bb.ws.close();
   await server.close();
 });
 
 test('plain HTTP gets a line saying where bodies connect', async () => {
   const server = createBrainServer({
-    config: readyConfig(), sfx: new Map(), earcons: renderEarcons(), log: () => {},
+    characters: () => [], sfx: new Map(), earcons: renderEarcons(), log: () => {},
     makeEars: () => { throw new Error('no body expected'); },
   });
   const port = await server.listen(0);
-  const text = await (await fetch(`http://127.0.0.1:${port}/`)).text();
+  const text = await (await globalThis.fetch(`http://127.0.0.1:${port}/`)).text();
   assert.match(text, /\/body/);
   await server.close();
 });

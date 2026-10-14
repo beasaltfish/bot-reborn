@@ -18,7 +18,7 @@ async function mute() {
 test('a body that hears nothing for the watchdog period halts by itself', async () => {
   const brain = await mute();
   const start = Date.now();
-  const body = await connectFakeBody(brain.url, { watchdogMs: 300 });
+  const body = await connectFakeBody(brain.url, { watchdogMs: 300, token: 'a'.repeat(32) });
   await until(() => body.halted !== null, 2000);
   assert.equal(body.halted?.why, 'watchdog');
   assert.ok(Date.now() - start < 700);
@@ -27,7 +27,7 @@ test('a body that hears nothing for the watchdog period halts by itself', async 
 
 test('a body whose brain hangs up halts at once', async () => {
   const brain = await mute();
-  const body = await connectFakeBody(brain.url);
+  const body = await connectFakeBody(brain.url, { token: 'a'.repeat(32) });
   for (const ws of brain.wss.clients) ws.terminate();
   await until(() => body.halted !== null, 500);
   assert.equal(body.halted?.why, 'closed');
@@ -38,7 +38,7 @@ test('a new move replaces the one in progress rather than queueing behind it', a
   // The brain renews a cruise LEAD_MS early with only what is left; a body
   // that queued instead would drive 300 ms extra per renewal.
   const brain = await mute();
-  const body = await connectFakeBody(brain.url);
+  const body = await connectFakeBody(brain.url, { token: 'a'.repeat(32) });
   const [ws] = brain.wss.clients;
   ws.send(JSON.stringify({ type: 'move', drive: 'forward', steer: 'straight', ms: 1000 }));
   await until(() => body.driving !== null);

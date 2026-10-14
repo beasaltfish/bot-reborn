@@ -1,10 +1,10 @@
-// `npm start`: the brain on this computer. Bodies on the same Wi-Fi connect
-// to ws://<this machine>:<port>/body; a phone needs HTTPS and goes through a
+// `npm start`: the brain on this computer. Each body is a character, set up
+// with `npm run add-character -- <name>`. Bodies on the same Wi-Fi connect to
+// ws://<this machine>:<port>/body; a phone needs HTTPS and goes through a
 // tunnel (server/body split spec §1).
 
 import { networkInterfaces } from 'node:os';
-import { loadConfig, saveConfig, layerReady } from '../web/config.js';
-import { fileStorage, DEFAULT_CONFIG_PATH } from './config-store.js';
+import { listCharacters, ready, CHARACTERS_DIR } from './characters.js';
 import { createBrainServer } from './brain-server.js';
 import { renderEarcons, loadSfx } from './audio/render.js';
 import {
@@ -13,16 +13,15 @@ import {
 import { BODY_PATH } from '../web/protocol.js';
 
 const PORT = Number(process.env.PORT ?? 8787);
-const store = fileStorage(DEFAULT_CONFIG_PATH);
-const config = loadConfig(store);
-// Written back at once so a first run leaves a file with every field in it to
-// fill in, rather than an error naming a file that does not exist.
-saveConfig(config, store);
 
-const missing = /** @type {const} */ (['stt', 'llm', 'tts']).filter((k) => !layerReady(config[k]));
-if (missing.length) {
-  console.error(`Fill in ${missing.join(', ')} in ${DEFAULT_CONFIG_PATH} (baseURL, apiKey, model; tts also voice).`);
+const { characters, problems } = listCharacters();
+for (const p of problems) console.error(`skipped ${p}`);
+if (characters.length === 0) {
+  console.error(`No characters in ${CHARACTERS_DIR}. Create one: npm run add-character -- <name>`);
   process.exit(1);
+}
+for (const c of characters) {
+  console.log(`  ${c.name}: ${ready(c.config) ? 'ready' : `fill in stt, llm, tts in ${c.path}`}`);
 }
 if (!modelsPresent()) {
   console.error('Models missing. Run: server/models/fetch.sh');
@@ -32,8 +31,11 @@ if (!modelsPresent()) {
 const sherpa = loadSherpaNode();
 const keywords = loadKeywords();
 const server = createBrainServer({
-  config,
-  save: (cfg) => saveConfig(cfg, store),
+  characters: () => {
+    const now = listCharacters();
+    for (const p of now.problems) console.error(`skipped ${p}`);
+    return now.characters;
+  },
   makeEars: () => ({ kws: createSpotter(sherpa, keywords), vad: createVoiceDetector(sherpa) }),
   sfx: loadSfx(),
   earcons: renderEarcons(),

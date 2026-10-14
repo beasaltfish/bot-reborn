@@ -1,8 +1,9 @@
 // The brain's end of the wire (server/body split spec §3): handshake, one
-// body at a time, and the heartbeat both sides' watchdogs run on.
+// body per character, and the heartbeat both sides' watchdogs run on.
 //
-// The robot built for a body is the caller's business (onBody). This file
-// only decides who is connected and whether they are still there.
+// Who a token belongs to is the caller's business (admit), and so is the
+// robot built for a body (onBody). This file only decides who is connected
+// and whether they are still there.
 
 import { WebSocketServer } from 'ws';
 import {
@@ -23,7 +24,9 @@ import {
  */
 
 /**
- * @param {{ server: import('node:http').Server, onBody: (conn: BodyConn) => void,
+ * @param {{ server: import('node:http').Server,
+ *           admit: (token: string) => { id: string, name: string } | string,
+ *           onBody: (conn: BodyConn, who: { id: string, name: string }) => void,
  *           heartbeatMs?: number, watchdogMs?: number, helloTimeoutMs?: number,
  *           allowedOrigins?: string[], log?: (line: string) => void }} opts
  */
@@ -35,10 +38,12 @@ export function createLink(opts) {
   // A body's frames are 100 ms of PCM (3.2 kB). The ws default is 100 MiB a
   // frame, buffered before anyone has said hello.
   const wss = new WebSocketServer({ server: opts.server, path: BODY_PATH, maxPayload: 64 * 1024 });
-  /** @type {import('ws').WebSocket | null} */ let active = null;
+  /** Character id → its body. One body per character (spec §1.1). */
+  /** @type {Map<string, import('ws').WebSocket>} */ const active = new Map();
 
   wss.on('connection', (ws, req) => {
-    const who = req.socket.remoteAddress ?? '?';
+    const from = req.socket.remoteAddress ?? '?';
+    /** @type {string | null} */ let id = null;
     const helloTimer = setTimeout(() => ws.terminate(), opts.helloTimeoutMs ?? 5000);
     /** @type {((bytes: Uint8Array) => void)[]} */ const audio = [];
     /** @type {((msg: any) => void)[]} */ const messages = [];
@@ -85,28 +90,30 @@ export function createLink(opts) {
         // Any web page the user opens may connect to localhost: browsers do
         // not apply same-origin rules to WebSockets. An ESP32 or a script
         // sends no Origin; a page always does, and only a listed one is ours.
-        // This does not stop a device on the LAN — that needs a token.
         const origin = req.headers.origin;
         if (origin && !allowed.has(origin)) return reject('origin');
-        if (active) return reject('busy');
-        active = ws;
+        const who = opts.admit(msg.token);
+        if (typeof who === 'string') return reject(who);
+        if (active.has(who.id)) return reject('busy');
+        id = who.id;
+        active.set(id, ws);
         welcomed = true;
         conn.caps = msg.caps;
         // Welcome first: a body may treat anything before it as a protocol
         // error, and the robot starts talking (its state) the moment it is
         // built. Building it in the same synchronous turn is still early
         // enough — the body's first audio can only arrive on a later tick.
-        ws.send(encode({ type: 'welcome' }));
-        opts.onBody(conn);
+        ws.send(encode({ type: 'welcome', name: who.name }));
+        opts.onBody(conn, who);
         // The watchdog starts now, not at hello. Building the robot loads the
         // ears' models synchronously, and on a busy machine that took longer
         // than WATCHDOG_MS — the first heartbeat then dropped every body as
         // silent before its queued pongs were even read.
         lastSeen = Date.now();
-        log(`body connected from ${who} ${JSON.stringify(msg.caps)}`);
+        log(`${who.name} connected from ${from} ${JSON.stringify(msg.caps)}`);
         beat = setInterval(() => {
           if (Date.now() - lastSeen > watchdogMs) {
-            log(`body ${who} went silent — dropping it`);
+            log(`${who.name} (${from}) went silent — dropping it`);
             ws.terminate();
             return;
           }
@@ -123,13 +130,13 @@ export function createLink(opts) {
       clearTimeout(helloTimer);
       if (beat) clearInterval(beat);
       open = false;
-      if (active === ws) {
-        active = null;
-        log(`body ${who} disconnected`);
+      if (id !== null && active.get(id) === ws) {
+        active.delete(id);
+        log(`${id} disconnected`);
         for (const fn of closes) fn();
       }
     });
-    ws.on('error', (err) => log(`body ${who}: ${err.message}`));
+    ws.on('error', (err) => log(`body ${from}: ${err.message}`));
   });
 
   return {

@@ -52,7 +52,8 @@ function rig(/** @type {Parameters<typeof fakeFetch>[0]} */ fetchOpts = {}, caps
    */
   const speak = async () => {
     e.say();
-    await until(() => { c.feed(); return states(c.sent).includes('THINKING'); });
+    await until(() => { c.feed(); return states(c.sent).includes('THINKING'); }, 3000,
+      () => `no THINKING; states ${JSON.stringify(states(c.sent))}`);
   };
   return { ...c, fetch, robot, speak };
 }
@@ -99,7 +100,8 @@ test('motors going away mid-session stops the car', async () => {
 test('the body leaving mid-turn cancels the turn and nothing moves afterwards', async () => {
   const r = rig({ llmHangs: true });
   await r.speak();
-  await until(() => r.fetch.calls.some((c) => c.url.endsWith('/chat/completions')));
+  await until(() => r.fetch.calls.some((c) => c.url.endsWith('/chat/completions')), 3000,
+    () => `no LLM call; fetches ${JSON.stringify(r.fetch.calls.map((c) => c.url))}, states ${JSON.stringify(states(r.sent))}`);
   r.robot.stop();
   const llm = r.fetch.calls.find((c) => c.url.endsWith('/chat/completions'));
   assert.equal(llm?.signal?.aborted, true);

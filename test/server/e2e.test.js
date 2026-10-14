@@ -9,20 +9,22 @@ import { toInt16 } from '../../web/audio/pcm.js';
 import {
   modelsPresent, loadSherpaNode, loadKeywords, createSpotter, createVoiceDetector,
 } from '../../server/audio/sherpa-node.js';
-import { readyConfig, fakeFetch } from './helpers.js';
+import { fakeFetch, tempCharacters } from './helpers.js';
 
 const skip = modelsPresent() ? false : 'models missing — run server/models/fetch.sh';
 
 test('a recorded sentence drives the robot end to end', { skip, timeout: 20000 }, async () => {
   const sherpa = loadSherpaNode();
   const keywords = loadKeywords();
+  const chars = tempCharacters();
+  const me = chars.add('me');
   const server = createBrainServer({
-    config: readyConfig(), fetch: fakeFetch(), sfx: loadSfx(), earcons: renderEarcons(),
+    characters: chars.list, fetch: fakeFetch(), sfx: loadSfx(), earcons: renderEarcons(),
     makeEars: () => ({ kws: createSpotter(sherpa, keywords), vad: createVoiceDetector(sherpa) }),
     log: () => {},
   });
   const port = await server.listen(0);
-  const body = await connectFakeBody(`ws://127.0.0.1:${port}/body`);
+  const body = await connectFakeBody(`ws://127.0.0.1:${port}/body`, { token: me.token });
   await body.waitFor((m) => m.type === 'state' && m.state === 'LISTENING');
 
   const { samples } = parseWav(new Uint8Array(

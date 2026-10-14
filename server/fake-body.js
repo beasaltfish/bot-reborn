@@ -5,7 +5,7 @@
 // handshake, the pong, and above all the watchdog — halt on close at once,
 // halt after WATCHDOG_MS of hearing nothing — are what firmware must copy.
 //
-//   node server/fake-body.js ws://localhost:8787/body some.wav
+//   node server/fake-body.js ws://localhost:8787/body <token> some.wav
 
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -18,10 +18,10 @@ const FRAME = RATE / 10;
 
 /**
  * @param {string} url
- * @param {{ caps?: Record<string, boolean>, watchdogMs?: number,
- *           onMessage?: (msg: any) => void }} [opts]
+ * @param {{ token: string, caps?: Record<string, boolean>, watchdogMs?: number,
+ *           onMessage?: (msg: any) => void }} opts
  */
-export async function connectFakeBody(url, opts = {}) {
+export async function connectFakeBody(url, opts) {
   const watchdogMs = opts.watchdogMs ?? WATCHDOG_MS;
   const ws = new WebSocket(url);
   /** @type {any[]} */ const messages = [];
@@ -58,7 +58,7 @@ export async function connectFakeBody(url, opts = {}) {
   });
 
   await new Promise((resolve, reject) => { ws.once('open', resolve); ws.once('error', reject); });
-  ws.send(encode({ type: 'hello', protocol: PROTOCOL, caps: opts.caps ?? { motors: true, screen: false } }));
+  ws.send(encode({ type: 'hello', protocol: PROTOCOL, token: opts.token, caps: opts.caps ?? { motors: true, screen: false } }));
 
   const reply = await first;
   if (!reply || reply.type !== 'welcome') {
@@ -101,13 +101,13 @@ export async function connectFakeBody(url, opts = {}) {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
-  const [url, wavPath] = process.argv.slice(2);
-  if (!url || !wavPath) {
-    console.error('usage: node server/fake-body.js <ws-url> <file.wav>');
+  const [url, token, wavPath] = process.argv.slice(2);
+  if (!url || !token || !wavPath) {
+    console.error('usage: node server/fake-body.js <ws-url> <token> <file.wav>');
     process.exit(1);
   }
   const { rate, samples } = parseWav(new Uint8Array(readFileSync(wavPath)));
-  const body = await connectFakeBody(url, { onMessage: (m) => console.log(JSON.stringify(m)) });
+  const body = await connectFakeBody(url, { token, onMessage: (m) => console.log(JSON.stringify(m)) });
   await body.sendPcm(toInt16(resample(samples, rate, RATE)), { paceMs: 100 });
   await body.sendPcm(new Int16Array(RATE * 2), { paceMs: 100 });
   await new Promise((r) => setTimeout(r, 15000));

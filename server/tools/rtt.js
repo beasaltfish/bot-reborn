@@ -2,8 +2,8 @@
 // over the quick tunnel, and how long "all stop" takes from the end of the
 // words to a `stop` arriving at the body (§2's known cost).
 //
-//   node server/tools/rtt.js ws://localhost:8787/body
-//   node server/tools/rtt.js wss://<name>.trycloudflare.com/body --wav my-all-stop.wav
+//   node server/tools/rtt.js ws://localhost:8787/body --token <token>
+//   node server/tools/rtt.js wss://<name>.trycloudflare.com/body --token <token> --wav my-all-stop.wav
 
 import { readFileSync } from 'node:fs';
 import WebSocket from 'ws';
@@ -13,14 +13,17 @@ import { int16ToBytes, parseWav, resample } from '../audio/pcm.js';
 
 const args = process.argv.slice(2);
 const url = args[0];
-const count = Number(args[args.indexOf('--count') + 1] || 50);
-const wavAt = args.indexOf('--wav');
-if (!url) { console.error('usage: rtt.js <ws-url> [--count N] [--wav file.wav]'); process.exit(1); }
+/** @param {string} flag */
+const arg = (flag) => { const i = args.indexOf(flag); return i === -1 ? undefined : args[i + 1]; };
+const count = Number(arg('--count') ?? 50);
+const token = arg('--token');
+const wavPath = arg('--wav');
+if (!url || !token) { console.error('usage: rtt.js <ws-url> --token <token> [--count N] [--wav file.wav]'); process.exit(1); }
 
 const ws = new WebSocket(url);
 await new Promise((r) => ws.once('open', r));
 // motors: false, so nothing this tool says can drive a car.
-ws.send(encode({ type: 'hello', protocol: PROTOCOL, caps: { motors: false } }));
+ws.send(encode({ type: 'hello', protocol: PROTOCOL, token, caps: { motors: false } }));
 // An inbox, not a list of waiters: the brain sends welcome and its first
 // states in one burst, and a waiter attached after the previous await
 // resolved would miss them.
@@ -62,8 +65,8 @@ rtts.sort((a, b) => a - b);
 const pct = (/** @type {number} */ p) => rtts[Math.min(rtts.length - 1, Math.floor(p * rtts.length))].toFixed(0);
 console.log(`round trip over ${count}: p50 ${pct(0.5)} ms, p95 ${pct(0.95)} ms, max ${pct(1)} ms`);
 
-if (wavAt !== -1) {
-  const { rate, samples } = parseWav(new Uint8Array(readFileSync(args[wavAt + 1])));
+if (wavPath) {
+  const { rate, samples } = parseWav(new Uint8Array(readFileSync(wavPath)));
   const pcm = toInt16(resample(samples, rate, RATE));
   const stop = next('stop');
   let lastSent = 0;
