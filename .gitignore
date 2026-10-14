@@ -53,3 +53,6 @@ docs/superpowers/
 # because nothing here needs a source build (unlike web/models/).
 server/models/*
 !server/models/fetch.sh
+
+# Built by npm start (or npm run admin:build); never committed.
+admin/dist/

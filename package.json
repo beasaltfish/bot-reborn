@@ -9,6 +9,8 @@
   "scripts": {
     "start": "node server/main.js",
     "add-character": "node server/tools/add-character.js",
+    "admin:build": "vite build --config admin/vite.config.ts",
+    "admin:dev": "vite --config admin/vite.config.ts",
     "test": "node --test",
     "typecheck": "tsc --noEmit",
     "deploy": "node --test && npx wrangler pages deploy web --branch production"
