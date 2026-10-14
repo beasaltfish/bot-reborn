@@ -130,3 +130,40 @@ test('a slow robot build does not count against the body\'s watchdog', async () 
   assert.equal(msgs[0].type, 'welcome');
   ws.close(); r.close();
 });
+
+/** @param {string} url @param {Record<string, string>} headers */
+async function helloWith(url, headers) {
+  const ws = new WebSocket(url, { headers });
+  /** @type {any[]} */ const msgs = [];
+  ws.on('message', (d, bin) => { if (!bin) msgs.push(JSON.parse(String(d))); });
+  await new Promise((r) => ws.once('open', r));
+  ws.send(JSON.stringify({ type: 'hello', protocol: PROTOCOL, caps: {} }));
+  await until(() => msgs.length > 0);
+  return { ws, msgs };
+}
+
+test('a web page the user happens to open cannot become the body', async () => {
+  // Browsers let any page open a WebSocket to localhost; only an Origin header
+  // tells it apart from an ESP32 or a script, which send none.
+  const r = await rig();
+  const page = await helloWith(r.url, { Origin: 'https://some-page.example' });
+  assert.deepEqual(page.msgs[0], { type: 'reject', reason: 'origin' });
+  assert.equal(r.bodies.length, 0);
+  page.ws.close(); r.close();
+});
+
+test('an allowed origin is welcomed', async () => {
+  const r = await rig({ allowedOrigins: ['https://bot.example'] });
+  const phone = await helloWith(r.url, { Origin: 'https://bot.example' });
+  assert.deepEqual(phone.msgs[0], { type: 'welcome' });
+  phone.ws.close(); r.close();
+});
+
+test('an oversized frame closes the connection instead of being buffered', async () => {
+  const r = await rig();
+  const ws = new WebSocket(r.url);
+  await new Promise((res) => ws.once('open', res));
+  ws.send(new Uint8Array(1 << 20));
+  await until(() => ws.readyState === WebSocket.CLOSED);
+  r.close();
+});

@@ -25,13 +25,16 @@ import {
 /**
  * @param {{ server: import('node:http').Server, onBody: (conn: BodyConn) => void,
  *           heartbeatMs?: number, watchdogMs?: number, helloTimeoutMs?: number,
- *           log?: (line: string) => void }} opts
+ *           allowedOrigins?: string[], log?: (line: string) => void }} opts
  */
 export function createLink(opts) {
   const heartbeatMs = opts.heartbeatMs ?? HEARTBEAT_MS;
   const watchdogMs = opts.watchdogMs ?? WATCHDOG_MS;
   const log = opts.log ?? console.log;
-  const wss = new WebSocketServer({ server: opts.server, path: BODY_PATH });
+  const allowed = new Set(opts.allowedOrigins ?? []);
+  // A body's frames are 100 ms of PCM (3.2 kB). The ws default is 100 MiB a
+  // frame, buffered before anyone has said hello.
+  const wss = new WebSocketServer({ server: opts.server, path: BODY_PATH, maxPayload: 64 * 1024 });
   /** @type {import('ws').WebSocket | null} */ let active = null;
 
   wss.on('connection', (ws, req) => {
@@ -79,6 +82,12 @@ export function createLink(opts) {
         if (msg.type !== 'hello') return;
         clearTimeout(helloTimer);
         if (msg.protocol !== PROTOCOL) return reject('protocol');
+        // Any web page the user opens may connect to localhost: browsers do
+        // not apply same-origin rules to WebSockets. An ESP32 or a script
+        // sends no Origin; a page always does, and only a listed one is ours.
+        // This does not stop a device on the LAN — that needs a token.
+        const origin = req.headers.origin;
+        if (origin && !allowed.has(origin)) return reject('origin');
         if (active) return reject('busy');
         active = ws;
         welcomed = true;
