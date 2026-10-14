@@ -48,3 +48,8 @@ docs/superpowers/
 .idea/
 .vscode/
 .superpowers/
+
+# Brain-server models: downloaded by server/models/fetch.sh, 6 MB, not vendored
+# because nothing here needs a source build (unlike web/models/).
+server/models/*
+!server/models/fetch.sh
