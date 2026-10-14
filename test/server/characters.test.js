@@ -140,7 +140,7 @@ test('patchCharacter renames without moving the file and deep-merges config', ()
   const again = /** @type {any} */ (characterById('a', dir));
   assert.equal(again.name, '阿白');
   assert.equal(again.config.tts.voice, 'nova');
-  assert.equal(again.config.tts.model, '');
+  assert.equal(again.config.tts.model, c.config.tts.model);   // a sibling, untouched
   assert.equal(again.token, c.token);
   assert.equal(statSync(c.path).mode & 0o777, 0o600);
 });
@@ -183,4 +183,18 @@ test('a display name is unique, ignoring case, whether made or renamed', () => {
   assert.equal(again.name, 'Rex');
   assert.notEqual(again.path, rex.path);
   assert.deepEqual(listCharacters(dir).characters.map((c) => c.name).sort(), ['Bo', 'Max', 'Rex']);
+});
+
+test('a new character starts on each layer\'s first provider, so only the key is left to type', async () => {
+  const { PRESETS, voicesFor } = await import('../../web/provider-presets.js');
+  const c = createCharacter('a', tmp());
+  for (const layer of /** @type {const} */ (['stt', 'llm', 'tts', 'reflex'])) {
+    const first = PRESETS[layer][0];
+    assert.equal(c.config[layer].baseURL, first.baseURL, layer);
+    assert.equal(c.config[layer].model, first.models[0] ?? '', layer);
+    assert.equal(c.config[layer].apiKey, '', layer);
+  }
+  assert.equal(c.config.tts.voice, voicesFor(PRESETS.tts[0], c.config.tts.model)[0]);
+  assert.equal(ready(c.config), false);
+  assert.deepEqual(listCharacters(join(c.path, '..')).characters[0].config.stt, c.config.stt);
 });

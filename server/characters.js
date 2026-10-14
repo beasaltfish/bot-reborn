@@ -10,6 +10,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, chmodS
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { defaultConfig, loadConfig, layerReady } from '../web/config.js';
+import { PRESETS, voicesFor } from '../web/provider-presets.js';
 
 export const HOME = process.env.BOT_REBORN_HOME ?? join(homedir(), '.bot-reborn');
 export const CHARACTERS_DIR = join(HOME, 'characters');
@@ -40,9 +41,27 @@ export function createCharacter(name, dir = CHARACTERS_DIR) {
   for (let n = 2; existsSync(join(dir, `${id}.json`)); n++) id = `${name.slice(0, 37)}-${n}`;
   const path = join(dir, `${id}.json`);
   /** @type {Character} */
-  const c = { id, name, token: randomBytes(16).toString('hex'), config: defaultConfig(), path };
+  const c = { id, name, token: randomBytes(16).toString('hex'), config: startingConfig(), path };
   saveCharacter(c);
   return c;
+}
+
+/**
+ * defaultConfig() with every layer on its first listed provider. An empty
+ * baseURL reads as "Other" on the admin page, which opens on a Base URL and a
+ * model to type; a provider already picked leaves only the key. The key stays
+ * empty, so the character still says "missing keys" until it has one.
+ */
+function startingConfig() {
+  const config = defaultConfig();
+  for (const layer of /** @type {const} */ (['stt', 'llm', 'tts', 'reflex'])) {
+    const first = PRESETS[layer][0];
+    if (!first) continue;
+    const model = first.models[0] ?? '';
+    Object.assign(config[layer], { baseURL: first.baseURL, model });
+    if (layer === 'tts') config.tts.voice = voicesFor(first, model)[0] ?? '';
+  }
+  return config;
 }
 
 /**

@@ -59,7 +59,7 @@ test('create, read, patch by deep merge, rename without moving, delete', async (
   assert.equal(patched.body.id, 'rex');
   assert.equal(patched.body.name, '小黑');
   assert.equal(patched.body.config.tts.voice, 'nova');
-  assert.equal(patched.body.config.tts.model, '');
+  assert.equal(patched.body.config.tts.model, made.body.config.tts.model);   // a sibling, untouched
   const read = await r.call('/api/characters/rex');
   assert.equal(read.body.token, made.body.token);
   const gone = await r.call('/api/characters/rex', { method: 'DELETE', headers: W });
