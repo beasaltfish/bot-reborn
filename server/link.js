@@ -89,6 +89,11 @@ export function createLink(opts) {
         // enough — the body's first audio can only arrive on a later tick.
         ws.send(encode({ type: 'welcome' }));
         opts.onBody(conn);
+        // The watchdog starts now, not at hello. Building the robot loads the
+        // ears' models synchronously, and on a busy machine that took longer
+        // than WATCHDOG_MS — the first heartbeat then dropped every body as
+        // silent before its queued pongs were even read.
+        lastSeen = Date.now();
         log(`body connected from ${who} ${JSON.stringify(msg.caps)}`);
         beat = setInterval(() => {
           if (Date.now() - lastSeen > watchdogMs) {

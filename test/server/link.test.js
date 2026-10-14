@@ -112,3 +112,21 @@ test('welcome is the first thing a body hears, even when the robot talks at once
   assert.deepEqual(msgs.map((m) => m.type), ['welcome', 'state']);
   ws.close(); r.close();
 });
+
+test('a slow robot build does not count against the body\'s watchdog', async () => {
+  const r = await rig({
+    heartbeatMs: 50,
+    watchdogMs: 200,
+    // Loading the ears' models blocks the loop; on a busy machine it took over a second.
+    onBody: (c) => { r2.bodies.push(c); const end = Date.now() + 400; while (Date.now() < end) { /* busy */ } },
+  });
+  const r2 = { bodies: /** @type {import('../../server/link.js').BodyConn[]} */ ([]) };
+  const { ws, msgs } = await hello(r.url);
+  ws.on('message', (d, bin) => {
+    if (!bin && JSON.parse(String(d)).type === 'ping') ws.send(JSON.stringify({ type: 'pong' }));
+  });
+  await new Promise((res) => setTimeout(res, 300));
+  assert.equal(r2.bodies[0].open, true);
+  assert.equal(msgs[0].type, 'welcome');
+  ws.close(); r.close();
+});
