@@ -104,3 +104,11 @@ test('motors messages reach the robot', async () => {
   assert.deepEqual(got[0], { type: 'motors', connected: false });
   ws.close(); r.close();
 });
+
+test('welcome is the first thing a body hears, even when the robot talks at once', async () => {
+  const r = await rig({ onBody: (c) => c.send({ type: 'state', state: 'SLEEPING' }) });
+  const { ws, msgs } = await hello(r.url);
+  await until(() => msgs.length >= 2);
+  assert.deepEqual(msgs.map((m) => m.type), ['welcome', 'state']);
+  ws.close(); r.close();
+});

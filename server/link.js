@@ -83,10 +83,12 @@ export function createLink(opts) {
         active = ws;
         welcomed = true;
         conn.caps = msg.caps;
-        // The robot is built BEFORE the welcome goes out, so its listeners
-        // are in place by the time the body, told it may, starts streaming.
-        opts.onBody(conn);
+        // Welcome first: a body may treat anything before it as a protocol
+        // error, and the robot starts talking (its state) the moment it is
+        // built. Building it in the same synchronous turn is still early
+        // enough — the body's first audio can only arrive on a later tick.
         ws.send(encode({ type: 'welcome' }));
+        opts.onBody(conn);
         log(`body connected from ${who} ${JSON.stringify(msg.caps)}`);
         beat = setInterval(() => {
           if (Date.now() - lastSeen > watchdogMs) {
