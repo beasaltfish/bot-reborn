@@ -8,7 +8,7 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, chmodSync, unlinkSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { defaultConfig, loadConfig, layerReady } from '../web/config.js';
 
 export const HOME = process.env.BOT_REBORN_HOME ?? join(homedir(), '.bot-reborn');
@@ -32,12 +32,27 @@ export function checkName(/** @type {string} */ name) {
  */
 export function createCharacter(name, dir = CHARACTERS_DIR) {
   checkName(name);
-  const path = join(dir, `${name}.json`);
-  if (existsSync(path)) throw new Error(`a character called ${name} already exists: ${path}`);
+  if (nameTaken(name, dir)) throw new Error(`a character called ${name} already exists`);
+  // The name is free but its file may not be: a character renamed away from
+  // it keeps its file (and id). Pick the next free one rather than refuse a
+  // name nobody can see in use.
+  let id = name;
+  for (let n = 2; existsSync(join(dir, `${id}.json`)); n++) id = `${name.slice(0, 37)}-${n}`;
+  const path = join(dir, `${id}.json`);
   /** @type {Character} */
-  const c = { id: name, name, token: randomBytes(16).toString('hex'), config: defaultConfig(), path };
+  const c = { id, name, token: randomBytes(16).toString('hex'), config: defaultConfig(), path };
   saveCharacter(c);
   return c;
+}
+
+/**
+ * Display names are unique ignoring case: macOS file names ignore it, and
+ * nobody can tell two robots called Max and max apart in a list.
+ * @param {string} name @param {string} dir @param {string} [except] the path of the character being renamed
+ */
+function nameTaken(name, dir, except) {
+  const lower = name.toLowerCase();
+  return listCharacters(dir).characters.some((c) => c.path !== except && c.name.toLowerCase() === lower);
 }
 
 /**
@@ -151,6 +166,7 @@ export function patchCharacter(path, patch) {
   if (patch.name !== undefined) {
     if (typeof patch.name !== 'string') throw new Error('name must be a string');
     checkName(patch.name);
+    if (nameTaken(patch.name, dirname(path), path)) throw new Error(`a character called ${patch.name} already exists`);
   }
   if (patch.config !== undefined && !isPlain(patch.config)) throw new Error('config must be an object');
   updateFile(path, (raw) => {

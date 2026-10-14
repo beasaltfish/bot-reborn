@@ -168,3 +168,19 @@ test('deleteCharacter removes the file', () => {
   deleteCharacter(c.path);
   assert.equal(existsSync(c.path), false);
 });
+
+test('a display name is unique, ignoring case, whether made or renamed', () => {
+  // Found in review: renaming Rex to Max let a second "Max" be created, and
+  // then "Rex" could not be made because Rex.json still existed, unseen.
+  const dir = tmp();
+  const rex = createCharacter('Rex', dir);
+  createCharacter('Bo', dir);
+  assert.throws(() => patchCharacter(rex.path, { name: 'bo' }), /already/);
+  patchCharacter(rex.path, { name: 'Max' });
+  assert.throws(() => createCharacter('max', dir), /already/);
+  patchCharacter(rex.path, { name: 'Max' });          // its own name again is fine
+  const again = createCharacter('Rex', dir);           // the name is free; the file is not
+  assert.equal(again.name, 'Rex');
+  assert.notEqual(again.path, rex.path);
+  assert.deepEqual(listCharacters(dir).characters.map((c) => c.name).sort(), ['Bo', 'Max', 'Rex']);
+});
