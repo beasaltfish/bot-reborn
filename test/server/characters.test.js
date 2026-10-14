@@ -1,10 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, statSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdtempSync, statSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   createCharacter, listCharacters, findByToken, saveCharacter, ready,
+  characterById, patchCharacter, regenerateToken, deleteCharacter, deepMerge,
 } from '../../server/characters.js';
 
 const tmp = () => join(mkdtempSync(join(tmpdir(), 'chars-')), 'characters');
@@ -114,4 +115,56 @@ test('a copied file with the same token is reported, not silently shadowed', () 
   assert.deepEqual(characters.map((c) => c.name), ['a']);
   assert.equal(problems.length, 1);
   assert.match(problems[0], /b\.json.*same token as.*a\.json/);
+});
+
+test('deepMerge merges nested objects, replaces the rest, and ignores prototype keys', () => {
+  const base = { a: { b: 1, c: 2 }, d: [1], e: 'x' };
+  const out = deepMerge(base, JSON.parse('{"a":{"c":3},"d":[2],"e":null,"__proto__":{"polluted":1}}'));
+  assert.deepEqual(out, { a: { b: 1, c: 3 }, d: [2], e: null });
+  assert.equal(/** @type {any} */ ({}).polluted, undefined);
+  assert.deepEqual(base, { a: { b: 1, c: 2 }, d: [1], e: 'x' });
+});
+
+test('characterById finds by file name, and refuses anything path-like', () => {
+  const dir = tmp();
+  createCharacter('a', dir);
+  assert.equal(characterById('a', dir)?.name, 'a');
+  assert.equal(characterById('missing', dir), null);
+  assert.equal(characterById('../a', dir), null);
+});
+
+test('patchCharacter renames without moving the file and deep-merges config', () => {
+  const dir = tmp();
+  const c = createCharacter('a', dir);
+  patchCharacter(c.path, { name: '阿白', config: { tts: { voice: 'nova' } } });
+  const again = /** @type {any} */ (characterById('a', dir));
+  assert.equal(again.name, '阿白');
+  assert.equal(again.config.tts.voice, 'nova');
+  assert.equal(again.config.tts.model, '');
+  assert.equal(again.token, c.token);
+  assert.equal(statSync(c.path).mode & 0o777, 0o600);
+});
+
+test('patchCharacter refuses a bad name or a non-object config, and drops prototype keys', () => {
+  const c = createCharacter('a', tmp());
+  assert.throws(() => patchCharacter(c.path, { name: '../x' }), /name/);
+  assert.throws(() => patchCharacter(c.path, { config: 'nope' }), /config/);
+  patchCharacter(c.path, { config: JSON.parse('{"__proto__":{"x":1},"llm":{"apiKey":"k"}}') });
+  const raw = readFileSync(c.path, 'utf8');
+  assert.doesNotMatch(raw, /__proto__/);
+  assert.match(raw, /"apiKey": "k"/);
+});
+
+test('regenerateToken writes a fresh token and returns it', () => {
+  const c = createCharacter('a', tmp());
+  const next = regenerateToken(c.path);
+  assert.match(next, /^[0-9a-f]{32}$/);
+  assert.notEqual(next, c.token);
+  assert.equal(JSON.parse(readFileSync(c.path, 'utf8')).token, next);
+});
+
+test('deleteCharacter removes the file', () => {
+  const c = createCharacter('a', tmp());
+  deleteCharacter(c.path);
+  assert.equal(existsSync(c.path), false);
 });

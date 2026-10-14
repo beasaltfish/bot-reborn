@@ -6,7 +6,7 @@
 // says hello with it, and the brain answers as whoever it belongs to.
 
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, chmodSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, chmodSync, unlinkSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { defaultConfig, loadConfig, layerReady } from '../web/config.js';
@@ -19,7 +19,7 @@ export const CHARACTERS_DIR = join(HOME, 'characters');
 const TOKEN = /^[0-9a-f]{32}$/;
 
 /** A file name as well as a display name, so nothing that walks a path. */
-function checkName(/** @type {string} */ name) {
+export function checkName(/** @type {string} */ name) {
   if (!name.trim() || name.length > 40 || /[/\\]/.test(name) || name.startsWith('.')) {
     throw new Error(`character name must be 1–40 characters, without / or \\, not starting with "." — got ${JSON.stringify(name)}`);
   }
@@ -99,20 +99,85 @@ export function saveCharacter(c) {
   chmodSync(c.path, 0o600);
 }
 
+/** Prototype keys are dropped: a PATCH body is JSON from a browser. */
+const BLOCKED = new Set(['__proto__', 'constructor', 'prototype']);
+const isPlain = (/** @type {unknown} */ v) => typeof v === 'object' && v !== null && !Array.isArray(v);
+
 /**
- * Change part of a character's config on disk, and nothing else. A robot
- * holds the file as it was at hello; writing that snapshot back would undo
- * whatever was edited by hand while it was online — a replaced token
- * included. So the file is read again and only the caller's fields change.
- * @param {string} path
- * @param {(config: any) => void} change
+ * Objects merge key by key; anything else — arrays, strings, null — replaces.
+ * Returns a new object and leaves `base` alone.
+ * @param {any} base @param {unknown} patch @returns {any}
  */
-export function updateConfig(path, change) {
+export function deepMerge(base, patch) {
+  if (!isPlain(patch)) return base;
+  const out = { ...base };
+  for (const [k, v] of Object.entries(/** @type {Record<string, unknown>} */ (patch))) {
+    if (BLOCKED.has(k)) continue;
+    out[k] = isPlain(v) && isPlain(out[k]) ? deepMerge(out[k], v) : v;
+  }
+  return out;
+}
+
+/**
+ * Read the file, change it, write it back — never from a snapshot taken
+ * earlier. A robot holds the file as it was at hello and the admin page edits
+ * it at the same time; each writes only what it changed.
+ * @param {string} path @param {(raw: any) => void} change
+ */
+function updateFile(path, change) {
   const raw = JSON.parse(readFileSync(path, 'utf8'));
   raw.config = raw.config ?? {};
-  change(raw.config);
+  change(raw);
   writeFileSync(path, JSON.stringify(raw, null, 2) + '\n', { mode: 0o600 });
   chmodSync(path, 0o600);
+}
+
+/**
+ * Change part of a character's config on disk, and nothing else (see
+ * updateFile). A replaced token stays replaced.
+ * @param {string} path @param {(config: any) => void} change
+ */
+export function updateConfig(path, change) {
+  updateFile(path, (raw) => change(raw.config));
+}
+
+/**
+ * The admin page's edit. The name is only the display name: the file, and so
+ * the id, stay put, and a body online under this character stays online.
+ * @param {string} path
+ * @param {{ name?: unknown, config?: unknown }} patch
+ */
+export function patchCharacter(path, patch) {
+  if (patch.name !== undefined) {
+    if (typeof patch.name !== 'string') throw new Error('name must be a string');
+    checkName(patch.name);
+  }
+  if (patch.config !== undefined && !isPlain(patch.config)) throw new Error('config must be an object');
+  updateFile(path, (raw) => {
+    if (patch.name !== undefined) raw.name = patch.name;
+    if (patch.config !== undefined) raw.config = deepMerge(raw.config, patch.config);
+  });
+}
+
+/** @param {string} path @returns {string} the new token */
+export function regenerateToken(path) {
+  const token = randomBytes(16).toString('hex');
+  updateFile(path, (raw) => { raw.token = token; });
+  return token;
+}
+
+/** @param {string} path */
+export function deleteCharacter(path) { unlinkSync(path); }
+
+/**
+ * By file name. An id is a name that passed checkName when it was created, so
+ * anything that would not pass now cannot be one — and must not reach join().
+ * @param {string} id @param {string} [dir]
+ * @returns {Character | null}
+ */
+export function characterById(id, dir = CHARACTERS_DIR) {
+  try { checkName(id); } catch { return null; }
+  return listCharacters(dir).characters.find((c) => c.id === id) ?? null;
 }
 
 /** The three layers a robot cannot run without. The reflex is optional. */
