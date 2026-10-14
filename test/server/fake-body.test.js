@@ -33,3 +33,22 @@ test('a body whose brain hangs up halts at once', async () => {
   assert.equal(body.halted?.why, 'closed');
   brain.close();
 });
+
+test('a new move replaces the one in progress rather than queueing behind it', async () => {
+  // The brain renews a cruise LEAD_MS early with only what is left; a body
+  // that queued instead would drive 300 ms extra per renewal.
+  const brain = await mute();
+  const body = await connectFakeBody(brain.url);
+  const [ws] = brain.wss.clients;
+  ws.send(JSON.stringify({ type: 'move', drive: 'forward', steer: 'straight', ms: 1000 }));
+  await until(() => body.driving !== null);
+  ws.send(JSON.stringify({ type: 'move', drive: 'backward', steer: 'left', ms: 100 }));
+  await until(() => body.driving?.drive === 'backward');
+  await new Promise((r) => setTimeout(r, 250));
+  assert.equal(body.driving, null);
+  ws.send(JSON.stringify({ type: 'move', drive: 'forward', steer: 'straight', ms: 1000 }));
+  await until(() => body.driving !== null);
+  ws.send(JSON.stringify({ type: 'stop' }));
+  await until(() => body.driving === null, 200);
+  body.close(); brain.close();
+});

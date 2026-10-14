@@ -20,6 +20,11 @@ export const HEARTBEAT_MS = 300;
 export const WATCHDOG_MS = 1000;
 
 /**
+ * A `move` REPLACES the one in progress; it never queues behind it. The brain
+ * renews a cruise LEAD_MS before the current order runs out, sending only
+ * what is left from now, so a body that queued would drive an extra LEAD_MS
+ * per renewal and keep going after the renewals stop.
+ *
  * The longest single `move`. A body only ever drives on a bounded order, so
  * a brain that dies mid-cruise costs at most this much travel — the same
  * bound executor.js's renewal loop gives the phone (MAX_COAST_MS).

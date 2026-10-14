@@ -29,7 +29,14 @@ export async function connectFakeBody(url, opts = {}) {
   let lastHeard = Date.now();
   /** @type {{ at: number, why: 'watchdog' | 'closed' } | null} */ let halted = null;
   /** @param {'watchdog' | 'closed'} why */
-  const halt = (why) => { if (!halted) halted = { at: Date.now(), why }; };
+  const halt = (why) => { motion = null; if (!halted) halted = { at: Date.now(), why }; };
+  /**
+   * The car, as far as a body without one can have it. A `move` REPLACES the
+   * one in progress (protocol.js): the brain renews a cruise early with only
+   * what is left, and a body that queued instead would overrun every renewal.
+   * @type {{ drive: string, steer: string, until: number } | null}
+   */
+  let motion = null;
 
   // One listener, attached before hello: the brain sends its first state in
   // the same breath as welcome, and a second listener attached after
@@ -44,6 +51,8 @@ export async function connectFakeBody(url, opts = {}) {
     if (!answered) { answered = true; onFirst(msg); return; }
     if (!msg) return;
     if (msg.type === 'ping') { ws.send(encode({ type: 'pong' })); return; }
+    if (msg.type === 'move') motion = { drive: msg.drive, steer: msg.steer, until: Date.now() + msg.ms };
+    if (msg.type === 'stop') motion = null;
     messages.push(msg);
     opts.onMessage?.(msg);
   });
@@ -65,6 +74,10 @@ export async function connectFakeBody(url, opts = {}) {
     messages,
     get audioBytes() { return audioBytes; },
     get halted() { return halted; },
+    /** What the car is doing right now, or null when it is standing still. */
+    get driving() {
+      return motion && motion.until > Date.now() ? { drive: motion.drive, steer: motion.steer } : null;
+    },
     /** @param {Int16Array} pcm @param {{ paceMs?: number }} [o] 0 = as fast as possible */
     async sendPcm(pcm, o = {}) {
       for (let i = 0; i < pcm.length; i += FRAME) {
