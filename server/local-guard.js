@@ -8,9 +8,18 @@ const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 const SELF = new Set(['localhost', '127.0.0.1', '[::1]']);
 
 /**
- * @param {{ socket: { remoteAddress?: string }, headers: { host?: string } }} req
+ * A tunnel or reverse proxy connects from this machine, so the address check
+ * passes for everything it forwards — and one told to rewrite Host (a common
+ * cloudflared and ngrok recipe) passes the Host check too. Every one of them
+ * adds at least one of these; nothing a browser sends directly does.
+ */
+const FORWARDED = ['cf-connecting-ip', 'x-forwarded-for', 'forwarded', 'x-real-ip'];
+
+/**
+ * @param {{ socket: { remoteAddress?: string }, headers: Record<string, string | string[] | undefined> & { host?: string } }} req
  */
 export function isLocalRequest(req) {
+  if (FORWARDED.some((h) => req.headers[h] !== undefined)) return false;
   const host = (req.headers.host ?? '').toLowerCase().replace(/:\d+$/, '');
   return LOOPBACK.has(req.socket.remoteAddress ?? '') && SELF.has(host);
 }

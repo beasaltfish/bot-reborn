@@ -23,3 +23,13 @@ test('a rebound domain is not, even from this machine', () => {
   assert.equal(isLocalRequest(req('127.0.0.1', '192.168.3.79:8787')), false);
   assert.equal(isLocalRequest(req('127.0.0.1', undefined)), false);
 });
+
+test('anything that came through a proxy or tunnel is not, even from 127.0.0.1 with a local Host', () => {
+  // cloudflared and ngrok connect from this machine; told to rewrite Host
+  // (--http-host-header localhost:8787), they would pass both checks above
+  // and publish every key and token. They always add one of these.
+  for (const h of ['cf-connecting-ip', 'x-forwarded-for', 'forwarded', 'x-real-ip']) {
+    const r = { socket: { remoteAddress: '127.0.0.1' }, headers: { host: 'localhost:8787', [h]: '203.0.113.9' } };
+    assert.equal(isLocalRequest(r), false, h);
+  }
+});
