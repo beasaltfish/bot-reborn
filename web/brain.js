@@ -5,7 +5,7 @@
 // the config — arrives through the constructor, so it can be tested without a
 // browser and a provider can be swapped without touching it.
 
-import { MIN_DURATION_MS } from './executor.js';
+import { MIN_DURATION_MS } from './motion.js';
 import { SOUNDS } from './audio/sfx.js';
 import { t } from './strings.js';
 
