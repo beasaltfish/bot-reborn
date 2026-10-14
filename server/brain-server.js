@@ -1,17 +1,20 @@
-// The brain as a server: plain HTTP for a person who opens the address in a
-// browser, the body link on /body, and a robot for each body that connects —
-// built from the config of the character whose token it said hello with
-// (spec §1.1). Construction only; main.js decides where the pieces come from.
+// The brain as a server: the admin page and its API for this machine only,
+// the body link on /body for anyone with a character's token, and a robot for
+// each body that connects — built from that character's config (server/body
+// split spec §1.1, admin spec §2). Construction only; main.js decides where
+// the pieces come from.
 
 import { createServer } from 'node:http';
 import { createLink } from './link.js';
 import { startRobot } from './robot.js';
-import { findByToken, updateConfig, ready } from './characters.js';
-import { BODY_PATH } from '../web/protocol.js';
+import { listCharacters, findByToken, updateConfig, ready } from './characters.js';
+import { isLocalRequest } from './local-guard.js';
+import { serveStatic, ADMIN_DIST, FIXTURES_DIR } from './static.js';
+import { createAdminApi } from './admin-api.js';
 
 /**
  * @param {{
- *   characters: () => import('./characters.js').Character[],
+ *   dir: string, adminDist?: string,
  *   fetch?: typeof fetch,
  *   makeEars: () => { kws: any, vad: any },
  *   sfx: Map<any, Int16Array>, earcons: Record<string, Int16Array>,
@@ -20,9 +23,21 @@ import { BODY_PATH } from '../web/protocol.js';
  */
 export function createBrainServer(opts) {
   const log = opts.log ?? console.log;
-  const http = createServer((_req, res) => {
-    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-    res.end(`bot-reborn brain. Bodies connect over WebSocket at ${BODY_PATH}.\n`);
+  /** @type {((req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) => Promise<void>) | null} */
+  let api = null;
+  const http = createServer((req, res) => {
+    // The body link is a WebSocket upgrade and never reaches here; everything
+    // that does is the admin page or its API, and both hold keys and tokens.
+    if (!isLocalRequest(req)) {
+      res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('The admin page only opens on the computer the brain runs on.\n');
+      return;
+    }
+    if ((req.url ?? '').startsWith('/api/')) return void api?.(req, res);
+    if (!serveStatic(req, res, { root: opts.adminDist ?? ADMIN_DIST, fixtures: FIXTURES_DIR })) {
+      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('Not found\n');
+    }
   });
   /** Looked up when admitted, used when built: the same object in between. */
   /** @type {Map<string, import('./characters.js').Character>} */ const admitted = new Map();
@@ -32,7 +47,9 @@ export function createBrainServer(opts) {
     allowedOrigins: opts.allowedOrigins,
     admit: (token) => {
       // Read fresh at every hello, so an edited file needs no restart.
-      const c = findByToken(opts.characters(), token);
+      const now = listCharacters(opts.dir);
+      for (const p of now.problems) log(`skipped ${p}`);
+      const c = findByToken(now.characters, token);
       if (!c) return 'token';
       // Refused at the door rather than answering every turn with apiFailed:
       // a body can show "this character is not set up" once, plainly.
@@ -55,6 +72,7 @@ export function createBrainServer(opts) {
       conn.onClose(() => robot.stop());
     },
   });
+  api = createAdminApi({ dir: opts.dir, link });
   return {
     /** @param {number} port @returns {Promise<number>} the port actually bound */
     listen(port) {

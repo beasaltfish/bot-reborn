@@ -31,11 +31,7 @@ if (!modelsPresent()) {
 const sherpa = loadSherpaNode();
 const keywords = loadKeywords();
 const server = createBrainServer({
-  characters: () => {
-    const now = listCharacters();
-    for (const p of now.problems) console.error(`skipped ${p}`);
-    return now.characters;
-  },
+  dir: CHARACTERS_DIR,
   makeEars: () => ({ kws: createSpotter(sherpa, keywords), vad: createVoiceDetector(sherpa) }),
   sfx: loadSfx(),
   earcons: renderEarcons(),

@@ -19,7 +19,7 @@ test('a recorded sentence drives the robot end to end', { skip, timeout: 20000 }
   const chars = tempCharacters();
   const me = chars.add('me');
   const server = createBrainServer({
-    characters: chars.list, fetch: fakeFetch(), sfx: loadSfx(), earcons: renderEarcons(),
+    dir: chars.dir, fetch: fakeFetch(), sfx: loadSfx(), earcons: renderEarcons(),
     makeEars: () => ({ kws: createSpotter(sherpa, keywords), vad: createVoiceDetector(sherpa) }),
     log: () => {},
   });

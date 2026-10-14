@@ -38,7 +38,7 @@ test('a body with its character\'s token is welcomed by name and told its state'
   const chars = tempCharacters();
   const a = chars.add('a');
   const server = createBrainServer({
-    characters: chars.list, fetch: fakeFetch(), sfx: new Map(), earcons: renderEarcons(),
+    dir: chars.dir, fetch: fakeFetch(), sfx: new Map(), earcons: renderEarcons(),
     makeEars: () => onceEars(), log: () => {},
   });
   const port = await server.listen(0);
@@ -53,7 +53,7 @@ test('a wrong token and an unfinished character are told why', async () => {
   const chars = tempCharacters();
   const half = chars.add('half', (cfg) => { cfg.tts.apiKey = ''; });
   const server = createBrainServer({
-    characters: chars.list, sfx: new Map(), earcons: renderEarcons(), log: () => {},
+    dir: chars.dir, sfx: new Map(), earcons: renderEarcons(), log: () => {},
     makeEars: () => { throw new Error('no robot expected'); },
   });
   const port = await server.listen(0);
@@ -76,7 +76,7 @@ test('two characters talk at once, each with its own voice and key', async () =>
     return fetch(url, init);
   });
   const server = createBrainServer({
-    characters: chars.list, fetch: spy, sfx: new Map(), earcons: renderEarcons(),
+    dir: chars.dir, fetch: spy, sfx: new Map(), earcons: renderEarcons(),
     makeEars: () => onceEars(), log: () => {}, slackMs: 0,
   });
   const port = await server.listen(0);
@@ -93,16 +93,5 @@ test('two characters talk at once, each with its own voice and key', async () =>
   assert.deepEqual(voices, ['alloy', 'nova']);
   assert.deepEqual(auth.sort(), ['Bearer key-a', 'Bearer key-b']);
   ba.ws.close(); bb.ws.close();
-  await server.close();
-});
-
-test('plain HTTP gets a line saying where bodies connect', async () => {
-  const server = createBrainServer({
-    characters: () => [], sfx: new Map(), earcons: renderEarcons(), log: () => {},
-    makeEars: () => { throw new Error('no body expected'); },
-  });
-  const port = await server.listen(0);
-  const text = await (await globalThis.fetch(`http://127.0.0.1:${port}/`)).text();
-  assert.match(text, /\/body/);
   await server.close();
 });
