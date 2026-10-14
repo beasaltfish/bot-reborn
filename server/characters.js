@@ -51,11 +51,18 @@ export function listCharacters(dir = CHARACTERS_DIR) {
   if (!existsSync(dir)) return { characters: [], problems: [] };
   /** @type {Character[]} */ const characters = [];
   /** @type {string[]} */ const problems = [];
+  /** token → the file that has it first */
+  /** @type {Map<string, string>} */ const seen = new Map();
   for (const file of readdirSync(dir).filter((f) => f.endsWith('.json')).sort()) {
     const path = join(dir, file);
     try {
       const raw = JSON.parse(readFileSync(path, 'utf8'));
       if (typeof raw.token !== 'string' || !TOKEN.test(raw.token)) throw new Error('no valid token');
+      // A copied file shares its original's token, and the body holding it
+      // would always be let in as whichever file sorts first.
+      const first = seen.get(raw.token);
+      if (first) throw new Error(`same token as ${first} — give it its own (npm run add-character makes one)`);
+      seen.set(raw.token, path);
       const id = file.slice(0, -'.json'.length);
       // loadConfig fills every field the file leaves out, as it does for the
       // phone's localStorage: an older file still loads after a new setting.

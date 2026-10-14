@@ -103,3 +103,15 @@ test('a robot saving its reply language keeps what was edited by hand meanwhile'
   assert.equal(after.config.replyLang, 'zh');
   assert.equal(statSync(c.path).mode & 0o777, 0o600);
 });
+
+test('a copied file with the same token is reported, not silently shadowed', () => {
+  // Configs are not inherited, so copying a.json to b.json is the natural
+  // way to start a second character — and its token then belongs to a.
+  const dir = tmp();
+  const a = createCharacter('a', dir);
+  writeFileSync(join(dir, 'b.json'), readFileSync(a.path, 'utf8'));
+  const { characters, problems } = listCharacters(dir);
+  assert.deepEqual(characters.map((c) => c.name), ['a']);
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /b\.json.*same token as.*a\.json/);
+});
