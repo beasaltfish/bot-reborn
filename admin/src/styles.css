@@ -28,3 +28,18 @@ button, input, select { font: inherit; }
 .new-character { display: flex; gap: 8px; flex-wrap: wrap; }
 .error { color: var(--bad); width: 100%; }
 @media (max-width: 640px) { .layout { grid-template-columns: 1fr; } .list { border-right: none; border-bottom: 1px solid var(--line); } }
+.editor header { display: flex; align-items: baseline; gap: 12px; }
+.editor h2 { margin: 0 0 12px; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 16px; }
+.tabs [role="tab"] { padding: 8px 14px; border: none; background: none; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; }
+.tabs [aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); }
+.fields { display: flex; flex-direction: column; gap: 12px; }
+.fields label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.fields label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--fg); }
+.fields input, .fields select { padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--fg); }
+.hint { margin: 0; color: var(--muted); font-size: 13px; }
+.test { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.test button { padding: 8px 16px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: inherit; cursor: pointer; }
+.result { margin: 0; font-size: 13px; white-space: pre-wrap; }
+.result.ok { color: var(--ok); }
+.result.bad { color: var(--bad); }
