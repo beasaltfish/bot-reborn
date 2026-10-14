@@ -41,7 +41,8 @@ const isBool = (/** @type {unknown} */ v) => typeof v === 'boolean';
 
 /** @type {Record<string, (m: any) => boolean>} */
 const FROM_BODY = {
-  hello: (m) => Number.isInteger(m.protocol) && typeof m.caps === 'object' && m.caps !== null,
+  hello: (m) => Number.isInteger(m.protocol) && typeof m.token === 'string'
+    && typeof m.caps === 'object' && m.caps !== null,
   motors: (m) => isBool(m.connected),
   ping: () => true,
   pong: () => true,

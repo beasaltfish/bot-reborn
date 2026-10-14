@@ -8,6 +8,7 @@
   },
   "scripts": {
     "start": "node server/main.js",
+    "add-character": "node server/tools/add-character.js",
     "test": "node --test",
     "typecheck": "tsc --noEmit",
     "deploy": "node --test && npx wrangler pages deploy web --branch production"

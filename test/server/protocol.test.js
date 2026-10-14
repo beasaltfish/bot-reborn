@@ -17,7 +17,7 @@ test('brain.js no longer reaches ftdi.js through executor.js', () => {
 });
 
 test('a body hello round-trips', () => {
-  const msg = { type: 'hello', protocol: PROTOCOL, caps: { motors: true, screen: false } };
+  const msg = { type: 'hello', protocol: PROTOCOL, token: 'ab'.repeat(16), caps: { motors: true, screen: false } };
   assert.deepEqual(parse(encode(msg), 'body'), msg);
 });
 
@@ -43,4 +43,9 @@ test('garbage is null, not a throw', () => {
   assert.equal(parse('not json', 'body'), null);
   assert.equal(parse('[]', 'body'), null);
   assert.equal(parse(encode({ type: 'motors' }), 'body'), null);
+});
+
+test('a hello without a token is refused', () => {
+  assert.equal(parse(encode({ type: 'hello', protocol: PROTOCOL, caps: {} }), 'body'), null);
+  assert.equal(parse(encode({ type: 'hello', protocol: PROTOCOL, caps: {}, token: 7 }), 'body'), null);
 });
