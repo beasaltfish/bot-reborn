@@ -45,7 +45,6 @@ test('garbage is null, not a throw', () => {
   assert.equal(parse(encode({ type: 'motors' }), 'body'), null);
 });
 
-test('a hello without a token is refused', () => {
-  assert.equal(parse(encode({ type: 'hello', protocol: PROTOCOL, caps: {} }), 'body'), null);
-  assert.equal(parse(encode({ type: 'hello', protocol: PROTOCOL, caps: {}, token: 7 }), 'body'), null);
+test('a hello without a token still parses, so the link can say why it is refused', () => {
+  assert.notEqual(parse(encode({ type: 'hello', protocol: PROTOCOL, caps: {} }), 'body'), null);
 });

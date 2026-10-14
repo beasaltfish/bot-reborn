@@ -92,6 +92,7 @@ export function createLink(opts) {
         // sends no Origin; a page always does, and only a listed one is ours.
         const origin = req.headers.origin;
         if (origin && !allowed.has(origin)) return reject('origin');
+        if (typeof msg.token !== 'string') return reject('token');
         const who = opts.admit(msg.token);
         if (typeof who === 'string') return reject(who);
         if (active.has(who.id)) return reject('busy');

@@ -200,3 +200,18 @@ test('when a character\'s body leaves, another body may take its place', async (
   assert.equal(second.msgs[0].type, 'welcome');
   second.ws.close(); r.close();
 });
+
+test('a hello with no token, or not a string, is told so rather than left to time out', async () => {
+  const r = await rig({ admit: () => { throw new Error('admit must not see a non-string token'); } });
+  for (const hello of [{}, { token: 7 }]) {
+    const ws = new WebSocket(r.url);
+    /** @type {any[]} */ const msgs = [];
+    ws.on('message', (d) => msgs.push(JSON.parse(String(d))));
+    await new Promise((res) => ws.once('open', res));
+    ws.send(JSON.stringify({ type: 'hello', protocol: PROTOCOL, caps: {}, ...hello }));
+    await until(() => msgs.length > 0, 1000);
+    assert.deepEqual(msgs[0], { type: 'reject', reason: 'token' });
+    ws.close();
+  }
+  r.close();
+});

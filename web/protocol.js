@@ -41,8 +41,9 @@ const isBool = (/** @type {unknown} */ v) => typeof v === 'boolean';
 
 /** @type {Record<string, (m: any) => boolean>} */
 const FROM_BODY = {
-  hello: (m) => Number.isInteger(m.protocol) && typeof m.token === 'string'
-    && typeof m.caps === 'object' && m.caps !== null,
+  // `token` is checked by the link, not here: a hello dropped at parse time
+  // gets no answer at all, and a body missing its token should be told so.
+  hello: (m) => Number.isInteger(m.protocol) && typeof m.caps === 'object' && m.caps !== null,
   motors: (m) => isBool(m.connected),
   ping: () => true,
   pong: () => true,
