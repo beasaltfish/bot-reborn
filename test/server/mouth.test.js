@@ -56,3 +56,16 @@ test('hush drops everything queued, settles every waiter, and tells the body', a
   assert.equal(chunks.length, sentBefore);
   assert.equal(mouth.play(new Int16Array(1600)).ms, 100);
 });
+
+test('done waits out the echo slack too, so the tail of a reply is not heard', async () => {
+  // With bargeIn off, SPEAKING is what keeps the VAD shut; ending it when our
+  // clock says the last sample left would open the ears while the body is
+  // still playing it, a network delay later.
+  const { clock, mouth } = rig(300);
+  let done = false;
+  void mouth.play(new Int16Array(1600)).done.then(() => { done = true; });
+  await clock.advance(399);
+  assert.equal(done, false);
+  await clock.advance(1);
+  assert.equal(done, true);
+});

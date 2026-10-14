@@ -29,9 +29,9 @@ export class Mouth {
    * @param {{ sendAudio: (bytes: Uint8Array) => void, send: (msg: object) => void,
    *           now?: () => number, after?: (ms: number, fn: () => void) => () => void,
    *           slackMs?: number }} opts
-   *   `slackMs` is added to what play() reports. The session closes its ears
-   *   for that long, and the body hears its own sound a network round trip
-   *   after we think it played.
+   *   `slackMs` is added to what play() reports and to `done`. The body
+   *   hears its own sound a network round trip after we think it played, and
+   *   both the ear gate and the end of SPEAKING have to wait that out.
    */
   constructor(opts) {
     this.#sendAudio = opts.sendAudio;
@@ -57,7 +57,10 @@ export class Mouth {
     return {
       ms: Math.ceil(startsIn + clipMs + this.#slackMs),
       started: this.#wait(startsIn),
-      done: this.#wait(startsIn + clipMs),
+      // The slack too: with bargeIn off, SPEAKING is what keeps the VAD shut,
+      // and ending it on our clock would open the ears while the body is
+      // still playing the last words.
+      done: this.#wait(startsIn + clipMs + this.#slackMs),
     };
   }
 
