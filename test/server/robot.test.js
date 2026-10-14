@@ -37,7 +37,7 @@ function fakeEars() {
   };
 }
 
-function rig(/** @type {Parameters<typeof fakeFetch>[0]} */ fetchOpts, caps = { motors: true }) {
+function rig(/** @type {Parameters<typeof fakeFetch>[0]} */ fetchOpts = {}, caps = { motors: true }) {
   const c = fakeConn(caps);
   const e = fakeEars();
   const fetch = fakeFetch(fetchOpts);
