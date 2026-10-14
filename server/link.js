@@ -145,5 +145,19 @@ export function createLink(opts) {
       for (const ws of wss.clients) ws.terminate();
       wss.close();
     },
+    /** Ids of the characters with a body connected right now. */
+    online: () => [...active.keys()],
+    /**
+     * Drop a character's body: its token was replaced or it was deleted, and
+     * a body that stayed connected would go on as if neither had happened.
+     * The close handlers run as for any disconnect.
+     * @param {string} id
+     */
+    kick(id) {
+      const ws = active.get(id);
+      if (!ws) return false;
+      ws.close();
+      return true;
+    },
   };
 }

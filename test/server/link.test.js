@@ -20,6 +20,7 @@ async function rig(opts = {}) {
   const port = /** @type {import('node:net').AddressInfo} */ (http.address()).port;
   return {
     bodies,
+    link,
     url: `ws://127.0.0.1:${port}/body`,
     close: () => { link.close(); http.close(); },
   };
@@ -214,4 +215,17 @@ test('a hello with no token, or not a string, is told so rather than left to tim
     ws.close();
   }
   r.close();
+});
+test('the link says who is online and can drop one character', async () => {
+  const r = await rig();
+  const a = await hello(r.url, PROTOCOL, 'a');
+  const b = await hello(r.url, PROTOCOL, 'b');
+  assert.deepEqual(r.link.online().sort(), ['a', 'b']);
+  assert.equal(r.link.kick('a'), true);
+  await until(() => a.ws.readyState === WebSocket.CLOSED);
+  await until(() => r.link.online().length === 1);
+  assert.deepEqual(r.link.online(), ['b']);
+  assert.equal(b.ws.readyState, WebSocket.OPEN);
+  assert.equal(r.link.kick('nobody'), false);
+  b.ws.close(); r.close();
 });
