@@ -35,3 +35,19 @@ test('built after every source means no build; a newer source means build', () =
   at(join(t.webDir, 'checks.js'), 3000);
   assert.equal(needsBuild(t), true);
 });
+
+test('a failed build is reported and the brain starts anyway', async () => {
+  // Bodies do not need the admin page; a missing dev dependency must not keep
+  // them from connecting. The page itself then says how to build it (503).
+  const { prepareAdmin } = await import('../../server/admin-build.js');
+  /** @type {string[]} */ const lines = [];
+  const ok = prepareAdmin({
+    needsBuild: () => true,
+    buildAdmin: () => { throw new Error('vite: command not found'); },
+    log: (l) => lines.push(l),
+  });
+  assert.equal(ok, false);
+  assert.match(lines.join('\n'), /vite: command not found/);
+  assert.match(lines.join('\n'), /npm run admin:build/);
+  assert.equal(prepareAdmin({ needsBuild: () => false, buildAdmin: () => { throw new Error('no'); }, log: () => {} }), true);
+});

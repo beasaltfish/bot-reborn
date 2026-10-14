@@ -6,7 +6,7 @@ import { networkInterfaces } from 'node:os';
 import { spawn } from 'node:child_process';
 import { listCharacters, CHARACTERS_DIR } from './characters.js';
 import { createBrainServer } from './brain-server.js';
-import { needsBuild, buildAdmin } from './admin-build.js';
+import { prepareAdmin, buildAdmin } from './admin-build.js';
 import { renderEarcons, loadSfx } from './audio/render.js';
 import {
   modelsPresent, loadSherpaNode, loadKeywords, createSpotter, createVoiceDetector,
@@ -19,10 +19,7 @@ if (!modelsPresent()) {
   console.error('Models missing. Run: server/models/fetch.sh');
   process.exit(1);
 }
-if (needsBuild()) {
-  console.log('Building the admin page…');
-  buildAdmin();
-}
+prepareAdmin({ buildAdmin: () => { console.log('Building the admin page…'); buildAdmin(); } });
 for (const p of listCharacters().problems) console.error(`skipped ${p}`);
 
 const sherpa = loadSherpaNode();

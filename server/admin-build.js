@@ -38,3 +38,23 @@ export function buildAdmin() {
   const r = spawnSync(npm, ['run', 'admin:build'], { stdio: 'inherit' });
   if (r.status !== 0) throw new Error('building the admin page failed (npm run admin:build)');
 }
+
+/**
+ * Build if stale, and never let a failed build stop the brain: bodies do not
+ * need the admin page, and the page's 503 already says how to build it.
+ * @param {{ needsBuild?: () => boolean, buildAdmin?: () => void, log?: (line: string) => void }} [deps]
+ * @returns {boolean} whether the page is up to date
+ */
+export function prepareAdmin(deps = {}) {
+  const stale = deps.needsBuild ?? needsBuild;
+  const build = deps.buildAdmin ?? buildAdmin;
+  const log = deps.log ?? console.error;
+  if (!stale()) return true;
+  try {
+    build();
+    return true;
+  } catch (err) {
+    log(`The admin page could not be built (${/** @type {Error} */ (err).message}). The brain starts anyway; run npm run admin:build to retry.`);
+    return false;
+  }
+}
