@@ -92,6 +92,22 @@ export function saveCharacter(c) {
   chmodSync(c.path, 0o600);
 }
 
+/**
+ * Change part of a character's config on disk, and nothing else. A robot
+ * holds the file as it was at hello; writing that snapshot back would undo
+ * whatever was edited by hand while it was online — a replaced token
+ * included. So the file is read again and only the caller's fields change.
+ * @param {string} path
+ * @param {(config: any) => void} change
+ */
+export function updateConfig(path, change) {
+  const raw = JSON.parse(readFileSync(path, 'utf8'));
+  raw.config = raw.config ?? {};
+  change(raw.config);
+  writeFileSync(path, JSON.stringify(raw, null, 2) + '\n', { mode: 0o600 });
+  chmodSync(path, 0o600);
+}
+
 /** The three layers a robot cannot run without. The reflex is optional. */
 export function ready(/** @type {any} */ config) {
   return layerReady(config.stt) && layerReady(config.llm) && layerReady(config.tts);

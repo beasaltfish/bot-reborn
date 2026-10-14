@@ -6,7 +6,7 @@
 import { createServer } from 'node:http';
 import { createLink } from './link.js';
 import { startRobot } from './robot.js';
-import { findByToken, saveCharacter, ready } from './characters.js';
+import { findByToken, updateConfig, ready } from './characters.js';
 import { BODY_PATH } from '../web/protocol.js';
 
 /**
@@ -46,7 +46,8 @@ export function createBrainServer(opts) {
       // Fresh ears per body: the VAD holds the last body's half sentence.
       const robot = startRobot(conn, {
         config: c.config,
-        save: (cfg) => saveCharacter({ ...c, config: cfg }),
+        // Only the field a robot changes by itself (§11.1's reply language).
+        save: (cfg) => updateConfig(c.path, (disk) => { disk.replyLang = cfg.replyLang; }),
         fetch: opts.fetch, ears: opts.makeEars(),
         sfx: opts.sfx, earcons: opts.earcons, slackMs: opts.slackMs,
         log: (line) => log(`[${c.name}] ${line}`),

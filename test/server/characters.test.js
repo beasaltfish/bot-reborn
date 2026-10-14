@@ -85,3 +85,21 @@ test('the file on disk is { name, token, config }', () => {
   const c = createCharacter('a', tmp());
   assert.deepEqual(Object.keys(JSON.parse(readFileSync(c.path, 'utf8'))), ['name', 'token', 'config']);
 });
+
+test('a robot saving its reply language keeps what was edited by hand meanwhile', async () => {
+  // Found in review: the robot wrote back the whole file as it was at hello,
+  // so a token changed while it was online came back, silently.
+  const { updateConfig } = await import('../../server/characters.js');
+  const dir = tmp();
+  const c = createCharacter('a', dir);
+  const onDisk = JSON.parse(readFileSync(c.path, 'utf8'));
+  onDisk.token = 'cd'.repeat(16);
+  onDisk.config.llm.apiKey = 'edited';
+  writeFileSync(c.path, JSON.stringify(onDisk));
+  updateConfig(c.path, (cfg) => { cfg.replyLang = 'zh'; });
+  const after = JSON.parse(readFileSync(c.path, 'utf8'));
+  assert.equal(after.token, 'cd'.repeat(16));
+  assert.equal(after.config.llm.apiKey, 'edited');
+  assert.equal(after.config.replyLang, 'zh');
+  assert.equal(statSync(c.path).mode & 0o777, 0o600);
+});
