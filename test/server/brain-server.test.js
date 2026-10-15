@@ -95,3 +95,21 @@ test('two characters talk at once, each with its own voice and key', async () =>
   ba.ws.close(); bb.ws.close();
   await server.close();
 });
+
+test('the phone page is served to the network, the admin page only to this machine', async () => {
+  const chars = tempCharacters();
+  const server = createBrainServer({
+    dir: chars.dir, sfx: new Map(), earcons: renderEarcons(), log: () => {},
+    makeEars: () => onceEars(),
+  });
+  const port = await server.listen(0);
+  const page = await fetch(`http://127.0.0.1:${port}/phone/`);
+  assert.equal(page.status, 200);
+  assert.match(await page.text(), /<html/);
+  // Same request as from a LAN address: the forwarding header makes
+  // isLocalRequest say no, and the phone page must not care.
+  const remote = { headers: { 'x-forwarded-for': '192.168.1.20' } };
+  assert.equal((await fetch(`http://127.0.0.1:${port}/phone/app.js`, remote)).status, 200);
+  assert.equal((await fetch(`http://127.0.0.1:${port}/api/characters`, remote)).status, 403);
+  await server.close();
+});

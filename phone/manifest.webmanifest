@@ -1,8 +1,8 @@
 {
   "name": "bot reborn",
   "short_name": "Robot",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "./",
+  "scope": "./",
   "display": "fullscreen",
   "orientation": "landscape",
   "background_color": "#121212",

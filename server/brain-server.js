@@ -1,5 +1,5 @@
 // The brain as a server: the admin page and its API for this machine only,
-// the body link on /body for anyone with a character's token, and a robot for
+// the phone's page on /phone/ for this network, the body link on /body for anyone with a character's token, and a robot for
 // each body that connects — built from that character's config (server/body
 // split spec §1.1, admin spec §2). Construction only; main.js decides where
 // the pieces come from.
@@ -9,7 +9,7 @@ import { createLink } from './link.js';
 import { startRobot } from './robot.js';
 import { listCharacters, findByToken, updateConfig, ready } from './characters.js';
 import { isLocalRequest } from './local-guard.js';
-import { serveStatic, ADMIN_DIST, FIXTURES_DIR } from './static.js';
+import { serveStatic, servePhone, ADMIN_DIST, FIXTURES_DIR, PHONE_DIR, CORE_DIR } from './static.js';
 import { createAdminApi } from './admin-api.js';
 
 /**
@@ -19,6 +19,7 @@ import { createAdminApi } from './admin-api.js';
  *   makeEars: () => { kws: any, vad: any },
  *   sfx: Map<any, Int16Array>, earcons: Record<string, Int16Array>,
  *   log?: (line: string) => void, slackMs?: number, allowedOrigins?: string[],
+ *   phoneDir?: string, coreDir?: string,
  * }} opts
  */
 export function createBrainServer(opts) {
@@ -26,8 +27,10 @@ export function createBrainServer(opts) {
   /** @type {((req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) => Promise<void>) | null} */
   let api = null;
   const http = createServer((req, res) => {
+    // The phone's page first: it is for the whole network, and holds no key.
+    if (servePhone(req, res, { phone: opts.phoneDir ?? PHONE_DIR, core: opts.coreDir ?? CORE_DIR })) return;
     // The body link is a WebSocket upgrade and never reaches here; everything
-    // that does is the admin page or its API, and both hold keys and tokens.
+    // else is the admin page or its API, and both hold keys and tokens.
     if (!isLocalRequest(req)) {
       res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
       res.end('The admin page only opens on the computer the brain runs on.\n');

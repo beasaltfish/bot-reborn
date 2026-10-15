@@ -229,3 +229,11 @@ test('the link says who is online and can drop one character', async () => {
   assert.equal(r.link.kick('nobody'), false);
   b.ws.close(); r.close();
 });
+
+test('a page served by this brain is welcomed: its origin names the host it connected to', async () => {
+  const r = await rig();
+  const host = new URL(r.url).host;
+  const phone = await helloWith(r.url, { Origin: `http://${host}` });
+  assert.deepEqual(phone.msgs[0], { type: 'welcome', name: 'n-a' });
+  phone.ws.close(); r.close();
+});

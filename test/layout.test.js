@@ -25,7 +25,10 @@ function sources(dir) {
 /** @param {string} file @returns {string[]} repo-relative targets */
 function targets(file) {
   const src = readFileSync(join(ROOT, file), 'utf8');
-  return [...src.matchAll(SPEC)].map((m) => posix.normalize(posix.join(posix.dirname(file), m[2])));
+  // A directory (trailing /) is a place files are served or read from — the
+  // brain serves phone/ to the network — not code being imported.
+  return [...src.matchAll(SPEC)].filter((m) => !m[2].endsWith('/'))
+    .map((m) => posix.normalize(posix.join(posix.dirname(file), m[2])));
 }
 
 /** @param {string} dir @param {string[]} banned */

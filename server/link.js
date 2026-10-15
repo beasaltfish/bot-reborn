@@ -89,9 +89,11 @@ export function createLink(opts) {
         if (msg.protocol !== PROTOCOL) return reject('protocol');
         // Any web page the user opens may connect to localhost: browsers do
         // not apply same-origin rules to WebSockets. An ESP32 or a script
-        // sends no Origin; a page always does, and only a listed one is ours.
+        // sends no Origin. A page does — and the phone's page comes from this
+        // brain (/phone/), so its origin names the host it connected to.
+        // A rebound domain would pass this too; it still needs a token.
         const origin = req.headers.origin;
-        if (origin && !allowed.has(origin)) return reject('origin');
+        if (origin && !allowed.has(origin) && !sameHost(origin, req.headers.host)) return reject('origin');
         if (typeof msg.token !== 'string') return reject('token');
         const who = opts.admit(msg.token);
         if (typeof who === 'string') return reject(who);
@@ -160,4 +162,9 @@ export function createLink(opts) {
       return true;
     },
   };
+}
+
+/** @param {string} origin @param {string | undefined} host */
+function sameHost(origin, host) {
+  try { return new URL(origin).host === host; } catch { return false; }
 }

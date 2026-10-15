@@ -1,6 +1,7 @@
 // `npm start`: the brain on this computer, and its admin page in the browser.
-// Characters are made on that page; bodies on the same Wi-Fi connect to
-// ws://<this machine>:<port>/body, and a phone goes through a tunnel.
+// Characters are made on that page; a body on the same Wi-Fi connects to
+// ws://<this machine>:<port>/body, and a phone opens the page this brain
+// serves at http://<this machine>:<port>/phone/ (the admin page's QR code).
 
 import { networkInterfaces } from 'node:os';
 import { spawn } from 'node:child_process';
@@ -36,8 +37,11 @@ const admin = `http://localhost:${port}/`;
 const lan = Object.values(networkInterfaces()).flat()
   .filter((i) => i && i.family === 'IPv4' && !i.internal).map((i) => i?.address);
 console.log(`admin page: ${admin}`);
-for (const ip of lan) console.log(`body URL: ws://${ip}:${port}${BODY_PATH}`);
-console.log(`phone: cloudflared tunnel --url http://localhost:${port}`);
+for (const ip of lan) {
+  console.log(`body URL: ws://${ip}:${port}${BODY_PATH}`);
+  console.log(`phone page: http://${ip}:${port}/phone/`);
+}
+console.log('phone: Chrome must treat that address as secure — chrome://flags/#unsafely-treat-insecure-origin-as-secure');
 
 if (process.env.BOT_REBORN_NO_OPEN !== '1') openBrowser(admin);
 
