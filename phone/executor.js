@@ -100,6 +100,13 @@ export class Executor {
    */
   #queuedMs = 0;
 
+  /**
+   * The order hold() is carrying out, or null. Its `until` is the deadline the
+   * running loop writes up to; a renewal in the same direction moves it.
+   * @type {{ gen: number, pins: number, until: number } | null}
+   */
+  #held = null;
+
   /** @type {Calibration} */ #cal = {};
 
   /**
@@ -148,6 +155,60 @@ export class Executor {
     if (!this.#connected) return;
     const gen = ++this.#gen;
     await this.#renew(gen, pinsFor(drive, steer, this.#cal), null);
+  }
+
+  /**
+   * One bounded order from a brain (protocol.js `move`), which REPLACES the
+   * one in progress. The brain renews a cruise LEAD_MS before it runs out with
+   * only what is left from now, so writing that behind the bytes the chip
+   * already holds would add LEAD_MS of travel at every renewal. The same pins
+   * therefore only move the deadline the running loop writes up to; different
+   * pins throw away what is queued and start from now.
+   *
+   * @param {string} drive @param {string} steer @param {number} ms
+   */
+  hold(drive, steer, ms) {
+    if (!this.#connected) return;
+    const pins = pinsFor(drive, steer, this.#cal);
+    const until = this.#now() + ms;
+    const h = this.#held;
+    if (h && h.gen === this.#gen && h.pins === pins) { h.until = until; return; }
+    const next = { gen: ++this.#gen, pins, until };
+    this.#held = next;
+    void this.#holdUntil(next);
+  }
+
+  /** @param {{ gen: number, pins: number, until: number }} h */
+  async #holdUntil(h) {
+    try {
+      try { await this.#ftdi.purgeTx(); } catch (err) { this.#fail(/** @type {Error} */ (err)); return; }
+      if (h.gen !== this.#gen) return;
+      this.#queuedMs = 0;
+      for (;;) {
+        if (h.gen !== this.#gen) return;
+        // What the chip still has to play counts against the deadline too.
+        const slice = Math.min(h.until - this.#now() - this.#queuedMs, MAX_COAST_MS);
+        if (slice < 1) return;
+        const startedAt = this.#now();
+        try {
+          await this.#ftdi.write(this.#ftdi.buildStream(h.pins, slice));
+        } catch (err) {
+          this.#fail(/** @type {Error} */ (err));
+          return;
+        }
+        if (h.gen !== this.#gen) return;
+        // The same books #renew keeps — see the long note there.
+        const spent = this.#now() - startedAt;
+        this.#queuedMs = Math.max(0, this.#queuedMs + slice - spent);
+        const wait = Math.max(0, this.#queuedMs - LEAD_MS);
+        this.#queuedMs -= wait;
+        await this.#sleep(wait);
+      }
+    } finally {
+      // Cleared in the same turn the loop decides to end, so a renewal that
+      // arrives afterwards starts a new loop instead of moving a dead deadline.
+      if (this.#held === h) this.#held = null;
+    }
   }
 
   /**
