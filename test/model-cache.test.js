@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MODEL_CACHE, cachedBytes } from '../web/audio/model-cache.js';
+import { MODEL_CACHE, cachedBytes } from '../phone/audio/model-cache.js';
 
 /** A Cache that remembers what was put in it, and counts matches. */
 function fakeCaches() {

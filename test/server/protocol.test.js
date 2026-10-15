@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { encode, parse, PROTOCOL, MAX_MOVE_MS } from '../../web/protocol.js';
-import * as motion from '../../web/motion.js';
-import * as executor from '../../web/executor.js';
+import { encode, parse, PROTOCOL, MAX_MOVE_MS } from '../../core/protocol.js';
+import * as motion from '../../core/motion.js';
+import * as executor from '../../phone/executor.js';
 
 test('executor re-exports the motion constants unchanged', () => {
   assert.equal(executor.MAX_COAST_MS, motion.MAX_COAST_MS);
@@ -12,7 +12,7 @@ test('executor re-exports the motion constants unchanged', () => {
 });
 
 test('brain.js no longer reaches ftdi.js through executor.js', () => {
-  const src = readFileSync(new URL('../../web/brain.js', import.meta.url), 'utf8');
+  const src = readFileSync(new URL('../../core/brain.js', import.meta.url), 'utf8');
   assert.doesNotMatch(src, /from '\.\/executor\.js'/);
 });
 

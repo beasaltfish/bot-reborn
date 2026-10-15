@@ -1,6 +1,6 @@
 // The calibration bench — the bring-up panel for spec §12's ①②⑧.
 //
-// It stands in for web/app.js (D4/D5, one byte at a time), whose model cannot
+// It stands in for phone/app.js (D4/D5, one byte at a time), whose model cannot
 // express "write 3000 bytes and then start a stopwatch". Here Ftdi.buildStream()
 // hands the whole buffer over in one go instead.
 //

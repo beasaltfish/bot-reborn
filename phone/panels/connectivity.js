@@ -10,26 +10,26 @@
 // localStorage is still not touched here — config.js is the only module in the
 // app that does, so that §8.2's schema has exactly one definition.
 
-import { CONFIG_KEY, loadConfig, saveConfig } from '../config.js';
+import { CONFIG_KEY, loadConfig, saveConfig } from '../../core/config.js';
 import { MIN_DURATION_MS } from '../executor.js';
-import { OpenAiCompatStt } from '../providers/stt-openai-compat.js';
-import { OpenAiCompatLlm } from '../providers/llm-openai-compat.js';
-import { WebAudioTts } from '../providers/tts-webaudio.js';
-import { Reflex } from '../reflex.js';
-import { Brain, TOOLS, buildSystemPrompt } from '../brain.js';
+import { OpenAiCompatStt } from '../../core/providers/stt-openai-compat.js';
+import { OpenAiCompatLlm } from '../../core/providers/llm-openai-compat.js';
+import { WebAudioTts } from '../../core/providers/tts-webaudio.js';
+import { Reflex } from '../../core/reflex.js';
+import { Brain, TOOLS, buildSystemPrompt } from '../../core/brain.js';
 import { AudioPipeline, RATE } from '../audio/pipeline.js';
-import { joinFrames, toInt16 } from '../audio/pcm.js';
+import { joinFrames, toInt16 } from '../../core/audio/pcm.js';
 import { encodeWav } from '../audio/wav.js';
 import { matchFixture, saveFixture, recordedAt } from '../fixture-store.js';
 // The three checks have one definition; this page and the product's setup
-// sheet ask the same questions of different audio. See web/checks.js.
-import { checkLlm, checkTts, checkReflex, fetchClip, transcribeClip } from '../checks.js';
+// sheet ask the same questions of different audio. See core/checks.js.
+import { checkLlm, checkTts, checkReflex, fetchClip, transcribeClip } from '../../core/checks.js';
 import { materialFor } from '../instrument-material.js';
-import { PRESETS, voicesFor } from '../provider-presets.js';
+import { PRESETS, voicesFor } from '../../core/provider-presets.js';
 
 /**
- * @typedef {import('../config.js').Config} Config
- * @typedef {import('../config.js').Layer} Layer
+ * @typedef {import('../../core/config.js').Config} Config
+ * @typedef {import('../../core/config.js').Layer} Layer
  * The form only knows the three provider layers; the four preferences beside
  * them (§8.2) are produced by voice and by §7.3's calibration, not typed in.
  * @typedef {Pick<Config, 'stt' | 'llm' | 'tts' | 'reflex'>} ProviderLayers
@@ -249,7 +249,7 @@ export function createConnectivity() {
   // --- Connectivity tests (spec §9.3) -----------------------------------------
   //
   // Every test exercises the hardest case on purpose — an easy input passing
-  // tells you nothing. See web/fixtures/README.md for why the three STT
+  // tells you nothing. See core/fixtures/README.md for why the three STT
   // fixtures are what they are.
 
   // The three clips this page asks you to record, keyed on the UI language for
@@ -262,7 +262,7 @@ export function createConnectivity() {
 
   /**
    * The one place a fixture is read, whether it was recorded on this page or
-   * dropped into web/fixtures/ with ffmpeg. Both arrive as a Response carrying
+   * dropped into core/fixtures/ with ffmpeg. Both arrive as a Response carrying
    * audio/wav (that is why fixture-store.js is a Cache and not a database), so
    * the test and the recorder's status line share a single code path instead of
    * each deciding for itself what "present" means.
@@ -403,7 +403,7 @@ export function createConnectivity() {
 
   // --- Recording the fixtures (spec §9.3) ------------------------------------
   //
-  // The three clips have to be in your own voice (web/fixtures/README.md), and
+  // The three clips have to be in your own voice (core/fixtures/README.md), and
   // on a phone there is no repo to drop a file into and no ffmpeg to make one —
   // so the page that needs them is the only place that can collect them. The
   // rows are built from STT_FIXTURES rather than written into dev.html so

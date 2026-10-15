@@ -13,7 +13,7 @@
 // wired — and forward has to be settled first, or the turn is being watched on
 // a car that may be reversing.
 
-import { t } from './strings.js';
+import { t } from '../core/strings.js';
 import { aheadDrive } from './executor.js';
 
 const $ = (/** @type {string} */ id) =>
@@ -35,7 +35,7 @@ const DRIVE_MS = 400;
  *   lang: 'en' | 'zh',
  *   openCar: (opts?: { raw?: boolean }) =>
  *     Promise<{ executor: import('./executor.js').Executor }>,
- *   onCalibrated: (patch: Partial<import('./config.js').Calibration>) => void,
+ *   onCalibrated: (patch: Partial<import('../core/config.js').Calibration>) => void,
  *   onChange: () => void,
  *   log: (msg: string) => void,
  * }} deps
@@ -82,7 +82,7 @@ export function createCalibration(deps) {
   }
 
   /**
-   * @param {import('./strings.js').StringKey} key
+   * @param {import('../core/strings.js').StringKey} key
    * @param {() => void} fn
    */
   function footButton(key, fn) {
@@ -182,8 +182,8 @@ export function createCalibration(deps) {
   }
 
   /**
-   * @param {import('./strings.js').StringKey} key
-   * @param {[import('./strings.js').StringKey, () => void][]} buttons
+   * @param {import('../core/strings.js').StringKey} key
+   * @param {[import('../core/strings.js').StringKey, () => void][]} buttons
    */
   function ask(key, buttons) {
     cal.textContent = '';

@@ -1,14 +1,14 @@
-// One robot per connected body: the session and the brain from web/, wired
+// One robot per connected body: the session and the brain from core/, wired
 // to a body over the link instead of to a microphone, a speaker and a USB
 // cable. Everything here is wiring, the way app.js is on the phone.
 
-import { Session } from '../web/audio/session.js';
-import { Brain } from '../web/brain.js';
-import { Ladder } from '../web/ladder.js';
-import { Reflex } from '../web/reflex.js';
-import { layerReady } from '../web/config.js';
-import { OpenAiCompatStt } from '../web/providers/stt-openai-compat.js';
-import { OpenAiCompatLlm } from '../web/providers/llm-openai-compat.js';
+import { Session } from '../core/audio/session.js';
+import { Brain } from '../core/brain.js';
+import { Ladder } from '../core/ladder.js';
+import { Reflex } from '../core/reflex.js';
+import { layerReady } from '../core/config.js';
+import { OpenAiCompatStt } from '../core/providers/stt-openai-compat.js';
+import { OpenAiCompatLlm } from '../core/providers/llm-openai-compat.js';
 import { RemotePipeline } from './body/pipeline.js';
 import { RemoteExecutor } from './body/executor.js';
 import { Mouth } from './body/mouth.js';
@@ -25,14 +25,14 @@ export const ECHO_SLACK_MS = 300;
 /**
  * @param {import('./link.js').BodyConn} conn
  * @param {{
- *   config: ReturnType<typeof import('../web/config.js').loadConfig>,
+ *   config: ReturnType<typeof import('../core/config.js').loadConfig>,
  *   save?: (cfg: any) => void,
  *   fetch?: typeof fetch,
  *   ears: { kws: { accept(frame: Float32Array): string[] },
  *           vad: { accept(frame: Float32Array): void, readonly detected: boolean,
  *                  drain(): Float32Array[], clear(): void } },
- *   sfx: Map<import('../web/audio/sfx.js').SoundName, Int16Array>,
- *   earcons: Record<import('../web/audio/earcon.js').EarconName, Int16Array>,
+ *   sfx: Map<import('../core/audio/sfx.js').SoundName, Int16Array>,
+ *   earcons: Record<import('../core/audio/earcon.js').EarconName, Int16Array>,
  *   log?: (line: string) => void,
  *   slackMs?: number,
  * }} deps
@@ -51,7 +51,7 @@ export function startRobot(conn, deps) {
     slackMs: deps.slackMs ?? ECHO_SLACK_MS,
   });
   const tts = new PcmTts(config.tts, { mouth, ...net });
-  /** @type {(part: import('../web/strings.js').FaultPart, err: Error) => void} */
+  /** @type {(part: import('../core/strings.js').FaultPart, err: Error) => void} */
   const onFault = (part, err) => log(`[${part}] ${err.message}`);
 
   const session = new Session({

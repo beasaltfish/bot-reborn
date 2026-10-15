@@ -11,8 +11,8 @@
 // Calibration (which wire is "left") is not here. It describes one car's
 // wiring, so it lives on that car's body.
 
-import { MAX_MOVE_MS } from '../../web/protocol.js';
-import { LEAD_MS } from '../../web/motion.js';
+import { MAX_MOVE_MS } from '../../core/protocol.js';
+import { LEAD_MS } from '../../core/motion.js';
 
 const realSleep = (/** @type {number} */ ms) => new Promise((r) => setTimeout(r, ms));
 

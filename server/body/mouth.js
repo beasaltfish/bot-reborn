@@ -7,7 +7,7 @@
 // has almost nothing already in flight to chase.
 
 import { int16ToBytes } from '../audio/pcm.js';
-import { RATE } from '../../web/protocol.js';
+import { RATE } from '../../core/protocol.js';
 
 const CHUNK = RATE / 10;               // 100 ms
 const CHUNK_MS = 100;

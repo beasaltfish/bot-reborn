@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { encodeWav } from '../web/audio/wav.js';
+import { encodeWav } from '../phone/audio/wav.js';
 
 /** @param {ArrayBuffer} buf @param {number} off */
 const ascii = (buf, off) =>

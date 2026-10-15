@@ -1,6 +1,6 @@
 // What the instruments say out loud, in the language this robot is set to.
 //
-// Keyed on lang for the reason web/checks.js already gives: spec §9.3's "test
+// Keyed on lang for the reason core/checks.js already gives: spec §9.3's "test
 // the hardest case" is a statement about the input this product actually gets,
 // not a difficulty setting. For a Chinese user the hardest case is
 // code-switching mid-sentence, and one clip then exercises Chinese, English and

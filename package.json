@@ -13,7 +13,7 @@
     "admin:dev": "vite --config admin/vite.config.ts",
     "test": "node --test \"test/**/*.test.js\" && vitest run --config admin/vite.config.ts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p admin",
-    "deploy": "node --test \"test/**/*.test.js\" && npx wrangler pages deploy web --branch production"
+    "deploy": "node --test \"test/**/*.test.js\" && npx wrangler pages deploy phone --branch production"
   },
   "keywords": [],
   "author": "",

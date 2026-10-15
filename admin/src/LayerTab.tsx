@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CUSTOM, PRESETS, presetById, presetIdFor, voicesFor } from '../../web/provider-presets.js';
+import { CUSTOM, PRESETS, presetById, presetIdFor, voicesFor } from '../../core/provider-presets.js';
 import { pickModel, pickProvider } from './layerEdit';
 import { t } from './i18n';
 import type { CheckFn } from './checks';

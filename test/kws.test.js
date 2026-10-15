@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createSpotter } from '../web/audio/kws.js';
+import { createSpotter } from '../phone/audio/kws.js';
 
 /** Captures the config createSpotter hands to createKws. */
 function spy() {

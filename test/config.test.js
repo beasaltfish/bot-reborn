@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CONFIG_KEY, STICKY, defaultConfig, loadConfig, saveConfig, resetSticky, layerReady }
-  from '../web/config.js';
+  from '../core/config.js';
 
 /** A localStorage stand-in. The real one is not available in node, and every
  * function under test takes it as a parameter for exactly this reason. */
@@ -100,7 +100,7 @@ test('unreadable storage yields defaults rather than throwing', () => {
 
 test('save then load round-trips every field', () => {
   const storage = fakeStorage();
-  /** @type {import('../web/config.js').Config} */
+  /** @type {import('../core/config.js').Config} */
   const cfg = { ...defaultConfig(), lang: 'zh', replyLang: 'en', bargeIn: false };
   cfg.tts.voice = 'alloy';
   saveConfig(cfg, storage);
@@ -109,7 +109,7 @@ test('save then load round-trips every field', () => {
 
 test('resetSticky clears exactly the two states the user cannot otherwise see', () => {
   assert.deepEqual([...STICKY], ['ttsPath', 'replyLang']);
-  /** @type {import('../web/config.js').Config} */
+  /** @type {import('../core/config.js').Config} */
   // lang set explicitly, not asked of defaultConfig: since 2026-09-17 that
   // returns 'en' whatever it is handed, and asserting the reset kept 'en' when
   // 'en' is also the default would pass without testing anything.

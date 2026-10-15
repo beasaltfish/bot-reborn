@@ -11,7 +11,7 @@ import { renderEarcons, loadSfx } from './audio/render.js';
 import {
   modelsPresent, loadSherpaNode, loadKeywords, createSpotter, createVoiceDetector,
 } from './audio/sherpa-node.js';
-import { BODY_PATH } from '../web/protocol.js';
+import { BODY_PATH } from '../core/protocol.js';
 
 const PORT = Number(process.env.PORT ?? 8787);
 

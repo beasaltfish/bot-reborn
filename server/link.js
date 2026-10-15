@@ -8,7 +8,7 @@
 import { WebSocketServer } from 'ws';
 import {
   PROTOCOL, BODY_PATH, HEARTBEAT_MS, WATCHDOG_MS, encode, parse,
-} from '../web/protocol.js';
+} from '../core/protocol.js';
 
 /**
  * @typedef {{

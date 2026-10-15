@@ -2,7 +2,7 @@
 // A new character: a token for its body and a config file to fill in.
 
 import { createCharacter } from '../characters.js';
-import { BODY_PATH } from '../../web/protocol.js';
+import { BODY_PATH } from '../../core/protocol.js';
 
 const name = process.argv.slice(2).join(' ').trim();
 try {

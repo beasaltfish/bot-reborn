@@ -8,13 +8,13 @@ import { needsBuild } from '../../server/admin-build.js';
 function tree() {
   const root = mkdtempSync(join(tmpdir(), 'adminb-'));
   const adminDir = join(root, 'admin');
-  const webDir = join(root, 'web');
+  const coreDir = join(root, 'core');
   mkdirSync(join(adminDir, 'src'), { recursive: true });
-  mkdirSync(join(webDir, 'models'), { recursive: true });
+  mkdirSync(join(coreDir, 'models'), { recursive: true });
   writeFileSync(join(adminDir, 'src', 'App.tsx'), 'x');
-  writeFileSync(join(webDir, 'checks.js'), 'x');
-  writeFileSync(join(webDir, 'models', 'big.wasm'), 'x');
-  return { adminDir, webDir };
+  writeFileSync(join(coreDir, 'checks.js'), 'x');
+  writeFileSync(join(coreDir, 'models', 'big.wasm'), 'x');
+  return { adminDir, coreDir };
 }
 const at = (/** @type {string} */ f, /** @type {number} */ s) => utimesSync(f, s, s);
 
@@ -28,11 +28,11 @@ test('built after every source means no build; a newer source means build', () =
   const index = join(t.adminDir, 'dist', 'index.html');
   writeFileSync(index, 'x');
   at(join(t.adminDir, 'src', 'App.tsx'), 1000);
-  at(join(t.webDir, 'checks.js'), 1000);
-  at(join(t.webDir, 'models', 'big.wasm'), 9000);    // models do not count
+  at(join(t.coreDir, 'checks.js'), 1000);
+  at(join(t.coreDir, 'models', 'big.wasm'), 9000);    // models do not count
   at(index, 2000);
   assert.equal(needsBuild(t), false);
-  at(join(t.webDir, 'checks.js'), 3000);
+  at(join(t.coreDir, 'checks.js'), 3000);
   assert.equal(needsBuild(t), true);
 });
 

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Reflex, shortEnough, buildState, FIRE_AT, TIMEOUT_MS, INSTRUCTIONS } from '../web/reflex.js';
+import { Reflex, shortEnough, buildState, FIRE_AT, TIMEOUT_MS, INSTRUCTIONS } from '../core/reflex.js';
 
 const CFG = { baseURL: 'https://openrouter.ai/api/v1', apiKey: 'sk-test', model: 'jev-1.13' };
 

@@ -36,11 +36,11 @@ const stub = () => ({
 
 /** Every id dev.html actually carries. */
 const IDS = new Set(
-  [...readFileSync(new URL('../web/dev.html', import.meta.url), 'utf8')
+  [...readFileSync(new URL('../phone/dev.html', import.meta.url), 'utf8')
     .matchAll(/id="([^"]+)"/g)].map((m) => m[1]),
 );
 
-test('web/dev.js evaluates without throwing', async () => {
+test('phone/dev.js evaluates without throwing', async () => {
   const g = /** @type {any} */ (globalThis);
   g.window = g;
   g.document = {
@@ -71,7 +71,7 @@ test('web/dev.js evaluates without throwing', async () => {
   g.caches = { open: () => Promise.resolve({ match: () => Promise.resolve(undefined), put: () => Promise.resolve(), keys: () => Promise.resolve([]) }) };
   if (!g.URL.createObjectURL) g.URL.createObjectURL = () => 'blob:';
 
-  await import('../web/dev.js');
+  await import('../phone/dev.js');
   // Let whatever the panels kicked off on start settle, so a rejection lands
   // inside this test rather than after it.
   await new Promise((r) => setTimeout(r, 50));

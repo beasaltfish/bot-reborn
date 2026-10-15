@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { PRESETS, CUSTOM, presetIdFor, presetById, voicesFor } from '../web/provider-presets.js';
+import { PRESETS, CUSTOM, presetIdFor, presetById, voicesFor } from '../core/provider-presets.js';
 
 test('a stored baseURL is recognised as the preset it came from', () => {
   assert.equal(presetIdFor('llm', { baseURL: 'https://api.deepseek.com' }), 'deepseek');

@@ -12,7 +12,7 @@ const skip = modelsPresent() ? false : 'models missing — run server/models/fet
 test('the server tokens are the phone build\'s tokens', { skip }, () => {
   assert.equal(
     readFileSync(join(MODEL_DIR, 'tokens.txt'), 'utf8'),
-    readFileSync(new URL('../../web/models/kws/tokens.txt', import.meta.url), 'utf8'),
+    readFileSync(new URL('../../phone/models/kws/tokens.txt', import.meta.url), 'utf8'),
   );
 });
 
@@ -30,7 +30,7 @@ test('the spotter hears nothing in silence', { skip }, () => {
 test('the VAD cuts the English check clip into at least one segment', { skip }, () => {
   const vad = createVoiceDetector(loadSherpaNode());
   const { samples } = parseWav(new Uint8Array(
-    readFileSync(new URL('../../web/fixtures/check-en.wav', import.meta.url))));
+    readFileSync(new URL('../../core/fixtures/check-en.wav', import.meta.url))));
   const padded = new Float32Array(samples.length + 32000);
   padded.set(samples);
   /** @type {Float32Array[]} */ const segs = [];

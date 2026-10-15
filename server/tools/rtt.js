@@ -7,8 +7,8 @@
 
 import { readFileSync } from 'node:fs';
 import WebSocket from 'ws';
-import { PROTOCOL, RATE, encode, parse } from '../../web/protocol.js';
-import { toInt16 } from '../../web/audio/pcm.js';
+import { PROTOCOL, RATE, encode, parse } from '../../core/protocol.js';
+import { toInt16 } from '../../core/audio/pcm.js';
 import { int16ToBytes, parseWav, resample } from '../audio/pcm.js';
 
 const args = process.argv.slice(2);

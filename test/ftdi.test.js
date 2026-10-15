@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { encodeBaudRate, PIN_MASK } from '../web/ftdi.js';
+import { encodeBaudRate, PIN_MASK } from '../phone/ftdi.js';
 
 // The FT232H's divisor runs off 120 MHz / 10 = 12 MHz, and the divide-by-5
 // prescaler has to be switched off. Switching it off means OR-ing 0x20000 into
@@ -50,7 +50,7 @@ test('PIN_MASK is D4-D7', () => {
   assert.equal(PIN_MASK, 0xf0);
 });
 
-import { Ftdi } from '../web/ftdi.js';
+import { Ftdi } from '../phone/ftdi.js';
 
 /**
  * A fake USBDevice that records every transfer in submission order.

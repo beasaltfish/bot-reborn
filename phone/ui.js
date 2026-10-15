@@ -2,7 +2,7 @@
 // else (spec §10); the one table that used to live here — state to string key —
 // moved into robot.js, where it is tested.
 
-import { t, KEYWORDS } from './strings.js';
+import { t, KEYWORDS } from '../core/strings.js';
 import { STEP_LABEL } from './steps.js';
 import { applyFace, applyAssembly, hintVisible, VIEWBOX } from './robot.js';
 
@@ -27,7 +27,7 @@ export function createUi(lang, wakeWord) {
   // nothing ever took it back down.
   let live = false;
   let named = false;   // wakeWord(), as it was when the microphone opened
-  /** @type {import('./audio/session.js').State} */ let state = 'SLEEPING';
+  /** @type {import('../core/audio/session.js').State} */ let state = 'SLEEPING';
   const paintHint = () => {
     const el = $('hint');
     // Built here rather than stored joined: a STRINGS entry containing the wake
@@ -47,7 +47,7 @@ export function createUi(lang, wakeWord) {
    * returned object.
    *
    * @param {'go' | 'stop' | 'wait'} tone
-   * @param {import('./strings.js').StringKey} key
+   * @param {import('../core/strings.js').StringKey} key
    */
   const fabFace = (tone, key) => {
     fab.dataset.tone = tone;
@@ -99,7 +99,7 @@ export function createUi(lang, wakeWord) {
     /**
      * The face IS the state display. The live region carries the same thing as
      * text, because an SVG gives a screen reader nothing.
-     * @param {import('./audio/session.js').State} s
+     * @param {import('../core/audio/session.js').State} s
      */
     setState(s) {
       state = s;

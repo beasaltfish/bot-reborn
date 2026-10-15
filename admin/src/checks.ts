@@ -1,12 +1,12 @@
 // The four layers' tests, run from this browser straight to the provider, as
-// the phone's setup sheet does (web/checks.js). STT plays the synthesised
+// the phone's setup sheet does (core/checks.js). STT plays the synthesised
 // clip the brain serves at /fixtures.
-import { checkLlm, checkReflex, checkStt, checkTts } from '../../web/checks.js';
-import { OpenAiCompatStt } from '../../web/providers/stt-openai-compat.js';
-import { OpenAiCompatLlm } from '../../web/providers/llm-openai-compat.js';
-import { WebAudioTts } from '../../web/providers/tts-webaudio.js';
-import { Reflex } from '../../web/reflex.js';
-import { TOOLS, buildSystemPrompt } from '../../web/brain.js';
+import { checkLlm, checkReflex, checkStt, checkTts } from '../../core/checks.js';
+import { OpenAiCompatStt } from '../../core/providers/stt-openai-compat.js';
+import { OpenAiCompatLlm } from '../../core/providers/llm-openai-compat.js';
+import { WebAudioTts } from '../../core/providers/tts-webaudio.js';
+import { Reflex } from '../../core/reflex.js';
+import { TOOLS, buildSystemPrompt } from '../../core/brain.js';
 import { lang } from './i18n';
 import type { Config, LayerName } from './types';
 

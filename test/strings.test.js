@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { STRINGS, KEYWORDS, t } from '../web/strings.js';
+import { STRINGS, KEYWORDS, t } from '../core/strings.js';
 
 test('the two keywords are the ones spec §5.5 fixed, and they are language-independent', () => {
   assert.deepEqual(KEYWORDS, ['hey steven', 'all stop']);

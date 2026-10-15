@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { WebAudioTts } from '../web/providers/tts-webaudio.js';
+import { WebAudioTts } from '../core/providers/tts-webaudio.js';
 
 const CFG = {
   baseURL: 'https://api.example.com/v1', apiKey: 'sk-test',

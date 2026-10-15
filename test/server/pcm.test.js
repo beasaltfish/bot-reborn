@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { bytesToFloat32, int16ToBytes, isWav, parseWav, resample } from '../../server/audio/pcm.js';
-import { encodeWav } from '../../web/providers/stt-openai-compat.js';
+import { encodeWav } from '../../core/providers/stt-openai-compat.js';
 
 test('int16 bytes round-trip little-endian', () => {
   const pcm = Int16Array.from([0, 16384, -16384, 32767, -32768]);

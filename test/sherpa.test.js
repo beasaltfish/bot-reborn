@@ -41,7 +41,7 @@ import assert from 'node:assert/strict';
 // file is about the one-shot property, not about caching.
 /** @type {any} */ (globalThis).caches = undefined;
 
-const { loadSherpa } = await import('../web/audio/sherpa.js');
+const { loadSherpa } = await import('../phone/audio/sherpa.js');
 
 test('loading twice injects the glue once and hands back the same attempt', () => {
   // Neither promise settles here — nothing fakes onRuntimeInitialized — so they

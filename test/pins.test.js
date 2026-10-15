@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { traceTheRun, readRun, pinTrace } from '../web/panels/pins.js';
+import { traceTheRun, readRun, pinTrace } from '../phone/panels/pins.js';
 
 // ② used to be timed by a person with a stopwatch on a 2.5 s run, which is
 // ±200 ms of hand. The chip can do it itself: readPins() reports what the last
@@ -107,7 +107,7 @@ test('a failed write surfaces as itself, not as a timeout', async () => {
 const tally = (rows) => new Map(rows.map(([ms, tries, hits]) => [ms, { tries, hits }]));
 
 test('the threshold is the shortest length that moved it every single time', async () => {
-  const { summariseTrials } = await import('../web/panels/pins.js');
+  const { summariseTrials } = await import('../phone/panels/pins.js');
   const { threshold } = summariseTrials(tally([[100, 3, 0], [200, 3, 3], [300, 3, 3]]), 3);
   assert.equal(threshold, 200);
 });
@@ -115,7 +115,7 @@ test('the threshold is the shortest length that moved it every single time', asy
 test('nine out of ten is not an answer', async () => {
   // Near the threshold the outcome is a probability, and the length that works
   // nine times in ten is exactly the one a shorter procedure would accept.
-  const { summariseTrials } = await import('../web/panels/pins.js');
+  const { summariseTrials } = await import('../phone/panels/pins.js');
   const { threshold } = summariseTrials(tally([[200, 10, 9], [300, 10, 10]]), 10);
   assert.equal(threshold, 300);
 });
@@ -124,14 +124,14 @@ test('a shorter length nobody finished testing is named, not ruled out', async (
   // Reporting 300 while 150 has had two tries would turn "nobody tested 150"
   // into "150 does not work" — and the product would carry a floor twice as
   // high as it needs.
-  const { summariseTrials } = await import('../web/panels/pins.js');
+  const { summariseTrials } = await import('../phone/panels/pins.js');
   const { threshold, unfinished } = summariseTrials(tally([[150, 2, 2], [300, 10, 10]]), 10);
   assert.equal(threshold, 300);
   assert.deepEqual(unfinished.map((r) => r.ms), [150]);
 });
 
 test('an untried length above the answer is not a caveat on it', async () => {
-  const { summariseTrials } = await import('../web/panels/pins.js');
+  const { summariseTrials } = await import('../phone/panels/pins.js');
   const { unfinished } = summariseTrials(tally([[300, 10, 10], [600, 1, 1]]), 10);
   assert.deepEqual(unfinished, []);
 });

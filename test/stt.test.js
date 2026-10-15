@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   OpenAiCompatStt, encodeWav, summariseSegments,
-} from '../web/providers/stt-openai-compat.js';
+} from '../core/providers/stt-openai-compat.js';
 
 const CFG = { baseURL: 'https://api.example.com/v1', apiKey: 'sk-test', model: 'whisper-large-v3-turbo' };
 

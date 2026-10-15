@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { micConstraints, gapFrames, reprocessTrack } from '../web/audio/pipeline.js';
+import { micConstraints, gapFrames, reprocessTrack } from '../phone/audio/pipeline.js';
 
 test('autoGainControl is never negotiable', () => {
   // It would ride a quiet room's level up and make the noise floor §5.8 cares

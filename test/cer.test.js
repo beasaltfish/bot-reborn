@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalize, editDistance, cer } from '../web/panels/acoustics.js';
+import { normalize, editDistance, cer } from '../phone/panels/acoustics.js';
 
 test('normalize drops punctuation, spaces and case', () => {
   // Punctuation comes and goes between STT backends and says nothing about the

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { GATING, fabRung, STEP_LABEL } from '../web/steps.js';
+import { GATING, fabRung, STEP_LABEL } from '../phone/steps.js';
 
 const none = { keys: false, car: false, steer: false };
 const all = { keys: true, car: true, steer: true };

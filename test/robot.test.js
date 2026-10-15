@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { STATES, faceFor, applyFace, missingParts, applyAssembly, hintVisible, PART_STEP }
-  from '../web/robot.js';
-import { GATING } from '../web/steps.js';
-import { STRINGS } from '../web/strings.js';
+  from '../phone/robot.js';
+import { GATING } from '../phone/steps.js';
+import { STRINGS } from '../core/strings.js';
 
 test('the five states are session.js\'s five, in its own order', () => {
   assert.deepEqual(
@@ -48,7 +48,7 @@ test('no two faces look the same', () => {
 test('every state owns a part no other state draws', () => {
   // SLEEPING used to own nothing: it was the other faces minus their parts,
   // which is why it read as an ordinary idle robot rather than a sleeping one.
-  const only = (/** @type {(f: import('../web/robot.js').Face) => boolean} */ has) =>
+  const only = (/** @type {(f: import('../phone/robot.js').Face) => boolean} */ has) =>
     STATES.filter((s) => has(faceFor(s)));
   assert.deepEqual(only((f) => f.doze), ['SLEEPING']);
   assert.deepEqual(only((f) => f.waves), ['CAPTURING']);

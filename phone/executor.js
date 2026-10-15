@@ -3,7 +3,7 @@
 // to do — brain.js does that. It only guarantees the car stops.
 
 import { Ftdi } from './ftdi.js';
-import { MAX_COAST_MS, LEAD_MS, MIN_DURATION_MS } from './motion.js';
+import { MAX_COAST_MS, LEAD_MS, MIN_DURATION_MS } from '../core/motion.js';
 
 // Re-exported so every existing importer keeps working; the definitions and
 // the reasoning behind each number live in motion.js.

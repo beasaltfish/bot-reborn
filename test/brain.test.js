@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { TOOLS, SYSTEM_PROMPT, buildSystemPrompt, validate, Brain } from '../web/brain.js';
-import { MIN_DURATION_MS } from '../web/executor.js';
-import { KEYWORDS } from '../web/strings.js';
+import { TOOLS, SYSTEM_PROMPT, buildSystemPrompt, validate, Brain } from '../core/brain.js';
+import { MIN_DURATION_MS } from '../phone/executor.js';
+import { KEYWORDS } from '../core/strings.js';
 
 /** @param {string} name @returns {any} */
 const byName = (name) => TOOLS.find((t) => t.function.name === name);

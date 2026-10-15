@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Session, wantedSubscriptions, IDLE_TO_SLEEP_MS } from '../web/audio/session.js';
-import { defaultConfig } from '../web/config.js';
+import { Session, wantedSubscriptions, IDLE_TO_SLEEP_MS } from '../core/audio/session.js';
+import { defaultConfig } from '../core/config.js';
 
 /**
  * A segment or frame at the level real speech arrives at — −20 dBFS, the

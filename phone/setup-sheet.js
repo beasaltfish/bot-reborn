@@ -27,15 +27,15 @@
 // does is press Test — a Save in between exists only to be forgotten, and the
 // failure it produces ("bad key") points at the wrong thing.
 
-import { t } from './strings.js';
-import { PRESETS, CUSTOM, presetIdFor, presetById, voicesFor } from './provider-presets.js';
-import { checkStt, checkLlm, checkTts, checkReflex } from './checks.js';
-import { layerReady } from './config.js';
-import { OpenAiCompatStt } from './providers/stt-openai-compat.js';
-import { OpenAiCompatLlm } from './providers/llm-openai-compat.js';
-import { WebAudioTts } from './providers/tts-webaudio.js';
-import { Reflex } from './reflex.js';
-import { TOOLS, buildSystemPrompt } from './brain.js';
+import { t } from '../core/strings.js';
+import { PRESETS, CUSTOM, presetIdFor, presetById, voicesFor } from '../core/provider-presets.js';
+import { checkStt, checkLlm, checkTts, checkReflex } from '../core/checks.js';
+import { layerReady } from '../core/config.js';
+import { OpenAiCompatStt } from '../core/providers/stt-openai-compat.js';
+import { OpenAiCompatLlm } from '../core/providers/llm-openai-compat.js';
+import { WebAudioTts } from '../core/providers/tts-webaudio.js';
+import { Reflex } from '../core/reflex.js';
+import { TOOLS, buildSystemPrompt } from '../core/brain.js';
 
 const $ = (/** @type {string} */ id) =>
   /** @type {HTMLElement} */ (document.getElementById(id));
@@ -43,9 +43,9 @@ const $ = (/** @type {string} */ id) =>
 /**
  * @typedef {{
  *   name: 'stt' | 'llm' | 'tts' | 'reflex',
- *   label: import('./strings.js').StringKey,
- *   what: import('./strings.js').StringKey,
- *   note: import('./strings.js').StringKey,
+ *   label: import('../core/strings.js').StringKey,
+ *   what: import('../core/strings.js').StringKey,
+ *   note: import('../core/strings.js').StringKey,
  *   optional: boolean,
  * }} LayerRow
  */
@@ -68,7 +68,7 @@ const LAYERS = [
 /**
  * @param {{
  *   lang: 'en' | 'zh',
- *   config: import('./config.js').Config,
+ *   config: import('../core/config.js').Config,
  *   save: () => void,
  *   onChange: () => void,
  *   audioContext: () => AudioContext,
@@ -194,7 +194,7 @@ export function createSetupSheet(deps) {
   }
 
   /**
-   * @param {import('./strings.js').StringKey} key
+   * @param {import('../core/strings.js').StringKey} key
    * @param {() => void} fn
    */
   function footButton(key, fn) {
@@ -436,7 +436,7 @@ export function createSetupSheet(deps) {
   }
 
   /**
-   * @param {import('./strings.js').StringKey} key
+   * @param {import('../core/strings.js').StringKey} key
    * @param {HTMLElement} field
    * @param {boolean} [full]
    */

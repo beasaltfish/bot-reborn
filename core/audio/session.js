@@ -6,7 +6,7 @@
 // only way this file can be tested at all (§10).
 
 import { classifyLabel, WAKE, STOP } from './keyword-lines.js';
-import { RATE } from './pipeline.js';
+import { RATE } from '../protocol.js';
 import { toInt16 } from './pcm.js';
 import { rms, aboveFloor } from './level.js';
 import { t } from '../strings.js';

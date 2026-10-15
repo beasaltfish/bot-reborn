@@ -1,6 +1,6 @@
 // `npm start` builds the admin page when it has to, so nobody needs to know
 // there is a build step (admin spec §2). "Has to" means: never built, or some
-// source is newer than the build — the page's own, or the web/ modules it
+// source is newer than the build — the page's own, or the core/ modules it
 // imports (provider list, checks).
 
 import { existsSync, readdirSync, statSync } from 'node:fs';
@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
 const ADMIN_DIR = fileURLToPath(new URL('../admin/', import.meta.url));
-const WEB_DIR = fileURLToPath(new URL('../web/', import.meta.url));
+const CORE_DIR = fileURLToPath(new URL('../core/', import.meta.url));
 /** Never sources of the page, and big enough to be worth not walking. */
 const SKIP = new Set(['dist', 'node_modules', 'models', 'fixtures', 'sounds']);
 
@@ -24,13 +24,13 @@ function newest(dir) {
   return max;
 }
 
-/** @param {{ adminDir?: string, webDir?: string }} [opts] */
+/** @param {{ adminDir?: string, coreDir?: string }} [opts] */
 export function needsBuild(opts = {}) {
   const adminDir = opts.adminDir ?? ADMIN_DIR;
   const index = join(adminDir, 'dist', 'index.html');
   if (!existsSync(index)) return true;
   const built = statSync(index).mtimeMs;
-  return newest(adminDir) > built || newest(opts.webDir ?? WEB_DIR) > built;
+  return newest(adminDir) > built || newest(opts.coreDir ?? CORE_DIR) > built;
 }
 
 export function buildAdmin() {

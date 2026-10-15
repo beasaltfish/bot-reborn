@@ -5,8 +5,7 @@
 // frames. A body sends whatever chunk size suits it, so this re-cuts the
 // stream to the same 100 ms rather than teaching the session a second shape.
 
-import { FRAME_MS } from '../../web/audio/pipeline.js';
-import { RATE } from '../../web/protocol.js';
+import { RATE, FRAME_MS } from '../../core/protocol.js';
 import { bytesToFloat32 } from '../audio/pcm.js';
 
 const FRAME = (RATE * FRAME_MS) / 1000;

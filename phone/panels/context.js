@@ -16,7 +16,7 @@
  *   pipeline: import('../audio/pipeline.js').AudioPipeline | null,
  *   sherpa: import('../audio/sherpa.js').Sherpa | null,
  *   keywords: string,
- *   config: import('../config.js').Config,
+ *   config: import('../../core/config.js').Config,
  *   log: (msg: string) => void,
  *   status: (id: string, state: StatusState, label: string) => void,
  *   exclusion: ReturnType<typeof import('./knobs.js').createExclusion>,

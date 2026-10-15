@@ -1,8 +1,8 @@
 // Entry point: wiring only (spec §10). Every decision here is made somewhere
 // else; if a branch shows up in this file it belongs in session.js.
 
-import { loadConfig, saveConfig, layerReady, directionsTaught, resetSticky } from './config.js';
-import { t, FAULT_LABEL } from './strings.js';
+import { loadConfig, saveConfig, layerReady, directionsTaught, resetSticky } from '../core/config.js';
+import { t, FAULT_LABEL } from '../core/strings.js';
 import { createUi } from './ui.js';
 import { createSettings } from './settings.js';
 import { createCalibration } from './calibrate.js';
@@ -11,20 +11,20 @@ import { fabRung } from './steps.js';
 import { missingParts, PART_STEP } from './robot.js';
 import { Ftdi , USB_FILTERS } from './ftdi.js';
 import { Executor } from './executor.js';
-import { Brain } from './brain.js';
-import { OpenAiCompatStt } from './providers/stt-openai-compat.js';
-import { OpenAiCompatLlm } from './providers/llm-openai-compat.js';
-import { WebAudioTts } from './providers/tts-webaudio.js';
+import { Brain } from '../core/brain.js';
+import { OpenAiCompatStt } from '../core/providers/stt-openai-compat.js';
+import { OpenAiCompatLlm } from '../core/providers/llm-openai-compat.js';
+import { WebAudioTts } from '../core/providers/tts-webaudio.js';
 import { AudioPipeline } from './audio/pipeline.js';
 import { loadSherpa } from './audio/sherpa.js';
 import { createSpotter } from './audio/kws.js';
 import { createVoiceDetector } from './audio/vad.js';
-import { createEarcon } from './audio/earcon.js';
-import { createSfx } from './audio/sfx.js';
-import { Reflex } from './reflex.js';
-import { Ladder } from './ladder.js';
-import { unknownTokens } from './audio/keyword-lines.js';
-import { Session } from './audio/session.js';
+import { createEarcon } from '../core/audio/earcon.js';
+import { createSfx } from '../core/audio/sfx.js';
+import { Reflex } from '../core/reflex.js';
+import { Ladder } from '../core/ladder.js';
+import { unknownTokens } from '../core/audio/keyword-lines.js';
+import { Session } from '../core/audio/session.js';
 import { offerInstall } from './install.js';
 
 const config = loadConfig();
@@ -338,7 +338,7 @@ async function start() {
     // consequence sends the user to fix the wrong instrument. Every fault
     // reaches the log; the notice keeps the first one of the turn.
     let reported = false;
-    /** @type {(part: import('./strings.js').FaultPart, err: Error) => void} */
+    /** @type {(part: import('../core/strings.js').FaultPart, err: Error) => void} */
     const onFault = (part, err) => {
       ui.log(`${part}: ${err.message}`);
       console.error(`[${part}]`, err);

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   Executor, pinsFor, aheadDrive, DRIVE_BITS, STEER_BITS,
   MAX_COAST_MS, LEAD_MS, MIN_DURATION_MS,
-} from '../web/executor.js';
+} from '../phone/executor.js';
 
 /**
  * A fake Ftdi plus a fake clock.
@@ -79,7 +79,7 @@ function harness({ bytesPerMs = 0.5, writeBlocks = false } = {}) {
       for (let i = 0; i < max && pending; i++) await this.tick();
     },
     /** @param {{ sleep?: (ms: number) => Promise<void>, onError?: (err: Error) => void,
-     *            calibration?: import('../web/executor.js').Calibration }} [opts] */
+     *            calibration?: import('../phone/executor.js').Calibration }} [opts] */
     make(opts = {}) { return new Executor(ftdi, { sleep, now: () => clock.t, ...opts }); },
   };
 }

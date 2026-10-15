@@ -24,7 +24,7 @@ export const GATING = /** @type {const} */ (['keys', 'car', 'steer']);
 /** @typedef {'keys' | 'car' | 'steer'} Step */
 /** @typedef {{ keys: boolean, car: boolean, steer: boolean }} Done */
 
-/** @type {Record<Step, import('./strings.js').StringKey>} */
+/** @type {Record<Step, import('../core/strings.js').StringKey>} */
 const RUNG = { keys: 'fabKeys', car: 'fabPair', steer: 'fabSteer' };
 
 /**
@@ -32,7 +32,7 @@ const RUNG = { keys: 'fabKeys', car: 'fabPair', steer: 'fabSteer' };
  * and the label on the region of the robot that stands for it. One table, so
  * the drawing and the words cannot come to call the same step two things.
  *
- * @type {Record<Step, import('./strings.js').StringKey>}
+ * @type {Record<Step, import('../core/strings.js').StringKey>}
  */
 export const STEP_LABEL = { keys: 'stepKeys', car: 'stepCar', steer: 'stepSteer' };
 
@@ -41,7 +41,7 @@ export const STEP_LABEL = { keys: 'stepKeys', car: 'stepCar', steer: 'stepSteer'
  * @param {boolean} running whether the microphone is open
  * @returns {{ step: Step | 'listen' | 'stop',
  *             tone: 'go' | 'wait' | 'stop',
- *             key: import('./strings.js').StringKey }}
+ *             key: import('../core/strings.js').StringKey }}
  */
 export function fabRung(done, running) {
   // Running outranks every unfinished step. The car can be rolling with the

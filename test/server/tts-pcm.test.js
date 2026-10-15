@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PcmTts } from '../../server/providers/tts-pcm.js';
-import { encodeWav } from '../../web/providers/stt-openai-compat.js';
+import { encodeWav } from '../../core/providers/stt-openai-compat.js';
 
 const CFG = { baseURL: 'http://tts', apiKey: 'k', model: 'm', voice: 'v' };
 

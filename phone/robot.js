@@ -10,10 +10,10 @@
 // opaque classes would let that pair drift apart silently — see the test that
 // pins them together.
 
-import { layerReady, directionsTaught } from './config.js';
+import { layerReady, directionsTaught } from '../core/config.js';
 
-/** @typedef {import('./audio/session.js').State} State */
-/** @typedef {import('./strings.js').StringKey} StringKey */
+/** @typedef {import('../core/audio/session.js').State} State */
+/** @typedef {import('../core/strings.js').StringKey} StringKey */
 
 /**
  * @typedef {{
@@ -82,7 +82,7 @@ const FACES = {
  * has been taught which way is which.
  *
  * @typedef {'ears' | 'mind' | 'voice' | 'wheels'} Part
- * @param {import('./config.js').Config} config
+ * @param {import('../core/config.js').Config} config
  * @returns {Part[]}
  */
 export function missingParts(config) {

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import WebSocket from 'ws';
 import { createBrainServer } from '../../server/brain-server.js';
 import { renderEarcons } from '../../server/audio/render.js';
-import { PROTOCOL } from '../../web/protocol.js';
+import { PROTOCOL } from '../../core/protocol.js';
 import { fakeFetch, until, tempCharacters } from './helpers.js';
 
 /** Ears that hear one loud second after `frames` frames, once. */

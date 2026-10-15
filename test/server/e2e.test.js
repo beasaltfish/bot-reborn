@@ -5,7 +5,7 @@ import { createBrainServer } from '../../server/brain-server.js';
 import { connectFakeBody } from '../../server/fake-body.js';
 import { renderEarcons, loadSfx } from '../../server/audio/render.js';
 import { parseWav } from '../../server/audio/pcm.js';
-import { toInt16 } from '../../web/audio/pcm.js';
+import { toInt16 } from '../../core/audio/pcm.js';
 import {
   modelsPresent, loadSherpaNode, loadKeywords, createSpotter, createVoiceDetector,
 } from '../../server/audio/sherpa-node.js';
@@ -28,7 +28,7 @@ test('a recorded sentence drives the robot end to end', { skip, timeout: 20000 }
   await body.waitFor((m) => m.type === 'state' && m.state === 'LISTENING');
 
   const { samples } = parseWav(new Uint8Array(
-    readFileSync(new URL('../../web/fixtures/check-en.wav', import.meta.url))));
+    readFileSync(new URL('../../core/fixtures/check-en.wav', import.meta.url))));
   // A real body streams in real time, and the session shuts its ears for the
   // wake earcon plus ECHO_SLACK_MS: wait that out, then pace like a body.
   await new Promise((r) => setTimeout(r, 500));

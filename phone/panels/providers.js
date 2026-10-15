@@ -10,14 +10,14 @@
 // only waiting item that can overturn a CHOICE rather than a constant: §8.3's
 // default TTS. Nothing is saved; config.js stays the only writer of storage.
 
-import { Session } from '../audio/session.js';
-import { Brain } from '../brain.js';
+import { Session } from '../../core/audio/session.js';
+import { Brain } from '../../core/brain.js';
 import { createSpotter } from '../audio/kws.js';
 import { createVoiceDetector } from '../audio/vad.js';
-import { createEarcon } from '../audio/earcon.js';
-import { OpenAiCompatStt } from '../providers/stt-openai-compat.js';
-import { OpenAiCompatLlm } from '../providers/llm-openai-compat.js';
-import { WebAudioTts } from '../providers/tts-webaudio.js';
+import { createEarcon } from '../../core/audio/earcon.js';
+import { OpenAiCompatStt } from '../../core/providers/stt-openai-compat.js';
+import { OpenAiCompatLlm } from '../../core/providers/llm-openai-compat.js';
+import { WebAudioTts } from '../../core/providers/tts-webaudio.js';
 import { setStat, setDisabled } from './readout.js';
 import { materialFor } from '../instrument-material.js';
 
@@ -115,7 +115,7 @@ export function createProviders() {
       onState: (st) => setStat('pvState', st),
     });
     // Brain gets the session's wrappers, never the raw provider — that is what
-    // makes SPEAKING bracket exactly the playback (web/app.js:88).
+    // makes SPEAKING bracket exactly the playback (phone/app.js:88).
     s.attach(new Brain({
       llm,
       executor: loggedExec,

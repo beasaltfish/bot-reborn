@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
   MATERIAL,
   fetchClip, toInt16Pcm, checkStt, checkLlm, checkTts, checkReflex,
-} from '../web/checks.js';
+} from '../core/checks.js';
 
 /** @param {{ status?: number, type?: string }} opts */
 function response({ status = 200, type = 'audio/wav' } = {}) {

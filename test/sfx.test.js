@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SOUNDS, createSfx } from '../web/audio/sfx.js';
+import { SOUNDS, createSfx } from '../core/audio/sfx.js';
 
 test('exactly the four sounds of the reflex spec §5', () => {
   assert.deepEqual([...SOUNDS], ['bark', 'yip', 'whimper', 'growl']);
@@ -65,9 +65,9 @@ test('every sound has its file, and every file is credited', async () => {
   // a turn that answers in silence, which is how this branch could not merge
   // until the files existed.
   const { existsSync, readFileSync } = await import('node:fs');
-  const credits = readFileSync(new URL('../web/sounds/CREDITS.md', import.meta.url), 'utf8');
+  const credits = readFileSync(new URL('../phone/sounds/CREDITS.md', import.meta.url), 'utf8');
   for (const name of SOUNDS) {
-    assert.ok(existsSync(new URL(`../web/sounds/${name}.mp3`, import.meta.url)), `${name}.mp3 is missing`);
+    assert.ok(existsSync(new URL(`../phone/sounds/${name}.mp3`, import.meta.url)), `${name}.mp3 is missing`);
     assert.match(credits, new RegExp(`\\| ${name}\\.mp3 \\|.*\\| CC0 \\|`), `${name}.mp3 is not credited`);
   }
 });

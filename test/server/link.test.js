@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import WebSocket from 'ws';
 import { createLink } from '../../server/link.js';
-import { PROTOCOL } from '../../web/protocol.js';
+import { PROTOCOL } from '../../core/protocol.js';
 
 /** @param {Partial<Parameters<typeof createLink>[0]>} [opts] */
 async function rig(opts = {}) {

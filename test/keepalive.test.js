@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   KEEPALIVE, BEHIND_FRAMES, expectedFrames, framesBehind, isBehind, shouldPlay,
-} from '../web/audio/keepalive.js';
+} from '../phone/audio/keepalive.js';
 
 test('the sound is the shape §5.8 chose, not the one that failed', () => {
   // 60 Hz was the first attempt and the phone speaker could not produce it —

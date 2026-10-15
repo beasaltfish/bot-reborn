@@ -11,6 +11,12 @@ export const PROTOCOL = 1;
 /** 16-bit little-endian mono, both directions. Not negotiated. */
 export const RATE = 16000;
 
+/**
+ * What the session cuts a body's audio into. Its thresholds were measured on
+ * 100 ms frames, and the phone's capture worklet cuts the same.
+ */
+export const FRAME_MS = 100;
+
 export const BODY_PATH = '/body';
 
 /** Both sides ping this often; any frame at all counts as being alive. */

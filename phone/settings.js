@@ -10,8 +10,8 @@
 // getting started — that path is the robot and the one button — so nothing
 // here is ordered, numbered, or ticked.
 
-import { t, KEYWORDS } from './strings.js';
-import { STICKY } from './config.js';
+import { t, KEYWORDS } from '../core/strings.js';
+import { STICKY } from '../core/config.js';
 
 const $ = (/** @type {string} */ id) =>
   /** @type {HTMLElement} */ (document.getElementById(id));
@@ -34,7 +34,7 @@ const TOOLS = [
 /**
  * @param {{
  *   lang: 'en' | 'zh',
- *   config: import('./config.js').Config,
+ *   config: import('../core/config.js').Config,
  *   save: () => void,
  *   openKeys: (back: () => void) => void,
  *   calibrate: (back: () => void) => void,
@@ -73,7 +73,7 @@ export function createSettings(deps) {
   }
 
   /**
-   * @param {import('./strings.js').StringKey} key
+   * @param {import('../core/strings.js').StringKey} key
    * @param {() => void} onPick
    */
   function door(key, onPick) {
@@ -183,7 +183,7 @@ export function createSettings(deps) {
     return row;
   }
 
-  /** @param {import('./strings.js').StringKey} key */
+  /** @param {import('../core/strings.js').StringKey} key */
   function caption(key) {
     const el = document.createElement('span');
     el.className = 'setting-caption';

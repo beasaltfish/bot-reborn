@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Ladder, LADDER, WINDOW_MS } from '../web/ladder.js';
-import { validate } from '../web/brain.js';
+import { Ladder, LADDER, WINDOW_MS } from '../core/ladder.js';
+import { validate } from '../core/brain.js';
 
 test('first time: bark back, nothing else', () => {
   assert.deepEqual(new Ladder(() => 0).next(), [{ kind: 'sound', name: 'bark' }]);

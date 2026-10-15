@@ -6,8 +6,8 @@
 // first sample is due, cancel() silences. WAV is asked for because it is the
 // one format every listed provider can send that needs no decoder here.
 
-import { RATE } from '../../web/protocol.js';
-import { toInt16 } from '../../web/audio/pcm.js';
+import { RATE } from '../../core/protocol.js';
+import { toInt16 } from '../../core/audio/pcm.js';
 import { isWav, parseWav, resample } from '../audio/pcm.js';
 
 const DEFAULT_TIMEOUT_MS = 15_000;

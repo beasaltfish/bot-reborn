@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { startRobot } from '../../server/robot.js';
 import { renderEarcons } from '../../server/audio/render.js';
-import { t } from '../../web/strings.js';
+import { t } from '../../core/strings.js';
 import { readyConfig, fakeFetch, until } from './helpers.js';
 
 function fakeConn(caps = { motors: true }) {

@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { HEADLINES } from '../web/panels/headlines.js';
+import { HEADLINES } from '../phone/panels/headlines.js';
 
-const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
-const dev = readFileSync(new URL('../web/dev.html', import.meta.url), 'utf8');
+const html = readFileSync(new URL('../phone/index.html', import.meta.url), 'utf8');
+const dev = readFileSync(new URL('../phone/dev.html', import.meta.url), 'utf8');
 
 /**
  * How much PROSE a page puts in front of somebody holding a phone — paragraphs
@@ -232,8 +232,8 @@ test('both stylesheets declare color-scheme', () => {
   // stylesheet, the top of that file went to the benches, and index.html spent
   // a commit rendering light-only on a phone set to dark. Nothing else catches
   // it: it is a property on :root, not a class any page names.
-  const product = readFileSync(new URL('../web/style.css', import.meta.url), 'utf8');
-  const instrument = readFileSync(new URL('../web/instrument.css', import.meta.url), 'utf8');
+  const product = readFileSync(new URL('../phone/style.css', import.meta.url), 'utf8');
+  const instrument = readFileSync(new URL('../phone/instrument.css', import.meta.url), 'utf8');
   for (const [name, css] of /** @type {[string, string][]} */ ([
     ['style.css', product], ['instrument.css', instrument],
   ])) {

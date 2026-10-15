@@ -1,6 +1,6 @@
 // Acoustics: ⑥ and ⑬. The guided five-window self-test, moved here from
 // web/spike/audio/main.js — the measurement flow is kept, everything it used
-// to build for itself now comes from web/audio/.
+// to build for itself now comes from phone/audio/.
 //
 // The flow exists because one window cannot separate three sources. Every
 // frame of playback mixes the robot's echo that AEC failed to remove, your own
@@ -20,10 +20,10 @@
 
 import { createVoiceDetector } from '../audio/vad.js';
 import { createSpotter } from '../audio/kws.js';
-import { toInt16, joinFrames } from '../audio/pcm.js';
+import { toInt16, joinFrames } from '../../core/audio/pcm.js';
 import { RATE } from '../audio/pipeline.js';
-import { OpenAiCompatStt } from '../providers/stt-openai-compat.js';
-import { WebAudioTts } from '../providers/tts-webaudio.js';
+import { OpenAiCompatStt } from '../../core/providers/stt-openai-compat.js';
+import { WebAudioTts } from '../../core/providers/tts-webaudio.js';
 import { rms, dbOf, dbs, fmt, setStat, setDisabled } from './readout.js';
 import { materialFor } from '../instrument-material.js';
 

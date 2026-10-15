@@ -3,13 +3,13 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   WAKE, STOP, parseTokens, unknownTokens, labelsIn, classifyLabel,
-} from '../web/audio/keyword-lines.js';
+} from '../core/audio/keyword-lines.js';
 
 const read = (/** @type {string} */ p) =>
   readFileSync(new URL(p, import.meta.url), 'utf8');
-const TOKENS = parseTokens(read('../web/models/kws/tokens.txt'));
-const NAME = read('../web/keywords/name.txt');
-const STOP_FILE = read('../web/keywords/stop.txt');
+const TOKENS = parseTokens(read('../phone/models/kws/tokens.txt'));
+const NAME = read('../core/keywords/name.txt');
+const STOP_FILE = read('../core/keywords/stop.txt');
 
 test('the tokens file parses into the symbol table, not the indices', () => {
   // Each line is "<symbol> <id>"; only the symbol is what a keyword line may use.

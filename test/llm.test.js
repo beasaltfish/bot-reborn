@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { OpenAiCompatLlm } from '../web/providers/llm-openai-compat.js';
+import { OpenAiCompatLlm } from '../core/providers/llm-openai-compat.js';
 
 const CFG = { baseURL: 'https://api.example.com/v1', apiKey: 'sk-test', model: 'deepseek-v4-flash' };
 

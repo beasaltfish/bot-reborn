@@ -10,7 +10,7 @@
 
 import { saveFixture, matchFixture, listFixtures, deleteFixture } from '../fixture-store.js';
 import { encodeWav } from '../audio/wav.js';
-import { toInt16, joinFrames } from '../audio/pcm.js';
+import { toInt16, joinFrames } from '../../core/audio/pcm.js';
 import { RATE } from '../audio/pipeline.js';
 
 export const PREFIX = 'calib/';

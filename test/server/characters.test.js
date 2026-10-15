@@ -186,7 +186,7 @@ test('a display name is unique, ignoring case, whether made or renamed', () => {
 });
 
 test('a new character starts on each layer\'s first provider, so only the key is left to type', async () => {
-  const { PRESETS, voicesFor } = await import('../../web/provider-presets.js');
+  const { PRESETS, voicesFor } = await import('../../core/provider-presets.js');
   const c = createCharacter('a', tmp());
   for (const layer of /** @type {const} */ (['stt', 'llm', 'tts', 'reflex'])) {
     const first = PRESETS[layer][0];

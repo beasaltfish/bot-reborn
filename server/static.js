@@ -8,7 +8,7 @@ import { extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const ADMIN_DIST = fileURLToPath(new URL('../admin/dist/', import.meta.url));
-export const FIXTURES_DIR = fileURLToPath(new URL('../web/fixtures/', import.meta.url));
+export const FIXTURES_DIR = fileURLToPath(new URL('../core/fixtures/', import.meta.url));
 
 /** @type {Record<string, string>} */
 const TYPES = {

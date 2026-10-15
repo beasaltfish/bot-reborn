@@ -10,7 +10,7 @@ export default defineConfig({
   plugins: [react()],
   build: { outDir: 'dist', emptyOutDir: true },
   server: {
-    // The page imports web/ (provider list, checks) from outside its root.
+    // The page imports core/ (provider list, checks) from outside its root.
     fs: { allow: ['..'] },
     proxy: { '/api': 'http://localhost:8787', '/fixtures': 'http://localhost:8787' },
   },

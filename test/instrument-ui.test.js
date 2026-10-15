@@ -5,8 +5,8 @@ import { readFileSync } from 'node:fs';
 /** @param {string} rel */
 const read = (rel) => readFileSync(new URL('../' + rel, import.meta.url), 'utf8');
 
-const productCss = read('web/style.css');
-const instrumentCss = read('web/instrument.css');
+const productCss = read('phone/style.css');
+const instrumentCss = read('phone/instrument.css');
 
 /** @param {string} css @param {string} name */
 function token(css, name) {
@@ -50,7 +50,7 @@ test('no red that is not the emergency stop', () => {
 // not licence to grow or shed one. 19 since 2026-09-29: the reflex spec (§7)
 // added the JEV card beside the other provider layers.
 const PAGES_SRC = /** @type {[string, string, number][]} */ ([
-  ['dev.html', read('web/dev.html'), 19],
+  ['dev.html', read('phone/dev.html'), 19],
 ]);
 
 test('no instrument page still separates its sections with a rule', () => {
@@ -94,9 +94,9 @@ test('every "Status:" line for the cable is written where the cable is opened', 
   // wrote the connectivity test's line only, so the pin bench, which is the tab
   // you are on when you first plug a freshly soldered board in, went on reading
   // "not connected" with the cable open.
-  const dev = read('web/dev.html');
+  const dev = read('phone/dev.html');
   const shown = [...dev.matchAll(/id="([^"]+)"[^>]*>\s*Status:/g)].map((m) => m[1]);
-  const written = (read('web/dev.js')
+  const written = (read('phone/dev.js')
     .match(/for \(const id of \[([^\]]+)\]\) setStat\(id, `Status: /) ?? [])[1];
   assert.ok(written, 'dev.js no longer has one place that writes the cable status');
   assert.deepEqual(
@@ -181,11 +181,11 @@ test('every id the instruments reach for exists in their markup', () => {
   // Derived rather than listed, so it cannot go stale: every `el('x')` and
   // `$('x')` in a page's own modules has to name something in that page.
   const SOURCES = /** @type {[string, string[]][]} */ ([
-    ['web/dev.html', [
-      'web/dev.js', 'web/panels/pins.js', 'web/panels/connectivity.js',
-      'web/panels/knobs.js', 'web/panels/residency.js',
-      'web/panels/acoustics.js', 'web/panels/recognition.js',
-      'web/panels/providers.js',
+    ['phone/dev.html', [
+      'phone/dev.js', 'phone/panels/pins.js', 'phone/panels/connectivity.js',
+      'phone/panels/knobs.js', 'phone/panels/residency.js',
+      'phone/panels/acoustics.js', 'phone/panels/recognition.js',
+      'phone/panels/providers.js',
     ]],
   ]);
   for (const [page, modules] of SOURCES) {
@@ -215,9 +215,9 @@ test('nothing in the config form can submit it', () => {
   const bare = [...form.matchAll(/<button(?![^>]*\btype=)[^>]*>/g)].map((m) => m[0]);
   assert.deepEqual(bare, [], 'a button in #cfgForm has no type, so it submits');
 
-  assert.match(read('web/panels/connectivity.js'), /el\('cfgForm'\)\.addEventListener\('submit'/,
+  assert.match(read('phone/panels/connectivity.js'), /el\('cfgForm'\)\.addEventListener\('submit'/,
     'setup.js no longer stops #cfgForm from submitting');
-  assert.match(read('web/panels/connectivity.js'), /function rowButton[\s\S]{0,300}?button\.type = 'button'/,
+  assert.match(read('phone/panels/connectivity.js'), /function rowButton[\s\S]{0,300}?button\.type = 'button'/,
     'rowButton creates a submit button');
 });
 
@@ -227,7 +227,7 @@ test('the USB test sends what the product sends, not a number of its own', () =>
   // fail for a reason which is not connectivity sends you to the solder joints
   // for nothing — and when ⑧ finally measures the motor's threshold, a literal
   // here would be a second place somebody has to remember.
-  const js = read('web/panels/connectivity.js');
+  const js = read('phone/panels/connectivity.js');
   assert.match(js, /import \{[^}]*\bMIN_DURATION_MS\b[^}]*\} from '[^']*executor\.js'/);
   assert.ok(!/buildStream\(0x10,\s*\d/.test(js),
     'testUsb hard-codes a pulse length; use MIN_DURATION_MS');
@@ -237,7 +237,7 @@ test('the pins panel registers every control it used to', () => {
   // bench.js attached eleven listeners at the top level of a module. Turning
   // that into a factory is where a button silently stops responding: it throws
   // nothing, it just does nothing, and no other test would notice.
-  const js = read('web/panels/pins.js');
+  const js = read('phone/panels/pins.js');
   // connectBtn, stopBtn and copyLogBtn are gone from here on purpose: the page
   // owns the one cable, the one emergency stop and the one log.
   for (const id of ['byteRateBtn', 'computeBtn',
@@ -257,7 +257,7 @@ test('the connectivity panel registers every control it used to', () => {
   // is load-bearing — the fixture rows must exist before anything refreshes
   // them — so start() calls named functions in the order they used to run, and
   // this pins that none of them was dropped on the way.
-  const js = read('web/panels/connectivity.js');
+  const js = read('phone/panels/connectivity.js');
   // connectBtn and stopBtn moved to the page, which owns one of each.
   for (const id of ['cfgForm', 'textForm', 'turnLog']) {
     assert.match(js, new RegExp(`'${id}'`), `connectivity.js no longer touches #${id}`);
@@ -274,7 +274,7 @@ test('the model is not fetched until an audio panel is chosen', () => {
   // nothing works yet — a fresh clone, a just-soldered board, no key typed —
   // and making them queue behind the heaviest asset in the project is the one
   // regression merging the three pages would otherwise introduce.
-  const js = read('web/dev.js');
+  const js = read('phone/dev.js');
   assert.ok(!/^\(async \(\) => \{[\s\S]*?loadSherpa/m.test(js),
     'main.js still loads the model at import time');
   assert.match(js, /function ensureSherpa/, 'main.js has no lazy loader');
@@ -284,9 +284,9 @@ test('nothing still points at the three pages that were merged away', () => {
   // They each opened their own handle to the same FT232H — fine in three
   // documents, a failed claimInterface in one. A stale reference is a link or a
   // comment sending somebody to a page that no longer exists.
-  for (const rel of ['web/dev.html', 'web/dev.js', 'web/settings.js',
-                     'web/checks.js', 'web/panels/pins.js',
-                     'web/panels/connectivity.js', 'docs/instruments.md']) {
+  for (const rel of ['phone/dev.html', 'phone/dev.js', 'phone/settings.js',
+                     'core/checks.js', 'phone/panels/pins.js',
+                     'phone/panels/connectivity.js', 'docs/instruments.md']) {
     assert.ok(!/\b(bench|setup|audio-bench)\.html\b/.test(read(rel)),
       `${rel} still points at a page that no longer exists`);
   }
@@ -298,7 +298,7 @@ test('every merged-away page has somewhere to land', () => {
   // that produced it by up to a week (s-maxage=604800). There is no purge — the
   // dashboard's is per zone and *.pages.dev is not one. A published 301 is what
   // replaces the stale entry, so these are load-bearing, not courtesy.
-  const redirects = read('web/_redirects');
+  const redirects = read('phone/_redirects');
   for (const path of ['/bench', '/setup', '/audio-bench']) {
     for (const suffix of ['', '.html']) {
       assert.match(redirects, new RegExp(`^\\${path}${suffix}\\s+/dev\\s+301$`, 'm'),

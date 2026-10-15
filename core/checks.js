@@ -14,7 +14,7 @@
 /**
  * The clips that ship, and the lines the voice check speaks — one pair per UI
  * language. Synthesised, so they are nobody's voice and every clone hears the
- * same take; see web/fixtures/README.md.
+ * same take; see core/fixtures/README.md.
  *
  * There are two pairs because §9.3's "test the hardest case" is a statement
  * about the input this product actually gets, not a difficulty setting. For a

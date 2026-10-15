@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MATERIAL, materialFor } from '../web/instrument-material.js';
+import { MATERIAL, materialFor } from '../phone/instrument-material.js';
 
 test('both arms carry every field an instrument reads', () => {
   for (const lang of /** @type {const} */ (['en', 'zh'])) {

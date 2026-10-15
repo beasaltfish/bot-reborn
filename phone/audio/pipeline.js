@@ -7,8 +7,9 @@
 // insurance along with it, and enabled = false would make KWS deaf too, so not
 // even the wake word could bring it back.
 
-export const RATE = 16000;
-export const FRAME_MS = 100;
+import { RATE, FRAME_MS } from '../../core/protocol.js';
+
+export { RATE, FRAME_MS };
 
 /**
  * autoGainControl off: it would ride the level of a quiet room up and make the

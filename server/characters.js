@@ -9,8 +9,8 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, chmodSync, unlinkSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { defaultConfig, loadConfig, layerReady } from '../web/config.js';
-import { PRESETS, voicesFor } from '../web/provider-presets.js';
+import { defaultConfig, loadConfig, layerReady } from '../core/config.js';
+import { PRESETS, voicesFor } from '../core/provider-presets.js';
 
 export const HOME = process.env.BOT_REBORN_HOME ?? join(homedir(), '.bot-reborn');
 export const CHARACTERS_DIR = join(HOME, 'characters');

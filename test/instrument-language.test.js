@@ -12,12 +12,12 @@ const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hang
 // Every instrument source. The product (index.html, app.js, strings.js …) is
 // not here: it is translated, and strings.js's zh table IS the locale.
 const INSTRUMENTS = [
-  'web/dev.html', 'web/dev.js',
-  'web/panels/pins.js', 'web/panels/connectivity.js',
-  'web/panels/acoustics.js', 'web/panels/knobs.js',
-  'web/dev.js', 'web/panels/providers.js',
-  'web/panels/readout.js', 'web/panels/recognition.js',
-  'web/panels/residency.js', 'web/panels/samples.js',
+  'phone/dev.html', 'phone/dev.js',
+  'phone/panels/pins.js', 'phone/panels/connectivity.js',
+  'phone/panels/acoustics.js', 'phone/panels/knobs.js',
+  'phone/dev.js', 'phone/panels/providers.js',
+  'phone/panels/readout.js', 'phone/panels/recognition.js',
+  'phone/panels/residency.js', 'phone/panels/samples.js',
 ];
 
 // The ratchet. Each entry is a file that still has Chinese in it and the task
@@ -37,14 +37,14 @@ test('no instrument source carries Chinese of its own', () => {
       .map((line, i) => [i + 1, line])
       .filter(([, line]) => CJK.test(String(line)));
     assert.deepEqual(lines, [],
-      `${rel} carries Chinese — it belongs in web/instrument-material.js or in docs/`);
+      `${rel} carries Chinese — it belongs in phone/instrument-material.js or in docs/`);
   }
 });
 
 test('the allow-list is empty, and stays that way', () => {
   // Every entry has been retired. Adding one back needs a reason in the commit
   // message: an instrument carries no Chinese of its own, and
-  // web/instrument-material.js is the single exemption.
+  // phone/instrument-material.js is the single exemption.
   //
   // This replaced a test that walked ALLOWED checking each entry was still
   // dirty. Against an empty set that test passes vacuously — it would have gone
@@ -56,6 +56,6 @@ test('the material table is the one place Chinese is allowed', () => {
   // Not on INSTRUMENTS, and deliberately asserted the other way round: if this
   // file ever stops carrying Chinese, the zh arm has been translated away and
   // ⑩ ⑪ stopped measuring code-switching without anything else going red.
-  assert.ok(CJK.test(read('web/instrument-material.js')),
-    'web/instrument-material.js has no Chinese left — the zh arm was translated away');
+  assert.ok(CJK.test(read('phone/instrument-material.js')),
+    'phone/instrument-material.js has no Chinese left — the zh arm was translated away');
 });

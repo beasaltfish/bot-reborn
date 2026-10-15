@@ -13,10 +13,10 @@ dist/
 # battery, AEC, transcription quality — is an answer about one phone in one
 # room, and expires when either changes. The apparatus had to stay; what it
 # did not have to be was a second copy of the engines. It lives in
-# web/audio-bench.html now, driving web/audio/'s own modules, which is what
+# web/audio-bench.html now, driving phone/audio/'s own modules, which is what
 # makes a reading worth taking back to them.
 
-# web/models/ is deliberately VENDORED, not ignored — the comment that used to
+# phone/models/ is deliberately VENDORED, not ignored — the comment that used to
 # sit here claimed the bundle was "fetched by script" and no such script has
 # ever existed. Upstream ships no prebuilt KWS wasm in any release (checked
 # v1.12.27 -> v1.13.8), and this build is patched on top of that anyway: the
@@ -28,15 +28,15 @@ dist/
 # at runtime, with nothing failing at build time to say so.
 
 # Connectivity-test fixture audio: each person's own voice, recorded locally
-# per web/fixtures/README.md, never someone else's sample.
-web/fixtures/*.wav
+# per core/fixtures/README.md, never someone else's sample.
+core/fixtures/*.wav
 # Except these. They are synthesised, so they are nobody's voice, and every
 # clone hears the same take — which is what lets the setup sheet ask "is this
 # layer reachable" without asking anyone to record anything first. They cannot
 # answer "does it understand *me*"; that is what the recorded three are for.
 # There are two because an English-only user tested against a code-switching
 # clip fails a setup that works perfectly well for them.
-!web/fixtures/check-*.wav
+!core/fixtures/check-*.wav
 
 # Personal design notes and specs (Chinese, single-author working documents)
 docs/design-notes/
@@ -50,7 +50,7 @@ docs/superpowers/
 .superpowers/
 
 # Brain-server models: downloaded by server/models/fetch.sh, 6 MB, not vendored
-# because nothing here needs a source build (unlike web/models/).
+# because nothing here needs a source build (unlike phone/models/).
 server/models/*
 !server/models/fetch.sh
 

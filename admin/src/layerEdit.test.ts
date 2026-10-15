@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { pickModel, pickProvider } from './layerEdit';
-import { presetById } from '../../web/provider-presets.js';
+import { presetById } from '../../core/provider-presets.js';
 
 const blank = { baseURL: '', apiKey: 'k', model: '', voice: '' };
 

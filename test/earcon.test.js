@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { EARCONS, SHAPES, durationOf } from '../web/audio/earcon.js';
+import { EARCONS, SHAPES, durationOf } from '../core/audio/earcon.js';
 
 test('the vocabulary is exactly the five spec §5.6 fixed', () => {
   assert.deepEqual([...EARCONS], ['wake', 'done', 'sleep', 'huh', 'error']);
@@ -12,7 +12,7 @@ test('brain.js only ever asks for names that exist', () => {
   // brain.js calls earcon('done' | 'error' | 'huh'); session.js adds the other
   // two. A sixth name appearing here would mean someone reopened §5.6's
   // decision that three kinds of failure share one sound.
-  const src = readFileSync(new URL('../web/brain.js', import.meta.url), 'utf8');
+  const src = readFileSync(new URL('../core/brain.js', import.meta.url), 'utf8');
   for (const m of src.matchAll(/#earcon\('([a-z]+)'\)/g)) {
     assert.ok(/** @type {readonly string[]} */ (EARCONS).includes(m[1]),
       `brain.js asks for an unknown earcon: ${m[1]}`);

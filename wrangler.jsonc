@@ -17,5 +17,5 @@
   // bot-reborn.agentlenshq.com, which track production only. Two weeks of work
   // went out that way without the domain moving. `npm run deploy` is the one
   // that publishes; it passes --branch production explicitly.
-  "pages_build_output_dir": "web"
+  "pages_build_output_dir": "phone"
 }

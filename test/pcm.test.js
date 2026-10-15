@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { toInt16, joinFrames } from '../web/audio/pcm.js';
+import { toInt16, joinFrames } from '../core/audio/pcm.js';
 
 test('full scale maps to the ends of the Int16 range', () => {
   assert.deepEqual([...toInt16(new Float32Array([0, 1, -1]))], [0, 32767, -32767]);

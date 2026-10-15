@@ -12,13 +12,13 @@
 
 import { createSpotter } from '../audio/kws.js';
 import { createVoiceDetector } from '../audio/vad.js';
-import { createEarcon, durationOf } from '../audio/earcon.js';
-import { classifyLabel, WAKE } from '../audio/keyword-lines.js';
-import { toInt16 } from '../audio/pcm.js';
+import { createEarcon, durationOf } from '../../core/audio/earcon.js';
+import { classifyLabel, WAKE } from '../../core/audio/keyword-lines.js';
+import { toInt16 } from '../../core/audio/pcm.js';
 import { RATE, FRAME_MS } from '../audio/pipeline.js';
-import { wantedSubscriptions } from '../audio/session.js';
+import { wantedSubscriptions } from '../../core/audio/session.js';
 import { materialFor } from '../instrument-material.js';
-import { OpenAiCompatStt } from '../providers/stt-openai-compat.js';
+import { OpenAiCompatStt } from '../../core/providers/stt-openai-compat.js';
 import {
   rms, dbs, fmt, setStat, setDisabled, aboveFloor, DB_FLOOR_OFF,
 } from './readout.js';

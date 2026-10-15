@@ -6,7 +6,7 @@
 // every bit of that in here is what lets kws.js and vad.js look like normal
 // modules.
 
-import { parseTokens } from './keyword-lines.js';
+import { parseTokens } from '../../core/audio/keyword-lines.js';
 import { cachedBytes } from './model-cache.js';
 
 export const MODELS_BASE = './models/kws/';

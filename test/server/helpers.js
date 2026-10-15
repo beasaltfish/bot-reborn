@@ -1,8 +1,8 @@
 // Shared by the robot and end-to-end tests: a config with every layer
 // filled, and a fetch that plays all three providers.
 
-import { defaultConfig } from '../../web/config.js';
-import { encodeWav } from '../../web/providers/stt-openai-compat.js';
+import { defaultConfig } from '../../core/config.js';
+import { encodeWav } from '../../core/providers/stt-openai-compat.js';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

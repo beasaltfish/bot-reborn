@@ -1,12 +1,12 @@
 // Shared readings and the page log.
 //
-// rms / dbOf / aboveFloor moved to web/audio/level.js on 2026-09-17, when
+// rms / dbOf / aboveFloor moved to core/audio/level.js on 2026-09-17, when
 // session.js came to need them: a panel may import from the product, never the
 // other way round. They are re-exported here so every panel and every existing
 // test keeps one import site.
 
-export { rms, dbOf, aboveFloor } from '../audio/level.js';
-import { dbOf } from '../audio/level.js';
+export { rms, dbOf, aboveFloor } from '../../core/audio/level.js';
+import { dbOf } from '../../core/audio/level.js';
 
 /** @param {number} n @param {number} [digits] */
 export function fmt(n, digits = 1) {

@@ -7,7 +7,7 @@
 // and takes the runtime with it, so the check has to happen out here.
 //
 // Pure functions only. This module is the reason `tokens.txt` is copied into
-// web/models/kws/ next to the four run-time files even though the .data bundle
+// phone/models/kws/ next to the four run-time files even though the .data bundle
 // already contains a copy of it.
 
 export const WAKE = 'wake';

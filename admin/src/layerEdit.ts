@@ -1,6 +1,6 @@
 // What picking a provider or a model does to a layer — the same rules as the
-// phone's setup sheet (web/setup-sheet.js), as functions the page can test.
-import { CUSTOM, presetById, voicesFor } from '../../web/provider-presets.js';
+// phone's setup sheet (phone/setup-sheet.js), as functions the page can test.
+import { CUSTOM, presetById, voicesFor } from '../../core/provider-presets.js';
 import type { LayerConfig, LayerName } from './types';
 
 type Preset = NonNullable<ReturnType<typeof presetById>>;

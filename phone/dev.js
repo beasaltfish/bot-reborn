@@ -11,10 +11,10 @@
 // each opening their own was fine while they were three documents and is a bug
 // the moment they are one.
 
-import { loadConfig } from './config.js';
+import { loadConfig } from '../core/config.js';
 import { AudioPipeline } from './audio/pipeline.js';
 import { loadSherpa } from './audio/sherpa.js';
-import { unknownTokens } from './audio/keyword-lines.js';
+import { unknownTokens } from '../core/audio/keyword-lines.js';
 import { createLog, setStat, setDisabled } from './panels/readout.js';
 import { createKnobs } from './panels/knobs.js';
 import { HEADLINES } from './panels/headlines.js';

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   rms, dbOf, fmt, dbs, createMeter, aboveFloor, DB_FLOOR_OFF,
-} from '../web/panels/readout.js';
+} from '../phone/panels/readout.js';
 
 test('rms of silence is zero', () => {
   assert.equal(rms(new Float32Array(160)), 0);

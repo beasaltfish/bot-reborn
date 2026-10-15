@@ -1,5 +1,5 @@
 // The wake word, the stop word and the VAD, in Node. Same model, same
-// keyword lines and the same thresholds as web/audio/kws.js and vad.js; only
+// keyword lines and the same thresholds as the phone's old wasm KWS and VAD; only
 // the binding differs — a native addon taking ONNX files, where the phone had
 // a wasm bundle with the files packed inside.
 
@@ -8,12 +8,17 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { VAD_WINDOW } from '../../web/audio/vad.js';
-import { parseTokens, unknownTokens } from '../../web/audio/keyword-lines.js';
-import { RATE } from '../../web/protocol.js';
+import { parseTokens, unknownTokens } from '../../core/audio/keyword-lines.js';
+import { RATE } from '../../core/protocol.js';
 
 export const MODEL_DIR = fileURLToPath(new URL('../models/', import.meta.url));
-const KEYWORD_DIR = fileURLToPath(new URL('../../web/keywords/', import.meta.url));
+const KEYWORD_DIR = fileURLToPath(new URL('../../core/keywords/', import.meta.url));
+
+/**
+ * Silero's window, in samples. The phone's wasm VAD used the same number
+ * (phone/audio/vad.js, until the phone stopped running one).
+ */
+export const VAD_WINDOW = 512;
 
 const FILES = {
   encoder: 'encoder-epoch-13-avg-2-chunk-16-left-64.int8.onnx',

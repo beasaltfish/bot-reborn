@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { renderEarcon, renderEarcons, loadSfx } from '../../server/audio/render.js';
-import { EARCONS, durationOf } from '../../web/audio/earcon.js';
-import { SOUNDS } from '../../web/audio/sfx.js';
+import { EARCONS, durationOf } from '../../core/audio/earcon.js';
+import { SOUNDS } from '../../core/audio/sfx.js';
 
 test('every earcon renders at 16 kHz for exactly its duration', () => {
   for (const name of EARCONS) {

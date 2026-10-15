@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { offerInstall } from '../web/install.js';
+import { offerInstall } from '../phone/install.js';
 
 /** A window and a button, as far as offerInstall can tell. */
 function setup() {
