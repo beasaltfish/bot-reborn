@@ -1,5 +1,10 @@
 # Fixed audio for the connectivity test
 
+> **2026-10-15:** the connectivity test that read the three recorded clips was
+> removed from the phone with the engines (see `docs/instruments.md`). The two
+> synthesised `check-*.wav` clips below still ship: the admin page's Ears test
+> plays them, and the brain's own tests use `check-en.wav`.
+
 `dev.html`'s STT test reads three clips of 2–4 seconds each:
 
 | File | Contents | What it tests |
@@ -11,7 +16,7 @@
 The third one is the point. Per §9.3, any old Chinese sentence will pass the
 test while leaving code-switching entirely unverified — and code-switching is
 the most common shape of input in the language-learning case this project is
-partly for. The sentences themselves live in `web/instrument-material.js`;
+partly for. The sentences themselves live in `instrument-material.js` (removed);
 this table follows it.
 
 ## The two clips that do ship
@@ -77,7 +82,7 @@ find your problem.
 
 ## The English arm
 
-`STT_FIXTURES` is keyed on the UI language (see `web/instrument-material.js`),
+`STT_FIXTURES` is keyed on the UI language (see `instrument-material.js` (removed)),
 so the three clips above are the **Chinese** set. Set the robot to English and
 the page asks for three different ones:
 

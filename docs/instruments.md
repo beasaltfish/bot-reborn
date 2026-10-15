@@ -1,6 +1,12 @@
 # The instruments
 
-One page in this repo is an instrument rather than product: `web/dev.html`,
+> **2026-10-15:** the phone became a body, and the engines it measured — the
+> wake word, the VAD, the three providers — moved to the brain. The page now
+> carries only the pin bench (`phone/dev.html`); the audio panels and the
+> connectivity test described below were removed with the engines and are in
+> git history. Rebuilding them on the computer is its own project.
+
+One page in this repo is an instrument rather than product: `phone/dev.html`,
 behind the gear. It exists to measure **this phone, this room and this voice**,
 and its answers expire when any of the three changes.
 
@@ -21,7 +27,7 @@ Two documents, two jobs:
   pages themselves carry only what changes which button you press next.
 
 Everything an instrument says out loud — the passage it reads, the line you read
-back, the words you shout at it — comes from `web/instrument-material.js`, keyed
+back, the words you shout at it — came from `instrument-material.js` (removed with the audio panels), keyed
 on the robot's language. That file is the only place in an instrument where
 Chinese is allowed to appear; `test/instrument-language.test.js` enforces it in
 both directions, including that the Chinese arm still *has* Chinese in it.

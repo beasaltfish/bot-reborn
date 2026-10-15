@@ -50,25 +50,40 @@
 
 The toy's own line-following chip is cut out of the loop. Four wires from the
 FT232H go straight to the inputs of the toy's motor driver and steering coil,
-and the phone switches those four pins over USB. Everything else — listening,
-understanding, deciding, talking — happens in a web page on the phone.
+and the phone switches those four pins over USB. The phone is the robot's
+body: it listens, plays, drives and shows a face. Everything that decides —
+hearing its name, understanding, choosing what to do, talking back — runs in a
+small Node server on a computer on the same Wi-Fi, the robot's brain.
 
 ## Build your own
 
 1. **Wire it.** Pin map, wiring and measurements are in
    [`docs/hardware.md`](docs/hardware.md). Read its D6/D7 soldering warning
    before you start.
-2. **Open it on the phone** in Chrome: **https://bot-reborn.agentlenshq.com**
-   is a ready-hosted copy of this repo, so there is nothing to deploy. The
-   robot shows what it is still missing, and each missing part is a step: your
-   keys, plugging in the board, and teaching it which way is left.
+2. **Start the brain** on a computer on the same Wi-Fi as the phone:
 
-Your keys stay on the phone, in plain text in the browser's storage, and are
-sent only to the providers you chose. There is no server in between. Using
-the hosted copy still means trusting whoever serves the page, so if you would
-rather not, serve your own: it is a folder of static files with no build step
-(`npx wrangler pages deploy web`, or any HTTPS static host — the phone only
-allows USB access from a secure page). See
+   ```bash
+   npm install
+   server/models/fetch.sh   # the wake-word and VAD models, once
+   npm start
+   ```
+
+   The admin page opens in your browser. Make a character and give it your
+   keys; the page tests each one as you type it.
+3. **Let Chrome on the phone use USB and the microphone on that page**, once
+   per phone: open `chrome://flags/#unsafely-treat-insecure-origin-as-secure`,
+   add the address the admin page shows (`http://<computer>:8787`), set it to
+   Enabled and relaunch Chrome. The page is plain http on your own network, and
+   Chrome only allows USB and the microphone on a page it treats as secure.
+   Giving the computer a fixed address on your router saves redoing this.
+4. **Scan the character's QR code** on the admin page with the phone, plug the
+   board in, and press Listen. The robot shows what it is still missing, and
+   each missing part is a step: plugging in the board, and teaching it which
+   way is left.
+
+Your keys stay on the computer, in a file under `~/.bot-reborn/` that only your
+user can read, and are sent only to the providers you chose. The phone never
+sees them: it holds a token that says which character it is. See
 [Security](docs/development.md#security).
 
 ## Status
@@ -80,8 +95,8 @@ still need tuning on the car.
 ## More
 
 - [`docs/hardware.md`](docs/hardware.md) — wiring, pin map, every measurement
-- [`docs/development.md`](docs/development.md) — reading the code, running it
-  locally, tests, security, deployment
+- [`docs/development.md`](docs/development.md) — reading the code, running it,
+  tests, security
 - [`docs/instruments.md`](docs/instruments.md) — the calibration page behind
   the gear
 - [`docs/ui.md`](docs/ui.md) — the robot's face and what each state means

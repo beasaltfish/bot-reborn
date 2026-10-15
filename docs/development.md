@@ -10,36 +10,45 @@ measured on the actual hardware.
 
 ## Reading the code
 
-About 6100 lines of product code, 3800 of instruments and 6300 of tests. Read it in this
+About 8000 lines of product code (the brain, the phone and the admin page), 1000 of instruments and 8000 of tests. Read it in this
 order — it follows the safety argument the design is built around, not the
 order the data flows.
 
-**Start with the test names, not the code.** `npm test` prints all 478 of them
+**Start with the test names, not the code.** `npm test` prints all of them
 and they are written as sentences, so the output is a behaviour inventory you
 can read in fifteen minutes. It is the cheapest map of the codebase there is.
 
-1. **`ftdi.js` + `executor.js`** — the only code here that moves a physical
-   object. `buildStream()` appends the stop byte *inside* the same buffer as the
-   drive bytes, so the car stops even if the JS that was driving it dies; the
-   renewal loop in `#renew()` exists to keep that guarantee bounded. If you read
-   one thing, read these two functions.
-2. **`brain.js`** — one conversational turn, start to finish: tool definitions,
-   the system prompt, the validator that only ever accepts or discards (it never
-   silently rewrites what the model asked for), then `handle()`.
-3. **`audio/session.js`** — the state machine, and the only file allowed to make
-   a decision. Start at `wantedSubscriptions()`, which is spec §5.3's table
-   written as a table.
-4. **`audio/sherpa.js`, `kws.js`, `vad.js`, `pipeline.js`** — four wrappers with
-   no branches anywhere in them, on purpose: none of this is reachable from
-   `node:test`, so a decision hidden in here would be untestable by
-   construction. Read them fast; the point is how little they contain.
-5. **`reflex.js` + `ladder.js`** — the shortcut in front of the LLM. Every way
-   the judge can fail ends in "ask the LLM as usual"; the ladder is a table, not
-   a model, so the same bark gets the same answer every time.
-6. **`app.js`** — how it is all wired together. Every decision in it was made
-   somewhere else.
+The code is in three places. `core/` is what the brain and a body share — the
+protocol, the voice chain, the strings. `server/` is the brain: it runs on a
+computer, serves the admin page and the phone's page, and holds every key.
+`phone/` is the body: the page the phone opens, which hears, plays, drives and
+shows a face. `admin/` is the admin page (React). `test/layout.test.js` holds
+the three apart: `core/` imports only `core/`, and the brain and the phone
+never import each other.
 
-`dev.html`, `dev.js` and `panels/` are instruments rather than product; read
+1. **`phone/ftdi.js` + `phone/executor.js`** — the only code here that moves a
+   physical object. `buildStream()` appends the stop byte *inside* the same
+   buffer as the drive bytes, so the car stops even if the JS that was driving
+   it dies; the renewal loops in `#renew()` and `#holdUntil()` exist to keep
+   that guarantee bounded. If you read one thing, read these.
+2. **`core/protocol.js`, `phone/body-link.js`, `server/link.js`** — the wire
+   between a body and the brain, and the watchdog on each end: a body that
+   hears nothing for a second stops the car by itself.
+   `server/fake-body.js` is the reference a new body (the ESP32) copies.
+3. **`core/brain.js`** — one conversational turn, start to finish: tool
+   definitions, the system prompt, the validator that only ever accepts or
+   discards (it never silently rewrites what the model asked for), then
+   `handle()`.
+4. **`core/audio/session.js`** — the state machine, and the only file allowed
+   to make a decision. Start at `wantedSubscriptions()`, which is spec §5.3's
+   table written as a table.
+5. **`core/reflex.js` + `core/ladder.js`** — the shortcut in front of the LLM.
+   Every way the judge can fail ends in "ask the LLM as usual"; the ladder is a
+   table, not a model, so the same bark gets the same answer every time.
+6. **`server/robot.js` and `phone/app.js`** — how each side is wired together.
+   Every decision in them was made somewhere else.
+
+`phone/dev.html`, `phone/dev.js` and `phone/panels/` are instruments rather than product; read
 `docs/instruments.md` before changing them, and skip them until you need them.
 
 Two habits that pay off here. **The comments carry the argument, not a
@@ -48,52 +57,38 @@ that rejection is usually load-bearing. And when you want to know what a guard
 is for, **delete it and run the tests**: the three nastiest defects found so far
 were all found exactly that way.
 
-## Local development
-
-WebUSB requires a secure context, which includes `http://localhost`:
+## Running it
 
 ```bash
-npx serve web        # or: python3 -m http.server -d web 8000
+npm install
+server/models/fetch.sh   # once: the wake-word and VAD models
+npm start                # the brain on :8787, and the admin page in your browser
 ```
 
-Then open the printed URL in Chrome or Edge. `index.html` is the robot, and
-its setup sheet takes the provider keys; `dev.html` is the instrument page —
-the hardware bench, connectivity tests in your own voice, and the typed driver
-that runs the whole chain without a microphone.
-
-Note that `localhost` is enough for WebUSB but **not** for testing on a phone:
-the phone needs a real secure context, so deploy first (see below).
+The admin page is at `http://localhost:8787/` and opens only on that machine.
+The phone's page is at `http://<this machine>:8787/phone/`; a phone needs
+Chrome's `unsafely-treat-insecure-origin-as-secure` flag set to that origin
+before it may use USB or the microphone there (the README has the steps).
+`server/fake-body.js` drives the whole brain from a WAV file, with no phone.
 
 ```bash
-npm test             # node --test — the whole suite, no browser
-npm run typecheck    # tsc --noEmit, strict, over web/ and test/
+npm test             # node --test and the admin page's vitest — no browser
+npm run typecheck    # tsc --noEmit, strict, over core/, server/, phone/, test/ and admin/
 ```
 
 ## Security
 
-**Your API keys are stored in plaintext in the browser's `localStorage`** on
-the device you configure — this is a bring-your-own-key app with no server and
-no proxy, so the keys have nowhere else to live. Anything with access to that
-browser profile can read them.
+**Your API keys live on the computer that runs the brain**, in one JSON file
+per character under `~/.bot-reborn/characters/`, readable only by your user.
+They are sent only to the providers you configured. Anything that can read
+your files can read them.
 
-A hosted copy of this page carries the trust problem inherent to every BYOK web
-app: you type your keys into a page someone else serves, and whoever serves it
-could ship a version that sends them somewhere. That cannot be fixed
-technically. The mitigation is that this project is open source and deploys as
-a folder of static files — read the code, then serve it yourself (`npx wrangler
-pages deploy web`, or any static host) and use your own copy.
-
-## Deploy to Cloudflare Pages
-
-Direct upload:
-
-```bash
-npx wrangler pages project create bot-reborn   # first time only
-npx wrangler pages deploy web
-```
-
-Git integration (dashboard): leave the build command empty and set the
-**build output directory** to `web`.
+The admin page, which shows keys and tokens, answers only requests from that
+machine. The phone's page is open to your network and holds no key; a body is
+let in only with a character's token, which the QR code carries in the part of
+the URL that is never sent to a server. Anyone on your Wi-Fi who has the token
+can be that character's body — replace the token on the admin page if it
+leaks.
 
 ## Browser support
 
