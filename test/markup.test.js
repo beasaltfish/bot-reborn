@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { HEADLINES } from '../phone/panels/headlines.js';
 
 const html = readFileSync(new URL('../phone/index.html', import.meta.url), 'utf8');
 const dev = readFileSync(new URL('../phone/dev.html', import.meta.url), 'utf8');
@@ -98,71 +97,6 @@ test('the developer page fits on a phone rather than reading like a paper', () =
   assert.ok(words < 760,
     `dev.html carries ${words} words of prose; the why belongs in docs/instruments.md`);
 });
-
-test('the panel you picked comes before the cards every panel shares', () => {
-  // #audioCommon is the same two cards for all four audio panels. Above the
-  // group, it made switching between them change nothing a phone can show: the
-  // chosen panel was below the fold, and the tabs read as dead.
-  const shared = dev.indexOf('<div id="audioCommon"');
-  const panels = [...dev.matchAll(/<section id="panel-([a-z]+)"/g)];
-  assert.ok(shared > 0, 'dev.html no longer has the shared audio cards');
-  for (const m of panels) {
-    assert.ok(m.index < shared,
-      `#panel-${m[1]} sits after the cards every audio panel shares`);
-  }
-});
-
-test('there is one tab per panel and no tab without one', () => {
-  // A panel with no tab is a panel nobody can reach; a tab naming no panel
-  // blanks the page. It was a <select> until 2026-09-21 — three actions per
-  // switch, and what was available stayed hidden until you opened it.
-  const panels = [...dev.matchAll(/<section id="panel-([a-z]+)"/g)].map((m) => m[1]);
-  const tabs = [...dev.matchAll(/data-panel="([a-z]+)"/g)].map((m) => m[1]);
-  assert.match(dev, /id="panelTabs"/);
-  assert.deepEqual(panels.sort(), tabs.sort());
-});
-
-test('exactly one tab starts selected', () => {
-  // Two would claim two panels at once; none would open on a page whose tabs
-  // all look inactive while a panel is in fact showing.
-  assert.equal([...dev.matchAll(/aria-selected="true"/g)].length, 1);
-});
-test('every headline the bar mirrors exists in the page', () => {
-  // The bar reads these ids out of the document. A typo is a bar that stays
-  // blank through an entire measurement, with nothing in the console but
-  // "null is not an object" — exactly the failure this file was written for.
-  for (const [panel, spec] of Object.entries(HEADLINES)) {
-    const ids = Array.isArray(spec) ? spec : [spec.mirror];
-    for (const id of ids) {
-      assert.match(dev, new RegExp(`id="${id}"`),
-        `audio-bench.html has no #${id}, which ${panel} declares as a headline`);
-    }
-  }
-});
-
-test('every panel that measures declares a headline', () => {
-  // A measuring panel with none is a panel whose readings still need scrolling
-  // to, which is the whole complaint.
-  //
-  // The two passive panels are deliberately absent. They hold no run and no
-  // live reading: the pin bench fires a pulse and the connectivity test answers
-  // in place, so there is nothing for a bar to follow you with.
-  const PASSIVE = ['pins', 'connectivity'];
-  const panels = [...dev.matchAll(/<section id="panel-([a-z]+)"/g)]
-    .map((m) => m[1]).filter((n) => !PASSIVE.includes(n));
-  assert.deepEqual(panels.sort(), Object.keys(HEADLINES).sort());
-});
-
-test('a headline is at most three readings', () => {
-  // Four will not fit beside a picker and a button at 400 px, and a bar that
-  // wraps to two lines eats the screen it was meant to save.
-  for (const [panel, spec] of Object.entries(HEADLINES)) {
-    if (Array.isArray(spec)) {
-      assert.ok(spec.length <= 3, `${panel} declares ${spec.length} headlines`);
-    }
-  }
-});
-
 
 test('the product and the instruments do not share a stylesheet', () => {
   // One file was dressing two audiences, and they undid each other: `.hint` was

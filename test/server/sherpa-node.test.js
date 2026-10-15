@@ -9,13 +9,6 @@ import { parseWav } from '../../server/audio/pcm.js';
 
 const skip = modelsPresent() ? false : 'models missing — run server/models/fetch.sh';
 
-test('the server tokens are the phone build\'s tokens', { skip }, () => {
-  assert.equal(
-    readFileSync(join(MODEL_DIR, 'tokens.txt'), 'utf8'),
-    readFileSync(new URL('../../phone/models/kws/tokens.txt', import.meta.url), 'utf8'),
-  );
-});
-
 test('the shipped keyword lines all use known tokens', { skip }, () => {
   assert.match(loadKeywords(), /@all_stop/);
 });

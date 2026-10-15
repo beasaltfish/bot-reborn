@@ -1,7 +1,8 @@
 # Sounds
 
-These are 16 kHz mono WAV conversions of web/sounds/*.mp3 (afconvert), so the
-server needs no MP3 decoder. Same sources and licences as below.
+These are 16 kHz mono WAV conversions of the MP3s listed below (afconvert),
+so the server needs no MP3 decoder. The MP3s lived in the phone's page until
+the phone became a body (2026-10-15); git history has them. Same sources and licences as below.
 
 All four are CC0 (public domain) from Freesound: no attribution is required,
 and it is given anyway. Each is Freesound's high-quality MP3 preview, cut to

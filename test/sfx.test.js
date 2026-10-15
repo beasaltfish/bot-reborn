@@ -65,9 +65,11 @@ test('every sound has its file, and every file is credited', async () => {
   // a turn that answers in silence, which is how this branch could not merge
   // until the files existed.
   const { existsSync, readFileSync } = await import('node:fs');
-  const credits = readFileSync(new URL('../phone/sounds/CREDITS.md', import.meta.url), 'utf8');
+  // The brain plays them now (server/sounds/, WAV); the credits still name
+  // the MP3 each was converted from.
+  const credits = readFileSync(new URL('../server/sounds/CREDITS.md', import.meta.url), 'utf8');
   for (const name of SOUNDS) {
-    assert.ok(existsSync(new URL(`../phone/sounds/${name}.mp3`, import.meta.url)), `${name}.mp3 is missing`);
+    assert.ok(existsSync(new URL(`../server/sounds/${name}.wav`, import.meta.url)), `${name}.wav is missing`);
     assert.match(credits, new RegExp(`\\| ${name}\\.mp3 \\|.*\\| CC0 \\|`), `${name}.mp3 is not credited`);
   }
 });

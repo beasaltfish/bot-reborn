@@ -1,7 +1,3 @@
-# Wrangler / Cloudflare
-.wrangler/
-.dev.vars
-
 # Dependencies and build output (this project has no build step; kept in case
 # a toolchain is added later)
 node_modules/
@@ -15,17 +11,6 @@ dist/
 # did not have to be was a second copy of the engines. It lives in
 # web/audio-bench.html now, driving phone/audio/'s own modules, which is what
 # makes a reading worth taking back to them.
-
-# phone/models/ is deliberately VENDORED, not ignored — the comment that used to
-# sit here claimed the bundle was "fetched by script" and no such script has
-# ever existed. Upstream ships no prebuilt KWS wasm in any release (checked
-# v1.12.27 -> v1.13.8), and this build is patched on top of that anyway: the
-# VAD symbols are exported from wasm/kws/CMakeLists.txt so both engines live in
-# one binary. Reproducing it means emsdk 4.0.23 and a source build, not a
-# download — recipe in docs/hardware.md. 18 MB once; the model release and the
-# emsdk version are both pinned, so it changes about never. While it was
-# ignored, `git clone && wrangler pages deploy` shipped a site whose models 404
-# at runtime, with nothing failing at build time to say so.
 
 # Connectivity-test fixture audio: each person's own voice, recorded locally
 # per core/fixtures/README.md, never someone else's sample.
@@ -50,7 +35,7 @@ docs/superpowers/
 .superpowers/
 
 # Brain-server models: downloaded by server/models/fetch.sh, 6 MB, not vendored
-# because nothing here needs a source build (unlike phone/models/).
+# because nothing here needs a source build.
 server/models/*
 !server/models/fetch.sh
 

@@ -56,21 +56,7 @@ test('phone/dev.js evaluates without throwing', async () => {
   // than assigned. dev.js reads navigator.usb and must find it absent, not
   // throw.
   Object.defineProperty(g, 'navigator', { value: {}, configurable: true });
-  g.fetch = () => Promise.resolve({
-    ok: true, status: 200, text: () => Promise.resolve(''),
-    headers: { get: () => 'audio/wav' },
-    arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
-    clone() { return this; },
-  });
-  g.AudioContext = function () {};
-  g.Audio = function () { return stub(); };
   g.localStorage = { getItem: () => null, setItem() {} };
-  // The connectivity panel refreshes its fixture rows on start, and those go
-  // through the Cache API. Stubbed so the work resolves instead of rejecting
-  // after this test has already returned.
-  g.caches = { open: () => Promise.resolve({ match: () => Promise.resolve(undefined), put: () => Promise.resolve(), keys: () => Promise.resolve([]) }) };
-  if (!g.URL.createObjectURL) g.URL.createObjectURL = () => 'blob:';
-
   await import('../phone/dev.js');
   // Let whatever the panels kicked off on start settle, so a rejection lands
   // inside this test rather than after it.
