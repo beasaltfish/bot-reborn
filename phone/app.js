@@ -162,15 +162,32 @@ async function pair() {
   await refresh();
 }
 
+/**
+ * Bumped by every start() and every stop(). The boot is a chain of awaits, and
+ * a person can press the brake or turn the screen off in the middle of it; a
+ * boot whose number is no longer current was cancelled while it waited, and
+ * must close what it just opened instead of going on to link a brain that
+ * would drive the car with nothing on screen left to stop it.
+ */
+let boot = 0;
+
 async function start() {
+  if (live) return;
   live = true;
+  const mine = ++boot;
+  const cancelled = () => mine !== boot;
   ui.running(true);
   ui.notice(t(config.lang, 'booting'));
   try {
-    pipeline = await AudioPipeline.start({ onRate: (hz) => ui.log(`AudioContext ${hz} Hz`) });
-    await running(pipeline.audioContext);
-    const player = new PcmPlayer(pipeline.audioContext);
+    const mic = await AudioPipeline.start({ onRate: (hz) => ui.log(`AudioContext ${hz} Hz`) });
+    if (cancelled()) return void mic.stop();
+    pipeline = mic;
+    await running(mic.audioContext);
+    // stop() has already closed the pipeline it found.
+    if (cancelled()) return;
+    const player = new PcmPlayer(mic.audioContext);
     const car = (await openCar()).executor;
+    if (cancelled()) return void car.stop();
     executor = car;
     car.onError = (err) => {
       ui.log('USB: ' + err.message);
@@ -211,9 +228,11 @@ async function start() {
         ui.notice(t(config.lang, REJECT[reason] ?? 'rejectProtocol'));
       },
     });
-    pipeline.subscribe('body', (frame) => link?.sendAudio(toInt16(frame)));
+    mic.subscribe('body', (frame) => link?.sendAudio(toInt16(frame)));
     await requestWakeLock();
   } catch (err) {
+    // A cancelled boot failing late is not news: stop() already ran.
+    if (cancelled()) return;
     const e = /** @type {Error} */ (err);
     const why = e.name === 'NotAllowedError' ? t(config.lang, 'micDenied') : e.message;
     ui.log('failed: ' + why);
@@ -224,6 +243,7 @@ async function start() {
 }
 
 function stop() {
+  boot++;
   live = false;
   link?.close();
   link = null;
