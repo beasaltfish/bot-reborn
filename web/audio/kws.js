@@ -46,12 +46,14 @@ export function createSpotter(sherpa, keywordLines, opts = {}) {
       const hits = [];
       while (kws.isReady(stream)) {
         kws.decode(stream);
-        hits.push(kws.getResult(stream).keyword);
+        const keyword = kws.getResult(stream).keyword;
+        if (!keyword) continue;
+        hits.push(keyword);
+        // Reset right after a hit, or the same keyword keeps re-reporting —
+        // including on a second decode within this same frame.
+        kws.reset(stream);
       }
-      const found = hits.filter(Boolean);
-      // Reset after a hit, or the same keyword keeps re-reporting.
-      found.forEach(() => kws.reset(stream));
-      return found;
+      return hits;
     },
   };
 }

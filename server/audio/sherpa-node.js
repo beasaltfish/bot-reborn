@@ -80,12 +80,15 @@ export function createSpotter(sherpa, keywordLines, opts = {}) {
       /** @type {string[]} */ const hits = [];
       while (kws.isReady(stream)) {
         kws.decode(stream);
-        hits.push(kws.getResult(stream).keyword);
+        const { keyword } = kws.getResult(stream);
+        if (!keyword) continue;
+        hits.push(keyword);
+        // Same as the web spotter: without a reset one utterance fires
+        // forever. Inside the loop, or a second decode in this same frame
+        // reports the hit again.
+        kws.reset(stream);
       }
-      const found = hits.filter(Boolean);
-      // Same as the web spotter: without a reset one utterance fires forever.
-      found.forEach(() => kws.reset(stream));
-      return found;
+      return hits;
     },
   };
 }
