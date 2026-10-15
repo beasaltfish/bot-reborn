@@ -48,3 +48,7 @@ button, input, select { font: inherit; }
 .token code { font-family: ui-monospace, Menlo, monospace; padding: 4px 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
 .token button { padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: inherit; cursor: pointer; }
 .danger { margin-top: 24px; padding: 8px 14px; border-radius: 6px; border: 1px solid var(--bad); background: none; color: var(--bad); cursor: pointer; }
+
+.phone { margin-top: 1.5rem; }
+.phone .qr svg { width: 220px; height: 220px; background: #fff; }
+.phone-url { display: block; word-break: break-all; margin: 0.5rem 0; }

@@ -3,6 +3,7 @@
 // Writes also need X-Bot-Reborn: 1, which no page from elsewhere can send
 // without a preflight this server never answers (spec §4).
 
+import { networkInterfaces } from 'node:os';
 import {
   listCharacters, characterById, createCharacter, patchCharacter,
   regenerateToken, deleteCharacter, ready,
@@ -11,7 +12,8 @@ import {
 const MAX_BODY = 64 * 1024;
 
 /**
- * @param {{ dir: string, link: { online(): string[], kick(id: string): boolean } }} opts
+ * @param {{ dir: string, link: { online(): string[], kick(id: string): boolean },
+ *           addresses?: () => string[] }} opts
  */
 export function createAdminApi(opts) {
   /** @param {import('./characters.js').Character} c @param {Set<string>} online */
@@ -30,6 +32,12 @@ export function createAdminApi(opts) {
     if (req.method !== 'GET' && req.headers['x-bot-reborn'] !== '1') return send(403, { error: 'missing X-Bot-Reborn header' });
 
     const path = new URL(req.url ?? '/', 'http://x').pathname;
+    if (path === '/api/lan') {
+      if (req.method !== 'GET') return send(405, { error: 'method not allowed' });
+      // What the QR code is made of: the address a phone on this Wi-Fi can
+      // reach, and the port this request came in on.
+      return send(200, { port: req.socket.localPort, addresses: (opts.addresses ?? lanAddresses)() });
+    }
     const m = path.match(/^\/api\/characters(?:\/([^/]+))?(\/token)?\/?$/);
     if (!m) return send(404, { error: 'no such endpoint' });
     let id;
@@ -108,4 +116,11 @@ function readJson(req) {
     });
     req.on('error', reject);
   });
+}
+
+/** IPv4 addresses on this machine's network interfaces, loopback excluded. */
+export function lanAddresses() {
+  return Object.values(networkInterfaces()).flat()
+    .filter((i) => i && i.family === 'IPv4' && !i.internal)
+    .map((i) => /** @type {import('node:os').NetworkInterfaceInfo} */ (i).address);
 }

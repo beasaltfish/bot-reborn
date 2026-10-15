@@ -19,7 +19,7 @@ export function installFakeApi(seed: Array<{ name: string; online?: boolean }> =
     ({ id: name, name, token: token(), online, config: blankConfig() });
   for (const s of seed) chars.set(s.name, make(s.name, s.online));
   const calls: Array<{ method: string; path: string; body: any; headers: Record<string, string> }> = [];
-  const state = { down: false };
+  const state = { down: false, addresses: ['192.168.1.5'] as string[] };
   const json = (status: number, body: unknown) =>
     new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
@@ -29,6 +29,7 @@ export function installFakeApi(seed: Array<{ name: string; online?: boolean }> =
     const body = init.body ? JSON.parse(String(init.body)) : undefined;
     calls.push({ method, path, body, headers: (init.headers ?? {}) as Record<string, string> });
     if (state.down) throw new TypeError('Failed to fetch');
+    if (path === '/api/lan') return json(200, { port: 8787, addresses: state.addresses });
     const m = path.match(/^\/api\/characters(?:\/([^/]+))?(\/token)?$/);
     if (!m) return json(404, { error: 'no such endpoint' });
     const id = m[1] === undefined ? undefined : decodeURIComponent(m[1]);

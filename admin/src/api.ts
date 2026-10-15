@@ -22,4 +22,5 @@ export const api = {
   patch: (id: string, patch: Patch) => call<Detail>('PATCH', one(id), patch),
   token: (id: string) => call<{ token: string }>('POST', `${one(id)}/token`),
   remove: (id: string) => call<object>('DELETE', one(id)),
+  lan: () => call<{ port: number; addresses: string[] }>('GET', '/api/lan'),
 };

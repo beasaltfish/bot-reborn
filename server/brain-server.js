@@ -19,7 +19,7 @@ import { createAdminApi } from './admin-api.js';
  *   makeEars: () => { kws: any, vad: any },
  *   sfx: Map<any, Int16Array>, earcons: Record<string, Int16Array>,
  *   log?: (line: string) => void, slackMs?: number, allowedOrigins?: string[],
- *   phoneDir?: string, coreDir?: string,
+ *   phoneDir?: string, coreDir?: string, addresses?: () => string[],
  * }} opts
  */
 export function createBrainServer(opts) {
@@ -75,7 +75,7 @@ export function createBrainServer(opts) {
       conn.onClose(() => robot.stop());
     },
   });
-  api = createAdminApi({ dir: opts.dir, link });
+  api = createAdminApi({ dir: opts.dir, link, addresses: opts.addresses });
   return {
     /** @param {number} port @returns {Promise<number>} the port actually bound */
     listen(port) {

@@ -161,3 +161,17 @@ test('an unbuilt page says how to build it', async () => {
   assert.match(await res.text(), /npm run admin:build/);
   await server.close();
 });
+
+test('the page learns where a phone can reach this brain', async () => {
+  const chars = tempCharacters();
+  const server = createBrainServer({
+    dir: chars.dir, sfx: new Map(), earcons: renderEarcons(), log: () => {},
+    makeEars: () => { throw new Error('no robot expected'); },
+    addresses: () => ['192.168.1.5', '10.0.0.7'],
+  });
+  const port = await server.listen(0);
+  const r = await fetch(`http://127.0.0.1:${port}/api/lan`);
+  assert.equal(r.status, 200);
+  assert.deepEqual(await r.json(), { port, addresses: ['192.168.1.5', '10.0.0.7'] });
+  await server.close();
+});

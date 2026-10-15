@@ -41,6 +41,11 @@ const en = {
   confirmRemove: 'Delete this character? Its keys and token are gone for good, and a connected body is disconnected.',
   serverDown: 'The brain is not running. Start it with npm start.',
   saveFailed: 'Not saved: ',
+  phoneTitle: 'Phone',
+  phoneScan: 'Scan this with the phone that will be this robot’s body.',
+  phoneNoNetwork: 'This computer is on no network a phone could share. Join the same Wi-Fi as the phone.',
+  phoneFlag: 'Once per phone: in Chrome open',
+  phoneFlagThen: ', add this address, set it to Enabled and relaunch Chrome:',
 };
 
 const zh: typeof en = {
@@ -84,6 +89,11 @@ const zh: typeof en = {
   confirmRemove: '删除这个角色？它的 key 和口令都会永久删除，连着的身体会被断开。',
   serverDown: '大脑服务没有在运行。用 npm start 启动它。',
   saveFailed: '没保存上：',
+  phoneTitle: '手机',
+  phoneScan: '用要当这个机器人身体的那台手机扫这个码。',
+  phoneNoNetwork: '这台电脑没有连到手机能用的网络。请和手机连同一个 Wi-Fi。',
+  phoneFlag: '每台手机一次：在 Chrome 里打开',
+  phoneFlagThen: '，填入下面这个地址，设为 Enabled，然后重启 Chrome：',
 };
 
 export type Key = keyof typeof en;

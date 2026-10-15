@@ -6,6 +6,7 @@ import { BasicTab } from './BasicTab';
 import { LayerTab } from './LayerTab';
 import { Dot } from './CharacterList';
 import { TokenBox } from './TokenBox';
+import { PhoneLink } from './PhoneLink';
 import { runCheck, type CheckFn } from './checks';
 import { t, type Key } from './i18n';
 import type { Detail, EditorSlot, Patch, TabName } from './types';
@@ -57,6 +58,7 @@ export function Editor(props: EditorSlot & { check?: CheckFn }) {
           : <LayerTab key={tab} layer={tab} config={detail.config} update={update} check={props.check ?? runCheck} />}
       </div>
       <TokenBox id={id} token={detail.token} onToken={(token) => setDetail((d) => (d ? { ...d, token } : d))} />
+      <PhoneLink token={detail.token} />
       <button
         type="button"
         className="danger"

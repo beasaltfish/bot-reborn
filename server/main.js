@@ -3,10 +3,10 @@
 // ws://<this machine>:<port>/body, and a phone opens the page this brain
 // serves at http://<this machine>:<port>/phone/ (the admin page's QR code).
 
-import { networkInterfaces } from 'node:os';
 import { spawn } from 'node:child_process';
 import { listCharacters, CHARACTERS_DIR } from './characters.js';
 import { createBrainServer } from './brain-server.js';
+import { lanAddresses } from './admin-api.js';
 import { prepareAdmin, buildAdmin } from './admin-build.js';
 import { renderEarcons, loadSfx } from './audio/render.js';
 import {
@@ -34,8 +34,7 @@ const server = createBrainServer({
 const port = await server.listen(PORT);
 
 const admin = `http://localhost:${port}/`;
-const lan = Object.values(networkInterfaces()).flat()
-  .filter((i) => i && i.family === 'IPv4' && !i.internal).map((i) => i?.address);
+const lan = lanAddresses();
 console.log(`admin page: ${admin}`);
 for (const ip of lan) {
   console.log(`body URL: ws://${ip}:${port}${BODY_PATH}`);
