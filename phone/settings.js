@@ -10,8 +10,7 @@
 // getting started — that path is the robot and the one button — so nothing
 // here is ordered, numbered, or ticked.
 
-import { t, KEYWORDS } from '../core/strings.js';
-import { STICKY } from '../core/config.js';
+import { t } from '../core/strings.js';
 
 const $ = (/** @type {string} */ id) =>
   /** @type {HTMLElement} */ (document.getElementById(id));
@@ -34,11 +33,10 @@ const TOOLS = [
 /**
  * @param {{
  *   lang: 'en' | 'zh',
- *   config: import('../core/config.js').Config,
+ *   config: import('./config.js').BodyConfig,
  *   save: () => void,
- *   openKeys: (back: () => void) => void,
  *   calibrate: (back: () => void) => void,
- *   onResetSticky: () => void,
+ *   onForgetBrain: () => void,
  *   onChange: () => void,
  * }} deps
  */
@@ -64,11 +62,9 @@ export function createSettings(deps) {
     // lower one showing around the edges of the upper, and closing the top one
     // uncovers a panel that has since gone stale. What is handed over is the
     // way back, so a door out of a drawer is not a one-way door.
-    rows.append(door('stepKeys', () => { close(); deps.openKeys(open); }));
+    rows.append(brain());
     rows.append(door('stepSteer', () => { close(); deps.calibrate(open); }));
     rows.append(language());
-    rows.append(wakeWord());
-    rows.append(sticky());
     rows.append(tools());
   }
 
@@ -115,54 +111,25 @@ export function createSettings(deps) {
   }
 
   /**
-   * Off by default: the screen being on is the robot being called. On brings
-   * back SLEEPING and the name that ends it. Read when the microphone opens,
-   * so a change lands on the next Listen rather than mid-conversation.
+   * Which brain this body belongs to. Linking happens on the computer — the
+   * admin page's code — so the only thing to do here is let go of it.
    */
-  function wakeWord() {
-    const row = document.createElement('label');
-    row.className = 'setting';
-    row.append(caption('settingsWakeWord'));
-    const box = document.createElement('input');
-    box.type = 'checkbox';
-    box.checked = deps.config.wakeWord;
-    const shown = document.createElement('p');
-    shown.className = 'setting-value';
-    // The name is composed here, never stored joined — see sayThis.
-    const paint = () => {
-      shown.textContent = box.checked
-        ? `「${KEYWORDS[0]}」` : t(deps.lang, 'settingsWakeWordOff');
-    };
-    box.addEventListener('change', () => {
-      deps.config.wakeWord = box.checked;
-      deps.save();
-      paint();
-    });
-    paint();
-    row.append(box, shown);
-    return row;
-  }
-
-  /**
-   * Spec §11.1: state the robot was put into by voice, invisible ever after.
-   * A state that can be entered and not left is a trap, and the trap is the
-   * reason this row exists rather than a list of preferences.
-   */
-  function sticky() {
+  function brain() {
     const row = document.createElement('div');
     row.className = 'setting';
-    row.append(caption('settingsSticky'));
+    row.append(caption('settingsBrain'));
     const shown = document.createElement('p');
     shown.className = 'setting-value';
-    shown.textContent = STICKY
-      .map((k) => `${k}: ${String(deps.config[k] ?? '—')}`)
-      .join(' · ');
-    const button = document.createElement('button');
-    button.className = 'quiet';
-    button.type = 'button';
-    button.textContent = t(deps.lang, 'settingsForget');
-    button.addEventListener('click', () => { deps.onResetSticky(); render(); });
-    row.append(shown, button);
+    shown.textContent = t(deps.lang, deps.config.token ? 'settingsBrainLinked' : 'brainHow');
+    row.append(shown);
+    if (deps.config.token) {
+      const button = document.createElement('button');
+      button.className = 'quiet';
+      button.type = 'button';
+      button.textContent = t(deps.lang, 'settingsForgetBrain');
+      button.addEventListener('click', () => { deps.onForgetBrain(); render(); });
+      row.append(button);
+    }
     return row;
   }
 

@@ -234,13 +234,13 @@ html, body { height: 100%; overflow: hidden; }
   border-radius: 16px; cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-.robot .part[data-part="keys"]  { top: 0;   height: 65%; }
+.robot .part[data-part="brain"]  { top: 0;   height: 65%; }
 .robot .part[data-part="car"]   { top: 65%; height: 20%; }
 .robot .part[data-part="steer"] { top: 85%; height: 15%; }
 .robot .part:active { background: rgba(128,128,128,.12); }
 .robot .part:focus-visible { outline: 2px solid var(--tintc); outline-offset: 2px; }
 
-.robot[data-next="keys"]  .part[data-part="keys"],
+.robot[data-next="brain"]  .part[data-part="brain"],
 .robot[data-next="car"]   .part[data-part="car"],
 .robot[data-next="steer"] .part[data-part="steer"] {
   animation: robot-part 2.4s ease-in-out infinite;

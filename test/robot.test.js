@@ -4,6 +4,7 @@ import { STATES, faceFor, applyFace, missingParts, applyAssembly, hintVisible, P
   from '../phone/robot.js';
 import { GATING } from '../phone/steps.js';
 import { STRINGS } from '../core/strings.js';
+import { defaultConfig } from '../phone/config.js';
 
 test('the five states are session.js\'s five, in its own order', () => {
   assert.deepEqual(
@@ -107,57 +108,22 @@ test('applyFace on an unknown state throws rather than leaving the last face up'
 
 // --- the parts it has not been given yet ----------------------------------
 
-/** @param {any} over @returns {any} */
-const cfg = (over = {}) => ({
-  stt: { baseURL: '', apiKey: '', model: '' },
-  llm: { baseURL: '', apiKey: '', model: '' },
-  tts: { baseURL: '', apiKey: '', model: '', voice: '' },
-  calibration: { steerSwapped: null, driveSwapped: null, bytesPerMs: null },
-  ...over,
+const bodyCfg = (/** @type {Partial<import('../phone/config.js').BodyConfig>} */ over = {}) =>
+  ({ ...defaultConfig(), ...over });
+const taught = { steerSwapped: false, driveSwapped: false, bytesPerMs: null };
+
+test('a phone straight out of the box is missing every part', () => {
+  assert.deepEqual(missingParts(bodyCfg()), ['ears', 'mind', 'voice', 'wheels']);
 });
 
-const full = { baseURL: 'https://x.test/v1', apiKey: 'k', model: 'm' };
-
-test('a config straight out of the box is missing every part', () => {
-  assert.deepEqual(missingParts(cfg()), ['ears', 'mind', 'voice', 'wheels']);
+test('a brain is the ears, the mind and the voice at once — one scan gives all three', () => {
+  assert.deepEqual(missingParts(bodyCfg({ token: 'ab'.repeat(16) })), ['wheels']);
 });
 
-test('each layer accounts for exactly one part', () => {
-  assert.ok(!missingParts(cfg({ stt: full })).includes('ears'));
-  assert.ok(missingParts(cfg({ stt: full })).includes('mind'));
-  assert.ok(!missingParts(cfg({ llm: full })).includes('mind'));
-  assert.ok(!missingParts(cfg({ tts: { ...full, voice: 'v' } })).includes('voice'));
-});
-
-test('an address with no key behind it is not a part it has been given', () => {
-  // This is the case the old check passed: baseURL set, nothing else, and the
-  // robot looked complete right up until its first sentence failed.
-  assert.ok(missingParts(cfg({ llm: { baseURL: 'https://x.test', apiKey: '', model: '' } }))
-    .includes('mind'));
-});
-
-test('TTS is not complete without its voice (spec §8.2 gives it a fourth field)', () => {
-  assert.ok(missingParts(cfg({ tts: { ...full, voice: '' } })).includes('voice'));
-});
-
-test('a car that measured as NOT reversed has still been taught', () => {
-  // `false` is a measurement. Only `null` means nobody has asked the question,
-  // and treating the two alike would leave the wheels pale forever on half the
-  // cars in the world.
-  const taught = { steerSwapped: false, driveSwapped: false, bytesPerMs: null };
-  assert.ok(!missingParts(cfg({ calibration: taught })).includes('wheels'));
-  assert.ok(missingParts(cfg({ calibration: { ...taught, steerSwapped: true } })).length === 3);
-});
-
-test('the wheels stay pale until BOTH directions have been taught', () => {
-  // Half a calibration is the dangerous state: the drawing would say the car
-  // knows its directions while the answer that decides forward from backward
-  // has never been asked, and the first command drives it into the wall
-  // behind it.
-  const half = { steerSwapped: false, driveSwapped: null, bytesPerMs: null };
-  assert.ok(missingParts(cfg({ calibration: half })).includes('wheels'));
-  assert.ok(missingParts(cfg({ calibration: { ...half, steerSwapped: null, driveSwapped: false } }))
-    .includes('wheels'));
+test('the wheels need both answers', () => {
+  const linked = { token: 'ab'.repeat(16) };
+  assert.deepEqual(missingParts(bodyCfg({ ...linked, calibration: taught })), []);
+  assert.deepEqual(missingParts(bodyCfg({ ...linked, calibration: { ...taught, driveSwapped: null } })), ['wheels']);
 });
 
 test('applyAssembly writes a token list the stylesheet can match one part at a time', () => {
@@ -182,8 +148,8 @@ test('every part the robot can draw as missing knows which sheet it opens', () =
   // does nothing is worse than not drawing it: the next ghost gets ignored
   // too. So a part added to missingParts() without a row here is a bug this
   // catches rather than something to be discovered by pressing it.
-  const every = missingParts(cfg());
-  assert.equal(every.length, 4, 'cfg() is meant to be missing every part');
+  const every = missingParts(bodyCfg());
+  assert.equal(every.length, 4, 'bodyCfg() is meant to be missing every part');
   for (const part of every) {
     assert.ok(PART_STEP[part], `part "${part}" is drawn as missing but opens nothing`);
     assert.ok(GATING.includes(PART_STEP[part]),
@@ -191,11 +157,9 @@ test('every part the robot can draw as missing knows which sheet it opens', () =
   }
 });
 
-test('the mouth opens the setup sheet even though a voice is not a step', () => {
-  // The case the ring cannot cover. done.keys asks only about the ears and the
-  // mind — a car drives fine with nothing to say — so nothing will ever ring
-  // over a missing mouth, and pressing it has to work anyway.
-  assert.equal(PART_STEP.voice, 'keys');
+test('the mouth opens the brain step, like the ears and the mind', () => {
+  // One scan gives all three, so all three are one door.
+  assert.equal(PART_STEP.voice, 'brain');
 });
 
 

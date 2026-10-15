@@ -10,7 +10,7 @@
 // opaque classes would let that pair drift apart silently — see the test that
 // pins them together.
 
-import { layerReady, directionsTaught } from '../core/config.js';
+import { directionsTaught } from './config.js';
 
 /** @typedef {import('../core/audio/session.js').State} State */
 /** @typedef {import('../core/strings.js').StringKey} StringKey */
@@ -62,58 +62,25 @@ const FACES = {
 };
 
 /**
- * The parts the robot has not been given yet.
- *
- * The five faces already put each layer somewhere on the drawing — the sound
- * waves only appear while it is hearing you, the antenna only orbits while it
- * is thinking, the mouth only opens while it is speaking. So "which layer is
- * missing" has an answer in the same three places, and an unconfigured layer
- * can be drawn as the part that is not there yet rather than as a row of text
- * somewhere else.
- *
- * This is finer than steps.js on purpose and does not duplicate it. The
- * checklist answers "how many steps are left", and giving it both keys is one
- * step, one errand, one sheet. The drawing answers "what is this robot still
- * missing", and there the ears and the mind are two different absences.
- *
- * The wheels are listed from the moment calibration has not been done,
- * including while there is no car at all. Both are true then, and the plug and
- * the pale wheels say two different things: nothing is plugged in, and nothing
- * has been taught which way is which.
+ * The parts the robot has not been given yet. A brain is the ears, the mind
+ * and the voice at once: one scan of the admin page's code gives all three,
+ * so they are missing or present together.
  *
  * @typedef {'ears' | 'mind' | 'voice' | 'wheels'} Part
- * @param {import('../core/config.js').Config} config
+ * @param {import('./config.js').BodyConfig} config
  * @returns {Part[]}
  */
 export function missingParts(config) {
   /** @type {Part[]} */
   const missing = [];
-  if (!layerReady(config.stt)) missing.push('ears');
-  if (!layerReady(config.llm)) missing.push('mind');
-  if (!layerReady(config.tts)) missing.push('voice');
-  // Both answers, from the same function the checklist reads — see
-  // directionsTaught(). A car taught only half of it is not a car with wheels.
+  if (!config.token) missing.push('ears', 'mind', 'voice');
   if (!directionsTaught(config.calibration)) missing.push('wheels');
   return missing;
 }
 
-/**
- * Which gating step a missing part is the door to.
- *
- * Finer on one side and coarser on the other, which is the whole reason this
- * table exists rather than being assumed: three of the four parts lead to the
- * same sheet, and the mouth leads there even though the VOICE is not a gating
- * step at all. A car drives fine without one — `done.keys` deliberately asks
- * only about the ears and the mind — so nothing would ever ring over a missing
- * mouth. The dashed mouth is the advertisement instead, and an advertisement
- * that does not open when it is pressed is worse than no mouth at all.
- *
- * The plug has no entry: it is not a missing PART, it is a missing car, and
- * app.js adds `car` from the same answer that draws it.
- *
- * @type {Record<Part, import('./steps.js').Step>}
- */
-export const PART_STEP = { ears: 'keys', mind: 'keys', voice: 'keys', wheels: 'steer' };
+// Three of the four parts are one step: the brain.
+/** @type {Record<Part, import('./steps.js').Step>} */
+export const PART_STEP = { ears: 'brain', mind: 'brain', voice: 'brain', wheels: 'steer' };
 
 /**
  * Written as one attribute holding a token list, so the stylesheet asks

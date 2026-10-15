@@ -135,7 +135,7 @@
              part, or the plug. Inert in the markup rather than live: the
              first openParts() is a tick away behind getDevices(), and for
              that tick all three would otherwise be doors. -->
-        <button class="part" data-part="keys" type="button" inert></button>
+        <button class="part" data-part="brain" type="button" inert></button>
         <button class="part" data-part="car" type="button" inert></button>
         <button class="part" data-part="steer" type="button" inert></button>
       </div>
@@ -157,20 +157,6 @@
     <button id="fab" class="fab" disabled></button>
 
     <pre id="log" class="log" hidden></pre>
-
-    <!-- Spec §8 of the 2026-09-17 design: setup stops being a page. The rows
-         are built by setup-sheet.js from the provider list, so the only thing
-         written here is the frame — three layers is a fact about the config
-         schema, not about this markup. -->
-    <div id="setupSheet" class="sheet" hidden>
-      <div class="panel">
-        <h2 id="setupTitle" class="panel-title"></h2>
-        <div id="setupTabs" class="tabs" role="tablist"></div>
-        <div id="setupRows" class="layers"></div>
-        <p id="setupNote" class="panel-note"></p>
-        <div id="setupFoot" class="foot"></div>
-      </div>
-    </div>
 
     <!-- Teaching it which way is which has two doors — the robot's wheels, and a
          row in settings — so it is a sheet of its own rather than a panel

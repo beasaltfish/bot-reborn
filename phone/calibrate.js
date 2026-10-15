@@ -35,7 +35,7 @@ const DRIVE_MS = 400;
  *   lang: 'en' | 'zh',
  *   openCar: (opts?: { raw?: boolean }) =>
  *     Promise<{ executor: import('./executor.js').Executor }>,
- *   onCalibrated: (patch: Partial<import('../core/config.js').Calibration>) => void,
+ *   onCalibrated: (patch: Partial<import('./config.js').Calibration>) => void,
  *   onChange: () => void,
  *   log: (msg: string) => void,
  * }} deps
@@ -48,7 +48,7 @@ export function createCalibration(deps) {
   sheet.addEventListener('click', (e) => { if (e.target === sheet) close(); });
 
   /** Where closing goes when this was opened from a sheet rather than from the
-   *  robot — see the same field in setup-sheet.js.
+   *  robot: back to that sheet, so a door out of a drawer is not one-way.
    *  @type {(() => void) | null} */
   let back = null;
 

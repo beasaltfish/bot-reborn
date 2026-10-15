@@ -36,7 +36,6 @@ const REQUIRED = [
   'robot', 'bubble', 'fab', 'mic', 'log', 'notice', 'hint',
   'settings', 'sheet', 'settingsTitle', 'settingsRows', 'sheetClose',
   'calSheet', 'cal',
-  'setupSheet', 'setupTitle', 'setupTabs', 'setupRows', 'setupNote', 'setupFoot',
   'calFoot',
 ];
 
@@ -59,7 +58,7 @@ test('the retired ids are gone, not merely hidden', () => {
   // entirely: shutting the microphone. That job moved to the icon in the
   // topbar, which is also the only thing that shows the ear is open.
   for (const id of ['state', 'title', 'start', 'stop', 'estop', 'sleep',
-                    'sheetSteps', 'setupTestAll', 'setupClose']) {
+                    'sheetSteps', 'setupTestAll', 'setupClose', 'setupSheet']) {
     assert.ok(!hasId(id), `index.html still has the retired #${id}`);
   }
 });
@@ -67,7 +66,7 @@ test('the retired ids are gone, not merely hidden', () => {
 test('the robot carries one touch target per gating step', () => {
   // The robot IS the checklist now. A missing band is a step with no door:
   // the ring pulses over a region that does nothing when it is pressed.
-  for (const step of ['keys', 'car', 'steer']) {
+  for (const step of ['brain', 'car', 'steer']) {
     assert.match(html, new RegExp(`class=["']part["'] data-part=["']${step}["']`),
       `index.html has no touch target for the "${step}" step`);
   }

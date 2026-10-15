@@ -19,13 +19,13 @@
  * to happen. Everything else is optional and is not listed until it works —
  * a row that never ticks teaches people to ignore the list.
  */
-export const GATING = /** @type {const} */ (['keys', 'car', 'steer']);
+export const GATING = /** @type {const} */ (['brain', 'car', 'steer']);
 
-/** @typedef {'keys' | 'car' | 'steer'} Step */
-/** @typedef {{ keys: boolean, car: boolean, steer: boolean }} Done */
+/** @typedef {'brain' | 'car' | 'steer'} Step */
+/** @typedef {{ brain: boolean, car: boolean, steer: boolean }} Done */
 
 /** @type {Record<Step, import('../core/strings.js').StringKey>} */
-const RUNG = { keys: 'fabKeys', car: 'fabPair', steer: 'fabSteer' };
+const RUNG = { brain: 'fabBrain', car: 'fabPair', steer: 'fabSteer' };
 
 /**
  * What each step is called wherever it is named in full: the settings list,
@@ -34,7 +34,7 @@ const RUNG = { keys: 'fabKeys', car: 'fabPair', steer: 'fabSteer' };
  *
  * @type {Record<Step, import('../core/strings.js').StringKey>}
  */
-export const STEP_LABEL = { keys: 'stepKeys', car: 'stepCar', steer: 'stepSteer' };
+export const STEP_LABEL = { brain: 'stepBrain', car: 'stepCar', steer: 'stepSteer' };
 
 /**
  * @param {Done} done

@@ -47,17 +47,18 @@ test('every string the UI needs exists in both languages', () => {
   const needed = /** @type {(keyof typeof STRINGS.en)[]} */ ([
     'usbNotConnected', 'didNotCatch', 'apiFailed', 'deviceDisconnected',
     'sessionTimedOut',
-    'fabStart', 'fabKeys', 'fabPair', 'fabSteer', 'fabStop',
+    'fabStart', 'fabBrain', 'fabPair', 'fabSteer', 'fabStop',
     'micOn', 'micOff', 'settings', 'install', 'close', 'sayThis',
-    'stepKeys', 'stepCar', 'stepSteer',
+    'stepBrain', 'stepCar', 'stepSteer',
     'calTitle', 'calIntro', 'calGo', 'calAsk', 'calLeft', 'calRight',
     'calDriveIntro', 'calDriveAsk', 'calForward', 'calBack',
     'calAgain', 'calDone', 'calNoCar',
     'emergencyStop', 'booting', 'micDenied',
-    'keywordsInvalid', 'usbNotPaired', 'pairNow', 'needsTap',
-    'settingsWakeWord', 'settingsWakeWordOff',
+    'usbNotPaired', 'pairNow', 'needsTap',
+    'brainHow', 'linkLost', 'insecure',
+    'rejectToken', 'rejectBusy', 'rejectUnconfigured', 'rejectProtocol', 'rejectOrigin',
+    'settingsBrain', 'settingsBrainLinked', 'settingsForgetBrain',
     'stSleeping', 'stListening', 'stCapturing', 'stThinking', 'stSpeaking',
-    'setupReflex', 'setupReflexWhat', 'setupReflexOptional',
   ]);
   for (const key of needed) {
     for (const lang of /** @type {const} */ (['en', 'zh'])) {
