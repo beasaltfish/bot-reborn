@@ -83,8 +83,10 @@ export function connectBody(opts) {
         attempt = 0;
         beat = setInterval(() => send({ type: 'ping' }), heartbeatMs);
         // Checked every 50 ms, so "within the watchdog" is within it plus a
-        // twentieth of a second, not plus a whole heartbeat.
-        dog = setInterval(() => { if (Date.now() - lastHeard > watchdogMs) socket.close(); }, 50);
+        // twentieth of a second, not plus a whole heartbeat. Lost at once,
+        // not on close: a browser waits for the peer to answer a close, and a
+        // brain that is gone never answers.
+        dog = setInterval(() => { if (Date.now() - lastHeard > watchdogMs) lost(socket); }, 50);
         opts.onWelcome(msg.name);
         return;
       }
@@ -92,17 +94,28 @@ export function connectBody(opts) {
       if (msg.type === 'pong') return;
       opts.onMessage(msg);
     };
-    socket.onclose = () => {
-      if (ws !== socket) return;
-      quiet();
-      welcomed = false;
-      ws = null;
-      if (finished) return;
-      opts.onLost();
-      const wait = retryMs[Math.min(attempt, retryMs.length - 1)];
-      attempt++;
-      retry = setTimeout(open, wait);
-    };
+    socket.onclose = () => lost(socket);
+  }
+
+  /**
+   * This socket is done with, however it ended. Its handlers are taken off
+   * first, so whatever it still says while it finishes closing — a late
+   * message, its own close event — reaches nobody.
+   * @param {WebSocketLike} socket
+   */
+  function lost(socket) {
+    if (ws !== socket) return;
+    socket.onmessage = null;
+    socket.onclose = null;
+    socket.close();
+    quiet();
+    welcomed = false;
+    ws = null;
+    if (finished) return;
+    opts.onLost();
+    const wait = retryMs[Math.min(attempt, retryMs.length - 1)];
+    attempt++;
+    retry = setTimeout(open, wait);
   }
 
   /** @param {object} msg */
