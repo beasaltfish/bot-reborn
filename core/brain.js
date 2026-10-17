@@ -99,6 +99,17 @@ export const TOOLS = [
   },
 ];
 
+const MOTION_TOOLS = new Set(['move', 'cruise', 'stop']);
+
+/**
+ * The tools a body gets (body motion spec §3). A dry-run is a car as far as
+ * the model can tell: what is being tested is the real prompt.
+ * @param {import('./config.js').Motion} [motion]
+ */
+export function toolsFor(motion = 'car') {
+  return motion === 'none' ? TOOLS.filter((t) => !MOTION_TOOLS.has(t.function.name)) : TOOLS;
+}
+
 // --- System prompt (spec §6.8) ---------------------------------------------
 
 export const SYSTEM_PROMPT = `You are a small living creature. You have a face,
@@ -137,11 +148,38 @@ There is no turning in place — steering must accompany forward or backward mot
 - duration_ms: default 600; use ${MIN_DURATION_MS} for "just a little".`;
 
 /**
- * @param {{ replyLang: 'zh' | 'en' | null, bargeIn: boolean }} cfg
+ * The same creature with no body that moves (body motion spec §3, §4.1 ②).
+ * Written whole rather than cut out of SYSTEM_PROMPT: there the wheels run
+ * through the same list as everything else, and stitching pieces back
+ * together is how the car's prompt would quietly change.
+ */
+export const SYSTEM_PROMPT_STILL = `You are a small living creature. You have a face
+and a voice, and that is all of you: there is no body that moves. You cannot
+drive, turn, walk or go anywhere.
+
+You are not a robot or a machine. Never call yourself "the robot". Speak in
+the first person.
+
+You are curious, playful, a little proud, and easily teased. You have moods,
+likes and dislikes, and you remember how the user has just treated you.
+
+- If the user asks you to move, tell them in your own way that you can't —
+  sulk about it or make a joke of it — but never pretend you moved.
+- If the user is chatting or asking a question, answer. You may also react
+  with your voice alone: \`play_sound\` is yours to use.
+- If the user repeats the same thing, do not repeat your reaction — escalate
+  it or change it.
+- Reply in the same language the user spoke. This instruction is written in
+  English; that is not a reason to answer in English.
+- Your reply is read aloud. Use plain spoken language — no markdown, no lists,
+  no code blocks, no parenthetical asides.`;
+
+/**
+ * @param {{ replyLang: 'zh' | 'en' | null, bargeIn: boolean, body?: { motion: import('./config.js').Motion } }} cfg
  * @returns {string}
  */
 export function buildSystemPrompt(cfg) {
-  let prompt = SYSTEM_PROMPT;
+  let prompt = cfg.body?.motion === 'none' ? SYSTEM_PROMPT_STILL : SYSTEM_PROMPT;
 
   // 1. A recorded language preference (spec §11.1). null = follow the user,
   //    which is the model's default behaviour, so inject nothing.
@@ -285,14 +323,14 @@ export class Brain {
   /**
    * @param {{
    *   llm: { chat(messages: object[], tools: object[], opts?: { signal?: AbortSignal }): Promise<{ text: string, toolCalls: any[], rawMessage: object }> },
-   *   executor: { connected: boolean, move(steps: Step[]): Promise<void>, cruise(d: string, s: string): Promise<void>, stop(): Promise<void> },
+   *   executor: { move(steps: Step[]): Promise<void>, cruise(d: string, s: string): Promise<void>, stop(): Promise<void> },
    *   tts: { speak(text: string, opts?: { signal?: AbortSignal }): Promise<void> },
    *   earcon: (name: import('./audio/earcon.js').EarconName) => void,
    *   sound?: (name: import('./audio/sfx.js').SoundName) => Promise<void>,
    *   reflex?: { judge(heard: string, robotSaid: string, signal?: AbortSignal):
    *              Promise<import('./reflex.js').Verdict> } | null,
    *   ladder?: { next(): Action[], reset(): void },
-   *   config: { lang: 'en' | 'zh', replyLang: 'zh' | 'en' | null, bargeIn: boolean },
+   *   config: { lang: 'en' | 'zh', replyLang: 'zh' | 'en' | null, bargeIn: boolean, body?: { motion: import('./config.js').Motion } },
    *   onReplyLangChange?: (lang: 'en' | 'zh' | null) => void,
    *   onFault?: (part: import('./strings.js').FaultPart, err: Error) => void,
    *   trace?: (line: string) => void,
@@ -337,21 +375,12 @@ export class Brain {
     const text = userText.trim();
     if (text === '') { this.#earcon('huh'); return; }
 
-    // Scoped to the whole turn, not just the LLM call: the two fixed lines
-    // below speak before the model is ever reached, and a stop button that
-    // works on most turns but silently not on those two is worse than one
-    // that never works.
+    // Scoped to the whole turn, not just the LLM call: the reflex below runs
+    // before the model is ever reached and the apiFailed line after it fails,
+    // and a stop button that works on most turns but silently not on those is
+    // worse than one that never works.
     const turn = new AbortController();
     this.#turn = turn;
-
-    // Spec §6.5: intercepted here, before the LLM. The car's state never enters
-    // the prompt — actions are short enough that it would be stale on arrival,
-    // and it would tempt the model into things the hardware cannot do.
-    if (!this.#executor.connected) {
-      this.#beep();
-      await this.#say(t(this.#config.lang, 'usbNotConnected'), turn);
-      return;
-    }
 
     // Reflex spec §2: asked before the LLM, never beside it. Anything but a
     // confident "tease" falls through to the LLM below, untouched.
@@ -368,7 +397,7 @@ export class Brain {
     try {
       reply = await this.#llm.chat(
         [{ role: 'system', content: buildSystemPrompt(this.#config) }, ...this.#history],
-        TOOLS,
+        toolsFor(this.#config.body?.motion),
         { signal: turn.signal },
       );
     } catch (err) {
@@ -389,7 +418,17 @@ export class Brain {
     }
     this.#trimHistory();
 
-    const { actions, replyLang, reasons, hadMoveIntent } = validate(reply.toolCalls);
+    const checked = validate(reply.toolCalls);
+    const { replyLang, reasons } = checked;
+    let { actions, hadMoveIntent } = checked;
+    // Body motion spec §4.1 ④: a body with no wheels was offered no moving,
+    // and a model that moves anyway is dropped like any other refused call.
+    // Not a refusal the person should hear: the sentence beside it is the answer.
+    if (this.#config.body?.motion === 'none') {
+      for (const a of actions) if (a.kind !== 'sound') reasons.push(`${a.kind}: this body cannot move`);
+      actions = actions.filter((a) => a.kind === 'sound');
+      hadMoveIntent = false;
+    }
 
     // One line per turn, whatever happened. `calls: []` next to a sentence
     // about going forward is the whole diagnosis of "it read the parameters

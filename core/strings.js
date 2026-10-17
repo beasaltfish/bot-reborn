@@ -20,7 +20,6 @@ export const KEYWORDS = /** @type {const} */ (['hey steven', 'all stop']);
 export const STRINGS = {
   en: {
     // --- Fixed TTS lines: spoken aloud, bypassing the LLM (§6.8) -----------
-    usbNotConnected: 'The car is not plugged in yet.',
     didNotCatch: 'Sorry, I did not catch that.',
     apiFailed: 'I could not reach the server.',
     deviceDisconnected: 'The car came unplugged. I have braked.',
@@ -111,7 +110,6 @@ export const STRINGS = {
     stSpeaking: 'speaking',
   },
   zh: {
-    usbNotConnected: '小车还没连上。',
     didNotCatch: '没听清。',
     apiFailed: '连不上服务器。',
     deviceDisconnected: '小车断开了，我已经刹住。',

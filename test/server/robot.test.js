@@ -2,7 +2,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { startRobot } from '../../server/robot.js';
 import { renderEarcons } from '../../server/audio/render.js';
-import { t } from '../../core/strings.js';
 import { readyConfig, fakeFetch, until } from './helpers.js';
 
 function fakeConn(caps = { motors: true }) {
@@ -76,16 +75,6 @@ test('one utterance becomes a bounded move and a spoken reply', async () => {
   await until(() => states(r.sent).includes('SPEAKING'));
   assert.ok(r.audio.length > 0);
   assert.equal(r.fetch.calls.find((c) => c.url.endsWith('/audio/speech'))?.body.input, 'Going!');
-  r.robot.stop();
-});
-
-test('a body without motors is told so instead of the LLM being asked', async () => {
-  const r = rig({}, { motors: false });
-  await r.speak();
-  await until(() => r.fetch.calls.some((c) => c.url.endsWith('/audio/speech')));
-  assert.equal(r.fetch.calls.find((c) => c.url.endsWith('/audio/speech'))?.body.input,
-    t('en', 'usbNotConnected'));
-  assert.ok(!r.fetch.calls.some((c) => c.url.endsWith('/chat/completions')));
   r.robot.stop();
 });
 

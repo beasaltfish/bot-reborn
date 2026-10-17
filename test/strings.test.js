@@ -32,7 +32,7 @@ test('en and zh define exactly the same keys', () => {
 });
 
 test('t() falls back to the key rather than rendering undefined', () => {
-  assert.equal(t('zh', 'usbNotConnected'), STRINGS.zh.usbNotConnected);
+  assert.equal(t('zh', 'apiFailed'), STRINGS.zh.apiFailed);
   // The cast is the point: reaching this fallback now takes deliberate effort,
   // because an ordinary misspelling no longer typechecks.
   assert.equal(t('zh', /** @type {any} */ ('noSuchKey')), 'noSuchKey');
@@ -45,7 +45,7 @@ test('every string the UI needs exists in both languages', () => {
   // list on 2026-09-17 when the main screen became one robot and one button.
 
   const needed = /** @type {(keyof typeof STRINGS.en)[]} */ ([
-    'usbNotConnected', 'didNotCatch', 'apiFailed', 'deviceDisconnected',
+    'didNotCatch', 'apiFailed', 'deviceDisconnected',
     'sessionTimedOut',
     'fabStart', 'fabBrain', 'fabPair', 'fabSteer', 'fabStop',
     'micOn', 'micOff', 'settings', 'install', 'close', 'sayThis',
