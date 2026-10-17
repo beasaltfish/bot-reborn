@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { SOUNDS } from '../../core/audio/sfx.js';
 import { MIN_DURATION_MS } from '../../core/motion.js';
+import { normalizeReflex } from '../../core/config.js';
 import {
   DRIVES, STEERS, blankQuestion, freshChoice, fromUnsloth, presetIdOf, presetPatch, toUnsloth, unsupported,
 } from './reflexEdit';
@@ -15,13 +16,29 @@ export function ReflexTab({ config, update, tryIt }: { config: Config; update(p:
   const set = (p: Partial<ReflexConfig>) => update({ config: { reflex: p } });
   const setQuestion = (question: ReflexQuestion | null) => set({ question });
   const [view, setView] = useState<'form' | 'json'>('form');
+  // Bumped whenever the question is replaced from outside the JSON box, so the
+  // box starts over from the new one instead of writing its stale text back.
+  const [epoch, setEpoch] = useState(0);
+  const replace = (p: Partial<ReflexConfig>) => { setEpoch((e) => e + 1); set(p); };
   const preset = presetIdOf(r);
   const ignored = unsupported(r, config.body.motion);
+  // The brain reads this through the same normalisation; when it would read
+  // something else, the page says so rather than show what will not run.
+  const read = normalizeReflex(r);
+  const diverges = JSON.stringify(read.question) !== JSON.stringify(r.question) || read.state !== r.state;
 
   return (
     <div className="fields">
       <label>{t('reflexPreset')}
-        <select aria-label={t('reflexPreset')} value={preset} onChange={(e) => set(presetPatch(e.target.value))}>
+        <select
+          aria-label={t('reflexPreset')}
+          value={preset}
+          onChange={(e) => {
+            // A hand-edited question exists nowhere else; a preset can be picked again.
+            if (preset === 'custom' && !window.confirm(t('confirmReplaceQuestion'))) return;
+            replace(presetPatch(e.target.value));
+          }}
+        >
           <option value="none">{t('presetNone')}</option>
           <option value="bark">{t('presetBark')}</option>
           <option value="commands">{t('presetCommands')}</option>
@@ -36,11 +53,12 @@ export function ReflexTab({ config, update, tryIt }: { config: Config; update(p:
           </div>
           {view === 'form'
             ? <QuestionForm question={r.question} onChange={setQuestion} />
-            : <QuestionJson question={r.question} onChange={setQuestion} />}
+            : <QuestionJson key={epoch} question={r.question} onChange={setQuestion} />}
         </>
       ) : (
-        <button type="button" className="secondary" onClick={() => setQuestion(blankQuestion())}>{t('newQuestion')}</button>
+        <button type="button" className="secondary" onClick={() => replace({ question: blankQuestion() })}>{t('newQuestion')}</button>
       )}
+      {diverges && <p className="hint">{t('reflexDiverges')}</p>}
       {ignored.length > 0 && <p className="hint" role="note">{t('reflexUnsupported').replace('{kinds}', ignored.join(', '))}</p>}
       <label>{t('threshold')}
         <ThresholdInput value={r.threshold} onChange={(threshold) => set({ threshold })} />
@@ -92,6 +110,7 @@ function QuestionForm({ question: q, onChange }: { question: ReflexQuestion; onC
                 onChange={(e) => setOption(i, { ...o, description: e.target.value })} /></td>
               <td><ActionList label={o.choice} actions={o.actions} onChange={(actions) => setOption(i, { ...o, actions })} /></td>
               <td><button type="button" className="icon" aria-label={`${t('removeOption')} ${o.choice}`}
+                disabled={q.options.length <= 2}
                 onClick={() => onChange({ ...q, options: q.options.filter((_, j) => j !== i) })}>×</button></td>
             </tr>
           ))}

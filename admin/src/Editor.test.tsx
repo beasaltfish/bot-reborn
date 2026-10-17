@@ -192,4 +192,52 @@ describe('Editor', () => {
     expect(await screen.findByText(/fired \(left 0\.97/)).toBeInTheDocument();
     expect(tryReflex).toHaveBeenCalledWith(expect.objectContaining({ reflex: expect.any(Object) }), 'turn left', 'Okay!');
   });
+
+  it('reflex: the JSON view follows a preset picked while it is open', async () => {
+    // Final review I1: the box kept the old question, and the next keystroke
+    // wrote it back over the preset.
+    installFakeApi([{ name: 'A' }]);
+    render(<Editor {...props({ initialTab: 'reflex' })} />);
+    const preset = await screen.findByLabelText('Reflex preset');
+    await userEvent.selectOptions(preset, 'bark');
+    await userEvent.click(screen.getByRole('button', { name: 'JSON' }));
+    await userEvent.selectOptions(preset, 'commands');
+    expect((screen.getByLabelText('Question as JSON') as HTMLTextAreaElement).value).toContain('"keep_going"');
+  });
+
+  it('reflex: leaving a hand-edited question asks first, and a no keeps it', async () => {
+    // Final review I2: None and the presets replace the question outright.
+    installFakeApi([{ name: 'A' }]);
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
+    render(<Editor {...props({ initialTab: 'reflex' })} />);
+    const preset = await screen.findByLabelText('Reflex preset');
+    await userEvent.selectOptions(preset, 'commands');
+    expect(confirm).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Remove option left' }));
+    await userEvent.selectOptions(preset, 'none');
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText('Instructions')).toBeInTheDocument();
+    await userEvent.selectOptions(preset, 'none');
+    expect(screen.queryByLabelText('Instructions')).toBeNull();
+  });
+
+  it('reflex: says when the brain would read the question differently', async () => {
+    // Final review I3: the brain normalises; the page showed what it would drop.
+    installFakeApi([{ name: 'A' }]);
+    render(<Editor {...props({ initialTab: 'reflex' })} />);
+    await userEvent.selectOptions(await screen.findByLabelText('Reflex preset'), 'commands');
+    expect(screen.queryByText(/brain will read this differently/)).toBeNull();
+    const second = screen.getByLabelText('Option 2');
+    await userEvent.clear(second);
+    await userEvent.type(second, 'stop');
+    expect(screen.getByText(/brain will read this differently/)).toBeInTheDocument();
+  });
+
+  it('reflex: the last two options cannot be removed', async () => {
+    installFakeApi([{ name: 'A' }]);
+    render(<Editor {...props({ initialTab: 'reflex' })} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Write a question' }));
+    expect(screen.getByRole('button', { name: 'Remove option yes' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Remove option pass' })).toBeDisabled();
+  });
 });
