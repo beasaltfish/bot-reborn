@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Editor } from './Editor';
 import { installFakeApi } from './test/fakeApi';
+import { REFLEX_PRESETS } from '../../core/reflex-presets.js';
 import type { EditorSlot } from './types';
 
 const props = (over: Partial<EditorSlot> = {}): EditorSlot =>
@@ -105,5 +106,90 @@ describe('Editor', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Delete this character' }));
     await waitFor(() => expect(p.onDeleted).toHaveBeenCalled());
     expect(fake.chars.has('A')).toBe(false);
+  });
+
+  it('reflex: picking a preset saves its question, state and threshold', async () => {
+    const fake = installFakeApi([{ name: 'A' }]);
+    render(<Editor {...props({ initialTab: 'reflex' })} />);
+    await userEvent.selectOptions(await screen.findByLabelText('Reflex preset'), 'commands');
+    await waitFor(() => expect(fake.patches()).toHaveLength(1), { timeout: 2000 });
+    expect(fake.patches()[0].body.config.reflex.question).toEqual(REFLEX_PRESETS[1].question);
+    expect(screen.getByLabelText('Option 4')).toHaveValue('left');
+    expect(screen.queryByRole('button', { name: 'Test' })).toBeNull();
+  });
+
+  it('reflex: None turns it off, and the brain is told so', async () => {
+    // Review focus 5: null must survive both deepMerges.
+    const fake = installFakeApi([{ name: 'A' }]);
+    render(<Editor {...props({ initialTab: 'reflex' })} />);
+    const preset = await screen.findByLabelText('Reflex preset');
+    await userEvent.selectOptions(preset, 'bark');
+    await waitFor(() => expect(fake.patches()).toHaveLength(1), { timeout: 2000 });
+    await userEvent.selectOptions(preset, 'none');
+    await waitFor(() => expect(fake.patches()).toHaveLength(2), { timeout: 2000 });
+    expect(fake.chars.get('A')?.config.reflex.question).toBeNull();
+    expect(screen.queryByLabelText('Instructions')).toBeNull();
+  });
+
+  it('reflex: removing an option takes its actions with it', async () => {
+    const fake = installFakeApi([{ name: 'A' }]);
+    render(<Editor {...props({ initialTab: 'reflex' })} />);
+    await userEvent.selectOptions(await screen.findByLabelText('Reflex preset'), 'commands');
+    await userEvent.click(screen.getByRole('button', { name: 'Remove option left' }));
+    await waitFor(() => expect(fake.chars.get('A')?.config.reflex.question?.options.map((o) => o.choice))
+      .toEqual(['stop', 'forward', 'backward', 'right', 'keep_going', 'pass']), { timeout: 2000 });
+    expect(screen.getByLabelText('Reflex preset')).toHaveValue('custom');
+  });
+
+  it('reflex: an action is edited in its row', async () => {
+    const fake = installFakeApi([{ name: 'A' }]);
+    render(<Editor {...props({ initialTab: 'reflex' })} />);
+    await userEvent.selectOptions(await screen.findByLabelText('Reflex preset'), 'commands');
+    await userEvent.selectOptions(screen.getByLabelText('left action 1 steer'), 'right');
+    await waitFor(() => {
+      const left = fake.chars.get('A')?.config.reflex.question?.options.find((o) => o.choice === 'left');
+      expect(left?.actions[0].args.steps[0].steer).toBe('right');
+    }, { timeout: 2000 });
+    await userEvent.click(screen.getByRole('button', { name: 'Add action to pass' }));
+    expect(screen.getByLabelText('pass action 1')).toHaveValue('move');
+  });
+
+  it('reflex: JSON edits keep actions by choice name', async () => {
+    // Review focus 1: a key renamed and typed back still owns its actions.
+    const fake = installFakeApi([{ name: 'A' }]);
+    render(<Editor {...props({ initialTab: 'reflex' })} />);
+    await userEvent.selectOptions(await screen.findByLabelText('Reflex preset'), 'commands');
+    await userEvent.click(screen.getByRole('button', { name: 'JSON' }));
+    const box = screen.getByLabelText('Question as JSON');
+    const text = (box as HTMLTextAreaElement).value;
+    fireEvent.change(box, { target: { value: text.replace('"left":', '"lef":') } });
+    fireEvent.change(box, { target: { value: text } });
+    await waitFor(() => {
+      const left = fake.chars.get('A')?.config.reflex.question?.options.find((o) => o.choice === 'left');
+      expect(left?.actions).toEqual(REFLEX_PRESETS[1].question.options[3].actions);
+    }, { timeout: 2000 });
+    fireEvent.change(box, { target: { value: '{ nope' } });
+    expect(screen.getByRole('alert')).toHaveTextContent(/Not valid JSON/);
+  });
+
+  it('reflex: says which configured actions this body will ignore', async () => {
+    installFakeApi([{ name: 'A' }]);
+    render(<Editor {...props()} />);
+    await userEvent.selectOptions(await screen.findByLabelText('Body'), 'none');
+    await userEvent.click(screen.getByRole('tab', { name: 'Reflex' }));
+    await userEvent.selectOptions(screen.getByLabelText('Reflex preset'), 'commands');
+    expect(screen.getByRole('note')).toHaveTextContent(/move/);
+  });
+
+  it('reflex: Try asks the typed sentence and shows the answer', async () => {
+    installFakeApi([{ name: 'A' }]);
+    const tryReflex = vi.fn().mockResolvedValueOnce('“turn left” → fired (left 0.97, 180 ms) → move');
+    render(<Editor {...props({ initialTab: 'reflex' })} tryReflex={tryReflex} />);
+    await userEvent.selectOptions(await screen.findByLabelText('Reflex preset'), 'commands');
+    await userEvent.type(screen.getByLabelText('Person said'), 'turn left');
+    await userEvent.type(screen.getByLabelText('Robot said (optional)'), 'Okay!');
+    await userEvent.click(screen.getByRole('button', { name: 'Try' }));
+    expect(await screen.findByText(/fired \(left 0\.97/)).toBeInTheDocument();
+    expect(tryReflex).toHaveBeenCalledWith(expect.objectContaining({ reflex: expect.any(Object) }), 'turn left', 'Okay!');
   });
 });

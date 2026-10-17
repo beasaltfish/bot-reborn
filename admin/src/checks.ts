@@ -25,3 +25,6 @@ export const runCheck: CheckFn = async (layer, config) => {
   if (layer === 'reflex') return checkReflex(new Reflex(config.reflex), 'hello');
   return checkTts(new WebAudioTts(config.tts as Required<typeof config.tts>, { audioContext: audio() }), lang);
 };
+
+export type TryFn = (config: Config, heard: string, robotSaid: string) => Promise<string>;
+export const runTry: TryFn = (config, heard, robotSaid) => checkReflex(new Reflex(config.reflex), heard, robotSaid);

@@ -52,3 +52,22 @@ button, input, select { font: inherit; }
 .phone { margin-top: 1.5rem; }
 .phone .qr svg { width: 220px; height: 220px; background: #fff; }
 .phone-url { display: block; word-break: break-all; margin: 0.5rem 0; }
+.fields textarea { padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--fg); font: 13px/1.4 ui-monospace, monospace; }
+.toggle { display: flex; gap: 4px; }
+.toggle button, button.secondary, button.icon { padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: inherit; cursor: pointer; }
+.toggle button[aria-pressed="true"] { border-color: var(--fg); }
+button.icon { padding: 4px 8px; }
+table.criteria { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.criteria th { text-align: left; color: var(--muted); font-weight: normal; padding: 4px; }
+table.criteria td { vertical-align: top; padding: 4px; }
+table.criteria input, .action select, .action input { padding: 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--fg); }
+table.criteria td:first-child input { width: 8em; }
+table.criteria td:nth-child(2) input { width: 100%; box-sizing: border-box; }
+.actions { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.action { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.action input[type="number"] { width: 6em; }
+@media (max-width: 640px) {
+  table.criteria, table.criteria tbody, table.criteria tr, table.criteria td { display: block; width: 100%; }
+  table.criteria thead { display: none; }
+  table.criteria tr { border-top: 1px solid var(--line); padding: 6px 0; }
+}

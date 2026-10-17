@@ -87,26 +87,28 @@ export function LayerTab({ layer, config, update, check }: {
           onChange={(e) => set({ apiKey: e.target.value })}
         />
       </label>
-      <div className="test">
-        <button
-          type="button"
-          disabled={busy}
-          onClick={async () => {
-            setBusy(true);
-            setResult(null);
-            try {
-              setResult({ ok: true, text: await check(layer, config) });
-            } catch (err) {
-              setResult({ ok: false, text: (err as Error).message });
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          {busy ? t('testing') : t('test')}
-        </button>
-        {result && <p role="status" className={result.ok ? 'result ok' : 'result bad'}>{result.text}</p>}
-      </div>
+      {layer !== 'reflex' && (
+        <div className="test">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              setResult(null);
+              try {
+                setResult({ ok: true, text: await check(layer, config) });
+              } catch (err) {
+                setResult({ ok: false, text: (err as Error).message });
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            {busy ? t('testing') : t('test')}
+          </button>
+          {result && <p role="status" className={result.ok ? 'result ok' : 'result bad'}>{result.text}</p>}
+        </div>
+      )}
     </div>
   );
 }

@@ -4,10 +4,11 @@ import { deepMerge } from './merge';
 import { useAutoSave } from './useAutoSave';
 import { BasicTab } from './BasicTab';
 import { LayerTab } from './LayerTab';
+import { ReflexTab } from './ReflexTab';
 import { Dot } from './CharacterList';
 import { TokenBox } from './TokenBox';
 import { PhoneLink } from './PhoneLink';
-import { runCheck, type CheckFn } from './checks';
+import { runCheck, runTry, type CheckFn, type TryFn } from './checks';
 import { t, type Key } from './i18n';
 import type { Detail, EditorSlot, Patch, TabName } from './types';
 
@@ -15,7 +16,7 @@ const TABS: Array<[TabName, Key]> = [
   ['basic', 'tabBasic'], ['stt', 'tabStt'], ['llm', 'tabLlm'], ['tts', 'tabTts'], ['reflex', 'tabReflex'],
 ];
 
-export function Editor(props: EditorSlot & { check?: CheckFn }) {
+export function Editor(props: EditorSlot & { check?: CheckFn; tryReflex?: TryFn }) {
   const { id, online, onChanged } = props;
   const [detail, setDetail] = useState<Detail | null>(null);
   const [tab, setTab] = useState<TabName>(props.initialTab);
@@ -56,6 +57,7 @@ export function Editor(props: EditorSlot & { check?: CheckFn }) {
         {tab === 'basic'
           ? <BasicTab detail={detail} update={update} />
           : <LayerTab key={tab} layer={tab} config={detail.config} update={update} check={props.check ?? runCheck} />}
+        {tab === 'reflex' && <ReflexTab config={detail.config} update={update} tryIt={props.tryReflex ?? runTry} />}
       </div>
       <TokenBox id={id} token={detail.token} onToken={(token) => setDetail((d) => (d ? { ...d, token } : d))} />
       <PhoneLink token={detail.token} />
