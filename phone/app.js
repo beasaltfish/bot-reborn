@@ -186,20 +186,23 @@ async function start() {
     // stop() has already closed the pipeline it found.
     if (cancelled()) return;
     const player = new PcmPlayer(mic.audioContext);
-    const car = (await openCar()).executor;
-    if (cancelled()) return void car.stop();
+    // The car is optional (body motion spec §4): no car is a body that does
+    // not drive, and the brain was configured to know it.
+    const car = await openCar().then((c) => c.executor, (err) => {
+      ui.log('no car: ' + /** @type {Error} */ (err).message);
+      return null;
+    });
+    if (cancelled()) return void car?.stop();
     executor = car;
-    car.onError = (err) => {
-      ui.log('USB: ' + err.message);
-    };
+    if (car) car.onError = (err) => { ui.log('USB: ' + err.message); };
 
     link = connectBody({
       url: `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${BODY_PATH}`,
       token: /** @type {string} */ (config.token),
       onWelcome: (name) => { ui.notice(''); ui.log(`▶︎ ${name}`); },
       onMessage: (msg) => {
-        if (msg.type === 'move') car.hold(msg.drive, msg.steer, msg.ms);
-        else if (msg.type === 'stop') void car.stop();
+        if (msg.type === 'move') car?.hold(msg.drive, msg.steer, msg.ms);
+        else if (msg.type === 'stop') void car?.stop();
         else if (msg.type === 'hush') player.hush();
         else if (msg.type === 'state') ui.setState(msg.state);
       },
@@ -207,7 +210,7 @@ async function start() {
       onLost: () => {
         // §2's watchdog: brake first, then say so. The link is already
         // looking for the brain again.
-        void car.stop();
+        void car?.stop();
         player.hush();
         ui.setState('SLEEPING');
         ui.notice(t(config.lang, 'linkLost'));

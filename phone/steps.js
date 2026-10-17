@@ -15,9 +15,10 @@
 // name two different steps.
 
 /**
- * The steps without which the car cannot move at all, in the order they have
- * to happen. Everything else is optional and is not listed until it works —
- * a row that never ticks teaches people to ignore the list.
+ * The setup steps, in the order they have to happen. Only the brain blocks
+ * listening; steering blocks it once a car is paired (fabRung). Everything
+ * else is optional and is not listed until it works — a row that never ticks
+ * teaches people to ignore the list.
  */
 export const GATING = /** @type {const} */ (['brain', 'car', 'steer']);
 
@@ -48,7 +49,11 @@ export function fabRung(done, running) {
   // setup half done — a previous session paired it, or calibration itself set
   // it moving — and at that moment the only button worth offering is the brake.
   if (running) return { step: 'stop', tone: 'stop', key: 'fabStop' };
-  const missing = GATING.find((s) => !done[s]);
-  if (missing) return { step: missing, tone: 'wait', key: RUNG[missing] };
+  // Body motion spec §4.1 ①: the car is not a gate any more — whether this
+  // robot moves is the admin's to say, and a dry-run or still character is
+  // meant to be talked to with nothing plugged in. Steering still is, once a
+  // car is there: one that does not know its left turns the wrong way first.
+  if (!done.brain) return { step: 'brain', tone: 'wait', key: RUNG.brain };
+  if (done.car && !done.steer) return { step: 'steer', tone: 'wait', key: RUNG.steer };
   return { step: 'listen', tone: 'go', key: 'fabStart' };
 }

@@ -34,7 +34,12 @@ function element() {
 
 const settle = () => new Promise((r) => setTimeout(r, 20));
 
-test('a stop pressed while the microphone is still opening means no link is ever made', async () => {
+/**
+ * A page with a microphone the test grants (or one granted at once), a
+ * WebSocket it can watch, and either a paired car or none.
+ * @param {{ withCar: boolean, micNow?: boolean }} opts
+ */
+function installPage({ withCar, micNow = false }) {
   const g = /** @type {any} */ (globalThis);
   /** @type {Map<string, any>} */ const els = new Map();
   g.window = g;
@@ -73,8 +78,12 @@ test('a stop pressed while the microphone is still opening means no link is ever
   Object.defineProperty(g, 'navigator', {
     configurable: true,
     value: {
-      usb: { getDevices: async () => [device], addEventListener() {}, requestDevice: async () => device },
-      mediaDevices: { getUserMedia: () => new Promise((r) => { grantMic = r; }) },
+      usb: { getDevices: async () => (withCar ? [device] : []), addEventListener() {}, requestDevice: async () => device },
+      mediaDevices: {
+        getUserMedia: micNow
+          ? async () => ({ getTracks: () => [{ stop() {} }], getAudioTracks: () => [] })
+          : () => new Promise((r) => { grantMic = r; }),
+      },
     },
   });
   g.AudioContext = function () {
@@ -87,14 +96,30 @@ test('a stop pressed while the microphone is still opening means no link is ever
   };
   g.AudioWorkletNode = function () { return { port: { onmessage: null }, disconnect() {} }; };
   let sockets = 0;
+  /** @type {any} */ let last = null;
   g.WebSocket = function () {
     sockets++;
-    return { readyState: 0, send() {}, close() {}, onopen: null, onmessage: null, onclose: null };
+    last = {
+      readyState: 0, sent: /** @type {string[]} */ ([]),
+      send(/** @type {string} */ m) { this.sent.push(m); },
+      close() {}, onopen: null, onmessage: null, onclose: null,
+    };
+    return last;
   };
+  return {
+    els,
+    sockets: () => sockets,
+    lastSocket: () => last,
+    grantMic: (/** @type {any} */ stream) => grantMic(stream),
+  };
+}
+
+test('a stop pressed while the microphone is still opening means no link is ever made', async () => {
+  const page = installPage({ withCar: true });
 
   await import('../phone/app.js');
   await settle();
-  const fab = els.get('fab');
+  const fab = page.els.get('fab');
   assert.equal(fab.dataset.tone, 'go', 'the phone was meant to be ready to listen');
 
   fab.fire('click');              // Listen: the boot starts, and waits for the microphone
@@ -103,7 +128,31 @@ test('a stop pressed while the microphone is still opening means no link is ever
   fab.fire('click');              // STOP, while the microphone is still being asked for
   await settle();
 
-  grantMic({ getTracks: () => [{ stop() {} }], getAudioTracks: () => [] });
+  page.grantMic({ getTracks: () => [{ stop() {} }], getAudioTracks: () => [] });
   await settle();
-  assert.equal(sockets, 0, 'a link to the brain was opened after the user pressed stop');
+  assert.equal(page.sockets(), 0, 'a link to the brain was opened after the user pressed stop');
+});
+
+test('with no car paired the phone still listens, links the brain, and ignores a move', async () => {
+  const page = installPage({ withCar: false, micNow: true });
+  // A second copy of the page: ESM caches by URL, and the first test's copy
+  // already ran with a car.
+  const fresh = '../phone/app.js?nocar';
+  await import(fresh);
+  await settle();
+  const fab = page.els.get('fab');
+  assert.equal(fab.dataset.tone, 'go', 'no car must not stand between the phone and listening');
+
+  fab.fire('click');
+  await settle();
+  assert.equal(page.sockets(), 1, 'the brain was never linked');
+  const ws = page.lastSocket();
+  ws.onopen?.({});
+  assert.deepEqual(JSON.parse(ws.sent[0]), { type: 'hello', protocol: 2, token: 'ab'.repeat(16) });
+  ws.onmessage?.({ data: JSON.stringify({ type: 'welcome', name: 'a' }) });
+  // Review Focus 5: orders for a car that is not there are not obeyed, and do not throw.
+  ws.onmessage?.({ data: JSON.stringify({ type: 'move', drive: 'forward', steer: 'straight', ms: 600 }) });
+  ws.onmessage?.({ data: JSON.stringify({ type: 'stop' }) });
+  await settle();
+  assert.equal(fab.dataset.tone, 'stop', 'the phone gave up after an order it could not obey');
 });

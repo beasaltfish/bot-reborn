@@ -9,9 +9,13 @@ test('the three gating steps are the ones without which the car cannot move', ()
   assert.deepEqual([...GATING], ['brain', 'car', 'steer']);
 });
 
-test('the button offers the first unfinished step, in order', () => {
+test('the button asks for the brain first, and for steering only once a car is paired', () => {
   assert.equal(fabRung(none, false).step, 'brain');
-  assert.equal(fabRung({ ...none, brain: true }, false).step, 'car');
+  // No car is no obstacle: the admin decides whether this robot moves, and a
+  // dry-run or a still character is meant to be talked to with nothing plugged in.
+  assert.equal(fabRung({ ...none, brain: true }, false).step, 'listen');
+  // A paired car that does not know its left from its right turns the wrong
+  // way on its first drive (Review Focus 1): that step still comes first.
   assert.equal(fabRung({ ...none, brain: true, car: true }, false).step, 'steer');
   assert.equal(fabRung(all, false).step, 'listen');
 });
@@ -31,7 +35,7 @@ test('red is the stop and nothing else wears it', () => {
     fabRung(none, false), fabRung({ ...none, brain: true }, false),
     fabRung({ ...none, brain: true, car: true }, false), fabRung(all, false),
   ].map((r) => r.tone);
-  assert.deepEqual(tones, ['wait', 'wait', 'wait', 'go']);
+  assert.deepEqual(tones, ['wait', 'go', 'wait', 'go']);
 });
 
 
