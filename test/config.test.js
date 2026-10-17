@@ -194,3 +194,27 @@ test('a stored reflex layer survives the read', () => {
   assert.deepEqual(loadConfig(storage).reflex, reflex);
   assert.equal(layerReady(loadConfig(storage).reflex), true);
 });
+
+test('body.motion defaults to car, and an old config gets it too', () => {
+  assert.deepEqual(defaultConfig().body, { motion: 'car' });
+  const old = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ wakeWord: true }) }));
+  assert.deepEqual(old.body, { motion: 'car' });
+});
+
+test('a stored motion survives the read', () => {
+  for (const motion of ['car', 'dry-run', 'none']) {
+    const c = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ body: { motion } }) }));
+    assert.equal(c.body.motion, motion);
+  }
+});
+
+test('a motion that is not one of the three reads as car', () => {
+  // A hand-edited file with a typo must still drive a car the way it did
+  // before the field existed, not crash and not silently become "none".
+  for (const motion of ['Car', 'dryrun', 42, null, '']) {
+    const c = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ body: { motion } }) }));
+    assert.equal(c.body.motion, 'car', `motion ${JSON.stringify(motion)}`);
+  }
+  const notObject = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ body: 'car' }) }));
+  assert.equal(notObject.body.motion, 'car');
+});

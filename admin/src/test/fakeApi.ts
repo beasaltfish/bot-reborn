@@ -8,6 +8,7 @@ export function blankConfig(): Config {
   return {
     stt: { ...layer(), prompt: '' }, llm: layer(), tts: { ...layer(), voice: '' }, reflex: layer(),
     lang: 'en', replyLang: null, bargeIn: true, wakeWord: false,
+    body: { motion: 'car' },
   };
 }
 

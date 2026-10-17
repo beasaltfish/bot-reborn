@@ -9,6 +9,8 @@ export interface LayerConfig {
   prompt?: string;
 }
 
+export type Motion = 'car' | 'dry-run' | 'none';
+
 export interface Config {
   stt: LayerConfig;
   llm: LayerConfig;
@@ -18,6 +20,7 @@ export interface Config {
   replyLang: 'zh' | 'en' | null;
   bargeIn: boolean;
   wakeWord: boolean;
+  body: { motion: Motion };
 }
 
 export type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K] };

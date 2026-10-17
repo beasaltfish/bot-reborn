@@ -9,6 +9,14 @@
 export const CONFIG_KEY = 'voicebot.config';
 
 /**
+ * How this character's body moves (body motion spec §2). Only the brain reads
+ * it: a body is never told, so firmware never has to understand it.
+ * `dry-run` drives nothing and logs what a car would have done; `none` is a
+ * body with no wheels at all, and the LLM is not offered moving.
+ */
+export const MOTIONS = /** @type {const} */ (['car', 'dry-run', 'none']);
+
+/**
  * Spec §11.1: state that got set by voice and is invisible afterwards. The
  * settings page walks this list to show and reset them — a state that can be
  * entered but not left is a trap.
@@ -88,6 +96,8 @@ export function defaultConfig(_navLang = globalThis.navigator?.language) {
     // called, the way opening an app is: the name on top of that is a second
     // knock on an open door. On, it brings back SLEEPING and §5.2's doze.
     wakeWord: false,
+    // car: every character made before this field existed had one.
+    body: { motion: 'car' },
 
     /**
      * What has been measured about THIS car (spec §7 of the 2026-09-17 design;
@@ -137,6 +147,9 @@ export function loadConfig(storage = globalThis.localStorage) {
       bargeIn: p.bargeIn ?? d.bargeIn,
       ttsPath: p.ttsPath ?? d.ttsPath,
       wakeWord: p.wakeWord ?? d.wakeWord,
+      // Anything but the three names reads as car, the robot as it was before
+      // this field existed — a typo must not take a car's wheels away.
+      body: { motion: MOTIONS.includes(p.body?.motion) ? p.body.motion : d.body.motion },
       // Spread over the default, so a config stored before this field existed
       // loads as "never measured" rather than as undefined. Reading
       // undefined.steerSwapped throws at startup, and the product would refuse
@@ -181,8 +194,11 @@ export function resetSticky(cfg) {
  *   bargeIn: boolean,
  *   ttsPath: 'webaudio' | 'loopback' | 'speechSynthesis',
  *   wakeWord: boolean,
+ *   body: { motion: Motion },
  *   calibration: Calibration,
  * }} Config
+ *
+ * @typedef {typeof MOTIONS[number]} Motion
  *
  * @typedef {{
  *   steerSwapped: boolean | null,
