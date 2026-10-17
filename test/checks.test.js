@@ -175,13 +175,24 @@ test('checkStt reads the clip belonging to the language it was given', async () 
   assert.deepEqual(asked, [MATERIAL.en.clip, MATERIAL.zh.clip]);
 });
 
-test('checkReflex passes a key that gets a verdict, and says which', async () => {
-  const reflex = { judge: async () => ({ verdict: 'fired', detail: 'tease 0.99', ms: 600 }) };
-  assert.equal(await checkReflex(reflex), '“woof woof” → fired (tease 0.99, 600 ms)');
+test('checkReflex asks the sentence it is given, and says what would happen', async () => {
+  /** @type {any[]} */ const asked = [];
+  const reflex = /** @type {any} */ ({ judge: async (/** @type {string} */ h, /** @type {string} */ r) => {
+    asked.push([h, r]);
+    return { verdict: 'fired', detail: 'left 0.97', ms: 180,
+      calls: [{ name: 'move', args: {}, rawArguments: '{}' }] };
+  } });
+  assert.equal(await checkReflex(reflex, 'turn left', 'Okay!'), '“turn left” → fired (left 0.97, 180 ms) → move');
+  assert.deepEqual(asked, [['turn left', 'Okay!']]);
+});
+
+test('checkReflex: a pass says so without actions', async () => {
+  const reflex = /** @type {any} */ ({ judge: async () => ({ verdict: 'passed', detail: 'pass 0.99', ms: 150 }) });
+  assert.equal(await checkReflex(reflex, 'how are you'), '“how are you” → passed (pass 0.99, 150 ms)');
 });
 
 test('checkReflex fails when no verdict came back', async () => {
   // judge() never rejects; `failed` is how a bad key or a timeout arrives.
-  const reflex = { judge: async () => ({ verdict: 'failed', detail: 'HTTP 401', ms: 300 }) };
-  await assert.rejects(() => checkReflex(reflex), /HTTP 401 after 300 ms/);
+  const reflex = /** @type {any} */ ({ judge: async () => ({ verdict: 'failed', detail: 'HTTP 401', ms: 300 }) });
+  await assert.rejects(() => checkReflex(reflex, 'hi'), /HTTP 401 after 300 ms/);
 });

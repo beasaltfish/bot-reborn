@@ -1,69 +1,49 @@
-// The reflex layer's judge: is this transcript somebody barking at me?
-// Reflex spec §3.
+// The reflex layer's judge: one typed question to a decision model, asked
+// before the LLM. Configurable reflex spec §3.1.
 //
-// JEV is a classifier, not a chat model: it answers typed questions about a
-// piece of state with probabilities, and generates no text. It is asked
-// BEFORE the LLM and only ever says fired / passed / skipped / failed — what
-// to do about a bark is the ladder's business (ladder.js), not the model's.
+// A decision model (JEV, or one trained with Unsloth and served at
+// /v1/systemone) is a classifier, not a chat model: it answers a typed
+// question about a piece of state with probabilities, and generates no text.
+// WHICH question, and what each answer does, are the character's: the admin
+// writes both. Here is only how to ask and how to read the answer.
 //
 // Every way this can go wrong ends in "ask the LLM as usual". The reflex is a
 // shortcut; a robot whose shortcut is down must still answer.
 
-/** Spec §3: provisional until a real-voice run confirms it (spec §9 step 2). */
-export const FIRE_AT = 0.8;
-/** Spec §2. Sequential, so this is the most a normal sentence can wait. */
+/** Sequential, so this is the most a normal sentence can wait. */
 export const TIMEOUT_MS = 1500;
 
 /**
- * Measured 2026-09-28 as "v2": 6/9 teases fired, 0/13 false fires. JEV reads
- * characters, not sound, so it is told the homophones outright — and told, in
- * the same breath, which short replies are never noises. The second half is
- * what keeps 明白 after 你明白吗 from being eaten.
+ * Spec §2.4. A line naming {robot} goes when the robot has said nothing yet,
+ * which is how the training data writes a first sentence. One pass over the
+ * template, so braces inside what was said stay as they were.
+ * @param {string} template @param {string} heard @param {string} robotSaid
  */
-export const INSTRUCTIONS =
-  'A person is talking to a small pet-like robot. "Robot said" is the robot\'s last '
-  + 'line, if any; "Person said" is a speech-recognition transcript of the reply. '
-  + 'The transcript may use wrong characters with the same sound: a bark 汪汪 can '
-  + 'arrive as 忘忘 or 往往, a meow 喵喵 as 苗苗. '
-  + 'Only call it an animal noise when the sound is a repeated syllable that makes no '
-  + 'sense as an answer to what the robot said. Short real words that answer the robot '
-  + '(明白, 好的, 嗯嗯, 对对, 哈哈) are replies, never noises. '
-  + 'What is the person doing?';
+export function fillState(template, heard, robotSaid) {
+  return template
+    .split('\n')
+    .filter((line) => robotSaid || !line.includes('{robot}'))
+    .join('\n')
+    .replace(/\{(robot|person)\}/g, (_, k) => (k === 'robot' ? robotSaid : heard));
+}
 
-export const CRITERIA = {
-  tease: 'Making an animal noise at the robot (bark, meow, howl) — a sound, not words',
-  command: 'Telling the robot to move, turn, hurry or stop',
-  reply: 'Answering, agreeing, laughing, or talking in real words',
-};
-
-const CJK = /\p{Script=Han}/gu;
-const PUNCTUATION = /[\p{P}\p{S}]/gu;
+/** @param {import('./config.js').ReflexQuestion} q @returns {Record<string, string>} */
+export function criteriaOf(q) {
+  return Object.fromEntries(q.options.map((o) => [o.choice, o.description]));
+}
 
 /**
- * Spec §2: a length cut, not a word list. Animal noises transcribe short, and
- * a long sentence is not worth a second of waiting on the classifier.
- * @param {string} text
+ * `calls` only on a fire: the chosen option's actions in validate()'s input
+ * shape, so they become Actions by exactly the rules the LLM's do.
+ * @typedef {{ name: string, args: any, rawArguments: string }} ToolCall
+ * @typedef {{ verdict: 'fired'|'passed'|'failed', detail: string, ms: number, calls?: ToolCall[] }} Verdict
  */
-export function shortEnough(text) {
-  const bare = text.replace(PUNCTUATION, ' ').trim();
-  if (!bare) return false;
-  const cjk = bare.match(CJK);
-  if (cjk) return cjk.length <= 6;
-  return bare.split(/\s+/).length <= 3;
-}
-
-/** @param {string} heard @param {string} robotSaid */
-export function buildState(heard, robotSaid) {
-  return (robotSaid ? `Robot said: 「${robotSaid}」\n` : '') + `Person said: 「${heard}」`;
-}
-
-/** @typedef {{ verdict: 'fired'|'passed'|'skipped'|'failed', detail: string, ms: number }} Verdict */
 
 export class Reflex {
   #cfg; #fetch; #timeoutMs; #now;
 
   /**
-   * @param {{ baseURL: string, apiKey: string, model: string }} cfg
+   * @param {import('./config.js').ReflexLayer} cfg
    * @param {{ fetch?: typeof fetch, timeoutMs?: number, now?: () => number }} [opts]
    */
   constructor(cfg, opts = {}) {
@@ -83,7 +63,8 @@ export class Reflex {
   async judge(heard, robotSaid, signal) {
     const start = this.#now();
     const ms = () => this.#now() - start;
-    if (!shortEnough(heard)) return { verdict: 'skipped', detail: 'too long', ms: 0 };
+    const { question, threshold, state } = this.#cfg;
+    if (!question) return { verdict: 'failed', detail: 'no question', ms: 0 };
 
     // Inside the try, both: AbortSignal.any is Chrome 116+, and an engine
     // without it must fail this verdict, not reject — handle() does not catch.
@@ -96,20 +77,25 @@ export class Reflex {
         headers: { Authorization: `Bearer ${this.#cfg.apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: this.#cfg.model,
-          state: buildState(heard, robotSaid),
-          questions: { intent: { type: 'choice', instructions: INSTRUCTIONS, criteria: CRITERIA } },
+          state: fillState(state, heard, robotSaid),
+          questions: { [question.name]: { type: 'choice', instructions: question.instructions, criteria: criteriaOf(question) } },
         }),
         signal: both,
       });
       if (!response.ok) return { verdict: 'failed', detail: `HTTP ${response.status}`, ms: ms() };
-      const intent = (await response.json())?.answers?.intent;
-      const p = intent?.probabilities?.tease;
-      if (typeof intent?.choice !== 'string' || typeof p !== 'number') {
+      const answer = (await response.json())?.answers?.[question.name];
+      const choice = answer?.choice;
+      const p = typeof answer?.probabilities?.[choice] === 'number' ? answer.probabilities[choice] : answer?.confidence;
+      if (typeof choice !== 'string' || typeof p !== 'number') {
         return { verdict: 'failed', detail: 'unexpected response', ms: ms() };
       }
-      const detail = `${intent.choice} ${p.toFixed(2)}`;
-      const fired = intent.choice === 'tease' && p >= FIRE_AT;
-      return { verdict: fired ? 'fired' : 'passed', detail, ms: ms() };
+      const detail = `${choice} ${p.toFixed(2)}`;
+      const option = question.options.find((o) => o.choice === choice);
+      if (!option || option.actions.length === 0 || p < threshold) return { verdict: 'passed', detail, ms: ms() };
+      const calls = option.actions.map((a) => ({
+        name: a.name, args: structuredClone(a.args), rawArguments: JSON.stringify(a.args),
+      }));
+      return { verdict: 'fired', detail, ms: ms(), calls };
     } catch (err) {
       const why = timeout?.aborted && !signal?.aborted ? 'timeout' : /** @type {Error} */ (err).message;
       return { verdict: 'failed', detail: why, ms: ms() };

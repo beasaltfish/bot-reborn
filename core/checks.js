@@ -155,17 +155,19 @@ export async function checkTts(tts, lang = 'zh') {
 }
 
 /**
- * The reflex (reflex spec §7). judge() never rejects — a bad key, a wrong
- * model or a timeout all arrive as `failed` — so that verdict is the failure.
- * Any other verdict means the key works; `fired` is what a bark should get.
- * English on purpose: barking is not Chinese, and dev.html's source carries
- * no CJK (test/instrument-language.test.js).
+ * The reflex's check is a sentence the admin types: there is no one right
+ * answer to test a key against, because the question is the character's.
+ * Any verdict but `failed` means the provider answered; the rest of the line
+ * says what this robot would do with that sentence.
  *
- * @param {{ judge: (heard: string, robotSaid: string) => Promise<{ verdict: string, detail: string, ms: number }> }} reflex
+ * @param {{ judge: (heard: string, robotSaid: string) => Promise<import('./reflex.js').Verdict> }} reflex
+ * @param {string} heard
+ * @param {string} [robotSaid]
  * @returns {Promise<string>}
  */
-export async function checkReflex(reflex) {
-  const v = await reflex.judge('woof woof', '');
+export async function checkReflex(reflex, heard, robotSaid = '') {
+  const v = await reflex.judge(heard, robotSaid);
   if (v.verdict === 'failed') throw new Error(`${v.detail} after ${v.ms} ms`);
-  return `“woof woof” → ${v.verdict} (${v.detail}, ${v.ms} ms)`;
+  const did = v.calls?.length ? ` → ${v.calls.map((c) => c.name).join(', ')}` : '';
+  return `“${heard}” → ${v.verdict} (${v.detail}, ${v.ms} ms)${did}`;
 }
