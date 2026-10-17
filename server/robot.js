@@ -4,9 +4,8 @@
 
 import { Session } from '../core/audio/session.js';
 import { Brain } from '../core/brain.js';
-import { Ladder } from '../core/ladder.js';
 import { Reflex } from '../core/reflex.js';
-import { layerReady } from '../core/config.js';
+import { reflexReady } from '../core/config.js';
 import { OpenAiCompatStt } from '../core/providers/stt-openai-compat.js';
 import { OpenAiCompatLlm } from '../core/providers/llm-openai-compat.js';
 import { RemotePipeline } from './body/pipeline.js';
@@ -77,8 +76,7 @@ export function startRobot(conn, deps) {
     tts: session.speakingTts,
     earcon: session.earcon,
     sound: session.sound,
-    reflex: layerReady(config.reflex) ? new Reflex(config.reflex, net) : null,
-    ladder: new Ladder(),
+    reflex: reflexReady(config.reflex) ? new Reflex(config.reflex, net) : null,
     config,
     onReplyLangChange: () => save(config),
     onFault,

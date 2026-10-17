@@ -5,8 +5,8 @@
 // they have formants. That is why the session plays them behind the same
 // listening gate as an earcon — without it the robot hears its own bark.
 //
-// Four, and the list is the one both the reflex ladder and the LLM's
-// play_sound tool draw from. Adding a sound is one row here plus its file.
+// Four, and the list is the one both a configured reflex's play_sound and the
+// LLM's play_sound tool draw from. Adding a sound is one row here plus its file.
 
 export const SOUNDS = /** @type {const} */ (['bark', 'yip', 'whimper', 'growl']);
 

@@ -8,6 +8,7 @@
 import { MIN_DURATION_MS } from './motion.js';
 import { SOUNDS } from './audio/sfx.js';
 import { t } from './strings.js';
+import { CAN_DO } from './config.js';
 
 const DRIVE_VALUES = ['forward', 'backward'];
 const STEER_VALUES = ['left', 'right', 'straight'];
@@ -221,7 +222,7 @@ export function buildSystemPrompt(cfg) {
  * them on the screen, and the one thing worth knowing about a refused command
  * is WHICH field this robot refused.
  *
- * @param {Array<{ id: string, name: string, args: object | null, rawArguments: string }>} toolCalls
+ * @param {Array<{ id?: string, name: string, args: object | null, rawArguments: string }>} toolCalls
  * @returns {{ actions: Action[], replyLang: 'zh'|'en'|'auto'|null, dropped: number,
  *             reasons: string[], hadMoveIntent: boolean }}
  */
@@ -313,7 +314,7 @@ function isValidStep(step) {
 
 export class Brain {
   #llm; #executor; #tts; #earcon; #sound; #config; #onReplyLangChange; #onFault; #trace;
-  #reflex; #ladder;
+  #reflex;
   /** Whether this turn has already sounded its failure. See #fail. */
   #beeped = false;
   /** @type {AbortController | null} */
@@ -329,7 +330,6 @@ export class Brain {
    *   sound?: (name: import('./audio/sfx.js').SoundName) => Promise<void>,
    *   reflex?: { judge(heard: string, robotSaid: string, signal?: AbortSignal):
    *              Promise<import('./reflex.js').Verdict> } | null,
-   *   ladder?: { next(): Action[], reset(): void },
    *   config: { lang: 'en' | 'zh', replyLang: 'zh' | 'en' | null, bargeIn: boolean, body?: { motion: import('./config.js').Motion } },
    *   onReplyLangChange?: (lang: 'en' | 'zh' | null) => void,
    *   onFault?: (part: import('./strings.js').FaultPart, err: Error) => void,
@@ -343,10 +343,9 @@ export class Brain {
     this.#earcon = deps.earcon;
     // Resolves when the sound ends, so a move queued behind it starts after.
     this.#sound = deps.sound ?? (async () => {});
-    // Optional, both: without a configured JEV the app passes null and every
-    // turn goes to the LLM exactly as before (reflex spec §1).
+    // Optional: without a configured reflex the server passes null and every
+    // turn goes to the LLM exactly as before.
     this.#reflex = deps.reflex ?? null;
-    this.#ladder = deps.ladder ?? { next: () => [], reset() {} };
     this.#config = deps.config;
     this.#onReplyLangChange = deps.onReplyLangChange ?? (() => {});
     this.#onFault = deps.onFault ?? (() => {});
@@ -367,7 +366,7 @@ export class Brain {
   cancel() { this.#turn?.abort(); }
 
   /** Spec §6.4: cleared when the session times out back to SLEEPING. */
-  resetHistory() { this.#history = []; this.#ladder.reset(); }
+  resetHistory() { this.#history = []; }
 
   /** @param {string} userText */
   async handle(userText) {
@@ -382,13 +381,13 @@ export class Brain {
     const turn = new AbortController();
     this.#turn = turn;
 
-    // Reflex spec §2: asked before the LLM, never beside it. Anything but a
-    // confident "tease" falls through to the LLM below, untouched.
+    // Configurable reflex spec §3: asked before the LLM, never beside it.
+    // Anything but a fire falls through to the LLM below, untouched.
     if (this.#reflex) {
       const v = await this.#reflex.judge(text, this.#lastRobotLine(), turn.signal);
       this.#trace(`[reflex] ${text} → ${v.verdict} ${v.detail} (${v.ms}ms)`);
       if (turn.signal.aborted) return;
-      if (v.verdict === 'fired') return this.#reflexTurn(text);
+      if (v.verdict === 'fired') return this.#reflexTurn(text, v.calls ?? []);
     }
 
     this.#pushUser(text);
@@ -501,25 +500,42 @@ export class Brain {
   }
 
   /**
-   * Reflex spec §6: the turn is written down as plain text on the user's side
-   * — what was heard, then a bracketed note of what the body did. Not as the
-   * model's own tool calls: those tie the next request to each provider's id
-   * and pairing rules. Not as assistant text either, or the model learns to
-   * narrate its actions instead of calling them.
-   * No `done` beep: the bark is the answer (spec §5).
+   * Spec §3.2. The fired option's calls become Actions by the LLM's own rules
+   * (validate), then only what this body does survives (CAN_DO). What cannot
+   * be done is not done: the admin chose both the body and the actions, and
+   * the trace is where they find out the two disagree. The LLM is not asked
+   * instead.
+   *
+   * Written down as plain text on the user's side — what was heard, then a
+   * bracketed note of what the body did. Not as the model's own tool calls:
+   * those tie the next request to each provider's id and pairing rules. Not as
+   * assistant text either, or the model learns to narrate its actions instead
+   * of calling them.
    * @param {string} text
+   * @param {import('./reflex.js').ToolCall[]} calls
    */
-  #reflexTurn(text) {
-    const actions = this.#ladder.next();
+  #reflexTurn(text, calls) {
+    const { actions: valid, reasons } = validate(calls);
+    for (const why of reasons) this.#trace(`[reflex] dropped — ${why}`);
+    const motion = this.#config.body?.motion ?? 'car';
+    const can = CAN_DO[motion] ?? CAN_DO.car;
+    const actions = valid.filter((a) => {
+      if (can.includes(a.kind)) return true;
+      this.#trace(`[reflex] ${a.kind} dropped: body "${motion}" does not do ${a.kind}`);
+      return false;
+    });
     const did = actions.map((a) => a.kind === 'sound'
       ? `play_sound ${a.name}`
       : a.kind === 'move'
         ? `move ${a.steps.map((s) => `${s.drive}/${s.steer} ${s.duration_ms}ms`).join(', ')}`
-        // The ladder never produces cruise or stop; this only keeps it total.
-        : a.kind);
-    this.#pushUser(`${text}\n[Before you could think, your reflexes answered: ${did.join('; ')}]`);
+        : a.kind === 'cruise' ? `cruise ${a.drive}/${a.steer}` : a.kind);
+    this.#pushUser(`${text}\n[Before you could think, your reflexes answered: ${did.length ? did.join('; ') : 'nothing'}]`);
     this.#trimHistory();
-    if (actions.length > 0) this.#dispatch(actions, this.#turn?.signal);
+    if (actions.length === 0) return;
+    this.#dispatch(actions, this.#turn?.signal);
+    // The same rule as an LLM turn: done says an instruction for the car ran.
+    // A bark has already answered out loud.
+    if (actions.some((a) => a.kind !== 'sound')) this.#earcon('done');
   }
 
   /**

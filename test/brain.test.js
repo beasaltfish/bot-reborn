@@ -282,8 +282,8 @@ function deferred() {
   return { promise, resolve };
 }
 
-/** @param {{ motion?: 'car' | 'dry-run' | 'none', reply?: any, gateMotion?: boolean, reflex?: any, ladder?: any, holdSound?: boolean }} [opts] */
-function brainHarness({ motion = 'car', reply, gateMotion = false, reflex = null, ladder = undefined, holdSound = false } = {}) {
+/** @param {{ motion?: 'car' | 'dry-run' | 'none', reply?: any, gateMotion?: boolean, reflex?: any, holdSound?: boolean }} [opts] */
+function brainHarness({ motion = 'car', reply, gateMotion = false, reflex = null, holdSound = false } = {}) {
   /** @type {any[]} */
   const events = [];
   // Only populated when gateMotion is true. Every move/cruise call then gets
@@ -352,7 +352,7 @@ function brainHarness({ motion = 'car', reply, gateMotion = false, reflex = null
   const traced = [];
   return { events, executor, llm, tts, config, motionGates, soundGates, langChanges, faults, traced,
     brain: new Brain({
-      llm, executor, tts, earcon, sound, config, reflex, ladder,
+      llm, executor, tts, earcon, sound, config, reflex,
       onReplyLangChange: (lang) => langChanges.push(lang),
       onFault: (part, err) => faults.push([part, err.message]),
       trace: (line) => traced.push(line),
@@ -811,29 +811,42 @@ test('cancel(): a TTS abort is not a fault (spec §8.1)', async () => {
   assert.deepEqual(h.events, []);
 });
 
-// --- Reflex layer (reflex spec §2, §6) ---------------------------------------
+// --- Reflex layer (configurable reflex spec §3) ------------------------------
+
+const BARK = [{ name: 'play_sound', args: { name: 'bark' }, rawArguments: '{"name":"bark"}' }];
+const LEFT_STEPS = [{ drive: 'forward', steer: 'left', duration_ms: 600 }];
+const LEFT = [{ name: 'move', args: { steps: LEFT_STEPS }, rawArguments: JSON.stringify({ steps: LEFT_STEPS }) }];
 
 /** A judge that answers with a fixed verdict and records what it was asked.
- *  @param {string} verdict */
-function judgeSaying(verdict) {
+ *  @param {string} verdict @param {any[]} [calls] */
+function judgeSaying(verdict, calls = BARK) {
   /** @type {any[]} */ const asked = [];
   return {
     asked,
     judge: async (/** @type {string} */ heard, /** @type {string} */ robotSaid) => {
       asked.push({ heard, robotSaid });
-      return { verdict, detail: verdict === 'fired' ? 'tease 0.94' : 'reply 0.01', ms: 5 };
+      return verdict === 'fired'
+        ? { verdict, detail: 'tease 0.94', ms: 5, calls }
+        : { verdict, detail: 'reply 0.01', ms: 5 };
     },
   };
 }
-const oneRung = { next: () => [{ kind: 'sound', name: 'bark' }], reset() {} };
 
-test('reflex fired: no LLM, the rung runs, no done beep, and it is traced', async () => {
-  const h = brainHarness({ reply: say('never'), reflex: judgeSaying('fired'), ladder: oneRung });
+test('reflex fired: no LLM, the calls run, and it is traced', async () => {
+  const h = brainHarness({ reply: say('never'), reflex: judgeSaying('fired') });
   await h.brain.handle('忘忘');
   await new Promise((r) => setTimeout(r, 0));
   assert.equal(h.llm.calls.length, 0);
-  assert.deepEqual(h.events, [{ op: 'sound', name: 'bark' }]);
+  assert.deepEqual(h.events, [{ op: 'sound', name: 'bark' }], 'a bark is its own answer: no done beep');
   assert.match(h.traced.join('\n'), /\[reflex\] 忘忘 → fired tease 0\.94 \(5ms\)/);
+});
+
+test('reflex fired with a move: it drives, and beeps done like an LLM move', async () => {
+  const h = brainHarness({ reply: say('never'), reflex: judgeSaying('fired', LEFT) });
+  await h.brain.handle('turn left');
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(h.llm.calls.length, 0);
+  assert.deepEqual(h.events, [{ op: 'move', steps: LEFT_STEPS }, { op: 'earcon', name: 'done' }]);
 });
 
 test('reflex fired: history holds the turn as a plain user line, no tool calls', async () => {
@@ -841,20 +854,48 @@ test('reflex fired: history holds the turn as a plain user line, no tool calls',
   // pairing rules (Mistral wants 9-char ids). Plain text every provider
   // accepts; on the user's side, so the model does not learn to write its
   // actions as prose instead of calling them.
-  const steps = [{ drive: 'backward', steer: 'left', duration_ms: 600 }];
-  const h = brainHarness({ reply: say('ok'), reflex: judgeSaying('fired'),
-    ladder: { next: () => [{ kind: 'sound', name: 'bark' }, { kind: 'move', steps }], reset() {} } });
+  const h = brainHarness({ reply: say('ok'), reflex: judgeSaying('fired', [...BARK, ...LEFT,
+    { name: 'cruise', args: { drive: 'forward', steer: 'straight' }, rawArguments: '{}' }]) });
   await h.brain.handle('忘忘');
   const history = /** @type {any[]} */ (h.brain.history);
   assert.equal(history.length, 1);
   assert.equal(history[0].role, 'user');
-  assert.match(history[0].content, /^忘忘\n\[.*play_sound bark; move backward\/left 600ms.*\]$/);
+  assert.equal(history[0].content,
+    '忘忘\n[Before you could think, your reflexes answered: play_sound bark; move forward/left 600ms; cruise forward/straight]');
+});
+
+test('reflex fired on a still body: the move is dropped and said why, and nothing asks the LLM', async () => {
+  // Review focus 2: "it did not move" is the admin's config, so the trace
+  // names the kind and the body, and the LLM does not get a second go.
+  const h = brainHarness({ motion: 'none', reply: say('never'), reflex: judgeSaying('fired', LEFT) });
+  await h.brain.handle('turn left');
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(h.llm.calls.length, 0);
+  assert.deepEqual(h.events, []);
+  assert.match(h.traced.join('\n'), /\[reflex\] move dropped: body "none" does not do move/);
+  assert.match(/** @type {any} */ (h.brain.history[0]).content, /your reflexes answered: nothing\]$/);
+});
+
+test('reflex fired on a still body: a sound still plays', async () => {
+  const h = brainHarness({ motion: 'none', reply: say('never'), reflex: judgeSaying('fired', [...BARK, ...LEFT]) });
+  await h.brain.handle('忘忘');
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(h.events, [{ op: 'sound', name: 'bark' }]);
+});
+
+test('reflex fired: a configured call validate() refuses is dropped with its reason', async () => {
+  const bad = [{ name: 'move', args: { steps: [{ drive: 'up', steer: 'left', duration_ms: 600 }] }, rawArguments: '{}' }];
+  const h = brainHarness({ reply: say('never'), reflex: judgeSaying('fired', [...bad, ...BARK]) });
+  await h.brain.handle('x');
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(h.events, [{ op: 'sound', name: 'bark' }]);
+  assert.match(h.traced.join('\n'), /\[reflex\] dropped — move: step rejected/);
 });
 
 test('the next LLM request after a reflex never has two user messages in a row', async () => {
   let verdict = 'fired';
-  const reflex = { judge: async () => ({ verdict, detail: verdict, ms: 1 }) };
-  const h = brainHarness({ reply: say('刚才吓我一跳。'), reflex, ladder: oneRung });
+  const reflex = { judge: async () => ({ verdict, detail: verdict, ms: 1, calls: BARK }) };
+  const h = brainHarness({ reply: say('刚才吓我一跳。'), reflex });
   await h.brain.handle('忘忘');
   await h.brain.handle('旺旺');
   verdict = 'passed';
@@ -866,59 +907,49 @@ test('the next LLM request after a reflex never has two user messages in a row',
 });
 
 test('reflex passed: the LLM turn runs exactly as without a reflex', async () => {
-  const h = brainHarness({ reply: say('明白就好。'), reflex: judgeSaying('passed'), ladder: oneRung });
+  const h = brainHarness({ reply: say('明白就好。'), reflex: judgeSaying('passed') });
   await h.brain.handle('明白');
   assert.equal(h.llm.calls.length, 1);
   assert.deepEqual(h.events, [{ op: 'speak', text: '明白就好。' }]);
 });
 
-test('reflex failed or skipped: the LLM answers', async () => {
-  for (const verdict of ['failed', 'skipped']) {
-    const h = brainHarness({ reply: say('嗯？'), reflex: judgeSaying(verdict), ladder: oneRung });
-    await h.brain.handle('汪汪');
-    assert.equal(h.llm.calls.length, 1, verdict);
-  }
+test('reflex failed: the LLM answers', async () => {
+  const h = brainHarness({ reply: say('嗯？'), reflex: judgeSaying('failed') });
+  await h.brain.handle('汪汪');
+  assert.equal(h.llm.calls.length, 1);
 });
 
 test('the judge is told what the robot last said', async () => {
-  // Review focus 1: context is what separates 明白 the answer from a noise.
+  // Review focus 1 of the reflex spec: context is what separates 明白 the
+  // answer from a noise.
   const judge = judgeSaying('passed');
-  const h = brainHarness({ reply: say('你明白吗？'), reflex: judge, ladder: oneRung });
+  const h = brainHarness({ reply: say('你明白吗？'), reflex: judge });
   await h.brain.handle('跟我解释一下');
   await h.brain.handle('明白');
   assert.deepEqual(judge.asked.map((a) => a.robotSaid), ['', '你明白吗？']);
 });
 
-test('cancel() during the JEV call ends the turn with nothing dispatched', async () => {
-  // Review focus 2: the stop button must work on a reflex turn too.
+test('cancel() during the reflex call ends the turn with nothing dispatched', async () => {
+  // Review focus 2 of the reflex spec: the stop button must work on a reflex turn too.
   /** @type {(v: any) => void} */ let answer = () => {};
   const reflex = { judge: () => new Promise((r) => { answer = r; }) };
-  const h = brainHarness({ reply: say('never'), reflex, ladder: oneRung });
+  const h = brainHarness({ reply: say('never'), reflex });
   const turn = h.brain.handle('汪汪');
   h.brain.cancel();
-  answer({ verdict: 'fired', detail: 'tease 0.9', ms: 1 });
+  answer({ verdict: 'fired', detail: 'tease 0.9', ms: 1, calls: BARK });
   await turn;
   await new Promise((r) => setTimeout(r, 0));
   assert.deepEqual(h.events, []);
   assert.equal(h.llm.calls.length, 0);
 });
 
-test('resetHistory() also resets the ladder', () => {
-  let resets = 0;
-  const h = brainHarness({ reflex: judgeSaying('passed'), ladder: { next: () => [], reset() { resets++; } } });
-  h.brain.resetHistory();
-  assert.equal(resets, 1);
-});
-
 test('a stop during a bark drops the move queued behind it (reflex turn)', async () => {
   // Found in review: the dispatch loop waited on the sound, which nothing
   // cancelled, and then drove the car after the emergency stop. The stop
   // button reaches brain through cancel() (session.onEmergencyStop).
-  const steps = [{ drive: 'backward', steer: 'left', duration_ms: 600 }];
-  const h = brainHarness({ reply: say('never'), reflex: judgeSaying('fired'), holdSound: true,
-    ladder: { next: () => [{ kind: 'sound', name: 'bark' }, { kind: 'move', steps }], reset() {} } });
+  const h = brainHarness({ reply: say('never'), reflex: judgeSaying('fired', [...BARK, ...LEFT]), holdSound: true });
   await h.brain.handle('汪汪');
-  assert.deepEqual(h.events, [{ op: 'sound', name: 'bark' }]);
+  assert.deepEqual(h.events.filter((e) => e.op !== 'earcon'), [{ op: 'sound', name: 'bark' }]);
   h.brain.cancel();
   h.soundGates[0].resolve();
   await new Promise((r) => setTimeout(r, 0));
