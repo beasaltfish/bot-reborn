@@ -41,3 +41,6 @@ server/models/*
 
 # Built by npm start (or npm run admin:build); never committed.
 admin/dist/
+
+# Cloudflare wrangler local cache
+.wrangler/

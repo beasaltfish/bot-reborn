@@ -11,7 +11,8 @@ import { bytesToFloat32 } from '../audio/pcm.js';
 const FRAME = (RATE * FRAME_MS) / 1000;
 
 export class RemotePipeline {
-  /** @type {Map<string, (frame: Float32Array) => void>} */ #subs = new Map();
+  /** @type {Map<string, (frame: Float32Array) => void>} */
+  #subs = new Map();
   #pending = new Float32Array(0);
 
   /** @param {string} name @param {(frame: Float32Array) => void} fn */

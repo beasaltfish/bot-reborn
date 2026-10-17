@@ -42,8 +42,11 @@ export function createBrainServer(opts) {
       res.end('Not found\n');
     }
   });
+
   /** Looked up when admitted, used when built: the same object in between. */
-  /** @type {Map<string, import('./characters.js').Character>} */ const admitted = new Map();
+  /** @type {Map<string, import('./characters.js').Character>} */
+  const admitted = new Map();
+
   const link = createLink({
     server: http,
     log,
@@ -68,14 +71,19 @@ export function createBrainServer(opts) {
         config: c.config,
         // Only the field a robot changes by itself (§11.1's reply language).
         save: (cfg) => updateConfig(c.path, (disk) => { disk.replyLang = cfg.replyLang; }),
-        fetch: opts.fetch, ears: opts.makeEars(),
-        sfx: opts.sfx, earcons: opts.earcons, slackMs: opts.slackMs,
+        fetch: opts.fetch,
+        ears: opts.makeEars(),
+        sfx: opts.sfx,
+        earcons: opts.earcons,
+        slackMs: opts.slackMs,
         log: (line) => log(`[${c.name}] ${line}`),
       });
       conn.onClose(() => robot.stop());
     },
   });
+
   api = createAdminApi({ dir: opts.dir, link, addresses: opts.addresses });
+
   return {
     /** @param {number} port @returns {Promise<number>} the port actually bound */
     listen(port) {
