@@ -6,7 +6,11 @@
 // microcontroller would have to negotiate, buffer or decode is fixed here
 // instead.
 
-export const PROTOCOL = 1;
+/**
+ * 2 since 2026-10-17: a body no longer says what it has (caps) or reports its
+ * motors — how a character moves is its config's to say (body motion spec §4).
+ */
+export const PROTOCOL = 2;
 
 /** 16-bit little-endian mono, both directions. Not negotiated. */
 export const RATE = 16000;
@@ -43,14 +47,11 @@ export const STEERS = /** @type {const} */ (['left', 'right', 'straight']);
 /** @param {object} msg */
 export function encode(msg) { return JSON.stringify(msg); }
 
-const isBool = (/** @type {unknown} */ v) => typeof v === 'boolean';
-
 /** @type {Record<string, (m: any) => boolean>} */
 const FROM_BODY = {
   // `token` is checked by the link, not here: a hello dropped at parse time
   // gets no answer at all, and a body missing its token should be told so.
-  hello: (m) => Number.isInteger(m.protocol) && typeof m.caps === 'object' && m.caps !== null,
-  motors: (m) => isBool(m.connected),
+  hello: (m) => Number.isInteger(m.protocol),
   ping: () => true,
   pong: () => true,
 };

@@ -32,7 +32,7 @@ async function hello(/** @type {string} */ url, protocol = PROTOCOL, token = 'a'
   /** @type {any[]} */ const msgs = [];
   ws.on('message', (d, bin) => { if (!bin) msgs.push(JSON.parse(String(d))); });
   await new Promise((r) => ws.once('open', r));
-  ws.send(JSON.stringify({ type: 'hello', protocol, token, caps: { motors: true } }));
+  ws.send(JSON.stringify({ type: 'hello', protocol, token }));
   await until(() => msgs.length > 0);
   return { ws, msgs };
 }
@@ -45,11 +45,11 @@ async function until(/** @type {() => boolean} */ pred, ms = 2000) {
   }
 }
 
-test('hello is answered with welcome and the body is handed over with its caps', async () => {
+test('hello is answered with welcome and the body is handed over', async () => {
   const r = await rig();
   const { ws, msgs } = await hello(r.url);
   assert.deepEqual(msgs[0], { type: 'welcome', name: 'n-a' });
-  assert.deepEqual(r.bodies[0].caps, { motors: true });
+  assert.equal(r.bodies.length, 1);
   ws.close(); r.close();
 });
 
@@ -101,17 +101,6 @@ test('a body that goes silent is dropped after the watchdog and the slot frees',
   ws.close(); again.ws.close(); r.close();
 });
 
-test('motors messages reach the robot', async () => {
-  const r = await rig();
-  const { ws } = await hello(r.url);
-  /** @type {any[]} */ const got = [];
-  r.bodies[0].onMessage((m) => got.push(m));
-  ws.send(JSON.stringify({ type: 'motors', connected: false }));
-  await until(() => got.length === 1);
-  assert.deepEqual(got[0], { type: 'motors', connected: false });
-  ws.close(); r.close();
-});
-
 test('welcome is the first thing a body hears, even when the robot talks at once', async () => {
   const r = await rig({ onBody: (c) => c.send({ type: 'state', state: 'SLEEPING' }) });
   const { ws, msgs } = await hello(r.url);
@@ -144,7 +133,7 @@ async function helloWith(url, headers) {
   /** @type {any[]} */ const msgs = [];
   ws.on('message', (d, bin) => { if (!bin) msgs.push(JSON.parse(String(d))); });
   await new Promise((r) => ws.once('open', r));
-  ws.send(JSON.stringify({ type: 'hello', protocol: PROTOCOL, token: 'a', caps: {} }));
+  ws.send(JSON.stringify({ type: 'hello', protocol: PROTOCOL, token: 'a' }));
   await until(() => msgs.length > 0);
   return { ws, msgs };
 }
@@ -209,7 +198,7 @@ test('a hello with no token, or not a string, is told so rather than left to tim
     /** @type {any[]} */ const msgs = [];
     ws.on('message', (d) => msgs.push(JSON.parse(String(d))));
     await new Promise((res) => ws.once('open', res));
-    ws.send(JSON.stringify({ type: 'hello', protocol: PROTOCOL, caps: {}, ...hello }));
+    ws.send(JSON.stringify({ type: 'hello', protocol: PROTOCOL, ...hello }));
     await until(() => msgs.length > 0, 1000);
     assert.deepEqual(msgs[0], { type: 'reject', reason: 'token' });
     ws.close();
@@ -236,4 +225,12 @@ test('a page served by this brain is welcomed: its origin names the host it conn
   const phone = await helloWith(r.url, { Origin: `http://${host}` });
   assert.deepEqual(phone.msgs[0], { type: 'welcome', name: 'n-a' });
   phone.ws.close(); r.close();
+});
+
+test('a page cached from before protocol 2 is refused, not half-understood', async () => {
+  const r = await rig();
+  const { ws, msgs } = await hello(r.url, 1);
+  assert.deepEqual(msgs[0], { type: 'reject', reason: 'protocol' });
+  assert.equal(r.bodies.length, 0);
+  ws.close(); r.close();
 });

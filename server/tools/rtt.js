@@ -22,8 +22,8 @@ if (!url || !token) { console.error('usage: rtt.js <ws-url> --token <token> [--c
 
 const ws = new WebSocket(url);
 await new Promise((r) => ws.once('open', r));
-// motors: false, so nothing this tool says can drive a car.
-ws.send(encode({ type: 'hello', protocol: PROTOCOL, token, caps: { motors: false } }));
+// It has no car: any move the brain sends it is simply not obeyed.
+ws.send(encode({ type: 'hello', protocol: PROTOCOL, token }));
 // An inbox, not a list of waiters: the brain sends welcome and its first
 // states in one burst, and a waiter attached after the previous await
 // resolved would miss them.

@@ -29,7 +29,7 @@ async function body(port, token) {
     msgs.push(m);
   });
   await new Promise((r) => ws.once('open', r));
-  ws.send(JSON.stringify({ type: 'hello', protocol: PROTOCOL, token, caps: { motors: true } }));
+  ws.send(JSON.stringify({ type: 'hello', protocol: PROTOCOL, token }));
   await until(() => msgs.length > 0);
   return { ws, msgs };
 }

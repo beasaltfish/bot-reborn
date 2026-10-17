@@ -48,7 +48,7 @@ function rig(over = {}) {
   FakeSocket.all = [];
   /** @type {string[]} */ const events = [];
   const link = connectBody({
-    url: 'ws://brain/body', token: 'ab'.repeat(16), caps: { motors: true, screen: true },
+    url: 'ws://brain/body', token: 'ab'.repeat(16),
     WebSocket: /** @type {any} */ (FakeSocket),
     onWelcome: (name) => events.push(`welcome ${name}`),
     onMessage: (msg) => events.push(`msg ${msg.type}`),
@@ -61,10 +61,10 @@ function rig(over = {}) {
   return { link, events, socket: (/** @type {number} */ i = 0) => FakeSocket.all[i] };
 }
 
-test('it says hello first, with its token and caps, and is welcomed by name', () => {
+test('it says hello first, with its token, and is welcomed by name', () => {
   const r = rig();
   r.socket().open();
-  assert.deepEqual(r.socket().texts[0], { type: 'hello', protocol: PROTOCOL, token: 'ab'.repeat(16), caps: { motors: true, screen: true } });
+  assert.deepEqual(r.socket().texts[0], { type: 'hello', protocol: PROTOCOL, token: 'ab'.repeat(16) });
   assert.equal(r.socket().binaryType, 'arraybuffer');
   r.socket().text({ type: 'welcome', name: 'Rex' });
   assert.deepEqual(r.events, ['welcome Rex']);

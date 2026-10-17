@@ -17,7 +17,7 @@ test('brain.js no longer reaches ftdi.js through executor.js', () => {
 });
 
 test('a body hello round-trips', () => {
-  const msg = { type: 'hello', protocol: PROTOCOL, token: 'ab'.repeat(16), caps: { motors: true, screen: false } };
+  const msg = { type: 'hello', protocol: PROTOCOL, token: 'ab'.repeat(16) };
   assert.deepEqual(parse(encode(msg), 'body'), msg);
 });
 
@@ -35,7 +35,7 @@ test('a well-formed move passes', () => {
 
 test('each side only accepts its own message types', () => {
   assert.equal(parse(encode({ type: 'welcome' }), 'body'), null);
-  assert.equal(parse(encode({ type: 'hello', protocol: 1, caps: {} }), 'brain'), null);
+  assert.equal(parse(encode({ type: 'hello', protocol: 1 }), 'brain'), null);
   assert.deepEqual(parse(encode({ type: 'ping' }), 'body'), { type: 'ping' });
 });
 
@@ -46,5 +46,15 @@ test('garbage is null, not a throw', () => {
 });
 
 test('a hello without a token still parses, so the link can say why it is refused', () => {
-  assert.notEqual(parse(encode({ type: 'hello', protocol: PROTOCOL, caps: {} }), 'body'), null);
+  assert.notEqual(parse(encode({ type: 'hello', protocol: PROTOCOL }), 'body'), null);
+});
+
+test('protocol 2: hello is a version and a token, nothing about the body', () => {
+  assert.equal(PROTOCOL, 2);
+  assert.ok(parse(JSON.stringify({ type: 'hello', protocol: 2, token: 't' }), 'body'));
+  assert.equal(parse(JSON.stringify({ type: 'hello', token: 't' }), 'body'), null);
+});
+
+test('a body cannot report motors any more: the message is unknown', () => {
+  assert.equal(parse(JSON.stringify({ type: 'motors', connected: false }), 'body'), null);
 });

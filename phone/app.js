@@ -191,15 +191,11 @@ async function start() {
     executor = car;
     car.onError = (err) => {
       ui.log('USB: ' + err.message);
-      // The brain decides what to say about it (it brakes and says so); the
-      // body only reports.
-      link?.send({ type: 'motors', connected: false });
     };
 
     link = connectBody({
       url: `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${BODY_PATH}`,
       token: /** @type {string} */ (config.token),
-      caps: { motors: true, screen: true },
       onWelcome: (name) => { ui.notice(''); ui.log(`▶︎ ${name}`); },
       onMessage: (msg) => {
         if (msg.type === 'move') car.hold(msg.drive, msg.steer, msg.ms);

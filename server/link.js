@@ -12,7 +12,6 @@ import {
 
 /**
  * @typedef {{
- *   caps: Record<string, unknown>,
  *   readonly open: boolean,
  *   send(msg: object): void,
  *   sendAudio(bytes: Uint8Array): void,
@@ -55,7 +54,6 @@ export function createLink(opts) {
 
     /** @type {BodyConn} */
     const conn = {
-      caps: {},
       get open() { return open; },
       // A closed socket is a no-op, not a throw: the session's emergency stop
       // runs AFTER the body is gone, and must not fail for that reason.
@@ -101,7 +99,6 @@ export function createLink(opts) {
         id = who.id;
         active.set(id, ws);
         welcomed = true;
-        conn.caps = msg.caps;
         // Welcome first: a body may treat anything before it as a protocol
         // error, and the robot starts talking (its state) the moment it is
         // built. Building it in the same synchronous turn is still early
@@ -113,7 +110,7 @@ export function createLink(opts) {
         // than WATCHDOG_MS — the first heartbeat then dropped every body as
         // silent before its queued pongs were even read.
         lastSeen = Date.now();
-        log(`${who.name} connected from ${from} ${JSON.stringify(msg.caps)}`);
+        log(`${who.name} connected from ${from}`);
         beat = setInterval(() => {
           if (Date.now() - lastSeen > watchdogMs) {
             log(`${who.name} (${from}) went silent — dropping it`);

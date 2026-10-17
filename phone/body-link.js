@@ -25,7 +25,7 @@ const RETRY_MS = [500, 1000, 2000, 5000];
 
 /**
  * @param {{
- *   url: string, token: string, caps: Record<string, boolean>,
+ *   url: string, token: string,
  *   WebSocket?: new (url: string) => WebSocketLike,
  *   onWelcome: (name: string) => void,
  *   onMessage: (msg: any) => void,
@@ -61,7 +61,7 @@ export function connectBody(opts) {
     ws = socket;
     socket.binaryType = 'arraybuffer';
     socket.onopen = () => {
-      socket.send(encode({ type: 'hello', protocol: PROTOCOL, token: opts.token, caps: opts.caps }));
+      socket.send(encode({ type: 'hello', protocol: PROTOCOL, token: opts.token }));
     };
     socket.onmessage = (ev) => {
       lastHeard = Date.now();

@@ -18,7 +18,7 @@ const FRAME = RATE / 10;
 
 /**
  * @param {string} url
- * @param {{ token: string, caps?: Record<string, boolean>, watchdogMs?: number,
+ * @param {{ token: string, watchdogMs?: number,
  *           onMessage?: (msg: any) => void }} opts
  */
 export async function connectFakeBody(url, opts) {
@@ -58,7 +58,7 @@ export async function connectFakeBody(url, opts) {
   });
 
   await new Promise((resolve, reject) => { ws.once('open', resolve); ws.once('error', reject); });
-  ws.send(encode({ type: 'hello', protocol: PROTOCOL, token: opts.token, caps: opts.caps ?? { motors: true, screen: false } }));
+  ws.send(encode({ type: 'hello', protocol: PROTOCOL, token: opts.token }));
 
   const reply = await first;
   if (!reply || reply.type !== 'welcome') {

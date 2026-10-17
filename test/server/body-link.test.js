@@ -29,7 +29,7 @@ test('the phone\'s link carries a whole turn: welcome, audio up, a move and spee
   /** @type {any[]} */ const got = [];
   let audio = 0;
   const link = connectBody({
-    url: `ws://127.0.0.1:${port}/body`, token: a.token, caps: { motors: true, screen: true },
+    url: `ws://127.0.0.1:${port}/body`, token: a.token,
     WebSocket: /** @type {any} */ (WebSocket),
     onWelcome: (name) => got.push({ type: 'welcome', name }),
     onMessage: (m) => got.push(m),
@@ -56,7 +56,7 @@ test('a wrong token is refused once, and the phone does not knock again', async 
   const port = await server.listen(0);
   /** @type {string[]} */ const why = [];
   const link = connectBody({
-    url: `ws://127.0.0.1:${port}/body`, token: '0'.repeat(32), caps: { motors: true },
+    url: `ws://127.0.0.1:${port}/body`, token: '0'.repeat(32),
     WebSocket: /** @type {any} */ (WebSocket),
     onWelcome() {}, onMessage() {}, onAudio() {}, onLost() {},
     onReject: (reason) => why.push(reason),
