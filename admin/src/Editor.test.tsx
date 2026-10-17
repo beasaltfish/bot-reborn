@@ -29,6 +29,17 @@ describe('Editor', () => {
     expect(fake.patches()[0].body).toEqual({ config: { wakeWord: true, tts: { apiKey: 'k' } } });
   });
 
+  it('picks how the body moves, and says when it takes effect', async () => {
+    const fake = installFakeApi([{ name: 'A' }]);
+    render(<Editor {...props()} />);
+    const body = await screen.findByLabelText('Body');
+    expect(body).toHaveValue('car');
+    expect(screen.getByText(/next time the body connects/)).toBeInTheDocument();
+    await userEvent.selectOptions(body, 'dry-run');
+    await waitFor(() => expect(fake.patches()).toHaveLength(1), { timeout: 2000 });
+    expect(fake.patches()[0].body).toEqual({ config: { body: { motion: 'dry-run' } } });
+  });
+
   it('renames through the name field', async () => {
     const fake = installFakeApi([{ name: 'A' }]);
     const p = props();
