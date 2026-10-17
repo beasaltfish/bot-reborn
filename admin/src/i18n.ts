@@ -51,6 +51,8 @@ const en = {
   phoneNoNetwork: 'This computer is on no network a phone could share. Join the same Wi-Fi as the phone.',
   phoneFlag: 'Once per phone: in Chrome open',
   phoneFlagThen: ', add this address, set it to Enabled and relaunch Chrome:',
+  jsonInvalid: 'Not valid JSON yet — nothing saved.',
+  jsonNotChoice: 'Needs exactly one question: { "<name>": { "type": "choice", "instructions": "…", "criteria": { at least two } } }',
 };
 
 const zh: typeof en = {
@@ -104,6 +106,8 @@ const zh: typeof en = {
   phoneNoNetwork: '这台电脑没有连到手机能用的网络。请和手机连同一个 Wi-Fi。',
   phoneFlag: '每台手机一次：在 Chrome 里打开',
   phoneFlagThen: '，填入下面这个地址，设为 Enabled，然后重启 Chrome：',
+  jsonInvalid: '还不是合法的 JSON，没有保存。',
+  jsonNotChoice: '需要恰好一道题：{ "<题名>": { "type": "choice", "instructions": "…", "criteria": { 至少两项 } } }',
 };
 
 export type Key = keyof typeof en;

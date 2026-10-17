@@ -22,6 +22,6 @@ export const runCheck: CheckFn = async (layer, config) => {
       tools: TOOLS, systemPrompt: buildSystemPrompt({ replyLang: null, bargeIn: true }),
     });
   }
-  if (layer === 'reflex') return checkReflex(new Reflex(config.reflex));
+  if (layer === 'reflex') return checkReflex(new Reflex(config.reflex), 'hello');
   return checkTts(new WebAudioTts(config.tts as Required<typeof config.tts>, { audioContext: audio() }), lang);
 };

@@ -6,7 +6,8 @@ import { deepMerge } from '../merge';
 export function blankConfig(): Config {
   const layer = () => ({ baseURL: '', apiKey: '', model: '' });
   return {
-    stt: { ...layer(), prompt: '' }, llm: layer(), tts: { ...layer(), voice: '' }, reflex: layer(),
+    stt: { ...layer(), prompt: '' }, llm: layer(), tts: { ...layer(), voice: '' },
+    reflex: { ...layer(), threshold: 0.8, state: 'Robot said: "{robot}"\nPerson said: "{person}"', question: null },
     lang: 'en', replyLang: null, bargeIn: true, wakeWord: false,
     body: { motion: 'car' },
   };

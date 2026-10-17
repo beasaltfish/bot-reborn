@@ -9,13 +9,22 @@ export interface LayerConfig {
   prompt?: string;
 }
 
+export interface ReflexCall { name: 'move' | 'cruise' | 'stop' | 'play_sound'; args: Record<string, any> }
+export interface ReflexOption { choice: string; description: string; actions: ReflexCall[] }
+export interface ReflexQuestion { name: string; instructions: string; options: ReflexOption[] }
+export interface ReflexConfig extends LayerConfig {
+  threshold: number;
+  state: string;
+  question: ReflexQuestion | null;
+}
+
 export type Motion = 'car' | 'dry-run' | 'none';
 
 export interface Config {
   stt: LayerConfig;
   llm: LayerConfig;
   tts: LayerConfig;
-  reflex: LayerConfig;
+  reflex: ReflexConfig;
   lang: 'en' | 'zh';
   replyLang: 'zh' | 'en' | null;
   bargeIn: boolean;
