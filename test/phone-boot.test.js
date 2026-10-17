@@ -37,9 +37,11 @@ const settle = () => new Promise((r) => setTimeout(r, 20));
 /**
  * A page with a microphone the test grants (or one granted at once), a
  * WebSocket it can watch, and either a paired car or none.
- * @param {{ withCar: boolean, micNow?: boolean }} opts
+ * @param {{ withCar: boolean, micNow?: boolean, taught?: boolean }} opts
  */
-function installPage({ withCar, micNow = false }) {
+function installPage({ withCar, micNow = false, taught = true }) {
+  const plugged = { car: withCar };
+  /** @type {Record<string, Function[]>} */ const docOn = {};
   const g = /** @type {any} */ (globalThis);
   /** @type {Map<string, any>} */ const els = new Map();
   g.window = g;
@@ -53,7 +55,7 @@ function installPage({ withCar, micNow = false }) {
     querySelector: () => element(),
     querySelectorAll: () => [],
     createElement: () => element(),
-    addEventListener() {},
+    addEventListener(/** @type {string} */ type, /** @type {Function} */ fn) { (docOn[type] ??= []).push(fn); },
     hidden: false,
   };
   g.addEventListener = () => {};
@@ -62,7 +64,9 @@ function installPage({ withCar, micNow = false }) {
   g.localStorage = {
     getItem: () => JSON.stringify({
       token: 'ab'.repeat(16),
-      calibration: { steerSwapped: false, driveSwapped: false, bytesPerMs: null },
+      calibration: taught
+        ? { steerSwapped: false, driveSwapped: false, bytesPerMs: null }
+        : { steerSwapped: null, driveSwapped: null, bytesPerMs: null },
     }),
     setItem() {},
   };
@@ -78,7 +82,7 @@ function installPage({ withCar, micNow = false }) {
   Object.defineProperty(g, 'navigator', {
     configurable: true,
     value: {
-      usb: { getDevices: async () => (withCar ? [device] : []), addEventListener() {}, requestDevice: async () => device },
+      usb: { getDevices: async () => (plugged.car ? [device] : []), addEventListener() {}, requestDevice: async () => device },
       mediaDevices: {
         getUserMedia: micNow
           ? async () => ({ getTracks: () => [{ stop() {} }], getAudioTracks: () => [] })
@@ -108,6 +112,9 @@ function installPage({ withCar, micNow = false }) {
   };
   return {
     els,
+    plug: () => { plugged.car = true; },
+    /** @param {boolean} hidden */
+    screen(hidden) { g.document.hidden = hidden; for (const fn of docOn.visibilitychange ?? []) fn(); },
     sockets: () => sockets,
     lastSocket: () => last,
     grantMic: (/** @type {any} */ stream) => grantMic(stream),
@@ -155,4 +162,25 @@ test('with no car paired the phone still listens, links the brain, and ignores a
   ws.onmessage?.({ data: JSON.stringify({ type: 'stop' }) });
   await settle();
   assert.equal(fab.dataset.tone, 'stop', 'the phone gave up after an order it could not obey');
+});
+
+test('a car plugged in while the screen was off is not driven untaught when it comes back on', async () => {
+  // Final review I1: the button is not the only way into start(). A screen
+  // coming back on starts again by itself, with whatever car is plugged in by
+  // then — and one that does not know its left turns the wrong way first.
+  const page = installPage({ withCar: false, micNow: true, taught: false });
+  const fresh = '../phone/app.js?untaught';
+  await import(fresh);
+  await settle();
+  const fab = page.els.get('fab');
+  page.els.get('fab').fire('click');      // no car: listening is offered
+  await settle();
+  assert.equal(page.sockets(), 1);
+  page.screen(true);                       // screen off: it stops, and means to come back
+  await settle();
+  page.plug();
+  page.screen(false);                      // screen on, with an untaught car now plugged in
+  await settle();
+  assert.equal(page.sockets(), 1, 'an untaught car was linked to the brain');
+  assert.equal(fab.dataset.tone, 'wait', 'the button should be asking for steering');
 });

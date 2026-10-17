@@ -193,6 +193,16 @@ async function start() {
       return null;
     });
     if (cancelled()) return void car?.stop();
+    // The button is not the only way in: a screen coming back on starts again
+    // by itself, with whatever car is plugged in by then. One that does not
+    // know its left turns the wrong way first (body motion spec §4.1 ①), so
+    // it is not driven — the button goes back to asking for steering.
+    if (car && !directionsTaught(config.calibration)) {
+      void car.stop();
+      ui.log('car not taught left and right yet — not starting');
+      stop();
+      return;
+    }
     executor = car;
     if (car) car.onError = (err) => { ui.log('USB: ' + err.message); };
 
