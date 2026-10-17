@@ -17,6 +17,29 @@ export const CONFIG_KEY = 'voicebot.config';
 export const MOTIONS = /** @type {const} */ (['car', 'dry-run', 'none']);
 
 /**
+ * What a configured reflex may do: the LLM's own tools, minus
+ * set_reply_language, which writes config and is not an action
+ * (configurable reflex spec §2.2).
+ */
+export const REFLEX_TOOLS = /** @type {const} */ (['move', 'cruise', 'stop', 'play_sound']);
+
+/**
+ * Which Action kinds each body carries out (configurable reflex spec §3.3).
+ * Known from the admin's config, never reported by the body. A new body is
+ * one row here. Every body plays sound: it plays the robot's audio anyway.
+ * @type {Record<Motion, readonly string[]>}
+ */
+export const CAN_DO = {
+  car: ['move', 'cruise', 'stop', 'sound'],
+  'dry-run': ['move', 'cruise', 'stop', 'sound'],
+  none: ['sound'],
+};
+
+/** The format beasaltfish/robot-simple-commands was trained on (spec §2.4). */
+export const DEFAULT_STATE = 'Robot said: "{robot}"\nPerson said: "{person}"';
+export const DEFAULT_THRESHOLD = 0.8;
+
+/**
  * Spec §11.1: state that got set by voice and is invisible afterwards. The
  * settings page walks this list to show and reset them — a state that can be
  * entered but not left is a trap.
@@ -38,6 +61,55 @@ export const STICKY = /** @type {const} */ (['ttsPath', 'replyLang']);
 export function layerReady(layer) {
   if (!layer?.baseURL || !layer.apiKey || !layer.model) return false;
   return !('voice' in layer) || Boolean(layer.voice);
+}
+
+/**
+ * The reflex runs only with somewhere to ask AND something to ask. A layer
+ * with a key but no question is a character that has not picked one yet.
+ * @param {ReflexLayer} r
+ */
+export function reflexReady(r) {
+  return layerReady(r) && r.question !== null;
+}
+
+const isPlain = (/** @type {unknown} */ v) => typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/**
+ * Spec §2.3: field by field, so one bad value costs that value and not the
+ * reflex. Options and actions are dropped one at a time for the same reason.
+ * @param {unknown} raw
+ * @returns {ReflexLayer}
+ */
+export function normalizeReflex(raw) {
+  const d = defaultConfig().reflex;
+  const p = /** @type {any} */ (isPlain(raw) ? raw : {});
+  const t = p.threshold;
+  return {
+    ...d,
+    ...p,
+    threshold: typeof t === 'number' && t >= 0 && t <= 1 ? t : d.threshold,
+    state: typeof p.state === 'string' && p.state.includes('{person}') ? p.state : d.state,
+    question: normalizeQuestion(p.question),
+  };
+}
+
+/** @param {any} q @returns {ReflexQuestion | null} */
+function normalizeQuestion(q) {
+  if (!isPlain(q) || typeof q.name !== 'string' || !q.name
+    || typeof q.instructions !== 'string' || !Array.isArray(q.options)) return null;
+  const seen = new Set();
+  /** @type {ReflexOption[]} */
+  const options = [];
+  for (const o of q.options) {
+    if (!isPlain(o) || typeof o.choice !== 'string' || !o.choice || seen.has(o.choice)
+      || typeof o.description !== 'string') continue;
+    seen.add(o.choice);
+    const actions = (Array.isArray(o.actions) ? o.actions : [])
+      .filter((/** @type {any} */ a) => isPlain(a) && REFLEX_TOOLS.includes(a.name) && isPlain(a.args))
+      .map((/** @type {any} */ a) => ({ name: a.name, args: a.args }));
+    options.push({ choice: o.choice, description: o.description, actions });
+  }
+  return options.length >= 2 ? { name: q.name, instructions: q.instructions, options } : null;
 }
 
 /**
@@ -73,9 +145,10 @@ export function defaultConfig(_navLang = globalThis.navigator?.language) {
     stt: { baseURL: '', apiKey: '', model: '', prompt: '' },
     llm: { baseURL: '', apiKey: '', model: '' },
     tts: { baseURL: '', apiKey: '', model: '', voice: '' },
-    // Reflex spec §7. Empty is off: the reflex runs only when layerReady()
-    // says all three are filled in, so no key means today's robot exactly.
-    reflex: { baseURL: '', apiKey: '', model: '' },
+    // Configurable reflex spec §2. Off until it has both a provider and a
+    // question: reflexReady() asks for the three connection fields AND a
+    // question, so no key, or no preset picked, means today's robot exactly.
+    reflex: { baseURL: '', apiKey: '', model: '', threshold: DEFAULT_THRESHOLD, state: DEFAULT_STATE, question: null },
     // English, always, as of 2026-09-17. This is an open-source project and the
     // default has to be the language its readers share; a Chinese phone landing
     // on a Chinese UI made the source's default and the running default two
@@ -139,7 +212,7 @@ export function loadConfig(storage = globalThis.localStorage) {
       stt: { ...d.stt, ...p.stt },
       llm: { ...d.llm, ...p.llm },
       tts: { ...d.tts, ...p.tts },
-      reflex: { ...d.reflex, ...p.reflex },
+      reflex: normalizeReflex(p.reflex),
       // `??`, never `||`: a stored `false` for bargeIn is a calibration result,
       // and `||` would silently promote it back to true.
       lang: p.lang ?? d.lang,
@@ -184,11 +257,15 @@ export function resetSticky(cfg) {
  * }} StorageLike
  *
  * @typedef {{ baseURL: string, apiKey: string, model: string }} Layer
+ * @typedef {{ name: typeof REFLEX_TOOLS[number], args: Record<string, unknown> }} ReflexCall
+ * @typedef {{ choice: string, description: string, actions: ReflexCall[] }} ReflexOption
+ * @typedef {{ name: string, instructions: string, options: ReflexOption[] }} ReflexQuestion
+ * @typedef {Layer & { threshold: number, state: string, question: ReflexQuestion | null }} ReflexLayer
  * @typedef {{
  *   stt: Layer & { prompt: string },
  *   llm: Layer,
  *   tts: Layer & { voice: string },
- *   reflex: Layer,
+ *   reflex: ReflexLayer,
  *   lang: 'en' | 'zh',
  *   replyLang: 'en' | 'zh' | null,
  *   bargeIn: boolean,

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CONFIG_KEY, STICKY, defaultConfig, loadConfig, saveConfig, resetSticky, layerReady }
-  from '../core/config.js';
+import { CONFIG_KEY, STICKY, defaultConfig, loadConfig, saveConfig, resetSticky, layerReady,
+  reflexReady, normalizeReflex, CAN_DO, DEFAULT_STATE } from '../core/config.js';
 
 /** A localStorage stand-in. The real one is not available in node, and every
  * function under test takes it as a parameter for exactly this reason. */
@@ -175,24 +175,83 @@ test('a config saved before calibration existed still loads', () => {
   );
 });
 
-test('reflex is off by default: an empty layer is not ready', () => {
+const LAYER = { baseURL: 'http://192.168.3.47:8888/v1', apiKey: 'k', model: 'jev-latest' };
+const QUESTION = {
+  name: 'action',
+  instructions: 'Is it a move?',
+  options: [
+    { choice: 'left', description: 'Turn left.', actions: [{ name: 'move', args: { steps: [{ drive: 'forward', steer: 'left', duration_ms: 600 }] } }] },
+    { choice: 'pass', description: 'Anything else.', actions: [] },
+  ],
+};
+
+test('reflex is off by default: no layer and no question', () => {
   const d = defaultConfig();
-  assert.deepEqual(d.reflex, { baseURL: '', apiKey: '', model: '' });
-  assert.equal(layerReady(d.reflex), false);
+  assert.deepEqual(d.reflex, {
+    baseURL: '', apiKey: '', model: '', threshold: 0.8, state: DEFAULT_STATE, question: null,
+  });
+  assert.equal(DEFAULT_STATE, 'Robot said: "{robot}"\nPerson said: "{person}"');
+  assert.equal(reflexReady(d.reflex), false);
 });
 
-test('a config saved before reflex existed loads with it off', () => {
-  // Review focus 5.
-  const storage = fakeStorage({ [CONFIG_KEY]: JSON.stringify({ stt: { baseURL: 'a' } }) });
-  const cfg = loadConfig(storage);
-  assert.deepEqual(cfg.reflex, { baseURL: '', apiKey: '', model: '' });
+test('a config saved before the question existed loads with the reflex off', () => {
+  // Configurable reflex spec §2.3: three connection fields and no question is
+  // today's 小黑 — off until the admin picks a preset.
+  const storage = fakeStorage({ [CONFIG_KEY]: JSON.stringify({ reflex: LAYER }) });
+  const r = loadConfig(storage).reflex;
+  assert.equal(layerReady(r), true);
+  assert.equal(r.question, null);
+  assert.equal(reflexReady(r), false);
 });
 
-test('a stored reflex layer survives the read', () => {
-  const reflex = { baseURL: 'https://openrouter.ai/api/v1', apiKey: 'k', model: 'jev-1.13' };
-  const storage = fakeStorage({ [CONFIG_KEY]: JSON.stringify({ reflex }) });
-  assert.deepEqual(loadConfig(storage).reflex, reflex);
-  assert.equal(layerReady(loadConfig(storage).reflex), true);
+test('a stored reflex with a question survives the read, and is on', () => {
+  const reflex = { ...LAYER, threshold: 0.6, state: 'Person said: {person}', question: QUESTION };
+  const r = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ reflex }) })).reflex;
+  assert.deepEqual(r, reflex);
+  assert.equal(reflexReady(r), true);
+});
+
+test('normalizeReflex: bad threshold and state fall back to the defaults', () => {
+  for (const threshold of [-0.1, 1.1, '0.5', NaN, null]) {
+    assert.equal(normalizeReflex({ threshold }).threshold, 0.8, String(threshold));
+  }
+  assert.equal(normalizeReflex({ threshold: 0 }).threshold, 0);
+  assert.equal(normalizeReflex({ threshold: 1 }).threshold, 1);
+  assert.equal(normalizeReflex({ state: 'no placeholder' }).state, DEFAULT_STATE);
+  assert.equal(normalizeReflex({ state: 42 }).state, DEFAULT_STATE);
+});
+
+test('normalizeReflex: a question needs a name, instructions and two good options', () => {
+  assert.equal(normalizeReflex({ question: { ...QUESTION, name: '' } }).question, null);
+  assert.equal(normalizeReflex({ question: { ...QUESTION, instructions: 3 } }).question, null);
+  assert.equal(normalizeReflex({ question: { ...QUESTION, options: 'x' } }).question, null);
+  assert.equal(normalizeReflex({ question: { ...QUESTION, options: [QUESTION.options[0]] } }).question, null);
+  assert.equal(normalizeReflex({ question: 'action' }).question, null);
+});
+
+test('normalizeReflex: bad options and bad actions are dropped one by one', () => {
+  const q = normalizeReflex({ question: { ...QUESTION, options: [
+    ...QUESTION.options,
+    { choice: 'left', description: 'duplicate', actions: [] },
+    { choice: '', description: 'empty', actions: [] },
+    { choice: 'right', description: 7, actions: [] },
+    { choice: 'stop', description: 'Stop.', actions: [
+      { name: 'stop', args: {} },
+      { name: 'set_reply_language', args: { lang: 'en' } },
+      { name: 'move', args: [] },
+      'stop',
+    ] },
+    { choice: 'odd', description: 'no actions array', actions: 'stop' },
+  ] } }).question;
+  assert.deepEqual(q?.options.map((o) => o.choice), ['left', 'pass', 'stop', 'odd']);
+  assert.deepEqual(q?.options[2].actions, [{ name: 'stop', args: {} }]);
+  assert.deepEqual(q?.options[3].actions, []);
+});
+
+test('CAN_DO: a car and a dry run do everything, a still body only makes sounds', () => {
+  assert.deepEqual(CAN_DO.car, ['move', 'cruise', 'stop', 'sound']);
+  assert.deepEqual(CAN_DO['dry-run'], CAN_DO.car);
+  assert.deepEqual(CAN_DO.none, ['sound']);
 });
 
 test('body.motion defaults to car, and an old config gets it too', () => {
