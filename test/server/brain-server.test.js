@@ -96,6 +96,26 @@ test('two characters talk at once, each with its own voice and key', async () =>
   await server.close();
 });
 
+test('a dry-run character answers a body with no car, and only the brain sees the move', async () => {
+  const chars = tempCharacters();
+  const a = chars.add('a', (cfg) => { cfg.body.motion = 'dry-run'; });
+  /** @type {string[]} */ const lines = [];
+  const server = createBrainServer({
+    dir: chars.dir, fetch: fakeFetch(), sfx: new Map(), earcons: renderEarcons(),
+    makeEars: () => onceEars(), log: (l) => lines.push(l), slackMs: 0,
+  });
+  const port = await server.listen(0);
+  const b = await body(port, a.token);
+  await until(() => b.msgs.some((m) => m.state === 'LISTENING'));
+  await new Promise((r) => setTimeout(r, 150));      // the wake earcon's gate
+  const frame = new Uint8Array(3200);
+  await until(() => { b.ws.send(frame); return lines.some((l) => l.includes('dry-run: move')); });
+  assert.ok(lines.includes('[a] dry-run: move forward/straight 600ms'));
+  assert.ok(!b.msgs.some((m) => m.type === 'move'));
+  b.ws.close();
+  await server.close();
+});
+
 test('the phone page is served to the network, the admin page only to this machine', async () => {
   const chars = tempCharacters();
   const server = createBrainServer({

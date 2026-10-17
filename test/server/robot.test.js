@@ -4,14 +4,14 @@ import { startRobot } from '../../server/robot.js';
 import { renderEarcons } from '../../server/audio/render.js';
 import { readyConfig, fakeFetch, until } from './helpers.js';
 
-function fakeConn(caps = { motors: true }) {
+function fakeConn() {
   /** @type {any[]} */ const sent = [];
   /** @type {Uint8Array[]} */ const audio = [];
   /** @type {Record<string, Function[]>} */ const h = { audio: [], msg: [], close: [] };
   return {
     sent, audio,
     conn: /** @type {any} */ ({
-      caps, open: true,
+      open: true,
       send: (/** @type {any} */ m) => sent.push(m),
       sendAudio: (/** @type {Uint8Array} */ b) => audio.push(b),
       onAudio: (/** @type {Function} */ f) => h.audio.push(f),
@@ -36,13 +36,16 @@ function fakeEars() {
   };
 }
 
-function rig(/** @type {Parameters<typeof fakeFetch>[0]} */ fetchOpts = {}, caps = { motors: true }) {
-  const c = fakeConn(caps);
+function rig(/** @type {Parameters<typeof fakeFetch>[0]} */ fetchOpts = {}, motion = 'car') {
+  const c = fakeConn();
   const e = fakeEars();
   const fetch = fakeFetch(fetchOpts);
+  /** @type {string[]} */ const logged = [];
+  const config = readyConfig();
+  config.body.motion = /** @type {any} */ (motion);
   const robot = startRobot(c.conn, {
-    config: readyConfig(), fetch, ears: e.ears, sfx: new Map(), earcons: renderEarcons(),
-    log: () => {}, slackMs: 0,
+    config, fetch, ears: e.ears, sfx: new Map(), earcons: renderEarcons(),
+    log: (l) => logged.push(l), slackMs: 0,
   });
   /**
    * One utterance: queue a segment, then keep feeding frames until the
@@ -54,7 +57,7 @@ function rig(/** @type {Parameters<typeof fakeFetch>[0]} */ fetchOpts = {}, caps
     await until(() => { c.feed(); return states(c.sent).includes('THINKING'); }, 3000,
       () => `no THINKING; states ${JSON.stringify(states(c.sent))}`);
   };
-  return { ...c, fetch, robot, speak };
+  return { ...c, fetch, robot, speak, logged };
 }
 
 const states = (/** @type {any[]} */ sent) => sent.filter((m) => m.type === 'state').map((m) => m.state);
@@ -78,14 +81,6 @@ test('one utterance becomes a bounded move and a spoken reply', async () => {
   r.robot.stop();
 });
 
-test('motors going away mid-session stops the car', async () => {
-  const r = rig();
-  await until(() => states(r.sent).includes('LISTENING'));
-  r.message({ type: 'motors', connected: false });
-  assert.ok(r.sent.some((m) => m.type === 'stop'));
-  r.robot.stop();
-});
-
 test('the body leaving mid-turn cancels the turn and nothing moves afterwards', async () => {
   const r = rig({ llmHangs: true });
   await r.speak();
@@ -96,4 +91,25 @@ test('the body leaving mid-turn cancels the turn and nothing moves afterwards', 
   assert.equal(llm?.signal?.aborted, true);
   await new Promise((res) => setTimeout(res, 200));
   assert.ok(!r.sent.some((m) => m.type === 'move'));
+});
+
+test('dry-run: the move is written down and never reaches the body', async () => {
+  const r = rig({}, 'dry-run');
+  await r.speak();
+  await until(() => r.logged.some((l) => l.startsWith('dry-run: move')));
+  assert.ok(r.logged.includes('dry-run: move forward/straight 600ms'));
+  await until(() => states(r.sent).includes('SPEAKING'));
+  assert.ok(!r.sent.some((m) => m.type === 'move'));
+  r.robot.stop();
+});
+
+test('none: nothing reaches the body, and the LLM was not offered moving', async () => {
+  const r = rig({}, 'none');
+  await r.speak();
+  await until(() => r.fetch.calls.some((c) => c.url.endsWith('/audio/speech')));
+  const llm = r.fetch.calls.find((c) => c.url.endsWith('/chat/completions'));
+  assert.ok(!llm?.body.tools.some((/** @type {any} */ t) => t.function.name === 'move'));
+  assert.ok(!r.sent.some((m) => m.type === 'move'));
+  assert.ok(!r.logged.some((l) => l.startsWith('dry-run')));
+  r.robot.stop();
 });

@@ -11,6 +11,7 @@ import { OpenAiCompatStt } from '../core/providers/stt-openai-compat.js';
 import { OpenAiCompatLlm } from '../core/providers/llm-openai-compat.js';
 import { RemotePipeline } from './body/pipeline.js';
 import { RemoteExecutor } from './body/executor.js';
+import { DryRunExecutor, NoMotionExecutor } from './body/still.js';
 import { Mouth } from './body/mouth.js';
 import { PcmTts } from './providers/tts-pcm.js';
 
@@ -44,7 +45,7 @@ export function startRobot(conn, deps) {
   const net = deps.fetch ? { fetch: deps.fetch } : {};
 
   const pipeline = new RemotePipeline();
-  const executor = new RemoteExecutor((msg) => conn.send(msg), { connected: conn.caps.motors === true });
+  const executor = makeExecutor(config.body.motion, conn, log);
   const mouth = new Mouth({
     sendAudio: (bytes) => conn.sendAudio(bytes),
     send: (msg) => conn.send(msg),
@@ -85,12 +86,6 @@ export function startRobot(conn, deps) {
   }));
 
   conn.onAudio((bytes) => pipeline.feed(bytes));
-  conn.onMessage((msg) => {
-    if (msg.type !== 'motors') return;
-    executor.connected = msg.connected;
-    // The phone's USB fault path did the same: brake, then tidy (app.js).
-    if (!msg.connected) session.onEmergencyStop();
-  });
 
   // Session only reports changes, and SLEEPING is where it starts.
   conn.send({ type: 'state', state: session.state });
@@ -107,4 +102,17 @@ export function startRobot(conn, deps) {
       pipeline.clear();
     },
   };
+}
+
+/**
+ * Body motion spec §3. The body is never told which: a dry-run is a car that
+ * never receives an order, and a still one is a car with nothing to receive.
+ * @param {import('../core/config.js').Motion} motion
+ * @param {import('./link.js').BodyConn} conn
+ * @param {(line: string) => void} log
+ */
+function makeExecutor(motion, conn, log) {
+  if (motion === 'dry-run') return new DryRunExecutor(log);
+  if (motion === 'none') return new NoMotionExecutor();
+  return new RemoteExecutor((msg) => conn.send(msg));
 }
