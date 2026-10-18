@@ -1,0 +1,191 @@
+"""Hand-written phrase bank for build.py.
+
+`pass` is the biggest class on purpose: taking ordinary talk for a command (the
+robot lurches off) is worse than missing a command (the LLM still catches it).
+The hard negatives are the point of it: questions about moving, negations,
+stories, idioms that contain "stop" / "left" / "right" / "back", commands meant
+for someone else, and moves too complex or too exact for a fixed action.
+"""
+
+STANDALONE = {
+    "stop": [
+        "Stop.", "Stop!", "Stop right there.", "Stop moving.", "Hold on, stop.",
+        "Freeze!", "Halt.", "Whoa, whoa, stop.", "Don't move.", "Stay put.",
+        "Stay right there.", "Hold it.", "That's far enough.", "Okay that's enough, stop.",
+        "Brake!", "Hit the brakes.", "Quit moving.", "Stop stop stop.", "Wait, stop.",
+        "Stand still.", "Enough, stop there.", "Pause.", "Hold up.",
+        "Stop, you're going to hit the wall.", "No no no, stop!", "Park it right there.",
+        "Stay.", "Easy, stop now.", "Okay, you can stop now.", "Please stop.",
+        "Stop driving.", "Hey, stop!", "Don't go any further.", "That's good, stop there.",
+        "Stop, careful!", "Kill the motors.", "Stop where you are.", "Hold your position.",
+        "Whoa there.", "Don't move an inch.", "Stop the wheels.", "Freeze right there.",
+    ],
+    "forward": [
+        "Go forward.", "Move forward.", "Come forward a bit.", "Go ahead a little.",
+        "Move up a little.", "Forward.", "Scoot forward.", "Inch forward.",
+        "A bit forward please.", "Come here.", "Come closer.", "Come over here.",
+        "Roll forward a little.", "Drive forward.", "Go straight.", "Go straight ahead a bit.",
+        "Move ahead.", "Step forward.", "Nudge forward.", "Come to me.", "Get closer.",
+        "Advance a bit.", "Go a little further.", "A little more forward.",
+        "Take a step forward.", "Move forward a tiny bit.", "Come on, come here.",
+        "Go forwards.", "Little bit closer.", "Roll up a bit.", "Creep forward.",
+    ],
+    "backward": [
+        "Back up.", "Go back.", "Move back.", "Back off a little.", "Reverse.",
+        "Back up a bit.", "Go backwards.", "Move backward.", "Get back.", "Scoot back.",
+        "Back it up.", "Roll back a little.", "Reverse a bit.", "Give me some space.",
+        "Too close, back up.", "Step back.", "Move away from me a little.", "Retreat!",
+        "Back away.", "Go back a little.", "Drive backwards.",
+        "You're too close, move back.", "Back up please.", "Inch back.", "Pull back a bit.",
+        "Reverse slowly.", "Go in reverse.", "Move back a tiny bit.",
+    ],
+    "left": [
+        "Turn left.", "Go left.", "Left.", "Turn to the left.", "Hang a left.",
+        "Veer left.", "Steer left.", "Go to the left a bit.", "Bear left.", "Take a left.",
+        "Make a left turn.", "Head left.", "Swing left.", "Turn left a little.",
+        "Left please.", "Move to your left.", "Curve left.", "Go left a bit.",
+        "Left turn.", "Turn a bit to the left.", "Slight left.", "Hook left.",
+        "Lean left.", "A little to the left.",
+    ],
+    "right": [
+        "Turn right.", "Go right.", "Right.", "Turn to the right.", "Hang a right.",
+        "Veer right.", "Steer right.", "Go to the right a bit.", "Bear right.", "Take a right.",
+        "Make a right turn.", "Head right.", "Swing right.", "Turn right a little.",
+        "Right please.", "Move to your right.", "Curve right.", "Go right a bit.",
+        "Right turn.", "Turn a bit to the right.", "Slight right.", "Hook right.",
+        "Lean right.", "A little to the right.",
+    ],
+    "keep_going": [
+        "Keep going.", "Keep going forward.", "Keep driving.", "Just keep going.",
+        "Go go go!", "Don't stop.", "Keep moving.", "Carry on.", "Keep rolling.",
+        "Drive until I say stop.", "Go straight until I tell you.", "Keep heading forward.",
+        "Full speed ahead!", "Off you go, keep going.", "Go forward and don't stop.",
+        "Continue forward.", "Keep it going.", "Go on, keep going.",
+        "Drive forward until I say stop.", "Keep on going.", "Onward!",
+        "Just go straight and keep going.", "Keep driving straight.", "Don't stop, keep rolling.",
+    ],
+    "pass": [
+        # Questions about moving.
+        "Can you go forward?", "Can you turn left?", "Do you know how to go backwards?",
+        "How fast can you go?", "Why did you stop?", "Did you just turn left?",
+        "What happens if you keep going?", "Can you stop by yourself?",
+        "Which way is left for you?", "Is it hard to back up?", "Are you able to turn right?",
+        "Do you ever get tired of driving?",
+        # Negations and warnings.
+        "Don't go forward yet.", "Don't turn left.", "Never go near the stairs.",
+        "Don't you dare back up into the plant.",
+        # Stories, past tense.
+        "I turned left at the light today.", "My car stopped on the highway.",
+        "I had to back up out of the parking spot.", "The bus kept going without me.",
+        "She told me to go straight home.", "Yesterday you went backwards into the table.",
+        "We drove forward for hours on the trip.",
+        # Idioms that contain move words.
+        "Stop being so cute.", "I can't stop laughing.", "Let's move forward with dinner.",
+        "Turn the TV on.", "Turn off the lights.", "You're right.", "Right, that makes sense.",
+        "I left my phone in the kitchen.", "Go ahead and tell me a joke.",
+        "Keep going with the story.", "Back to what I was saying.", "I'll be right back.",
+        "Right now I'm busy.", "Don't stop the music.", "Keep it down.", "Turn it up.",
+        "Is that right?", "All right.", "Alright then.", "Straight up, that's crazy.",
+        "Forward this email to Mom.", "I need to stop by the store later.",
+        "The bus stop is near here.", "Turn the page.", "Go on.", "Keep talking.",
+        "Hold on a second, I'm on the phone.", "Left or right?", "Right?",
+        "Leave me alone.", "Go to sleep.", "Get back to work, everyone.",
+        # Meant for someone else.
+        "Make a left at the bakery and you'll see it.",
+        "Honey, turn left at the next light.", "Mom, stop!",
+        "Max, stop, that's my sandwich!", "Back off, Jake, it's mine.",
+        "Kids, come here for dinner.",
+        # Too complex or too exact for a fixed action.
+        "Turn around.", "Spin in a circle.", "Do a little dance.", "Go to the kitchen.",
+        "Find the cat.", "Follow me.", "Go forward three meters.",
+        "Drive for five seconds then stop.", "Turn left then go straight.",
+        "Back up and then turn right.", "Zigzag across the room.", "Drive in a figure eight.",
+        "Go back to your corner.", "Go around the chair.", "Chase the ball.",
+        "Back up slowly and then turn left.", "Go forward ten seconds.",
+        # Chat.
+        "What's your name?", "How are you today?", "Tell me a story.",
+        "What's the weather like?", "I'm hungry.", "Good morning!", "You're so funny.",
+        "Thank you.", "Okay.", "Yes.", "No.", "Hmm.", "Haha.", "Really?",
+        "What did you say?", "Say that again.", "Speak Chinese from now on.",
+        "Can you bark?", "Woof woof!", "Who made you?", "I love you.", "Good boy.",
+        "Bad robot.", "What time is it?", "Let me think.", "Wait, what?",
+        "I'm going to make some tea.", "Do you like music?", "You look tired.",
+        "Guess what happened today.", "That's so cool.", "Never mind.",
+    ],
+}
+
+# (robot said, person said, label): replies whose meaning comes from the robot's line.
+CONTEXT = [
+    ("Should I stop here?", "Yes.", "stop"),
+    ("Want me to stop?", "Yeah please.", "stop"),
+    ("Should I keep going?", "No.", "stop"),
+    ("Should I keep going?", "Yes.", "keep_going"),
+    ("Should I keep going?", "Yep, keep going.", "keep_going"),
+    ("Should I keep going straight?", "Yes, don't stop.", "keep_going"),
+    ("I'm driving!", "Keep going.", "keep_going"),
+    ("Which way should I go?", "Left.", "left"),
+    ("Which way should I go?", "Right.", "right"),
+    ("Left or right?", "Left.", "left"),
+    ("Should I turn left or right?", "The right.", "right"),
+    ("Should I go left?", "Yes.", "left"),
+    ("Should I go left?", "No, right.", "right"),
+    ("Should I go right?", "No, left.", "left"),
+    ("Should I turn right?", "Yeah.", "right"),
+    ("Where should I go?", "Forward.", "forward"),
+    ("Where to?", "Straight ahead.", "forward"),
+    ("Want me to come closer?", "Sure.", "forward"),
+    ("Should I come over?", "Come here.", "forward"),
+    ("Should I go forward?", "Yes.", "forward"),
+    ("Should I back up?", "Yes.", "backward"),
+    ("Am I too close?", "Yeah, back up.", "backward"),
+    ("I'm moving forward now.", "Stop.", "stop"),
+    ("Wheee, I'm going fast!", "Okay stop now.", "stop"),
+    ("I'm going to back up.", "No, stop!", "stop"),
+    # Same words, but the robot's line makes them chat.
+    ("Am I too close?", "No, you're fine.", "pass"),
+    ("Should I back up?", "No.", "pass"),
+    ("Should I go forward?", "Not yet.", "pass"),
+    ("Do you want me to come closer?", "No thanks.", "pass"),
+    ("Do you like the left side or the right side of the room?", "Left.", "pass"),
+    ("Which hand is the treat in?", "The right one.", "pass"),
+    ("Is this right?", "Right.", "pass"),
+    ("Did you have fun?", "Yes.", "pass"),
+    ("Do you want to hear a joke?", "Sure.", "pass"),
+    ("Are you still there?", "Yes.", "pass"),
+    ("Should I stop telling the story?", "Yes.", "pass"),
+    ("Should I keep going with the story?", "Yes, keep going.", "pass"),
+    ("Want me to go on?", "Go on.", "pass"),
+    ("Should I turn the volume down?", "Yes.", "pass"),
+    ("Left or right, which do you prefer?", "Right.", "pass"),
+    ("Who's a good robot?", "You are.", "pass"),
+    ("Can I say something?", "Go ahead.", "pass"),
+    ("Should I stop barking?", "Yes, stop.", "pass"),
+    ("Do you want me to sing?", "No, stop.", "pass"),
+]
+
+# Lines after which a standalone phrase means just what it says. At run time
+# buildState() puts the robot's last line before almost every transcript, and
+# that line is usually about something else, so these are long and short,
+# jokes, answers, moods, and some that mention moving or say "stop" / "left"
+# without asking anything. None asks a yes/no or either/or question: after
+# "Should I go left?" a bare "Yes." would no longer be a standalone phrase.
+NEUTRAL_ROBOT_LINES = [
+    "Hi there!", "What should we do now?", "I'm ready.", "That was fun!",
+    "I'm listening.", "Hmm, what's next?", "Okay!", "I'm bored.",
+    "Why did the robot cross the road? Because it was programmed to!",
+    "My name is Bolt, nice to meet you.", "I don't know what time it is, sorry.",
+    "It's sunny outside, I think. I can't see the sky from down here.",
+    "Hmm, that's a tough one. Let me think about it.", "Haha, that tickles!",
+    "I'm a little sleepy today.", "Woof! Just kidding, I'm a robot.",
+    "You're my favorite human.", "I can't stop thinking about cookies!",
+    "I left my good mood somewhere this morning.", "That's right, two plus two is four.",
+    "I went forward earlier and bumped into the sofa. Ouch.",
+    "I'm not moving, I'm just resting my wheels.", "Braked, and waiting.",
+    "I like music with a good beat.", "Grr. I'm annoyed with you.",
+    "Once upon a time there was a tiny robot who wanted to see the sea.",
+    "Okay, I'll speak English from now on.", "The cat looked at me again.",
+    "I'm curious about everything in this room.", "Hello again!",
+    "That's a funny story about your sister.", "I'm here.", "Done!",
+    "I'll remember that.", "Sorry, I didn't catch that.",
+    "You sound happy today.", "Beep boop. Just joking.",
+]
