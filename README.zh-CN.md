@@ -12,6 +12,8 @@
 
 *孩子：问题很多。机器人：脾气不小。* — [看带声音的短视频](https://youtube.com/shorts/3Y984t1W6nc)
 
+**📖 完整的改造故事：[我把一台 30 块钱的玩具机器人，改成了会顶嘴的 AI 机器人](https://agentlenshq.com/zh-CN/maker/four-dollar-robot)**
+
 <table>
   <tr>
     <td align="center"><img src="docs/media/before.jpg" height="320" alt="买来时的样子：盒装的 Silverlit Maze Breaker"></td>
