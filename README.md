@@ -1,6 +1,9 @@
 # bot-reborn
 
-**Turn a $4 toy robot into an AI robot, with an old phone as its brain.**
+English | [中文](README.zh-CN.md)
+
+**Turn a $4 toy robot into an AI robot, with an old phone as its body and your
+computer as its brain.**
 
 [![The robot keeping a child company while the real dog eats](docs/media/demo.gif)](https://youtube.com/shorts/SNA9ok1j0Sg)
 
@@ -25,11 +28,18 @@
 
 - **You talk, it drives and answers.** "Go forward two seconds, then turn
   left".
-- **Bark at it and it barks back.** A bark is caught before any chat model is
-  asked, and it answers from a fixed routine: bark, then bark and turn tail,
-  then whimper and retreat. Optional.
-- **It listens while its screen is on.** No wake word needed. Say the stop word
-  or hit the stop button and the car stops, whatever it was doing.
+- **Reflexes, before the chat model thinks.** Optionally, a small decision
+  model hears each line first and picks one of a few answers you wrote; each
+  answer does what you set it to — play a sound, move, stop — or hands the
+  turn to the chat model. Two presets come with it: *bark* (bark at it and it
+  barks back) and *simple commands* ("stop", "come here", "turn left" act at
+  once). Both are just data you can edit on the admin page.
+- **It listens while its screen is on.** No wake word needed, though you can
+  turn one on. Say the stop word or hit the stop button and the car stops,
+  whatever it was doing.
+- **Several characters, one brain.** Each robot is a character with its own
+  name, voice, providers and keys, all set up from an admin page in your
+  browser, in English or Chinese.
 
 ## What you need
 
@@ -41,8 +51,16 @@
 - **An Android phone with Chrome.** The phone talks to the board over WebUSB,
   which iPhones do not have. Plus a USB-C cable to the board.
 - **API keys** for speech-to-text, a chat model and text-to-speech. Any
-  OpenAI-compatible provider works.
+  OpenAI-compatible provider works; the admin page has presets for common ones.
+- **For reflexes (optional):** a decision model — JEV, or one trained with
+  [Unsloth](https://github.com/unslothai/unsloth) and served at
+  `/v1/systemone`. The simple-commands preset asks exactly the question of the
+  model trained on [`training/commands/`](training/commands/).
 - A soldering iron, some wire, cardboard and rubber bands.
+
+No car yet? Set a character's body to **Dry run** and the moves are only
+written to the brain's log, or to **Cannot move** for a robot that just talks. The
+phone then needs no board at all.
 
 ## How it works
 
@@ -68,8 +86,12 @@ small Node server on a computer on the same Wi-Fi, the robot's brain.
    npm start
    ```
 
-   The admin page opens in your browser. Make a character and give it your
-   keys; the page tests each one as you type it.
+   The admin page opens in your browser. Make a character, pick what body it
+   has, and give each layer (ears, mind, voice, and optionally reflex) a
+   provider and key; the page tests each one as you type it, and a second
+   character can copy providers, keys included, from the first.
+
+   ![The admin page: a character's basic settings and the QR code a phone scans to become its body](docs/media/admin.png)
 3. **Let Chrome on the phone use USB and the microphone on that page**, once
    per phone: open `chrome://flags/#unsafely-treat-insecure-origin-as-secure`,
    add the address the admin page shows (`http://<computer>:8787`), set it to
@@ -79,7 +101,7 @@ small Node server on a computer on the same Wi-Fi, the robot's brain.
 4. **Scan the character's QR code** on the admin page with the phone, plug the
    board in, and press Listen. The robot shows what it is still missing, and
    each missing part is a step: plugging in the board, and teaching it which
-   way is left.
+   way is left. A phone with no board plugged in still listens and talks.
 
 Your keys stay on the computer, in a file under `~/.bot-reborn/` that only your
 user can read, and are sent only to the providers you chose. The phone never
@@ -89,8 +111,9 @@ sees them: it holds a token that says which character it is. See
 ## Status
 
 It works end to end on one robot and one phone. Some hardware numbers are
-still unmeasured, and the barking routine's timings are first guesses that
-still need tuning on the car.
+still unmeasured. The configurable reflexes and the simple-commands model are
+new and not yet tried with a real voice on the car, so their 0.8 firing
+threshold is a first guess.
 
 ## More
 
@@ -101,8 +124,10 @@ still need tuning on the car.
   the gear
 - [`docs/ui.md`](docs/ui.md) — the robot's face and what each state means
 - [`docs/promo-video.md`](docs/promo-video.md) — what making the video taught us
+- [`training/commands/`](training/commands/) — the simple-commands dataset,
+  its builder and model card
 
 ## License
 
-[MIT](LICENSE). The sounds in `web/sounds/` are CC0 — see their
-[credits](web/sounds/CREDITS.md).
+[MIT](LICENSE). The sounds in `server/sounds/` are CC0 — see their
+[credits](server/sounds/CREDITS.md).

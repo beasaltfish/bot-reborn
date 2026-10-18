@@ -78,18 +78,18 @@ drive bit and one steer bit, never two of either.
 ## Calibration results (spec §12)
 
 These are measurements, not decisions. Fill them in from the bench page
-(`web/dev.html`) and update the constants they feed. **Blank = not measured
+(`phone/dev.html`) and update the constants they feed. **Blank = not measured
 yet**; do not treat a blank row as "fine".
 
 | # | What | Measured | Feeds |
 |---|---|---|---|
 | ① | Which steer byte is left: `0x40` or `0x80` | | `calibration.steerSwapped`, measured in the app — the robot's wheels, or Settings → Teach it directions |
 | ①b | Which drive byte is forward: `0x10` or `0x20` | | `calibration.driveSwapped`, same sheet, **asked first**: ① is judged by watching a car that is driving forwards, so on a car wired backwards the turn would be watched in reverse and ① recorded the wrong way round |
-| ② | Bitbang byte rate at 1200 baud | **5:1 — five bytes per baud tick, 6000 bytes/s at 1200 baud** (2026-09-21, timed off the chip's own pin read-back over three byte counts and three bauds). The 1:1 that stood before it was a stopwatch on a 0.5 s run. See the note below | `DEFAULT_BYTES_PER_MS` in `web/ftdi.js`, now 6.0 |
+| ② | Bitbang byte rate at 1200 baud | **5:1 — five bytes per baud tick, 6000 bytes/s at 1200 baud** (2026-09-21, timed off the chip's own pin read-back over three byte counts and three bauds). The 1:1 that stood before it was a stopwatch on a 0.5 s run. See the note below | `DEFAULT_BYTES_PER_MS` in `phone/ftdi.js`, now 6.0 |
 | ②b | Road speed in m/s, to check spec §4.3's `MAX_COAST_MS ≈ 1.5 m` | Not measured, and no longer measured by ② — see docs/instruments.md § ② | Wants its own procedure: a measured distance on the floor, crossed at speed |
 | ③ | Pull-down resistors on U3/U5 inputs? (power off, measure input-to-GND: tens of kΩ = yes, open = no) | | Spec §4.7's gap. No pull-downs → solder 2 × 10 kΩ to GND, or layer 0 does not hold when USB is unplugged |
 | ④ | Board VCC and U3 logic threshold (5 V logic needs ≥ 0.7 × VCC = 3.5 V; the FT232H drives 3.3 V) | | Whether a level shifter is needed at all |
-| ⑧ | Shortest pulse that reliably starts the motor (from 100 ms, +50 ms, 10 tries each) | **Not measured.** Every pulse ⑧ fired before 2026-09-21 was a fifth of its label, because ② was wrong by 5×, so there is nothing to carry over. The card now keeps the tally and names the answer | `MIN_DURATION_MS` in `web/executor.js`, a guess of 300 until this is run |
+| ⑧ | Shortest pulse that reliably starts the motor (from 100 ms, +50 ms, 10 tries each) | **Not measured.** Every pulse ⑧ fired before 2026-09-21 was a fifth of its label, because ② was wrong by 5×, so there is nothing to carry over. The card now keeps the tally and names the answer | `MIN_DURATION_MS` in `phone/executor.js`, a guess of 300 until this is run |
 
 ## ② the byte rate, and why its target band is stale (measured 2026-09-20)
 
@@ -329,8 +329,9 @@ to be reloaded before it can try again. This corrects an earlier guess that a
 wrong spelling would fail silently: it fails loudly and takes the runtime with
 it. Since the wake word is still being chosen by typing into a box, the box has
 to be validated in JS against `tokens.txt` *before* `createKws()` sees it —
-which is why `tokens.txt` is copied into `web/models/kws/` alongside the four
-runtime files even though the `.data` already contains it.
+which is why `tokens.txt` was copied into `web/models/kws/` alongside the four
+runtime files even though the `.data` already contains it. (Since 2026-10-15
+the engines run on the brain, and `tokens.txt` sits in `server/models/`.)
 
 `modelingUnit` does not enter into this. `EncodeKeywords()` takes only the
 symbol table; the upstream default `'cjkchar'` is irrelevant to keyword lines.
@@ -412,7 +413,7 @@ Dev-Mac cost, both engines in one module, 100 ms frames of silence:
 
 VAD is ~18% of KWS's cost. Scaling from the phone's measured 8.55 ms for KWS,
 the pair should land near **10 ms per frame — about 10% of one core.** To be
-confirmed by `web/spike/audio/`.
+confirmed by the audio spike (`web/spike/audio/`, since deleted).
 
 ### Two knobs left for later
 
@@ -429,8 +430,8 @@ confirmed by `web/spike/audio/`.
 > **The freeze half of this run is void — see "The freeze result was an
 > artifact" below. The CPU, download and keyword findings stand.**
 
-Page: `web/spike/kws/index.html` (a probe, not product code; kept in the repo
-and deployed with the rest of `web/`). It holds the mic open under spec §5.1's exact constraints, feeds
+Page: `web/spike/kws/index.html` (a probe, not product code; deleted since —
+it is in git history). It holds the mic open under spec §5.1's exact constraints, feeds
 100 ms frames to a resident spotter, takes a screen Wake Lock and re-takes it on
 every `visibilitychange`, and writes its counters to `localStorage` every 2 s so
 they survive the tab being killed.
@@ -628,7 +629,8 @@ Both are now the spike's defaults.
 
 ## The audio spike: barge-in, VAD and transcription (2026-09-14)
 
-Page: `web/spike/audio/index.html` (a probe, kept). One `getUserMedia` feeding KWS
+Page: `web/spike/audio/index.html` (a probe, deleted since — it is in git
+history). One `getUserMedia` feeding KWS
 and VAD from the same wasm module, VAD segments going to STT, transcripts read
 back by TTS. It was built to answer five questions; this run answered three.
 
@@ -875,7 +877,8 @@ of *car*, not of phone, and are measured on `dev.html`.
 
 What does **not** expire, because it is a fact about the code or the build
 rather than about the device: that the VAD and KWS can share one wasm module
-(the binary is vendored in `web/models/`), that keywords are spelled in ARPAbet
+(the binary was vendored in `web/models/` until the engines moved to the
+brain), that keywords are spelled in ARPAbet
 and toned pinyin rather than BPE, and that an unknown token aborts the module
 via `SHERPA_ONNX_EXIT(-1)` instead of failing quietly.
 

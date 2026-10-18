@@ -36,7 +36,7 @@ both directions, including that the Chinese arm still *has* Chinese in it.
 
 ## Pin bench
 
-The bring-up panel for ① ② ⑧. It stands in for `web/app.js`, whose model (D4/D5,
+The bring-up panel for ① ② ⑧. It stands in for `phone/app.js`, whose model (D4/D5,
 one byte at a time) cannot express "write 3000 bytes and then start a
 stopwatch": here `Ftdi.buildStream()` hands the whole buffer over in one go.
 
@@ -56,7 +56,7 @@ Each button holds its pins high for 600 ms. Watch which way the wheels turn and
 write the answer into `docs/hardware.md`.
 
 **The in-app calibration asks a different question and both are kept.** The
-robot's own "teach it directions" (`web/calibrate.js`) runs an Executor
+robot's own "teach it directions" (`phone/calibrate.js`) runs an Executor
 *without* calibration applied, because calibrating through the setting being
 calibrated measures itself. The bench's six buttons are lower than that: they
 address pins directly, with no Executor in the path at all, which is what you
@@ -155,7 +155,7 @@ Somebody else's accent cannot find your problem. Say each line as written, then
 **listen back before trusting it** — a clip where the sentence got cut off still
 transcribes into something plausible, and the test will pass on it.
 
-Which three they are depends on the language (`web/fixtures/README.md` has both
+Which three they are depends on the language (`core/fixtures/README.md` has both
 sets). In Chinese one of them mixes both languages inside a single sentence,
 because that is the hardest input this robot actually receives. In English there
 is no mixed clip: §9.3's "test the hardest case" is a claim about the input this
@@ -172,7 +172,7 @@ from.
 The permanent instrument for every audio-side calibration §12 still wants.
 ⑤ ⑥ ⑩ were each answered on one phone and every one of those answers expires
 when the phone changes, so the apparatus stays. Every engine on the page is the
-product's own module: the numbers are only worth taking back to `web/audio/` if
+product's own module: the numbers are only worth taking back to `core/audio/` if
 they were measured on the code that runs there.
 
 > **Measuring anything about the background or the battery means no adb, no cable

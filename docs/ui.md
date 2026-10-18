@@ -1,11 +1,11 @@
 # The screen
 
 What the product page shows, and why each part of it is that shape. The
-authority for behaviour is `web/robot.js` and `web/ui.js`; this file exists so
+authority for behaviour is `phone/robot.js` and `phone/ui.js`; this file exists so
 that a reader can see the design without running it.
 
-Everything here is the main page, `web/index.html`. The bench pages
-(`bench.html`, `audio-bench.html`) are instruments and are deliberately plain.
+Everything here is the main page, `phone/index.html`. The bench page
+(`phone/dev.html`) is an instrument and is deliberately plain.
 
 ---
 

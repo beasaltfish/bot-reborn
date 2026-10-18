@@ -42,9 +42,11 @@ never import each other.
 4. **`core/audio/session.js`** — the state machine, and the only file allowed
    to make a decision. Start at `wantedSubscriptions()`, which is spec §5.3's
    table written as a table.
-5. **`core/reflex.js` + `core/ladder.js`** — the shortcut in front of the LLM.
-   Every way the judge can fail ends in "ask the LLM as usual"; the ladder is a
-   table, not a model, so the same bark gets the same answer every time.
+5. **`core/reflex.js` + `core/reflex-presets.js`** — the shortcut in front of
+   the LLM. The question and what each answer does are the character's data,
+   not code; the presets are only starting points. Every way the judge can fail
+   ends in "ask the LLM as usual", and a fired answer's actions go through the
+   same validator and the same body limits as the LLM's.
 6. **`server/robot.js` and `phone/app.js`** — how each side is wired together.
    Every decision in them was made somewhere else.
 
