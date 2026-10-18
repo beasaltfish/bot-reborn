@@ -118,9 +118,34 @@ function readJson(req) {
   });
 }
 
-/** IPv4 addresses on this machine's network interfaces, loopback excluded. */
+// Interfaces a phone on the same Wi-Fi can never reach: macOS's bridges
+// (Internet Sharing, VMs), VPN and proxy tunnels, and the virtual ones Linux
+// and containers add. Matched by name, because their addresses look ordinary.
+const VIRTUAL_IFACE = /^(bridge|utun|tun|tap|awdl|llw|anpi|ap|vnic|vmnet|vboxnet|docker|veth|virbr|tailscale|zt|lo)/;
+
+/**
+ * Only the private ranges a home or office Wi-Fi hands out. 198.18.0.0/15
+ * (proxy fake-IP tools) and 100.64.0.0/10 (tailnets) fall outside them.
+ * @param {string} a dotted IPv4
+ */
+function isPrivateIPv4(a) {
+  const [x, y] = a.split('.').map(Number);
+  return x === 10 || (x === 172 && y >= 16 && y <= 31) || (x === 192 && y === 168);
+}
+
+/**
+ * The addresses a phone could reach this machine on, in interface order.
+ * @param {Record<string, Array<{ family: string | number, internal: boolean, address: string }> | undefined>} ifaces
+ *   what os.networkInterfaces() returns
+ * @returns {string[]}
+ */
+export function lanAddressesFrom(ifaces) {
+  return Object.entries(ifaces).flatMap(([name, list]) => (VIRTUAL_IFACE.test(name) ? [] : (list ?? [])
+    .filter((i) => (i.family === 'IPv4' || i.family === 4) && !i.internal && isPrivateIPv4(i.address))
+    .map((i) => i.address)));
+}
+
+/** IPv4 addresses on this machine's network interfaces a phone could use. */
 export function lanAddresses() {
-  return Object.values(networkInterfaces()).flat()
-    .filter((i) => i && i.family === 'IPv4' && !i.internal)
-    .map((i) => /** @type {import('node:os').NetworkInterfaceInfo} */ (i).address);
+  return lanAddressesFrom(networkInterfaces());
 }
