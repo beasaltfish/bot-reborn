@@ -36,6 +36,10 @@
  */
 
 /**
+ * `region` is set only on a provider that runs two sites, mainland China and
+ * global, whose keys refuse each other. Each site is its own row, because
+ * rows are told apart by address; the label says which site it is.
+ *
  * `voices` is keyed by model id, not held once per provider, because on some
  * providers the voice name contains the model name: SiliconFlow's speakers are
  * spelled `<model>:<speaker>`, so changing the model invalidates every voice
@@ -49,6 +53,7 @@
  *   openModels?: boolean,
  *   voices?: Record<string, string[]>,
  *   body?: Record<string, unknown>,
+ *   region?: 'cn' | 'global',
  * }} Preset
  */
 
@@ -59,12 +64,59 @@ const SPEAKERS = ['alex', 'anna', 'bella', 'benjamin', 'charles', 'claire', 'dav
 const prefixed = (model) => SPEAKERS.map((s) => `${model}:${s}`);
 
 const SILICONFLOW = 'https://api.siliconflow.com/v1';
+const SILICONFLOW_CN = 'https://api.siliconflow.cn/v1';
+
+/**
+ * Mainland addresses of the providers that run a second site, by the id of
+ * the global row: its own address and its own keys, and otherwise the global
+ * row's catalogue unless a layer says different.
+ * @type {Record<string, { baseURL: string, layers?: Partial<Record<LayerName, Partial<Preset>>> }>}
+ */
+const MAINLAND = {
+  siliconflow: {
+    baseURL: SILICONFLOW_CN,
+    layers: {
+      // The .cn catalogue is its own, and a lot fresher. Each of these was
+      // checked against its /models list and answered a tool call, 2026-10-17.
+      // Off, thinking roughly halves the wait for the first word; GLM ignores
+      // the flag and stays quick either way.
+      llm: {
+        models: [
+          'deepseek-ai/DeepSeek-V4-Flash',
+          'Qwen/Qwen3.6-35B-A3B',
+          'zai-org/GLM-5.3-Flash',
+          'Pro/moonshotai/Kimi-K2.6',
+        ],
+        body: { enable_thinking: false },
+      },
+    },
+  },
+  moonshot: { baseURL: 'https://api.moonshot.cn/v1' },
+  dashscope: { baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
+  zhipu: { baseURL: 'https://open.bigmodel.cn/api/paas/v4' },
+};
+
+/**
+ * Puts each mainland row right under its global twin, so the dropdown shows
+ * the pair together.
+ * @param {Record<LayerName, Preset[]>} presets
+ * @returns {Record<LayerName, Preset[]>}
+ */
+function withMainland(presets) {
+  return /** @type {Record<LayerName, Preset[]>} */ (Object.fromEntries(
+    Object.entries(presets).map(([layer, list]) => [layer, list.flatMap((p) => {
+      const site = MAINLAND[p.id];
+      if (!site) return [p];
+      const own = site.layers?.[/** @type {LayerName} */ (layer)];
+      return [p, { ...p, ...own, id: `${p.id}-cn`, baseURL: site.baseURL, region: /** @type {const} */ ('cn') }];
+    })])));
+}
 
 /** The id every layer falls back to: nothing filled in, every field typed. */
 export const CUSTOM = 'custom';
 
 /** @type {Record<LayerName, Preset[]>} */
-export const PRESETS = {
+export const PRESETS = withMainland({
   stt: [
     {
       id: 'groq',
@@ -86,6 +138,7 @@ export const PRESETS = {
       label: 'SiliconFlow',
       baseURL: SILICONFLOW,
       models: ['FunAudioLLM/SenseVoiceSmall'],
+      region: 'global',
     },
     {
       // Audio lives on its own host here, not on the inference endpoint the
@@ -147,13 +200,12 @@ export const PRESETS = {
       label: 'SiliconFlow',
       baseURL: SILICONFLOW,
       models: ['deepseek-ai/DeepSeek-V3'],
+      region: 'global',
     },
     {
-      // Kimi, on the global platform. Moonshot runs two — api.moonshot.ai and
+      // Kimi. Moonshot runs two platforms — api.moonshot.ai and
       // api.moonshot.cn — and a key from one is refused by the other, exactly
-      // like SiliconFlow's pair. This is the .ai one, to match the SiliconFlow
-      // row beside it; somebody on the mainland platform changes one letter
-      // under "Other".
+      // like SiliconFlow's pair; the mainland one is its own row.
       //
       // NOT moonshot-v1-*: that whole series was retired on 2026-08-31 and now
       // answers 404, which on this sheet reads as a broken key.
@@ -161,12 +213,16 @@ export const PRESETS = {
       label: 'Moonshot (Kimi)',
       baseURL: 'https://api.moonshot.ai/v1',
       models: ['kimi-k3', 'kimi-k2.6'],
+      region: 'global',
     },
     {
+      // Z.ai is Zhipu's global platform; open.bigmodel.cn is the mainland one,
+      // with its own console and its own keys.
       id: 'zhipu',
       label: 'Zhipu (GLM)',
-      baseURL: 'https://open.bigmodel.cn/api/paas/v4',
+      baseURL: 'https://api.z.ai/api/paas/v4',
       models: ['glm-4.7-flash', 'glm-4.7'],
+      region: 'global',
     },
     {
       // Alibaba Model Studio, international endpoint. The mainland one is
@@ -176,6 +232,7 @@ export const PRESETS = {
       label: 'Alibaba (Qwen)',
       baseURL: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
       models: ['qwen-plus', 'qwen-turbo', 'qwen-max'],
+      region: 'global',
     },
     {
       // Address known, model yours to name. A dropdown exists to fill in the
@@ -228,6 +285,7 @@ export const PRESETS = {
         'fishaudio/fish-speech-1.5': prefixed('fishaudio/fish-speech-1.5'),
         'FunAudioLLM/CosyVoice2-0.5B': prefixed('FunAudioLLM/CosyVoice2-0.5B'),
       },
+      region: 'global',
     },
   ],
   reflex: [
@@ -242,7 +300,7 @@ export const PRESETS = {
       models: ['jev-1.13'],
     },
   ],
-};
+});
 
 /**
  * The voices a layer can use as it is configured right now.
@@ -305,3 +363,23 @@ export function presetBody(layer, cfg) {
 export function presetById(layer, id) {
   return PRESETS[layer].find((p) => p.id === id) ?? null;
 }
+
+/**
+ * The dropdown's order: providers alphabetical by name, a mainland row always
+ * right after its global twin, and the custom choice is added by the caller.
+ * @template {{ id: string, label: string, region?: 'cn' | 'global' }} T
+ * @param {T[]} list
+ * @returns {T[]}
+ */
+export function orderForPicker(list) {
+  /** @type {Map<string, T[]>} */ const groups = new Map();
+  for (const p of list) {
+    const key = p.id.replace(/-cn$/, '');
+    groups.set(key, [...(groups.get(key) ?? []), p]);
+  }
+  const name = (/** @type {T[]} */ g) => (g.find((p) => !p.region) ?? g[0]).label;
+  return [...groups.values()]
+    .sort((a, b) => name(a).localeCompare(name(b)))
+    .flatMap((g) => [...g].sort((a, b) => Number(a.region === 'cn') - Number(b.region === 'cn')));
+}
+

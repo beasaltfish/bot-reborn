@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { PRESETS, CUSTOM, presetIdFor, presetById, voicesFor } from '../core/provider-presets.js';
+import { PRESETS, CUSTOM, presetIdFor, presetById, presetBody, voicesFor } from '../core/provider-presets.js';
 
 test('a stored baseURL is recognised as the preset it came from', () => {
   assert.equal(presetIdFor('llm', { baseURL: 'https://api.deepseek.com' }), 'deepseek');
@@ -121,4 +121,63 @@ test('the reflex layer offers JEV on OpenRouter', () => {
   const jev = presetById('reflex', 'openrouter');
   assert.equal(jev?.baseURL, 'https://openrouter.ai/api/v1');
   assert.deepEqual(jev?.models, ['jev-1.13']);
+});
+
+test('a mainland key has its own row, recognised by the mainland address', () => {
+  // The two sites of each provider refuse each other's keys, so a mainland
+  // account on the global row fails with what reads as a bad key.
+  assert.equal(presetIdFor('stt', { baseURL: 'https://api.siliconflow.cn/v1' }), 'siliconflow-cn');
+  assert.equal(presetIdFor('llm', { baseURL: 'https://api.siliconflow.cn/v1' }), 'siliconflow-cn');
+  assert.equal(presetIdFor('tts', { baseURL: 'https://api.siliconflow.cn/v1' }), 'siliconflow-cn');
+  assert.equal(presetIdFor('llm', { baseURL: 'https://api.moonshot.cn/v1' }), 'moonshot-cn');
+  assert.equal(
+    presetIdFor('llm', { baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1' }),
+    'dashscope-cn');
+  assert.equal(presetIdFor('llm', { baseURL: 'https://open.bigmodel.cn/api/paas/v4' }), 'zhipu-cn');
+});
+
+test('a config saved on a global site still opens on the global row', () => {
+  assert.equal(presetIdFor('stt', { baseURL: 'https://api.siliconflow.com/v1' }), 'siliconflow');
+  assert.equal(presetIdFor('llm', { baseURL: 'https://api.moonshot.ai/v1' }), 'moonshot');
+  assert.equal(
+    presetIdFor('llm', { baseURL: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1' }),
+    'dashscope');
+  assert.equal(presetIdFor('llm', { baseURL: 'https://api.z.ai/api/paas/v4' }), 'zhipu');
+});
+
+test('a mainland row has a global twin and the same voices', () => {
+  // Models may differ — SiliconFlow's two sites carry different catalogues —
+  // but a voice list is per model, so a shared model keeps its voices.
+  for (const [layer, list] of Object.entries(PRESETS)) {
+    for (const cn of list.filter((p) => p.region === 'cn')) {
+      const global = presetById(/** @type {any} */ (layer), cn.id.replace(/-cn$/, ''));
+      assert.ok(global, `${layer}/${cn.id} has no global twin`);
+      assert.equal(global.region, 'global', `${layer}/${global.id} is not marked global`);
+      assert.deepEqual(cn.voices, global.voices, `${layer}/${cn.id} voices`);
+    }
+  }
+});
+
+test('SiliconFlow mainland offers current tool-calling chat models, thinking off', () => {
+  // Checked against the .cn /models list and a tool call each, 2026-10-17.
+  const cn = presetById('llm', 'siliconflow-cn');
+  assert.deepEqual(cn?.models, [
+    'deepseek-ai/DeepSeek-V4-Flash',
+    'Qwen/Qwen3.6-35B-A3B',
+    'zai-org/GLM-5.3-Flash',
+    'Pro/moonshotai/Kimi-K2.6',
+  ]);
+  assert.deepEqual(presetBody('llm', { baseURL: 'https://api.siliconflow.cn/v1' }), { enable_thinking: false });
+  // The override is the LLM row's alone.
+  assert.deepEqual(presetById('stt', 'siliconflow-cn')?.models, ['FunAudioLLM/SenseVoiceSmall']);
+  assert.deepEqual(presetBody('stt', { baseURL: 'https://api.siliconflow.cn/v1' }), {});
+});
+
+test('no two rows in a layer share an address', () => {
+  // Rows are found by address, so a shared one makes the second row
+  // unreachable: picking it would reopen as the first.
+  for (const [layer, list] of Object.entries(PRESETS)) {
+    const urls = list.map((p) => p.baseURL.replace(/\/+$/, ''));
+    assert.equal(new Set(urls).size, urls.length, `${layer} has a duplicate address`);
+  }
 });
