@@ -175,3 +175,42 @@ test('the page learns where a phone can reach this brain', async () => {
   assert.deepEqual(await r.json(), { port, addresses: ['192.168.1.5', '10.0.0.7'] });
   await server.close();
 });
+
+test('the phone addresses are the Wi-Fi ones: private, not tunnels, not bridges', async () => {
+  const { lanAddressesFrom } = await import('../../server/admin-api.js');
+  /** @param {string} address @param {boolean} [internal] */
+  const v4 = (address, internal = false) => ({ family: 'IPv4', internal, address });
+  const ifaces = {
+    lo0: [v4('127.0.0.1', true)],
+    en0: [v4('192.168.3.79')],
+    bridge100: [v4('192.168.139.3')],
+    bridge101: [v4('192.168.97.0')],
+    utun7: [v4('198.18.0.1')],
+    tailscale0: [v4('100.101.2.3')],
+    en5: [v4('10.0.0.7'), { family: 'IPv6', internal: false, address: 'fe80::1' }],
+    eth1: [v4('172.20.1.1'), v4('8.8.8.8')],
+  };
+  assert.deepEqual(lanAddressesFrom(ifaces), ['192.168.3.79', '10.0.0.7', '172.20.1.1']);
+});
+
+test('endpoints are kept per character, and checked before they are written', async () => {
+  const r = await rig();
+  await r.call('/api/characters', { method: 'POST', headers: W, body: JSON.stringify({ name: 'rex' }) });
+  const groq = { id: 'groq', name: 'Groq', baseURL: 'https://api.groq.com/openai/v1', apiKey: 'gsk-1' };
+  const first = await r.call('/api/characters/rex', {
+    method: 'PATCH', headers: W, body: JSON.stringify({ endpoints: [groq] }),
+  });
+  assert.equal(first.status, 200);
+  const mine = { id: 'ep-1', name: 'Home', baseURL: 'http://10.0.0.5:11434/v1', apiKey: 'k', custom: true };
+  const second = await r.call('/api/characters/rex', {
+    method: 'PATCH', headers: W, body: JSON.stringify({ endpoints: [groq, mine] }),
+  });
+  assert.deepEqual(second.body.endpoints, [groq, mine]);
+  assert.equal(second.body.config.llm.apiKey, '', 'the layers are not touched by the list');
+  const bad = await r.call('/api/characters/rex', { method: 'PATCH', headers: W, body: JSON.stringify({ endpoints: [{ id: 'a', name: 'a', baseURL: 'x', apiKey: 3 }] }) });
+  assert.equal(bad.status, 400);
+  const many = Array.from({ length: 51 }, (_, i) => ({ id: `ep-${i}`, name: 'n', baseURL: 'http://x', apiKey: '', custom: true }));
+  const tooMany = await r.call('/api/characters/rex', { method: 'PATCH', headers: W, body: JSON.stringify({ endpoints: many }) });
+  assert.equal(tooMany.status, 400);
+  await r.server.close();
+});

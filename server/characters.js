@@ -10,12 +10,17 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, chmodS
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { defaultConfig, loadConfig, layerReady } from '../core/config.js';
-import { PRESETS, voicesFor } from '../core/provider-presets.js';
+import { PRESETS, orderForPicker, voicesFor } from '../core/provider-presets.js';
+import { checkEndpoints, endpointsFrom, storedEndpoints, withEndpointIds } from './endpoints.js';
 
 export const HOME = process.env.BOT_REBORN_HOME ?? join(homedir(), '.bot-reborn');
 export const CHARACTERS_DIR = join(HOME, 'characters');
 
-/** @typedef {{ id: string, name: string, token: string, config: any, path: string }} Character */
+/**
+ * `endpoints` are the provider entries and their keys (see endpoints.js). They
+ * sit beside `config`, not in it, so the body never has to read them.
+ * @typedef {{ id: string, name: string, token: string, config: any, endpoints: import('./endpoints.js').Endpoint[], path: string }} Character
+ */
 
 const TOKEN = /^[0-9a-f]{32}$/;
 
@@ -40,8 +45,9 @@ export function createCharacter(name, dir = CHARACTERS_DIR) {
   let id = name;
   for (let n = 2; existsSync(join(dir, `${id}.json`)); n++) id = `${name.slice(0, 37)}-${n}`;
   const path = join(dir, `${id}.json`);
+  const config = startingConfig();
   /** @type {Character} */
-  const c = { id, name, token: randomBytes(16).toString('hex'), config: startingConfig(), path };
+  const c = { id, name, token: randomBytes(16).toString('hex'), config, endpoints: startingEndpoints(config), path };
   saveCharacter(c);
   return c;
 }
@@ -55,13 +61,31 @@ export function createCharacter(name, dir = CHARACTERS_DIR) {
 function startingConfig() {
   const config = defaultConfig();
   for (const layer of /** @type {const} */ (['stt', 'llm', 'tts', 'reflex'])) {
-    const first = PRESETS[layer][0];
+    // The first one the dropdown shows, not the first one in the file.
+    const first = orderForPicker(PRESETS[layer])[0];
     if (!first) continue;
     const model = first.models[0] ?? '';
     Object.assign(config[layer], { baseURL: first.baseURL, model });
     if (layer === 'tts') config.tts.voice = voicesFor(first, model)[0] ?? '';
   }
   return config;
+}
+
+/**
+ * Each layer's first provider is an entry with no key yet, and the layer points
+ * at it, so the admin page can say "missing key" against a provider it knows.
+ * @param {any} config @returns {import('./endpoints.js').Endpoint[]}
+ */
+function startingEndpoints(config) {
+  /** @type {import('./endpoints.js').Endpoint[]} */ const out = [];
+  for (const layer of /** @type {const} */ (['stt', 'llm', 'tts', 'reflex'])) {
+    // The first one the dropdown shows, not the first one in the file.
+    const first = orderForPicker(PRESETS[layer])[0];
+    if (!first) continue;
+    config[layer].endpointId = first.id;
+    if (!out.some((e) => e.id === first.id)) out.push({ id: first.id, name: first.label, baseURL: first.baseURL, apiKey: '' });
+  }
+  return out;
 }
 
 /**
@@ -101,7 +125,10 @@ export function listCharacters(dir = CHARACTERS_DIR) {
       // loadConfig fills every field the file leaves out, as it does for the
       // phone's localStorage: an older file still loads after a new setting.
       const config = loadConfig({ getItem: () => JSON.stringify(raw.config ?? {}), setItem() {} });
-      characters.push({ id, name: typeof raw.name === 'string' ? raw.name : id, token: raw.token, config, path });
+      // A file written before endpoints existed has its keys in a table; its
+      // entries are worked out from that until the next write keeps them.
+      const endpoints = Array.isArray(raw.endpoints) ? storedEndpoints(raw.endpoints) : endpointsFrom(config, keysFrom(raw.keys));
+      characters.push({ id, name: typeof raw.name === 'string' ? raw.name : id, token: raw.token, config: withEndpointIds(config, endpoints), endpoints, path });
     } catch (err) {
       problems.push(`${path}: ${/** @type {Error} */ (err).message}`);
     }
@@ -128,9 +155,20 @@ export function findByToken(characters, token) {
 /** It holds API keys: readable by this user only. @param {Character} c */
 export function saveCharacter(c) {
   mkdirSync(join(c.path, '..'), { recursive: true, mode: 0o700 });
-  writeFileSync(c.path, JSON.stringify({ name: c.name, token: c.token, config: c.config }, null, 2) + '\n', { mode: 0o600 });
+  const raw = { name: c.name, token: c.token, config: c.config, ...(c.endpoints?.length ? { endpoints: c.endpoints } : {}) };
+  writeFileSync(c.path, JSON.stringify(raw, null, 2) + '\n', { mode: 0o600 });
   // writeFileSync's mode only applies when it creates the file.
   chmodSync(c.path, 0o600);
+}
+
+/** The key table as stored: string to string, and nothing else. @param {unknown} v */
+export function keysFrom(v) {
+  const out = /** @type {Record<string, string>} */ ({});
+  if (!isPlain(v)) return out;
+  for (const [addr, key] of Object.entries(/** @type {Record<string, unknown>} */ (v))) {
+    if (typeof key === 'string' && !BLOCKED.has(addr)) out[addr] = key;
+  }
+  return out;
 }
 
 /** Prototype keys are dropped: a PATCH body is JSON from a browser. */
@@ -179,9 +217,10 @@ export function updateConfig(path, change) {
  * The admin page's edit. The name is only the display name: the file, and so
  * the id, stay put, and a body online under this character stays online.
  * @param {string} path
- * @param {{ name?: unknown, config?: unknown }} patch
+ * @param {{ name?: unknown, config?: unknown, endpoints?: unknown }} patch
  */
 export function patchCharacter(path, patch) {
+  const endpoints = patch.endpoints === undefined ? undefined : checkEndpoints(patch.endpoints);
   if (patch.name !== undefined) {
     if (typeof patch.name !== 'string') throw new Error('name must be a string');
     checkName(patch.name);
@@ -189,8 +228,13 @@ export function patchCharacter(path, patch) {
   }
   if (patch.config !== undefined && !isPlain(patch.config)) throw new Error('config must be an object');
   updateFile(path, (raw) => {
+    // The first write of an old file turns its key table into entries, from
+    // the config as it was, before this write changes anything.
+    if (!Array.isArray(raw.endpoints)) raw.endpoints = endpointsFrom(raw.config, keysFrom(raw.keys));
+    delete raw.keys;
     if (patch.name !== undefined) raw.name = patch.name;
     if (patch.config !== undefined) raw.config = deepMerge(raw.config, patch.config);
+    if (endpoints !== undefined) raw.endpoints = endpoints;
   });
 }
 

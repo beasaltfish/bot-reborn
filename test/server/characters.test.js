@@ -82,9 +82,9 @@ test('ready means stt, llm and tts are all filled in', () => {
   assert.equal(ready(c.config), true);
 });
 
-test('the file on disk is { name, token, config }', () => {
+test('the file on disk is { name, token, config, endpoints }', () => {
   const c = createCharacter('a', tmp());
-  assert.deepEqual(Object.keys(JSON.parse(readFileSync(c.path, 'utf8'))), ['name', 'token', 'config']);
+  assert.deepEqual(Object.keys(JSON.parse(readFileSync(c.path, 'utf8'))), ['name', 'token', 'config', 'endpoints']);
 });
 
 test('a robot saving its reply language keeps what was edited by hand meanwhile', async () => {
@@ -186,10 +186,10 @@ test('a display name is unique, ignoring case, whether made or renamed', () => {
 });
 
 test('a new character starts on each layer\'s first provider, so only the key is left to type', async () => {
-  const { PRESETS, voicesFor } = await import('../../core/provider-presets.js');
+  const { PRESETS, voicesFor, orderForPicker } = await import('../../core/provider-presets.js');
   const c = createCharacter('a', tmp());
   for (const layer of /** @type {const} */ (['stt', 'llm', 'tts', 'reflex'])) {
-    const first = PRESETS[layer][0];
+    const first = orderForPicker(PRESETS[layer])[0];
     assert.equal(c.config[layer].baseURL, first.baseURL, layer);
     assert.equal(c.config[layer].model, first.models[0] ?? '', layer);
     assert.equal(c.config[layer].apiKey, '', layer);
