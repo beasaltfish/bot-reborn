@@ -6,6 +6,7 @@
 // here is what the model said, parsed just far enough to be inspectable.
 
 import { presetBody } from '../provider-presets.js';
+import { requestError } from './request-error.js';
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 
@@ -57,7 +58,7 @@ export class OpenAiCompatLlm {
         signal,
       });
       if (!response.ok) {
-        throw new Error(`LLM request failed: ${response.status} ${response.statusText}`);
+        throw await requestError('LLM', response);
       }
       const json = await response.json();
       const message = json.choices?.[0]?.message ?? {};

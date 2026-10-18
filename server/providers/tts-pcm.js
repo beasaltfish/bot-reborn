@@ -9,6 +9,7 @@
 import { RATE } from '../../core/protocol.js';
 import { toInt16 } from '../../core/audio/pcm.js';
 import { isWav, parseWav, resample } from '../audio/pcm.js';
+import { requestError } from '../../core/providers/request-error.js';
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 
@@ -49,7 +50,7 @@ export class PcmTts {
         }),
         signal,
       });
-      if (!response.ok) throw new Error(`TTS request failed: ${response.status} ${response.statusText}`);
+      if (!response.ok) throw await requestError('TTS', response);
       const bytes = new Uint8Array(await response.arrayBuffer());
       // A provider that ignores response_format sends MP3. Saying so here is
       // the difference between "fix the provider" and "the robot is mute".

@@ -1,6 +1,8 @@
 // STT over the OpenAI-compatible /v1/audio/transcriptions endpoint.
 // Spec §8.1 interface: transcribe(pcm, sampleRate) → text.
 
+import { requestError } from './request-error.js';
+
 /**
  * Fold verbose_json's per-slice numbers into one reading.
  *
@@ -172,7 +174,7 @@ export class OpenAiCompatStt {
         signal,
       });
       if (!response.ok) {
-        throw new Error(`STT request failed: ${response.status} ${response.statusText}`);
+        throw await requestError('STT', response);
       }
       return await response.json();
     } finally {

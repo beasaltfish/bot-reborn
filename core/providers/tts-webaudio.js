@@ -7,6 +7,8 @@
 //   3. createMediaStreamDestination() for the future loopback path ← v1 leaves
 //      the seam and does not use it (§7.2)
 
+import { requestError } from './request-error.js';
+
 const FADE_MS = 10;
 
 /** Spec §6.7: the same 15 s net as the other two providers. */
@@ -122,7 +124,7 @@ export class WebAudioTts {
     // this audio any more.
     if (epoch !== this.#epoch) return;
     if (!response.ok) {
-      throw new Error(`TTS request failed: ${response.status} ${response.statusText}`);
+      throw await requestError('TTS', response);
     }
 
     const buffer = await this.#ctx.decodeAudioData(await response.arrayBuffer());
