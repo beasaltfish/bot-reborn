@@ -47,10 +47,14 @@ export function PhoneLink({ token }: { token: string }) {
       {/* The SVG is qrcode's own output for our URL; nothing else goes in. */}
       <div className="qr" data-testid="qr" dangerouslySetInnerHTML={{ __html: svg }} />
       <code className="phone-url">{url}</code>
-      <p>
-        {t('phoneFlag')} <code>{FLAG}</code>{t('phoneFlagThen')}
-      </p>
-      <code>{origin}</code>
+      {/* Once per phone, so it stays shut until someone opens it. */}
+      <details>
+        <summary>{t('phoneFlagSummary')}</summary>
+        <p>
+          {t('phoneFlag')} <code>{FLAG}</code>{t('phoneFlagThen')}
+        </p>
+        <code>{origin}</code>
+      </details>
     </section>
   );
 }

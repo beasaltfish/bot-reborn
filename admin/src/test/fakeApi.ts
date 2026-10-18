@@ -18,7 +18,7 @@ export function installFakeApi(seed: Array<{ name: string; online?: boolean }> =
   let n = 0;
   const token = () => (++n).toString(16).padStart(32, '0');
   const make = (name: string, online = false): Detail =>
-    ({ id: name, name, token: token(), online, config: blankConfig() });
+    ({ id: name, name, token: token(), online, config: blankConfig(), endpoints: [] });
   for (const s of seed) chars.set(s.name, make(s.name, s.online));
   const calls: Array<{ method: string; path: string; body: any; headers: Record<string, string> }> = [];
   const state = { down: false, addresses: ['192.168.1.5'] as string[] };
@@ -52,6 +52,7 @@ export function installFakeApi(seed: Array<{ name: string; online?: boolean }> =
     if (method === 'PATCH') {
       if (body.name !== undefined) c.name = body.name;
       if (body.config) c.config = deepMerge(c.config, body.config);
+      if (body.endpoints) c.endpoints = body.endpoints;
       return json(200, c);
     }
     if (method === 'DELETE') { chars.delete(c.id); return json(200, {}); }

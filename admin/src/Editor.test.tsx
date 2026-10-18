@@ -9,25 +9,42 @@ import type { EditorSlot } from './types';
 const props = (over: Partial<EditorSlot> = {}): EditorSlot =>
   ({ id: 'A', online: false, initialTab: 'basic', onChanged: vi.fn(), onDeleted: vi.fn(), ...over });
 
+// A character whose layer already uses a preset, with its key still to type.
+const GROQ = { id: 'groq', name: 'Groq', baseURL: 'https://api.groq.com/openai/v1', apiKey: '' };
+const OPENAI = { id: 'openai', name: 'OpenAI', baseURL: 'https://api.openai.com/v1', apiKey: '' };
+function withProvider(fake: ReturnType<typeof installFakeApi>, layer: 'llm' | 'tts', entry: typeof GROQ) {
+  const c = fake.chars.get('A')!;
+  c.endpoints = [entry];
+  c.config[layer] = { ...c.config[layer], endpointId: entry.id, baseURL: entry.baseURL, model: 'm' };
+}
+
 describe('Editor', () => {
   it('saves only what changed, once, after typing stops', async () => {
     const fake = installFakeApi([{ name: 'A' }]);
+    withProvider(fake, 'llm', GROQ);
     render(<Editor {...props({ initialTab: 'llm' })} />);
     const key = await screen.findByLabelText('API key');
     await userEvent.type(key, 'sk-1');
     await waitFor(() => expect(fake.patches()).toHaveLength(1), { timeout: 2000 });
-    expect(fake.patches()[0].body).toEqual({ config: { llm: { apiKey: 'sk-1' } } });
+    expect(fake.patches()[0].body).toEqual({
+      endpoints: [{ ...GROQ, apiKey: 'sk-1' }],
+      config: { llm: { apiKey: 'sk-1' } },
+    });
     expect(fake.chars.get('A')?.config.llm.apiKey).toBe('sk-1');
   });
 
   it('gathers two quick edits on different tabs into one save', async () => {
     const fake = installFakeApi([{ name: 'A' }]);
+    withProvider(fake, 'tts', OPENAI);
     render(<Editor {...props()} />);
     await userEvent.click(await screen.findByLabelText(/Wake word/));
     await userEvent.click(screen.getByRole('tab', { name: 'Voice' }));
     await userEvent.type(screen.getByLabelText('API key'), 'k');
     await waitFor(() => expect(fake.patches()).toHaveLength(1), { timeout: 2000 });
-    expect(fake.patches()[0].body).toEqual({ config: { wakeWord: true, tts: { apiKey: 'k' } } });
+    expect(fake.patches()[0].body).toEqual({
+      endpoints: [{ ...OPENAI, apiKey: 'k' }],
+      config: { wakeWord: true, tts: { apiKey: 'k' } },
+    });
   });
 
   it('picks how the body moves, and says when it takes effect', async () => {
@@ -54,6 +71,7 @@ describe('Editor', () => {
 
   it('keeps what was typed when a save fails, says so on this tab, and resends it with the next edit', async () => {
     const fake = installFakeApi([{ name: 'A' }]);
+    withProvider(fake, 'llm', GROQ);
     render(<Editor {...props({ initialTab: 'llm' })} />);
     const key = await screen.findByLabelText('API key');
     fake.state.down = true;
@@ -66,14 +84,26 @@ describe('Editor', () => {
     expect(screen.queryByText(/Not saved/)).not.toBeInTheDocument();
   });
 
-  it('picking a provider fills its address and model; Other asks for them', async () => {
+  it('picking a provider fills its address and model; a custom one asks for its own address', async () => {
     const fake = installFakeApi([{ name: 'A' }]);
     render(<Editor {...props({ initialTab: 'stt' })} />);
     await userEvent.selectOptions(await screen.findByLabelText('Provider'), 'groq');
     await waitFor(() => expect(fake.chars.get('A')?.config.stt.baseURL).toBe('https://api.groq.com/openai/v1'), { timeout: 2000 });
     expect(screen.queryByLabelText('Base URL')).not.toBeInTheDocument();
-    await userEvent.selectOptions(screen.getByLabelText('Provider'), 'custom');
+    await userEvent.selectOptions(screen.getByLabelText('Provider'), '__new__');
     expect(screen.getByLabelText('Base URL')).toBeInTheDocument();
+  });
+
+  it('a provider with two sites says which one, and shows the address it fills in', async () => {
+    const fake = installFakeApi([{ name: 'A' }]);
+    render(<Editor {...props({ initialTab: 'llm' })} />);
+    const provider = await screen.findByLabelText('Provider');
+    expect(screen.getByRole('option', { name: 'Moonshot (Kimi) · China' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Moonshot (Kimi) · Global' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'DeepSeek' })).toBeInTheDocument();
+    await userEvent.selectOptions(provider, 'moonshot-cn');
+    expect(screen.getByText('api.moonshot.cn')).toBeInTheDocument();
+    await waitFor(() => expect(fake.chars.get('A')?.config.llm.baseURL).toBe('https://api.moonshot.cn/v1'), { timeout: 2000 });
   });
 
   it('the test button shows what the check said, or why it failed', async () => {
@@ -95,12 +125,12 @@ describe('Editor', () => {
     expect(await screen.findByText(/Optional/)).toBeInTheDocument();
   });
 
-  it('shows the token box and deletes only after confirming', async () => {
+  it('shows the replace button and deletes only after confirming', async () => {
     const fake = installFakeApi([{ name: 'A' }]);
     const p = props();
     vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
     render(<Editor {...p} />);
-    expect(await screen.findByTestId('token')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'New pairing code' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Delete this character' }));
     expect(fake.chars.has('A')).toBe(true);
     await userEvent.click(screen.getByRole('button', { name: 'Delete this character' }));

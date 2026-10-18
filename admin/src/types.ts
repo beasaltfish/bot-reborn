@@ -1,7 +1,18 @@
 export type LayerName = 'stt' | 'llm' | 'tts' | 'reflex';
 export type TabName = 'basic' | LayerName;
 
+/** One provider a character talks to, and the key for it. See server/endpoints.js. */
+export interface Endpoint {
+  id: string;
+  name: string;
+  baseURL: string;
+  apiKey: string;
+  custom?: true;
+}
+
 export interface LayerConfig {
+  /** The entry this layer uses; baseURL and apiKey are copied from it. */
+  endpointId?: string;
   baseURL: string;
   apiKey: string;
   model: string;
@@ -37,10 +48,12 @@ export type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartia
 export interface Patch {
   name?: string;
   config?: DeepPartial<Config>;
+  /** The whole list of providers, as it should be after this edit. */
+  endpoints?: Endpoint[];
 }
 
 export interface Summary { id: string; name: string; ready: boolean; online: boolean }
-export interface Detail { id: string; name: string; token: string; config: Config; online: boolean }
+export interface Detail { id: string; name: string; token: string; config: Config; endpoints: Endpoint[]; online: boolean }
 
 export interface EditorSlot {
   id: string;
