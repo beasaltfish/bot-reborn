@@ -1,4 +1,4 @@
-import { t } from './i18n';
+import { lang, setLang, t } from './i18n';
 import type { Summary } from './types';
 
 export function Dot({ online }: { online: boolean }) {
@@ -27,6 +27,13 @@ export function CharacterList(props: {
         </button>
       ))}
       <button type="button" className="new" onClick={props.onNew}>{t('newCharacter')}</button>
+      <label className="lang">
+        <span className="sr-only">{t('language')}</span>
+        <select value={lang} onChange={(e) => setLang(e.target.value as 'zh' | 'en')}>
+          <option value="en">English</option>
+          <option value="zh">中文</option>
+        </select>
+      </label>
     </nav>
   );
 }

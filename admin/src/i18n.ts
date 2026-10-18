@@ -1,7 +1,8 @@
 // The admin page is product, not instrument, so it speaks both languages
-// (language boundary). It follows the browser; there is no switch.
+// (language boundary). English by default; a Chinese browser starts in Chinese.
 const en = {
   characters: 'Characters',
+  language: 'Language',
   newCharacter: '+ New character',
   firstCharacter: 'Create your first character',
   namePlaceholder: 'Name, e.g. Rex',
@@ -85,6 +86,7 @@ const en = {
 
 const zh: typeof en = {
   characters: '角色',
+  language: '语言',
   newCharacter: '+ 新建角色',
   firstCharacter: '新建第一个角色',
   namePlaceholder: '名字，例如 小黑',
@@ -167,5 +169,29 @@ const zh: typeof en = {
 };
 
 export type Key = keyof typeof en;
-export const lang: 'zh' | 'en' = navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en';
+// The choice is remembered in this browser. Without one, a Chinese browser gets
+// Chinese and everything else gets English. Read once at load: changing the
+// language reloads the page (setLang), so no string has to be re-rendered.
+const KEY = 'botreborn.adminLang';
+
+function initialLang(): 'zh' | 'en' {
+  try {
+    const saved = localStorage.getItem(KEY);
+    if (saved === 'zh' || saved === 'en') return saved;
+  } catch {
+    // Blocked storage (private window, site data cleared): fall through.
+  }
+  return navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en';
+}
+
+export const lang: 'zh' | 'en' = initialLang();
 export const t = (key: Key) => (lang === 'zh' ? zh : en)[key];
+
+export function setLang(next: 'zh' | 'en') {
+  try {
+    localStorage.setItem(KEY, next);
+  } catch {
+    // Storage is blocked: the choice is lost on reload, and the page comes back in the browser's language.
+  }
+  location.reload();
+}

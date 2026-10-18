@@ -5,11 +5,15 @@
 
 export const CONFIG_KEY = 'botreborn.body';
 
-/** @returns {BodyConfig} */
-export function defaultConfig() {
+/**
+ * @param {string} [navLang] the browser's language; read once, when nothing is saved yet
+ * @returns {BodyConfig}
+ */
+export function defaultConfig(navLang = globalThis.navigator?.language) {
   return {
-    // English by default, for the reason core/config.js gives.
-    lang: 'en',
+    // English by default; a Chinese browser starts in Chinese. Once the
+    // settings sheet saves a choice, that choice wins over the browser.
+    lang: String(navLang ?? '').toLowerCase().startsWith('zh') ? 'zh' : 'en',
     // Which character this body is. Set by scanning the admin page's code.
     token: null,
     // null is "never measured" — see the note on calibration in core/config.js.
