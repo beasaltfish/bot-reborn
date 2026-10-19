@@ -1,32 +1,35 @@
-// TTS over the OpenAI-compatible /audio/speech endpoint, played through a
-// body's speaker instead of this machine's.
+// TTS played through a body's speaker instead of this machine's.
 //
 // Same interface as WebAudioTts, because session.js and brain.js are built
 // against it: speak() resolves when playback ends, onPlaying fires when the
-// first sample is due, cancel() silences. WAV is asked for because it is the
-// one format every listed provider can send that needs no decoder here.
+// first sample is due, cancel() silences. Where the audio comes from is a
+// source's business (tts-openai.js, tts-volcengine.js; picked in pick.js) —
+// this half is the same for every provider.
 
 import { RATE } from '../../core/protocol.js';
 import { toInt16 } from '../../core/audio/pcm.js';
-import { isWav, parseWav, resample } from '../audio/pcm.js';
-import { requestError } from '../../core/providers/request-error.js';
+import { resample } from '../audio/pcm.js';
+
+/**
+ * @typedef {{ synthesize(text: string, opts?: { signal?: AbortSignal }):
+ *   Promise<{ samples: Float32Array, rate: number }> }} TtsSource
+ */
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 
 export class PcmTts {
-  #cfg; #fetch; #mouth; #timeoutMs;
+  #source; #mouth; #timeoutMs;
   #epoch = 0;
   /** Whether a clip of OURS is on the mouth — see cancel(). */
   #playing = false;
 
   /**
-   * @param {{ baseURL: string, apiKey: string, model: string, voice: string }} cfg
-   * @param {{ mouth: import('../body/mouth.js').Mouth, fetch?: typeof fetch, timeoutMs?: number }} opts
+   * @param {TtsSource} source
+   * @param {{ mouth: import('../body/mouth.js').Mouth, timeoutMs?: number }} opts
    */
-  constructor(cfg, opts) {
-    this.#cfg = cfg;
+  constructor(source, opts) {
+    this.#source = source;
     this.#mouth = opts.mouth;
-    this.#fetch = opts.fetch ?? globalThis.fetch.bind(globalThis);
     this.#timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   }
 
@@ -42,21 +45,8 @@ export class PcmTts {
     const signal = opts.signal ? AbortSignal.any([opts.signal, controller.signal]) : controller.signal;
     /** @type {Int16Array} */ let pcm;
     try {
-      const response = await this.#fetch(`${this.#cfg.baseURL}/audio/speech`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.#cfg.apiKey}` },
-        body: JSON.stringify({
-          model: this.#cfg.model, voice: this.#cfg.voice, input: text, response_format: 'wav',
-        }),
-        signal,
-      });
-      if (!response.ok) throw await requestError('TTS', response);
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      // A provider that ignores response_format sends MP3. Saying so here is
-      // the difference between "fix the provider" and "the robot is mute".
-      if (!isWav(bytes)) throw new Error('TTS returned audio that is not WAV — this provider must support response_format "wav"');
-      const wav = parseWav(bytes);
-      pcm = toInt16(resample(wav.samples, wav.rate, RATE));
+      const audio = await this.#source.synthesize(text, { signal });
+      pcm = toInt16(resample(audio.samples, audio.rate, RATE));
     } catch (err) {
       if (opts.signal?.aborted) return;
       throw err;

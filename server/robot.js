@@ -13,6 +13,7 @@ import { RemoteExecutor } from './body/executor.js';
 import { DryRunExecutor, NoMotionExecutor } from './body/still.js';
 import { Mouth } from './body/mouth.js';
 import { PcmTts } from './providers/tts-pcm.js';
+import { OpenAiTtsSource } from './providers/tts-openai.js';
 
 /**
  * How much longer the session keeps its ears shut after one of the robot's
@@ -50,7 +51,7 @@ export function startRobot(conn, deps) {
     send: (msg) => conn.send(msg),
     slackMs: deps.slackMs ?? ECHO_SLACK_MS,
   });
-  const tts = new PcmTts(config.tts, { mouth, ...net });
+  const tts = new PcmTts(new OpenAiTtsSource(config.tts, net), { mouth });
   /** @type {(part: import('../core/strings.js').FaultPart, err: Error) => void} */
   const onFault = (part, err) => log(`[${part}] ${err.message}`);
 

@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PcmTts } from '../../server/providers/tts-pcm.js';
+import { OpenAiTtsSource } from '../../server/providers/tts-openai.js';
 import { encodeWav } from '../../core/providers/stt-openai-compat.js';
 
 const CFG = { baseURL: 'http://tts', apiKey: 'k', model: 'm', voice: 'v' };
@@ -27,10 +28,9 @@ const wavResponse = (/** @type {number} */ samples, /** @type {number} */ rate) 
 test('asks for WAV, resamples to 16 kHz, plays, and resolves when playback ends', async () => {
   /** @type {any} */ let body;
   const m = fakeMouth();
-  const tts = new PcmTts(CFG, {
-    mouth: m.mouth,
+  const tts = new PcmTts(new OpenAiTtsSource(CFG, {
     fetch: async (_url, init) => { body = JSON.parse(String(init?.body)); return wavResponse(24000, 24000); },
-  });
+  }), { mouth: m.mouth });
   let playing = false; let resolved = false;
   const p = tts.speak('hi', { onPlaying: () => { playing = true; } }).then(() => { resolved = true; });
   await new Promise((r) => setImmediate(r));
@@ -45,25 +45,23 @@ test('asks for WAV, resamples to 16 kHz, plays, and resolves when playback ends'
 
 test('MP3 back from a provider is a readable fault, not a crash', async () => {
   const m = fakeMouth();
-  const tts = new PcmTts(CFG, {
-    mouth: m.mouth,
+  const tts = new PcmTts(new OpenAiTtsSource(CFG, {
     fetch: async () => new Response(new TextEncoder().encode('ID3\u0004rest of an mp3')),
-  });
+  }), { mouth: m.mouth });
   await assert.rejects(tts.speak('hi'), /not WAV/);
   assert.deepEqual(m.played, []);
 });
 
 test('an HTTP error names its status', async () => {
-  const tts = new PcmTts(CFG, {
-    mouth: fakeMouth().mouth,
+  const tts = new PcmTts(new OpenAiTtsSource(CFG, {
     fetch: async () => new Response('no', { status: 401, statusText: 'Unauthorized' }),
-  });
+  }), { mouth: fakeMouth().mouth });
   await assert.rejects(tts.speak('hi'), /401/);
 });
 
 test('cancel during playback hushes the mouth and lets speak resolve', async () => {
   const m = fakeMouth();
-  const tts = new PcmTts(CFG, { mouth: m.mouth, fetch: async () => wavResponse(1600, 16000) });
+  const tts = new PcmTts(new OpenAiTtsSource(CFG, { fetch: async () => wavResponse(1600, 16000) }), { mouth: m.mouth });
   const p = tts.speak('hi');
   await new Promise((r) => setImmediate(r));
   tts.cancel();
@@ -73,17 +71,16 @@ test('cancel during playback hushes the mouth and lets speak resolve', async () 
 
 test('cancel with nothing playing does not hush someone else\'s beep', () => {
   const m = fakeMouth();
-  new PcmTts(CFG, { mouth: m.mouth, fetch: async () => wavResponse(1600, 16000) }).cancel();
+  new PcmTts(new OpenAiTtsSource(CFG, { fetch: async () => wavResponse(1600, 16000) }), { mouth: m.mouth }).cancel();
   assert.equal(m.hushed, 0);
 });
 
 test('a caller abort during the request is silent', async () => {
   const ctrl = new AbortController();
-  const tts = new PcmTts(CFG, {
-    mouth: fakeMouth().mouth,
+  const tts = new PcmTts(new OpenAiTtsSource(CFG, {
     fetch: (_u, init) => new Promise((_, reject) =>
       init?.signal?.addEventListener('abort', () => reject(new Error('aborted')))),
-  });
+  }), { mouth: fakeMouth().mouth });
   const p = tts.speak('hi', { signal: ctrl.signal });
   ctrl.abort();
   await p;
