@@ -219,7 +219,9 @@ test('Groq speaks English through Orpheus, 200 characters a request', () => {
 test('a new character speaks through OpenAI, not English-only Groq, though Groq sorts first', () => {
   assert.equal(orderForPicker(PRESETS.tts)[0].id, 'groq');
   assert.equal(startingPreset('tts')?.id, 'openai');
-  assert.equal(startingPreset('llm')?.id, orderForPicker(PRESETS.llm)[0].id);
+  assert.equal(startingPreset('stt')?.id, 'openai');
+  assert.equal(startingPreset('llm')?.id, 'openai');
+  assert.equal(startingPreset('reflex')?.id, orderForPicker(PRESETS.reflex)[0].id);
 });
 
 test('OpenAI offers gpt-4o-mini-tts with marin and cedar, after the tts-1 models', () => {

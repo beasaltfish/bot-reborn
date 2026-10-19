@@ -467,12 +467,13 @@ export function orderForPicker(list) {
 
 
 /**
- * Where a new character starts on each layer: the first the dropdown shows,
- * except where that would be wrong for most people. TTS stays on OpenAI's
- * multilingual voices, because Groq — first by name — speaks English only.
+ * Where a new character starts on each layer: OpenAI for ears, mind and
+ * voice, so one key fills three layers, and its voices speak more than
+ * English (Groq, first by name, does not). Reflex has no OpenAI row and starts
+ * on the first the dropdown shows.
  * @type {Partial<Record<LayerName, string>>}
  */
-const STARTING = { tts: 'openai' };
+const STARTING = { stt: 'openai', llm: 'openai', tts: 'openai' };
 
 /**
  * @param {LayerName} layer
