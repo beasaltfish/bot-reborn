@@ -122,7 +122,11 @@ export class OpenAiCompatStt {
    * @returns {Promise<{ text: string } & ReturnType<typeof summariseSegments>>}
    */
   async transcribeDetailed(pcm, sampleRate, opts = {}) {
-    const json = await this.#post(pcm, sampleRate, 'verbose_json', opts.signal);
+    // OpenAI's own gpt- recognisers are not Whisper and refuse verbose_json
+    // (only `json`, docs read 2026-10-19). They get the plain answer, and
+    // both numbers come back null — "the endpoint did not say".
+    const format = this.#cfg.model.startsWith('gpt-') ? null : 'verbose_json';
+    const json = await this.#post(pcm, sampleRate, format, opts.signal);
     return { text: (json.text ?? '').trim(), ...summariseSegments(json.segments) };
   }
 

@@ -162,7 +162,10 @@ export const PRESETS = withMainland({
       id: 'openai',
       label: 'OpenAI',
       baseURL: 'https://api.openai.com/v1',
-      models: ['whisper-1'],
+      // gpt-transcribe (2026-07) replaced whisper-1 as OpenAI's recommended
+      // recogniser. It answers plain JSON only, which stt-openai-compat.js
+      // knows; a layer still saved on whisper-1 keeps working.
+      models: ['gpt-transcribe'],
     },
     {
       // Spec §8.3 names it as the STT alternative for one reason: SenseVoice

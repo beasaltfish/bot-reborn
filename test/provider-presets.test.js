@@ -229,3 +229,7 @@ test('OpenAI offers gpt-4o-mini-tts with marin and cedar, after the tts-1 models
   // marin and cedar are not in the tts-1 family's list.
   assert.ok(!voicesFor(tts, 'tts-1').includes('marin'));
 });
+
+test('OpenAI STT is gpt-transcribe, not whisper-1', () => {
+  assert.deepEqual(presetById('stt', 'openai')?.models, ['gpt-transcribe']);
+});

@@ -194,3 +194,11 @@ test('transcribeDetailed(): sends the same prompt, and still no language', async
   assert.equal(seen.form.get('prompt'), 'p');
   assert.equal(seen.form.get('language'), null);
 });
+
+test('transcribeDetailed(): a gpt- model gets plain JSON, since it refuses verbose_json', async () => {
+  const cap = captureFetch({ text: ' 往前走 ' });
+  const got = await new OpenAiCompatStt({ ...CFG, model: 'gpt-transcribe' }, { fetch: cap.fetchImpl })
+    .transcribeDetailed(Int16Array.from([1]), 16000);
+  assert.equal(cap.seen.form.get('response_format'), null);
+  assert.deepEqual(got, { text: '往前走', noSpeech: null, logprob: null, parts: 0 });
+});
