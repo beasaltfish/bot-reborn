@@ -10,7 +10,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, chmodS
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { defaultConfig, loadConfig, layerReady } from '../core/config.js';
-import { PRESETS, orderForPicker, voicesFor } from '../core/provider-presets.js';
+import { startingPreset, voicesFor } from '../core/provider-presets.js';
 import { checkEndpoints, endpointsFrom, storedEndpoints, withEndpointIds } from './endpoints.js';
 
 export const HOME = process.env.BOT_REBORN_HOME ?? join(homedir(), '.bot-reborn');
@@ -61,8 +61,8 @@ export function createCharacter(name, dir = CHARACTERS_DIR) {
 function startingConfig() {
   const config = defaultConfig();
   for (const layer of /** @type {const} */ (['stt', 'llm', 'tts', 'reflex'])) {
-    // The first one the dropdown shows, not the first one in the file.
-    const first = orderForPicker(PRESETS[layer])[0];
+    // The dropdown's first, unless provider-presets.js says otherwise.
+    const first = startingPreset(layer);
     if (!first) continue;
     const model = first.models[0] ?? '';
     Object.assign(config[layer], { baseURL: first.baseURL, model });
@@ -79,8 +79,8 @@ function startingConfig() {
 function startingEndpoints(config) {
   /** @type {import('./endpoints.js').Endpoint[]} */ const out = [];
   for (const layer of /** @type {const} */ (['stt', 'llm', 'tts', 'reflex'])) {
-    // The first one the dropdown shows, not the first one in the file.
-    const first = orderForPicker(PRESETS[layer])[0];
+    // The dropdown's first, unless provider-presets.js says otherwise.
+    const first = startingPreset(layer);
     if (!first) continue;
     config[layer].endpointId = first.id;
     if (!out.some((e) => e.id === first.id)) out.push({ id: first.id, name: first.label, baseURL: first.baseURL, apiKey: '' });

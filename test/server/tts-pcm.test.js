@@ -85,3 +85,36 @@ test('a caller abort during the request is silent', async () => {
   ctrl.abort();
   await p;
 });
+
+test('a provider with an input limit gets the text in sentence-sized pieces, played as one', async () => {
+  /** @type {string[]} */ const inputs = [];
+  const source = new OpenAiTtsSource(CFG, {
+    maxInput: 40,
+    fetch: async (_url, init) => { inputs.push(JSON.parse(String(init?.body)).input); return wavResponse(100, 24000); },
+  });
+  const text = 'The first sentence is here. The second one follows it. And a third.';
+  const { samples, rate } = await source.synthesize(text);
+  assert.ok(inputs.length > 1);
+  assert.ok(inputs.every((s) => s.length <= 40), JSON.stringify(inputs));
+  assert.equal(inputs.join(' ').replace(/\s+/g, ' '), text);
+  assert.equal(rate, 24000);
+  assert.equal(samples.length, 100 * inputs.length);
+});
+
+test('a sentence longer than the limit is cut at a space, and a word longer than it is cut anyway', async () => {
+  /** @type {string[]} */ const inputs = [];
+  const source = new OpenAiTtsSource(CFG, {
+    maxInput: 10,
+    fetch: async (_url, init) => { inputs.push(JSON.parse(String(init?.body)).input); return wavResponse(10, 24000); },
+  });
+  await source.synthesize('one two three four supercalifragilistic');
+  assert.ok(inputs.every((s) => s.length > 0 && s.length <= 10), JSON.stringify(inputs));
+  assert.equal(inputs.join('').replace(/ /g, ''), 'one two three four supercalifragilistic'.replace(/ /g, ''));
+});
+
+test('without a limit the text goes in one request', async () => {
+  let calls = 0;
+  const source = new OpenAiTtsSource(CFG, { fetch: async () => { calls++; return wavResponse(10, 24000); } });
+  await source.synthesize('x'.repeat(500));
+  assert.equal(calls, 1);
+});
