@@ -60,3 +60,10 @@ test('an HTTP 401 goes through requestError', async () => {
   const f = fake({ status: 401, body: { error: 'bad key' } });
   await assert.rejects(new VolcengineStt(CFG, { fetch: f }).transcribe(PCM, 16000), /401/);
 });
+
+test('a 200 with no status header is an error, not an empty transcript', async () => {
+  // What a wrong path behind a gateway looks like. Taking it as success makes
+  // the robot answer every sentence with "huh?" and log nothing.
+  const f = fake({ body: { something: 'else' } });
+  await assert.rejects(new VolcengineStt(CFG, { fetch: f }).transcribe(PCM, 16000), /no status/);
+});

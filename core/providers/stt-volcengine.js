@@ -87,7 +87,10 @@ export class VolcengineStt {
         signal,
       });
       if (!response.ok) throw await requestError('STT', response);
-      const code = response.headers.get('X-Api-Status-Code') ?? OK;
+      const code = response.headers.get('X-Api-Status-Code');
+      // Every real answer carries one. A 200 without it is somebody else's
+      // page — a wrong path, a gateway — and must not read as silence.
+      if (code === null) throw new Error('Volcengine STT answered with no status code — is the address right?');
       if (code === SILENCE) return { text: '', noSpeech: null, logprob: null, parts: 0 };
       if (code !== OK) {
         throw new Error(`Volcengine STT ${code}: ${response.headers.get('X-Api-Message') ?? 'no message'}`);
