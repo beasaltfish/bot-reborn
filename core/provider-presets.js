@@ -172,21 +172,6 @@ export const PRESETS = withMainland({
       region: 'global',
     },
     {
-      // Audio lives on its own host here, not on the inference endpoint the
-      // rest of Fireworks uses — pointing this at api.fireworks.ai/inference/v1
-      // gets a 404 from a URL that looks entirely correct.
-      //
-      // Listed with one model, not two: Fireworks deprecated audio inference in
-      // June 2026, turbo still answers and plain whisper-v3 returns auth
-      // errors. A row that 401s is the failure this table exists to prevent,
-      // so only the one that works is here — and if turbo follows it, this
-      // entry goes rather than getting a footnote.
-      id: 'fireworks',
-      label: 'Fireworks',
-      baseURL: 'https://audio-turbo.api.fireworks.ai/v1',
-      models: ['whisper-v3-turbo'],
-    },
-    {
       // The flash ("极速版") recording recogniser: one request, whole clip,
       // answer in the response. Not 一句话识别, the older small model.
       id: 'volcengine',
