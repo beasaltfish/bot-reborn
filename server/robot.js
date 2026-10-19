@@ -6,14 +6,13 @@ import { Session } from '../core/audio/session.js';
 import { Brain } from '../core/brain.js';
 import { Reflex } from '../core/reflex.js';
 import { reflexReady } from '../core/config.js';
-import { OpenAiCompatStt } from '../core/providers/stt-openai-compat.js';
 import { OpenAiCompatLlm } from '../core/providers/llm-openai-compat.js';
 import { RemotePipeline } from './body/pipeline.js';
 import { RemoteExecutor } from './body/executor.js';
 import { DryRunExecutor, NoMotionExecutor } from './body/still.js';
 import { Mouth } from './body/mouth.js';
 import { PcmTts } from './providers/tts-pcm.js';
-import { OpenAiTtsSource } from './providers/tts-openai.js';
+import { makeStt, makeTtsSource } from './providers/pick.js';
 
 /**
  * How much longer the session keeps its ears shut after one of the robot's
@@ -51,7 +50,7 @@ export function startRobot(conn, deps) {
     send: (msg) => conn.send(msg),
     slackMs: deps.slackMs ?? ECHO_SLACK_MS,
   });
-  const tts = new PcmTts(new OpenAiTtsSource(config.tts, net), { mouth });
+  const tts = new PcmTts(makeTtsSource(config.tts, net), { mouth });
   /** @type {(part: import('../core/strings.js').FaultPart, err: Error) => void} */
   const onFault = (part, err) => log(`[${part}] ${err.message}`);
 
@@ -59,7 +58,7 @@ export function startRobot(conn, deps) {
     pipeline,
     kws: ears.kws,
     vad: ears.vad,
-    stt: new OpenAiCompatStt(config.stt, net),
+    stt: makeStt(config.stt, net),
     tts,
     executor,
     earcon: (name) => mouth.play(earcons[name]).ms,
