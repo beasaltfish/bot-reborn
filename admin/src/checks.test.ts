@@ -31,6 +31,7 @@ describe('key checks go through the brain', () => {
     class FakeContext {
       destination = {};
       constructor() { made(); }
+      resume = async () => {};
       decodeAudioData = async () => ({ duration: 0 });
       createBufferSource = () => ({ connect: vi.fn(), start, set onended(f: () => void) { f(); } });
     }
@@ -38,6 +39,28 @@ describe('key checks go through the brain', () => {
     expect(await runCheck('tts', blankConfig())).toBe(MATERIAL[lang].line);
     expect(made).toHaveBeenCalledTimes(1);
     expect(start).toHaveBeenCalled();
+  });
+
+  it('tts check makes and resumes the AudioContext before waiting on the brain', async () => {
+    // Safari ends the click's activation while the brain synthesises; a
+    // context made after that starts suspended and never plays.
+    const order: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      order.push('fetch');
+      return new Response(new Uint8Array([82, 73, 70, 70]), { headers: { 'Content-Type': 'audio/wav' } });
+    }));
+    class FakeContext {
+      destination = {};
+      constructor() { order.push('context'); }
+      resume = async () => { order.push('resume'); };
+      decodeAudioData = async () => ({ duration: 0 });
+      createBufferSource = () => ({ connect: vi.fn(), start: vi.fn(), set onended(f: () => void) { f(); } });
+    }
+    vi.stubGlobal('AudioContext', FakeContext);
+    vi.resetModules();
+    const fresh = await import('./checks');
+    await fresh.runCheck('tts', blankConfig());
+    expect(order.slice(0, 3)).toEqual(['context', 'resume', 'fetch']);
   });
 
   it('a 502 shows the provider error text', async () => {

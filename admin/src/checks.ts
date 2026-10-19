@@ -8,25 +8,33 @@ import type { Config, LayerName } from './types';
 
 export type CheckFn = (layer: LayerName, config: Config) => Promise<string>;
 
-// Made on the first TTS check, which is a click: a context made before any
-// gesture starts suspended, and the line would never be heard.
+// Made and resumed on the TTS check's click, BEFORE waiting on the brain:
+// Safari's activation from that click is gone by the time the audio arrives,
+// and a context made then starts suspended and never plays.
 let ctx: AudioContext | null = null;
 
-async function play(res: Response) {
-  ctx ??= new AudioContext();
-  const buffer = await ctx.decodeAudioData(await res.arrayBuffer());
-  const source = ctx.createBufferSource();
+async function play(audio: AudioContext, res: Response) {
+  const buffer = await audio.decodeAudioData(await res.arrayBuffer());
+  const source = audio.createBufferSource();
   source.buffer = buffer;
-  source.connect(ctx.destination);
-  await new Promise<void>((resolve) => { source.onended = () => resolve(); source.start(); });
+  source.connect(audio.destination);
+  // `ended` never fires on a context that stayed suspended; the button must
+  // come back either way.
+  await new Promise<void>((resolve) => {
+    const done = setTimeout(resolve, (buffer.duration + 1) * 1000);
+    source.onended = () => { clearTimeout(done); resolve(); };
+    source.start();
+  });
 }
 
 const text = async (res: Response) => ((await res.json()) as { text: string }).text;
 
 export const runCheck: CheckFn = async (layer, config) => {
+  const audio = layer === 'tts' ? (ctx ??= new AudioContext()) : null;
+  void audio?.resume();
   const res = await api.check(layer, { config: config[layer], lang });
-  if (layer === 'tts') {
-    await play(res);
+  if (audio) {
+    await play(audio, res);
     return MATERIAL[lang].line;
   }
   return layer === 'stt' ? `“${await text(res)}”` : text(res);
