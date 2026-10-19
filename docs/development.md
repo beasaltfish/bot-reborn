@@ -78,6 +78,28 @@ npm test             # node --test and the admin page's vitest — no browser
 npm run typecheck    # tsc --noEmit, strict, over core/, server/, phone/, test/ and admin/
 ```
 
+### Trying Volcengine (豆包语音) with a real key
+
+The Volcengine adapters (`core/providers/stt-volcengine.js`,
+`server/providers/tts-volcengine.js`) were written from the docs and tested
+against fakes. A few things only a real API key (new console, one `X-Api-Key`)
+can settle. Pick "Volcengine 火山引擎" for STT and TTS on a character, then:
+
+- [ ] **STT Test button** on the admin page shows the check clip's words. If it
+      fails, the error names Volcengine's status code.
+- [ ] **TTS Test button** plays 小何 in the browser. A 404 here means the other
+      documented path, `/api/v3/tts/create`, is the one to use (`PATH` in the TTS
+      adapter).
+- [ ] **STT context.** Find out whether the recogniser's context or hotword field
+      steers wording the way a Whisper `prompt` does (for example, writing a bark
+      as English). If it does, send `stt.prompt` there. If not, leave it unsent.
+- [ ] **Voices outside the list.** Under "Other", try one 1.0 voice (`…_mars_bigtts`)
+      and one `ICL_…` voice. Write down in the preset comment whether each one
+      works on `seed-tts-2.0`.
+- [ ] **A real turn on the robot.** Speak, hear the answer from the robot's
+      speaker, and interrupt it mid-sentence. Check the brain log for `[stt]` and
+      `[tts]` faults.
+
 ## Security
 
 **Your API keys live on the computer that runs the brain**, in one JSON file
