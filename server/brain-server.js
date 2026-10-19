@@ -82,7 +82,7 @@ export function createBrainServer(opts) {
     },
   });
 
-  api = createAdminApi({ dir: opts.dir, link, addresses: opts.addresses });
+  api = createAdminApi({ dir: opts.dir, link, addresses: opts.addresses, fetch: opts.fetch });
 
   return {
     /** @param {number} port @returns {Promise<number>} the port actually bound */

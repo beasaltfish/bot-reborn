@@ -1,15 +1,12 @@
 // What "this layer works" means, in one place.
 //
-// Two surfaces ask it now and they ask different versions of the same
-// question. dev.html is the instrument: three clips in your own voice, so a
-// pass means the chain understands *you*. The setup sheet is the product: one
-// clip that ships with the repo, so a pass means the baseURL, the model name
-// and the key are right — and nobody has to hold a microphone before they can
-// find out their key has a typo.
+// The admin page's Test buttons ask it, through the brain (server/check-api.js):
+// one clip that ships with the repo, so a pass means the baseURL, the model
+// name and the key are right — and nobody has to hold a microphone before they
+// can find out their key has a typo.
 //
-// The difference is the audio, not the assertions. Everything below takes the
-// clip, or the provider, as an argument and decides nothing about where it
-// came from; the two callers own that. No DOM here (spec §10).
+// Everything below takes the clip, or the provider, as an argument and decides
+// nothing about where it came from. No DOM here (spec §10).
 
 /**
  * The clips that ship, and the lines the voice check speaks — one pair per UI
@@ -47,53 +44,8 @@ export const MATERIAL = {
 };
 
 /**
- * Fetch a clip, refusing the page Cloudflare serves instead of a 404.
- *
- * Cloudflare Pages (wrangler pages dev included) answers a missing static path
- * with index.html and status 200. `response.ok` calls that "found" and hands
- * decodeAudioData an HTML document, which fails with a decode error that says
- * nothing about the clip being absent. A real .wav is never text/html.
- *
- * @param {string} path
- * @returns {Promise<Response | null>}
- */
-export async function fetchClip(path) {
-  const response = await fetch(path);
-  const contentType = response.headers.get('content-type') ?? '';
-  if (!response.ok || contentType.includes('text/html')) return null;
-  return response;
-}
-
-/**
- * @param {AudioBuffer} buffer
- * @returns {{ pcm: Int16Array, sampleRate: number }}
- */
-export function toInt16Pcm(buffer) {
-  const float = buffer.getChannelData(0);
-  const pcm = new Int16Array(float.length);
-  for (let i = 0; i < float.length; i++) {
-    const clamped = Math.max(-1, Math.min(1, float[i]));
-    pcm[i] = clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff;
-  }
-  return { pcm, sampleRate: buffer.sampleRate };
-}
-
-/**
- * One clip in, one transcript out.
- *
- * @param {{ transcribe: (pcm: Int16Array, rate: number) => Promise<string> }} stt
- * @param {Response} clip
- * @param {AudioContext | OfflineAudioContext} ctx
- * @returns {Promise<string>}
- */
-export async function transcribeClip(stt, clip, ctx) {
-  const buffer = await ctx.decodeAudioData(await clip.arrayBuffer());
-  const { pcm, sampleRate } = toInt16Pcm(buffer);
-  return stt.transcribe(pcm, sampleRate);
-}
-
-/**
  * The product's STT check: the shipped clip has to come back as *something*.
+ * The caller reads the clip (server/check-api.js, from core/fixtures/).
  *
  * An empty transcript is a failure, not a pass with no text. A provider that
  * accepts the request and returns nothing is exactly the case a key with the
@@ -101,15 +53,12 @@ export async function transcribeClip(stt, clip, ctx) {
  * debug their microphone.
  *
  * @param {{ transcribe: (pcm: Int16Array, rate: number) => Promise<string> }} stt
- * @param {AudioContext | OfflineAudioContext} ctx
- * @param {'en' | 'zh'} [lang]
+ * @param {Int16Array} pcm
+ * @param {number} rate
  * @returns {Promise<string>} the transcript, for showing
  */
-export async function checkStt(stt, ctx, lang = 'zh') {
-  const path = MATERIAL[lang].clip;
-  const clip = await fetchClip(path);
-  if (!clip) throw new Error(`${path} is missing from this deployment`);
-  const text = (await transcribeClip(stt, clip, ctx)).trim();
+export async function checkStt(stt, pcm, rate) {
+  const text = (await stt.transcribe(pcm, rate)).trim();
   if (!text) throw new Error('the transcript came back empty');
   return text;
 }
@@ -137,21 +86,6 @@ export async function checkLlm(llm, deps) {
     throw new Error('the model can chat but did not call a tool — tool calling is unusable on this provider');
   }
   return `“${chat.text}” · ${tool.toolCalls[0].name}`;
-}
-
-/**
- * The one check the code cannot grade. It plays the line; whether it was
- * intelligible is a question for ears, and saying so out loud is more honest
- * than a green tick that only means the request returned 200.
- *
- * @param {{ speak: (text: string) => Promise<void> }} tts
- * @param {'en' | 'zh'} [lang]
- * @returns {Promise<string>}
- */
-export async function checkTts(tts, lang = 'zh') {
-  const line = MATERIAL[lang].line;
-  await tts.speak(line);
-  return line;
 }
 
 /**

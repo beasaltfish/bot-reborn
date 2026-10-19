@@ -8,14 +8,16 @@ import {
   listCharacters, characterById, createCharacter, patchCharacter,
   regenerateToken, deleteCharacter, ready,
 } from './characters.js';
+import { createCheckApi, LAYERS } from './check-api.js';
 
 const MAX_BODY = 64 * 1024;
 
 /**
  * @param {{ dir: string, link: { online(): string[], kick(id: string): boolean },
- *           addresses?: () => string[] }} opts
+ *           addresses?: () => string[], fetch?: typeof fetch, checkTimeoutMs?: number }} opts
  */
 export function createAdminApi(opts) {
+  const check = createCheckApi({ fetch: opts.fetch, timeoutMs: opts.checkTimeoutMs });
   /** @param {import('./characters.js').Character} c @param {Set<string>} online */
   const detail = (c, online) => ({ id: c.id, name: c.name, token: c.token, config: c.config, endpoints: c.endpoints ?? [], online: online.has(c.id) });
 
@@ -37,6 +39,17 @@ export function createAdminApi(opts) {
       // What the QR code is made of: the address a phone on this Wi-Fi can
       // reach, and the port this request came in on.
       return send(200, { port: req.socket.localPort, addresses: (opts.addresses ?? lanAddresses)() });
+    }
+    const c1 = path.match(/^\/api\/check\/([^/]+)\/?$/);
+    if (c1) {
+      const layer = /** @type {any} */ (c1[1]);
+      if (!LAYERS.includes(layer)) return send(404, { error: 'no such layer' });
+      if (req.method !== 'POST') return send(405, { error: 'method not allowed' });
+      let body;
+      try { body = await readJson(req); } catch (err) {
+        return send(/** @type {any} */ (err).status ?? 400, { error: /** @type {Error} */ (err).message });
+      }
+      return check(res, layer, body);
     }
     const m = path.match(/^\/api\/characters(?:\/([^/]+))?(\/token)?\/?$/);
     if (!m) return send(404, { error: 'no such endpoint' });
