@@ -5,6 +5,17 @@ import { useCharacters } from './useCharacters';
 import { t } from './i18n';
 import type { EditorSlot, TabName } from './types';
 
+// The character open last, per browser: the page opens on it rather than on
+// an empty pane. Storage can be missing or refuse (private windows), and then
+// the page simply opens on the first character.
+const REMEMBER = 'admin.character';
+function remembered(): string | null {
+  try { return localStorage.getItem(REMEMBER); } catch { return null; }
+}
+function remember(id: string) {
+  try { localStorage.setItem(REMEMBER, id); } catch { /* nothing to keep it in */ }
+}
+
 export function App({ pollMs = 2000, renderEditor }: {
   pollMs?: number;
   renderEditor: (props: EditorSlot) => ReactNode;
@@ -20,6 +31,7 @@ export function App({ pollMs = 2000, renderEditor }: {
   const created = (id: string) => {
     setCreating(false);
     setSelected(id);
+    remember(id);
     // Spec §5: a new character starts where its first key goes.
     setInitialTab('stt');
     void refresh();
@@ -36,15 +48,19 @@ export function App({ pollMs = 2000, renderEditor }: {
     );
   }
 
-  const current = list.find((c) => c.id === selected) ?? null;
+  // Nothing picked yet, or the pick was deleted: the one open last time,
+  // else the first.
+  const current = list.find((c) => c.id === selected)
+    ?? list.find((c) => c.id === remembered())
+    ?? list[0] ?? null;
   return (
     <>
       {banner}
       <div className="layout">
         <CharacterList
           list={list}
-          selected={selected}
-          onSelect={(id) => { setCreating(false); setSelected(id); setInitialTab('basic'); }}
+          selected={creating ? null : current?.id ?? null}
+          onSelect={(id) => { setCreating(false); setSelected(id); remember(id); setInitialTab('basic'); }}
           onNew={() => setCreating(true)}
         />
         <main className="pane">

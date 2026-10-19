@@ -35,6 +35,31 @@ describe('App', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('already exists');
   });
 
+  it('opens the first character instead of an empty pane', async () => {
+    localStorage.clear();
+    installFakeApi([{ name: 'A' }, { name: 'B' }]);
+    render(<App pollMs={50} renderEditor={slot} />);
+    expect(await screen.findByTestId('editor')).toHaveTextContent('A:basic');
+  });
+
+  it('reopens the character looked at last time', async () => {
+    localStorage.clear();
+    installFakeApi([{ name: 'A' }, { name: 'B' }]);
+    const first = render(<App pollMs={50} renderEditor={slot} />);
+    await userEvent.click(await screen.findByRole('button', { name: /B/ }));
+    expect(await screen.findByTestId('editor')).toHaveTextContent('B:basic');
+    first.unmount();
+    render(<App pollMs={50} renderEditor={slot} />);
+    expect(await screen.findByTestId('editor')).toHaveTextContent('B:basic');
+  });
+
+  it('falls back to the first when the remembered one is gone', async () => {
+    localStorage.setItem('admin.character', 'Gone');
+    installFakeApi([{ name: 'A' }]);
+    render(<App pollMs={50} renderEditor={slot} />);
+    expect(await screen.findByTestId('editor')).toHaveTextContent('A:basic');
+  });
+
   it('marks who is online and who is missing keys', async () => {
     installFakeApi([{ name: 'A', online: true }, { name: 'B' }]);
     render(<App pollMs={50} renderEditor={slot} />);
