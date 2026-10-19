@@ -225,7 +225,11 @@ export const PRESETS = withMainland({
       id: 'openai',
       label: 'OpenAI',
       baseURL: 'https://api.openai.com/v1',
-      models: ['gpt-4o-mini', 'gpt-4o'],
+      // The GPT-4 series leaves the API on 2027-01-14. Of GPT-6, only Luna
+      // calls tools on Chat Completions, and only with reasoning off — which
+      // is also what a toy answering out loud wants (docs read 2026-10-19).
+      models: ['gpt-6-luna'],
+      body: { reasoning_effort: 'none' },
     },
     {
       id: 'siliconflow',

@@ -235,3 +235,9 @@ test('OpenAI offers gpt-4o-mini-tts with marin and cedar, after the tts-1 models
 test('OpenAI STT is gpt-transcribe, not whisper-1', () => {
   assert.deepEqual(presetById('stt', 'openai')?.models, ['gpt-transcribe']);
 });
+
+test('OpenAI mind is gpt-6-luna with reasoning off, the one GPT-6 that calls tools on Chat Completions', () => {
+  const llm = presetById('llm', 'openai');
+  assert.deepEqual(llm?.models, ['gpt-6-luna']);
+  assert.deepEqual(presetBody('llm', { baseURL: 'https://api.openai.com/v1' }), { reasoning_effort: 'none' });
+});
