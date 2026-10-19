@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { PRESETS, CUSTOM, presetIdFor, presetById, presetBody, voicesFor } from '../core/provider-presets.js';
+import { PRESETS, CUSTOM, presetIdFor, presetById, presetBody, presetApi, voicesFor } from '../core/provider-presets.js';
 
 test('a stored baseURL is recognised as the preset it came from', () => {
   assert.equal(presetIdFor('llm', { baseURL: 'https://api.deepseek.com' }), 'deepseek');
@@ -180,4 +180,30 @@ test('no two rows in a layer share an address', () => {
     const urls = list.map((p) => p.baseURL.replace(/\/+$/, ''));
     assert.equal(new Set(urls).size, urls.length, `${layer} has a duplicate address`);
   }
+});
+
+test('Volcengine is listed for STT and TTS with its resource ids', () => {
+  const stt = presetById('stt', 'volcengine');
+  assert.deepEqual(stt?.models, ['volc.bigasr.auc_turbo']);
+  assert.equal(stt?.api, 'volcengine');
+  assert.equal(stt?.baseURL, 'https://openspeech.bytedance.com');
+  const tts = presetById('tts', 'volcengine');
+  assert.deepEqual(tts?.models, ['seed-tts-2.0']);
+  assert.equal(tts?.api, 'volcengine');
+});
+
+test('Volcengine voices start with 小何 and every voice has a label', () => {
+  const tts = presetById('tts', 'volcengine');
+  const voices = voicesFor(tts, 'seed-tts-2.0');
+  assert.equal(voices[0], 'zh_female_xiaohe_uranus_bigtts');
+  assert.equal(voices.length, 6);
+  for (const v of voices) assert.ok(tts?.voiceLabels?.[v], `${v} has no label`);
+  assert.equal(tts?.voicesURL, 'https://docs.volcengine.com/docs/DoubaoVoice/Tonelist-1');
+});
+
+test('presetApi finds the API by address, and anything unknown is openai', () => {
+  assert.equal(presetApi('tts', { baseURL: 'https://openspeech.bytedance.com/' }), 'volcengine');
+  assert.equal(presetApi('stt', { baseURL: 'https://openspeech.bytedance.com' }), 'volcengine');
+  assert.equal(presetApi('tts', { baseURL: 'https://api.openai.com/v1' }), 'openai');
+  assert.equal(presetApi('stt', { baseURL: 'https://example.com' }), 'openai');
 });

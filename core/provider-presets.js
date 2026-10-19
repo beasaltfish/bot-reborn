@@ -25,15 +25,18 @@
 // open-source robot; the decisions in the spec about Chinese and English mixed
 // in one sentence are decisions about THIS robot's own user, and a provider is
 // not disqualified for failing to serve that user as long as it serves some
-// user completely. The hard requirement is the wire format — the three
-// provider classes speak OpenAI-compatible endpoints and nothing else, so a
-// service with its own API shape cannot be listed however good it is.
+// user completely. The hard requirement is the wire format: a provider can be
+// listed only if there is an adapter that speaks it. Most rows are
+// OpenAI-compatible; a row with its own API shape says so in `api`, and the
+// brain picks the adapter by it (server/providers/pick.js).
 
 /**
  * `reflex` is listed here so both the setup sheet and the instrument page
  * offer it from the same table (reflex spec §7).
  * @typedef {'stt' | 'llm' | 'tts' | 'reflex'} LayerName
  */
+
+/** @typedef {'openai' | 'volcengine'} ProviderApi */
 
 /**
  * `region` is set only on a provider that runs two sites, mainland China and
@@ -45,6 +48,11 @@
  * spelled `<model>:<speaker>`, so changing the model invalidates every voice
  * in the list. OpenAI's do not, and its two models simply share one array.
  *
+ * `api` names the adapter for a row that is not OpenAI-compatible; absent
+ * means it is. `voiceLabels` gives a voice id the name the dropdown shows —
+ * a voice without one shows its id. `voicesURL` is the provider's own full
+ * list, linked beside the field where somebody types a voice by hand.
+ *
  * @typedef {{
  *   id: string,
  *   label: string,
@@ -52,8 +60,11 @@
  *   models: string[],
  *   openModels?: boolean,
  *   voices?: Record<string, string[]>,
+ *   voiceLabels?: Record<string, string>,
+ *   voicesURL?: string,
  *   body?: Record<string, unknown>,
  *   region?: 'cn' | 'global',
+ *   api?: ProviderApi,
  * }} Preset
  */
 
@@ -64,6 +75,26 @@ const SPEAKERS = ['alex', 'anna', 'bella', 'benjamin', 'charles', 'claire', 'dav
 const prefixed = (model) => SPEAKERS.map((s) => `${model}:${s}`);
 
 const SILICONFLOW = 'https://api.siliconflow.com/v1';
+
+// Volcengine's speech service (豆包语音) answers on one host for both layers,
+// with the resource id — written here as the model — in a header. Mainland
+// only, so no `region`: that field marks one of a pair of sites.
+const VOLCENGINE = 'https://openspeech.bytedance.com';
+
+/**
+ * Only 2.0 (`uranus`) voices: the 1.0 ones (`mars`/`moon`) are believed not to
+ * synthesise on seed-tts-2.0, and whether the `ICL_` ones need enabling first
+ * is unknown. Either kind can still be typed under "Other". First is default.
+ * @type {Record<string, string>}
+ */
+const VOLCENGINE_VOICES = {
+  zh_female_xiaohe_uranus_bigtts: '小何 2.0',
+  zh_female_vv_uranus_bigtts: 'Vivi 2.0',
+  zh_male_m191_uranus_bigtts: '云舟 2.0',
+  zh_male_taocheng_uranus_bigtts: '小天 2.0',
+  zh_male_naiqimengwa_uranus_bigtts: '奶气萌娃 2.0',
+  en_male_tim_uranus_bigtts: 'Tim',
+};
 const SILICONFLOW_CN = 'https://api.siliconflow.cn/v1';
 
 /**
@@ -154,6 +185,15 @@ export const PRESETS = withMainland({
       label: 'Fireworks',
       baseURL: 'https://audio-turbo.api.fireworks.ai/v1',
       models: ['whisper-v3-turbo'],
+    },
+    {
+      // The flash ("极速版") recording recogniser: one request, whole clip,
+      // answer in the response. Not 一句话识别, the older small model.
+      id: 'volcengine',
+      label: 'Volcengine 火山引擎',
+      baseURL: VOLCENGINE,
+      models: ['volc.bigasr.auc_turbo'],
+      api: 'volcengine',
     },
   ],
   llm: [
@@ -287,6 +327,17 @@ export const PRESETS = withMainland({
       },
       region: 'global',
     },
+    {
+      id: 'volcengine',
+      label: 'Volcengine 火山引擎',
+      baseURL: VOLCENGINE,
+      models: ['seed-tts-2.0'],
+      voices: { 'seed-tts-2.0': Object.keys(VOLCENGINE_VOICES) },
+      voiceLabels: VOLCENGINE_VOICES,
+      // Chinese only; finding a voice needs nothing more than copying its id.
+      voicesURL: 'https://docs.volcengine.com/docs/DoubaoVoice/Tonelist-1',
+      api: 'volcengine',
+    },
   ],
   reflex: [
     {
@@ -335,6 +386,19 @@ export function presetIdFor(layer, cfg) {
   const hit = PRESETS[layer].find(
     (p) => p.baseURL.replace(/\/+$/, '') === url);
   return hit ? hit.id : CUSTOM;
+}
+
+/**
+ * Which adapter a layer needs. Found by address like the preset itself, so a
+ * layer typed by hand under "Other" that points at a known service still gets
+ * that service's adapter; anything unknown is OpenAI-compatible.
+ *
+ * @param {LayerName} layer
+ * @param {{ baseURL: string }} cfg
+ * @returns {ProviderApi}
+ */
+export function presetApi(layer, cfg) {
+  return presetById(layer, presetIdFor(layer, cfg))?.api ?? 'openai';
 }
 
 /**
