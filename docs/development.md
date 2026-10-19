@@ -80,26 +80,29 @@ npm run typecheck    # tsc --noEmit, strict, over core/, server/, phone/, test/ 
 
 ### Trying Volcengine (豆包语音) with a real key
 
-The Volcengine adapters (`core/providers/stt-volcengine.js`,
+The Volcengine adapters (`server/providers/stt-volcengine.js`,
 `server/providers/tts-volcengine.js`) were written from the docs and tested
 against fakes. A few things only a real API key (new console, one `X-Api-Key`)
-can settle. Pick "Volcengine 火山引擎" for STT and TTS on a character, then:
+can settle. STT uses 一句话识别 on the 2.0 model, so first enable
+**豆包流式语音识别模型 2.0（小时版）** for the key in the Volcengine console.
+Pick "Volcengine 火山引擎" for STT and TTS on a character, then:
 
 - [ ] **STT Test button** on the admin page shows the check clip's words. If it
-      fails, the error names Volcengine's status code.
+      fails, the error names Volcengine's status code. A 401 or 403 straight
+      away usually means the 2.0 resource is not enabled for the key.
 - [ ] **TTS Test button** plays 小何 in the browser. Also note whether the last
       line of the answer carries code `20000000`. The docs only describe `0`, and
       the adapter lets `20000000` through just in case; if it never appears, that
       exception can go.
-- [ ] **STT context.** Find out whether the recogniser's context or hotword field
-      steers wording the way a Whisper `prompt` does (for example, writing a bark
-      as English). If it does, send `stt.prompt` there. If not, leave it unsent.
 - [ ] **Voices outside the list.** Under "Other", try one 1.0 voice (`…_mars_bigtts`)
       and one `ICL_…` voice. Write down in the preset comment whether each one
       works on `seed-tts-2.0`.
 - [ ] **A real turn on the robot.** Speak, hear the answer from the robot's
       speaker, and interrupt it mid-sentence. Check the brain log for `[stt]` and
       `[tts]` faults.
+
+`stt.prompt` is not sent to Volcengine. Sending the robot's last reply as the
+recogniser's `context` is planned separately.
 
 ## Security
 
