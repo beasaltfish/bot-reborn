@@ -19,13 +19,19 @@ const REFLEX = {
 /**
  * The admin API on its own, with a fetch that answers the OpenAI-compatible
  * paths (helpers.js) and /systemone, or fails every request when `status` is set.
- * @param {{ status?: number, llmHangs?: boolean, timeoutMs?: number }} [opts]
+ * @param {{ status?: number, llmHangs?: boolean, timeoutMs?: number, lateRefusal?: number }} [opts]
  */
 async function rig(opts = {}) {
   const base = fakeFetch({ llmHangs: opts.llmHangs });
+  const late = opts.lateRefusal;
   /** @type {any[]} */ const reflexAsked = [];
   const fetch = /** @type {any} */ (async (/** @type {string} */ url, /** @type {any} */ init) => {
     if (opts.status) return new Response('{"error":{"message":"bad key"}}', { status: opts.status });
+    if (late && url.endsWith('/chat/completions')) {
+      // Answers after the check's deadline, ignoring the abort, with a refusal.
+      await new Promise((r) => setTimeout(r, late));
+      return new Response('{"error":{"message":"tools are not supported"}}', { status: 400 });
+    }
     if (url.endsWith('/systemone')) {
       reflexAsked.push(JSON.parse(init.body));
       return Response.json({ answers: { action: { choice: 'left', probabilities: { left: 0.95, pass: 0.05 } } } });
@@ -114,5 +120,16 @@ test('a provider that never answers times out with a message', async () => {
     const out = await r.check('llm', { config: LAYER, lang: 'en' });
     assert.equal(out.status, 502);
     assert.ok(out.body.error);
+  } finally { r.close(); }
+});
+
+test('a provider error that lands after the deadline is still shown as itself', async () => {
+  // A slow model that then refuses tools: "tools are not supported" is the
+  // answer this check exists to give, and "no answer" would hide it.
+  const r = await rig({ lateRefusal: 100, timeoutMs: 50 });
+  try {
+    const out = await r.check('llm', { config: LAYER, lang: 'en' });
+    assert.equal(out.status, 502);
+    assert.match(out.body.error, /400|tools are not supported/);
   } finally { r.close(); }
 });

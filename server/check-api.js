@@ -62,8 +62,11 @@ export function createCheckApi(opts = {}) {
     } catch (err) {
       const e = /** @type {Error} */ (err);
       // A timeout's own message is "The operation was aborted", which says
-      // nothing about which wait ran out.
-      const message = signal.aborted ? `no answer within ${timeoutMs / 1000} s` : e.message;
+      // nothing about which wait ran out. Only that one is reworded: a real
+      // answer that lands after the deadline (a late "tools not supported")
+      // is the very thing a check is for.
+      const gaveUp = e?.name === 'AbortError' || e?.name === 'TimeoutError' || /abort/i.test(e?.message ?? '');
+      const message = signal.aborted && gaveUp ? `no answer within ${timeoutMs / 1000} s` : e.message;
       send(res, 502, { error: message || String(e) });
     }
   };
