@@ -1,18 +1,24 @@
 // The audio half of TTS over Volcengine's speech synthesis (豆包语音合成 2.0).
 // Volcengine voice spec §4.2. Playback is PcmTts's.
 //
-// The answer is a run of JSON lines, each carrying a base64 slice of the
-// audio, ending in a line with the final status. No streaming playback this
-// round (spec §1), so every slice is collected before anything is played.
+// The answer is HTTP chunked: a run of JSON lines, each carrying a base64
+// slice of the audio. HTTP itself says when the last chunk has arrived —
+// response.text() resolves only then, and rejects on a cut connection — so no
+// end-of-stream line is needed. No streaming playback this round (spec §1):
+// every slice is collected before anything is played.
 // 16 kHz PCM is asked for so nothing needs resampling or decoding.
 
 import { RATE } from '../../core/protocol.js';
 import { bytesToFloat32 } from '../audio/pcm.js';
 import { requestError } from '../../core/providers/request-error.js';
 
-// The docs read on 2026-10-18 named two HTTP paths, this one and
-// /api/v3/tts/create. Which one answers is for a real key to settle (spec §5.2).
+// The unidirectional streaming endpoint, as documented 2026-10-19.
 const PATH = '/api/v3/tts/unidirectional';
+// The docs say 0 is success and anything else a failure. 20000000 is the
+// "finished" code of Volcengine's other v3 protocols; it is let through in
+// case a closing line carries it, because refusing it would fail a whole
+// sentence that had already arrived. Undocumented here — the real-key test
+// settles whether it ever appears.
 const DONE = 20000000;
 
 export class VolcengineTtsSource {

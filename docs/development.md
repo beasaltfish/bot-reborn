@@ -87,9 +87,10 @@ can settle. Pick "Volcengine 火山引擎" for STT and TTS on a character, then:
 
 - [ ] **STT Test button** on the admin page shows the check clip's words. If it
       fails, the error names Volcengine's status code.
-- [ ] **TTS Test button** plays 小何 in the browser. A 404 here means the other
-      documented path, `/api/v3/tts/create`, is the one to use (`PATH` in the TTS
-      adapter).
+- [ ] **TTS Test button** plays 小何 in the browser. Also note whether the last
+      line of the answer carries code `20000000`. The docs only describe `0`, and
+      the adapter lets `20000000` through just in case; if it never appears, that
+      exception can go.
 - [ ] **STT context.** Find out whether the recogniser's context or hotword field
       steers wording the way a Whisper `prompt` does (for example, writing a bark
       as English). If it does, send `stt.prompt` there. If not, leave it unsent.
