@@ -224,12 +224,10 @@ test('a new character speaks through OpenAI, not English-only Groq, though Groq 
   assert.equal(startingPreset('reflex')?.id, orderForPicker(PRESETS.reflex)[0].id);
 });
 
-test('OpenAI offers gpt-4o-mini-tts with marin and cedar, after the tts-1 models', () => {
+test('OpenAI voice is gpt-4o-mini-tts alone, marin first: tts-1 and tts-1-hd leave on 2027-01-06', () => {
   const tts = presetById('tts', 'openai');
-  assert.deepEqual(tts?.models, ['tts-1', 'tts-1-hd', 'gpt-4o-mini-tts']);
+  assert.deepEqual(tts?.models, ['gpt-4o-mini-tts']);
   assert.deepEqual(voicesFor(tts, 'gpt-4o-mini-tts'), ['marin', 'cedar', 'alloy', 'nova', 'shimmer']);
-  // marin and cedar are not in the tts-1 family's list.
-  assert.ok(!voicesFor(tts, 'tts-1').includes('marin'));
 });
 
 test('OpenAI STT is gpt-transcribe, not whisper-1', () => {

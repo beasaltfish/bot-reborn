@@ -178,7 +178,7 @@ describe('LayerTab voices', () => {
   });
 
   it('OpenAI voices are unchanged: label is the id, no link', async () => {
-    setupTts({ endpointId: 'openai', baseURL: 'https://api.openai.com/v1', apiKey: 'sk-1', model: 'tts-1', voice: 'nova' }, [openai]);
+    setupTts({ endpointId: 'openai', baseURL: 'https://api.openai.com/v1', apiKey: 'sk-1', model: 'gpt-4o-mini-tts', voice: 'nova' }, [openai]);
     const select = screen.getByLabelText('Voice') as HTMLSelectElement;
     expect(select.selectedOptions[0].textContent).toBe('nova');
     await userEvent.selectOptions(select, '');
