@@ -52,6 +52,8 @@
  * means it is. `voiceLabels` gives a voice id the name the dropdown shows —
  * a voice without one shows its id. `voicesURL` is the provider's own full
  * list, linked beside the field where somebody types a voice by hand.
+ * `maxInput` is the most characters one TTS request may carry; a longer reply
+ * is spoken in pieces (tts-openai.js) rather than refused.
  *
  * @typedef {{
  *   id: string,
@@ -65,6 +67,7 @@
  *   body?: Record<string, unknown>,
  *   region?: 'cn' | 'global',
  *   api?: ProviderApi,
+ *   maxInput?: number,
  * }} Preset
  */
 
@@ -328,6 +331,17 @@ export const PRESETS = withMainland({
       region: 'global',
     },
     {
+      // English only (Orpheus by Canopy Labs; the Saudi Arabic model is left
+      // out). WAV is its only format, which is what tts-openai.js asks for.
+      // 200 characters a request, so a longer reply goes in pieces.
+      id: 'groq',
+      label: 'Groq',
+      baseURL: 'https://api.groq.com/openai/v1',
+      models: ['canopylabs/orpheus-v1-english'],
+      voices: { 'canopylabs/orpheus-v1-english': ['hannah', 'autumn', 'diana', 'austin', 'daniel', 'troy'] },
+      maxInput: 200,
+    },
+    {
       id: 'volcengine',
       label: 'Volcengine 火山引擎',
       baseURL: VOLCENGINE,
@@ -418,6 +432,17 @@ export function presetBody(layer, cfg) {
 }
 
 /**
+ * The most characters one request may carry, found by address like the
+ * preset; null when the provider sets no limit this list knows of.
+ * @param {LayerName} layer
+ * @param {{ baseURL: string }} cfg
+ * @returns {number | null}
+ */
+export function presetMaxInput(layer, cfg) {
+  return presetById(layer, presetIdFor(layer, cfg))?.maxInput ?? null;
+}
+
+/**
  * @param {LayerName} layer
  * @param {string} id
  * @returns {Preset | null} null for `custom`, and for an id that has since
@@ -447,3 +472,20 @@ export function orderForPicker(list) {
     .flatMap((g) => [...g].sort((a, b) => Number(a.region === 'cn') - Number(b.region === 'cn')));
 }
 
+
+/**
+ * Where a new character starts on each layer: the first the dropdown shows,
+ * except where that would be wrong for most people. TTS stays on OpenAI's
+ * multilingual voices, because Groq — first by name — speaks English only.
+ * @type {Partial<Record<LayerName, string>>}
+ */
+const STARTING = { tts: 'openai' };
+
+/**
+ * @param {LayerName} layer
+ * @returns {Preset | null}
+ */
+export function startingPreset(layer) {
+  const id = STARTING[layer];
+  return (id ? presetById(layer, id) : null) ?? orderForPicker(PRESETS[layer])[0] ?? null;
+}

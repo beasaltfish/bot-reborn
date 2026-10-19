@@ -186,15 +186,15 @@ test('a display name is unique, ignoring case, whether made or renamed', () => {
 });
 
 test('a new character starts on each layer\'s first provider, so only the key is left to type', async () => {
-  const { PRESETS, voicesFor, orderForPicker } = await import('../../core/provider-presets.js');
+  const { voicesFor, startingPreset } = await import('../../core/provider-presets.js');
   const c = createCharacter('a', tmp());
   for (const layer of /** @type {const} */ (['stt', 'llm', 'tts', 'reflex'])) {
-    const first = orderForPicker(PRESETS[layer])[0];
+    const first = /** @type {any} */ (startingPreset(layer));
     assert.equal(c.config[layer].baseURL, first.baseURL, layer);
     assert.equal(c.config[layer].model, first.models[0] ?? '', layer);
     assert.equal(c.config[layer].apiKey, '', layer);
   }
-  assert.equal(c.config.tts.voice, voicesFor(PRESETS.tts[0], c.config.tts.model)[0]);
+  assert.equal(c.config.tts.voice, voicesFor(startingPreset('tts'), c.config.tts.model)[0]);
   assert.equal(ready(c.config), false);
   assert.deepEqual(listCharacters(join(c.path, '..')).characters[0].config.stt, c.config.stt);
 });

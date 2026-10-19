@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { PRESETS, CUSTOM, presetIdFor, presetById, presetBody, presetApi, voicesFor } from '../core/provider-presets.js';
+import { PRESETS, CUSTOM, presetIdFor, presetById, presetBody, presetApi, presetMaxInput, voicesFor, orderForPicker, startingPreset } from '../core/provider-presets.js';
 
 test('a stored baseURL is recognised as the preset it came from', () => {
   assert.equal(presetIdFor('llm', { baseURL: 'https://api.deepseek.com' }), 'deepseek');
@@ -206,4 +206,18 @@ test('presetApi finds the API by address, and anything unknown is openai', () =>
   assert.equal(presetApi('stt', { baseURL: 'https://openspeech.bytedance.com' }), 'volcengine');
   assert.equal(presetApi('tts', { baseURL: 'https://api.openai.com/v1' }), 'openai');
   assert.equal(presetApi('stt', { baseURL: 'https://example.com' }), 'openai');
+});
+
+test('Groq speaks English through Orpheus, 200 characters a request', () => {
+  const tts = presetById('tts', 'groq');
+  assert.deepEqual(tts?.models, ['canopylabs/orpheus-v1-english']);
+  assert.deepEqual(voicesFor(tts, 'canopylabs/orpheus-v1-english'), ['hannah', 'autumn', 'diana', 'austin', 'daniel', 'troy']);
+  assert.equal(presetMaxInput('tts', { baseURL: 'https://api.groq.com/openai/v1/' }), 200);
+  assert.equal(presetMaxInput('tts', { baseURL: 'https://api.openai.com/v1' }), null);
+});
+
+test('a new character speaks through OpenAI, not English-only Groq, though Groq sorts first', () => {
+  assert.equal(orderForPicker(PRESETS.tts)[0].id, 'groq');
+  assert.equal(startingPreset('tts')?.id, 'openai');
+  assert.equal(startingPreset('llm')?.id, orderForPicker(PRESETS.llm)[0].id);
 });

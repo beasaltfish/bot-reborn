@@ -2,7 +2,7 @@
 // `api`). The robot and the admin page's key checks both build through here,
 // so a check that passes has gone down the path the robot will take.
 
-import { presetApi } from '../../core/provider-presets.js';
+import { presetApi, presetMaxInput } from '../../core/provider-presets.js';
 import { OpenAiCompatStt } from '../../core/providers/stt-openai-compat.js';
 import { VolcengineStt } from '../../core/providers/stt-volcengine.js';
 import { OpenAiTtsSource } from './tts-openai.js';
@@ -22,5 +22,5 @@ export function makeStt(cfg, net = {}) {
  * @returns {import('./tts-pcm.js').TtsSource}
  */
 export function makeTtsSource(cfg, net = {}) {
-  return presetApi('tts', cfg) === 'volcengine' ? new VolcengineTtsSource(cfg, net) : new OpenAiTtsSource(cfg, net);
+  return presetApi('tts', cfg) === 'volcengine' ? new VolcengineTtsSource(cfg, net) : new OpenAiTtsSource(cfg, { ...net, maxInput: presetMaxInput('tts', cfg) });
 }

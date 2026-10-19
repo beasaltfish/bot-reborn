@@ -20,3 +20,16 @@ test('a Volcengine address gets the Volcengine adapters, even typed by hand with
   assert.ok(makeStt(cfg) instanceof VolcengineStt);
   assert.ok(makeTtsSource(cfg) instanceof VolcengineTtsSource);
 });
+
+test('a Groq TTS layer gets its 200-character limit', async () => {
+  /** @type {string[]} */ const inputs = [];
+  const { encodeWav } = await import('../../core/providers/stt-openai-compat.js');
+  const src = makeTtsSource({ ...layer('https://api.groq.com/openai/v1'), model: 'canopylabs/orpheus-v1-english' }, {
+    fetch: /** @type {any} */ (async (/** @type {string} */ _u, /** @type {RequestInit} */ init) => {
+      inputs.push(JSON.parse(String(init.body)).input);
+      return new Response(encodeWav(new Int16Array(10), 24000));
+    }),
+  });
+  await src.synthesize('word '.repeat(100).trim());
+  assert.ok(inputs.length > 1 && inputs.every((s) => s.length <= 200));
+});
