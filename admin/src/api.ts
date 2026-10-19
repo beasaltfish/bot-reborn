@@ -23,4 +23,13 @@ export const api = {
   token: (id: string) => call<{ token: string }>('POST', `${one(id)}/token`),
   remove: (id: string) => call<object>('DELETE', one(id)),
   lan: () => call<{ port: number; addresses: string[] }>('GET', '/api/lan'),
+  /** The raw response: a TTS check answers with audio, not JSON. */
+  check: async (layer: string, body: unknown): Promise<Response> => {
+    const res = await fetch(`/api/check/${layer}`, { method: 'POST', headers: HEADERS, body: JSON.stringify(body) });
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      throw new Error((json as { error?: string }).error ?? `HTTP ${res.status}`);
+    }
+    return res;
+  },
 };
