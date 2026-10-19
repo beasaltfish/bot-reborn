@@ -4,7 +4,7 @@
 
 import { presetApi } from '../../core/provider-presets.js';
 import { OpenAiCompatStt } from '../../core/providers/stt-openai-compat.js';
-import { VolcengineStt } from '../../core/providers/stt-volcengine.js';
+import { VolcengineStt } from './stt-volcengine.js';
 import { OpenAiTtsSource } from './tts-openai.js';
 import { VolcengineTtsSource } from './tts-volcengine.js';
 
@@ -13,7 +13,7 @@ import { VolcengineTtsSource } from './tts-volcengine.js';
  * @param {{ fetch?: typeof fetch }} [net]
  */
 export function makeStt(cfg, net = {}) {
-  return presetApi('stt', cfg) === 'volcengine' ? new VolcengineStt(cfg, net) : new OpenAiCompatStt(cfg, net);
+  return presetApi('stt', cfg) === 'volcengine' ? new VolcengineStt(cfg) : new OpenAiCompatStt(cfg, net);
 }
 
 /**

@@ -184,7 +184,7 @@ test('no two rows in a layer share an address', () => {
 
 test('Volcengine is listed for STT and TTS with its resource ids', () => {
   const stt = presetById('stt', 'volcengine');
-  assert.deepEqual(stt?.models, ['volc.bigasr.auc_turbo']);
+  assert.deepEqual(stt?.models, ['volc.seedasr.sauc.duration', 'volc.seedasr.sauc.concurrent']);
   assert.equal(stt?.api, 'volcengine');
   assert.equal(stt?.baseURL, 'https://openspeech.bytedance.com');
   const tts = presetById('tts', 'volcengine');

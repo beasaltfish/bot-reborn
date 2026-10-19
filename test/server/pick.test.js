@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { makeStt, makeTtsSource } from '../../server/providers/pick.js';
 import { OpenAiCompatStt } from '../../core/providers/stt-openai-compat.js';
-import { VolcengineStt } from '../../core/providers/stt-volcengine.js';
+import { VolcengineStt } from '../../server/providers/stt-volcengine.js';
 import { OpenAiTtsSource } from '../../server/providers/tts-openai.js';
 import { VolcengineTtsSource } from '../../server/providers/tts-volcengine.js';
 

@@ -187,12 +187,13 @@ export const PRESETS = withMainland({
       models: ['whisper-v3-turbo'],
     },
     {
-      // The flash ("极速版") recording recogniser: one request, whole clip,
-      // answer in the response. Not 一句话识别, the older small model.
+      // 一句话识别 in whole-sentence mode (`bigmodel_nostream`), 2.0 only.
+      // Hourly first: it needs no concurrency bought ahead. Not the flash
+      // recogniser any more — Volcengine moved it to 历史文档, and it is 1.0.
       id: 'volcengine',
       label: 'Volcengine 火山引擎',
       baseURL: VOLCENGINE,
-      models: ['volc.bigasr.auc_turbo'],
+      models: ['volc.seedasr.sauc.duration', 'volc.seedasr.sauc.concurrent'],
       api: 'volcengine',
     },
   ],
