@@ -36,6 +36,10 @@ export function LayerTab({ id, layer, config, endpoints, update, check }: {
   const [error, setError] = useState<string | null>(null);
   const set = (p: Partial<LayerConfig>) => update({ config: { [layer]: p } });
   const voices = voicesFor(preset, cfg.model);
+  // "Other" is open when it was picked, or when the stored voice is not one
+  // the list has — a typed-in id must never be swapped for the default.
+  const [freeVoice, setFreeVoice] = useState(false);
+  const otherVoice = freeVoice || (Boolean(cfg.voice) && !voices.includes(cfg.voice ?? ''));
 
   // Changes one entry's fields, and every layer that uses it follows.
   const changeEntry = (entryId: string, change: Partial<Endpoint>) => {
@@ -48,11 +52,13 @@ export function LayerTab({ id, layer, config, endpoints, update, check }: {
     const made = list === endpoints ? {} : { endpoints: list };
     if (e.custom || !presetById(layer, e.id)) {
       setFreeModel(true);
+      setFreeVoice(false);
       update({ ...made, config: { [layer]: { endpointId: e.id, baseURL: e.baseURL, apiKey: e.apiKey } } });
       return;
     }
     const r = pickProvider(layer, cfg, e.id);
     setFreeModel(r.freeModel);
+    setFreeVoice(false);
     update({ ...made, config: { [layer]: { ...r.patch, endpointId: e.id, baseURL: e.baseURL, apiKey: e.apiKey } } });
   };
 
@@ -187,12 +193,27 @@ export function LayerTab({ id, layer, config, endpoints, update, check }: {
       {layer === 'tts' && (
         <label>{t('voice')}
           {voices.length ? (
-            <select aria-label={t('voice')} value={cfg.voice || voices[0]} onChange={(e) => set({ voice: e.target.value })}>
-              {voices.map((v) => <option key={v} value={v}>{v}</option>)}
+            <select
+              aria-label={t('voice')}
+              value={otherVoice ? '' : cfg.voice || voices[0]}
+              onChange={(e) => {
+                const v = e.target.value;
+                setFreeVoice(v === '');
+                if (v) set({ voice: v });
+              }}
+            >
+              {voices.map((v) => <option key={v} value={v}>{preset?.voiceLabels?.[v] ?? v}</option>)}
+              <option value="">{t('custom')}</option>
             </select>
           ) : (
             <input aria-label={t('voice')} value={cfg.voice ?? ''} onChange={(e) => set({ voice: e.target.value })} />
           )}
+        </label>
+      )}
+      {layer === 'tts' && voices.length > 0 && otherVoice && (
+        <label>{t('voiceName')}
+          <input aria-label={t('voiceName')} value={cfg.voice ?? ''} onChange={(e) => set({ voice: e.target.value })} />
+          {preset?.voicesURL && <a href={preset.voicesURL} target="_blank" rel="noreferrer">{t('voicesLink')}</a>}
         </label>
       )}
       <label>{t('key')}

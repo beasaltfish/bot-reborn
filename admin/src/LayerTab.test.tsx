@@ -133,3 +133,55 @@ describe('LayerTab copying a provider', () => {
     }));
   });
 });
+
+const VOLC = 'https://openspeech.bytedance.com';
+const volc: Endpoint = { id: 'volcengine', name: 'Volcengine 火山引擎', baseURL: VOLC, apiKey: 'v-1' };
+const openai: Endpoint = { id: 'openai', name: 'OpenAI', baseURL: 'https://api.openai.com/v1', apiKey: 'sk-1' };
+
+function setupTts(tts: object, endpoints: Endpoint[]) {
+  const config = blankConfig();
+  config.tts = { ...config.tts, ...tts };
+  const update = vi.fn();
+  render(<LayerTab id="A" layer="tts" config={config} endpoints={endpoints} update={update} check={vi.fn()} />);
+  return { update };
+}
+
+describe('LayerTab voices', () => {
+  const onVolc = (voice: string) => setupTts(
+    { endpointId: 'volcengine', baseURL: VOLC, apiKey: 'v-1', model: 'seed-tts-2.0', voice }, [volc]);
+
+  it('Volcengine voices show their labels and store the id', async () => {
+    const { update } = onVolc('zh_female_xiaohe_uranus_bigtts');
+    const select = screen.getByLabelText('Voice') as HTMLSelectElement;
+    expect(select.selectedOptions[0].textContent).toBe('小何 2.0');
+    await userEvent.selectOptions(select, 'Vivi 2.0');
+    expect(update).toHaveBeenLastCalledWith({ config: { tts: { voice: 'zh_female_vv_uranus_bigtts' } } });
+  });
+
+  it('Other opens a voice ID field with the full list link beside it', async () => {
+    const { update } = onVolc('zh_female_xiaohe_uranus_bigtts');
+    expect(screen.queryByLabelText('Voice ID')).toBeNull();
+    await userEvent.selectOptions(screen.getByLabelText('Voice'), '');
+    const link = screen.getByRole('link', { name: 'Full voice list' });
+    expect(link).toHaveAttribute('href', 'https://docs.volcengine.com/docs/DoubaoVoice/Tonelist-1');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noreferrer');
+    await userEvent.type(screen.getByLabelText('Voice ID'), 'x');
+    expect(update).toHaveBeenLastCalledWith({ config: { tts: { voice: 'zh_female_xiaohe_uranus_bigttsx' } } });
+  });
+
+  it('a stored voice that is not listed opens as Other with its id filled in', () => {
+    const { update } = onVolc('ICL_uranus_zh_female_aojiaonvyou_tob');
+    expect((screen.getByLabelText('Voice') as HTMLSelectElement).value).toBe('');
+    expect(screen.getByLabelText('Voice ID')).toHaveValue('ICL_uranus_zh_female_aojiaonvyou_tob');
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('OpenAI voices are unchanged: label is the id, no link', async () => {
+    setupTts({ endpointId: 'openai', baseURL: 'https://api.openai.com/v1', apiKey: 'sk-1', model: 'tts-1', voice: 'nova' }, [openai]);
+    const select = screen.getByLabelText('Voice') as HTMLSelectElement;
+    expect(select.selectedOptions[0].textContent).toBe('nova');
+    await userEvent.selectOptions(select, '');
+    expect(screen.queryByRole('link', { name: 'Full voice list' })).toBeNull();
+  });
+});
