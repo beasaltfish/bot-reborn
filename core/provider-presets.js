@@ -287,7 +287,10 @@ export const PRESETS = withMainland({
       id: 'openai',
       label: 'OpenAI',
       baseURL: 'https://api.openai.com/v1',
-      models: ['tts-1', 'tts-1-hd'],
+      // gpt-4o-mini-tts is OpenAI's recommended one; it goes last so a new
+      // character keeps starting on tts-1. marin and cedar, OpenAI's best,
+      // are not in the tts-1 family's voice list (docs read 2026-10-19).
+      models: ['tts-1', 'tts-1-hd', 'gpt-4o-mini-tts'],
       // §11.1 fixes ONE voice rather than switching per language, so these
       // lists are "which voice", never "which voice for which language".
       //
@@ -299,10 +302,11 @@ export const PRESETS = withMainland({
       // strength of a decision made for a different user is the same mistake
       // as testing that user's setup with a code-switching clip.
       //
-      // OpenAI's names stand on their own, so both models share them.
+      // OpenAI's names stand on their own, so the tts-1 models share them.
       voices: {
         'tts-1': ['alloy', 'nova', 'shimmer'],
         'tts-1-hd': ['alloy', 'nova', 'shimmer'],
+        'gpt-4o-mini-tts': ['marin', 'cedar', 'alloy', 'nova', 'shimmer'],
       },
     },
     {
