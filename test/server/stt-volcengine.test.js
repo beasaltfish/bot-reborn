@@ -41,8 +41,14 @@ function fakeConnect(script = {}) {
       socket.sent.push(b);
       if (b[1] === 0x23) script.onLast?.(socket);
     };
-    socket.close = () => { socket.closed = true; };
-    socket.terminate = () => { socket.terminated = true; };
+    let open = false;
+    socket.on('open', () => { open = true; });
+    // Like ws: ending a socket still connecting emits an error, next tick.
+    const end = () => {
+      if (!open) process.nextTick(() => socket.emit('error', new Error('WebSocket was closed before the connection was established')));
+    };
+    socket.close = () => { socket.closed = true; end(); };
+    socket.terminate = () => { socket.terminated = true; end(); };
     if (script.open !== false) setImmediate(() => socket.emit('open'));
     return socket;
   });
@@ -124,6 +130,23 @@ test('abort closes the socket and rejects', async () => {
   await assert.rejects(p);
   const s = fake.socket();
   assert.ok(s.closed || s.terminated);
+});
+
+test('an already-aborted signal rejects with its reason and opens no socket', async () => {
+  // Opening one and terminating it emits an error before any listener is on,
+  // which would crash the whole brain.
+  const fake = fakeConnect();
+  const ac = new AbortController();
+  ac.abort(new Error('barged in'));
+  await assert.rejects(new VolcengineStt(CFG, { connect: fake.connect }).transcribe(PCM, 16000, { signal: ac.signal }), /barged in/);
+  await new Promise((r) => setImmediate(r));
+  assert.equal(fake.socket(), undefined);
+});
+
+test('a close without a result names the close code and reason', async () => {
+  const fake = fakeConnect({ onLast: (s) => s.emit('close', 1011, Buffer.from('server says bye')) });
+  await assert.rejects(new VolcengineStt(CFG, { connect: fake.connect }).transcribe(PCM, 16000),
+    /closed before the result \(1011 server says bye\)/);
 });
 
 test('the retired flash model id is sent as 2.0 duration', async () => {

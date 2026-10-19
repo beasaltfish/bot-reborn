@@ -81,6 +81,9 @@ export class VolcengineStt {
    * @returns {Promise<{ text: string, noSpeech: null, logprob: null, parts: number }>}
    */
   transcribeDetailed(pcm, sampleRate, opts = {}) {
+    // Before any socket: one opened and ended before its listeners are on
+    // emits an error nobody catches, and that takes the whole brain down.
+    if (opts.signal?.aborted) return Promise.reject(opts.signal.reason ?? new Error('aborted'));
     const model = !this.#cfg.model || this.#cfg.model === RETIRED ? DEFAULT_MODEL : this.#cfg.model;
     const socket = this.#connect(socketURL(this.#cfg.baseURL), {
       'X-Api-Key': this.#cfg.apiKey,
@@ -103,7 +106,6 @@ export class VolcengineStt {
 
       const timer = setTimeout(() => fail(new Error(`Volcengine STT timed out after ${this.#timeoutMs} ms`), true), this.#timeoutMs);
       const onAbort = () => fail(opts.signal?.reason ?? new Error('aborted'), true);
-      if (opts.signal?.aborted) return onAbort();
       opts.signal?.addEventListener('abort', onAbort, { once: true });
 
       socket.on('open', () => {
@@ -141,7 +143,11 @@ export class VolcengineStt {
         fail(new Error(`Volcengine STT ${res?.statusCode}${said ? `: ${said}` : ''}`), true);
       });
       socket.on('error', (/** @type {Error} */ err) => fail(err, true));
-      socket.on('close', () => fail(new Error('Volcengine STT closed before the result')));
+      // The close reason may be the only place Volcengine says why.
+      socket.on('close', (/** @type {number} */ code, /** @type {Buffer} */ reason) => {
+        const why = [code, String(reason ?? '')].filter(Boolean).join(' ');
+        fail(new Error(`Volcengine STT closed before the result${why ? ` (${why})` : ''}`));
+      });
     });
   }
 }
