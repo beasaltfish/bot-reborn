@@ -8,6 +8,7 @@
 #include "console.h"
 #include "led.h"
 #include "link.h"
+#include "motor.h"
 #include "net.h"
 #include "settings.h"
 
@@ -22,17 +23,29 @@ static void on_message(const brain_msg_t *m) {
     case MSG_HUSH:
       audio_hush();
       break;
+    case MSG_MOVE:
+      motor_move(m->drive, m->steer, m->ms);
+      break;
+    case MSG_STOP:
+      motor_stop();
+      break;
     default:
       break;
   }
 }
 
-static void on_lost(void) {}
+/* No brain: stop the car, and stop saying whatever it was saying. */
+static void on_lost(void) {
+  motor_stop();
+  audio_hush();
+}
 
 static const link_handlers_t HANDLERS = { on_message, audio_play_bytes, on_lost };
 
 void app_main(void) {
+  motor_init();   /* before anything else: the pins float until this runs */
   settings_load(&settings);
+  motor_start(&settings.calib);
   led_start();
   console_start(&settings);
   printf("body: protocol %d, brain at %s\n", PROTO_VERSION, settings.url);
