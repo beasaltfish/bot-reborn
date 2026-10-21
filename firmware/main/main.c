@@ -1,6 +1,45 @@
+// The body: settings, the light, the serial console, Wi-Fi, then the brain.
+// Firmware spec §2: listen, play, move, keep the watchdog, show the state.
+
 #include <stdio.h>
-#include "proto.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "console.h"
+#include "led.h"
+#include "link.h"
+#include "net.h"
+#include "settings.h"
+
+static settings_t settings;
+
+static void on_message(const brain_msg_t *m) {
+  led_mode_t mode;
+  switch (m->type) {
+    case MSG_STATE:
+      if (led_mode_for_state(m->text, &mode)) led_set(mode);
+      break;
+    default:
+      break;
+  }
+}
+
+static void on_audio(const uint8_t *bytes, size_t n) { (void)bytes; (void)n; }
+
+static void on_lost(void) {}
+
+static const link_handlers_t HANDLERS = { on_message, on_audio, on_lost };
 
 void app_main(void) {
-  printf("body: protocol %d\n", PROTO_VERSION);
+  settings_load(&settings);
+  led_start();
+  console_start(&settings);
+  printf("body: protocol %d, brain at %s\n", PROTO_VERSION, settings.url);
+
+  /* Nothing to connect with yet: say what is missing until it is typed. */
+  while (!settings.ssid[0] || !settings.token[0]) {
+    printf("not set up: type %s, then reboot (help lists commands)\n", !settings.ssid[0] ? "wifi <ssid> [pass]" : "token <32 hex>");
+    vTaskDelay(pdMS_TO_TICKS(5000));
+  }
+  net_start(&settings);
+  link_start(&settings, &HANDLERS);
 }
