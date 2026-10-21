@@ -16,6 +16,8 @@ typedef struct {
 } link_handlers_t;
 
 void link_start(const settings_t *s, const link_handlers_t *h);
-/* False, and nothing sent, before welcome or when the send does not go
-   within 50 ms: the microphone drops that block rather than wait. */
+/* False, and nothing sent, before welcome. A send that cannot go within
+   SEND_TIMEOUT_MS (link.c) costs the connection, not just the block: that is
+   esp_websocket_client's rule, so the TCP send buffer is sized to make it
+   rare (sdkconfig.defaults). */
 bool link_send_audio(const int16_t *pcm, size_t n);

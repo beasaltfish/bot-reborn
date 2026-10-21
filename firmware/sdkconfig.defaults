@@ -1,2 +1,7 @@
 CONFIG_IDF_TARGET="esp32s3"
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+# A second of audio may be in flight. At lwIP's default (5760 B) a socket
+# stops being writable with ~2.9 kB unsent, and esp_websocket_client treats a
+# send that times out as a dead connection: a 150 ms Wi-Fi stall would
+# disconnect the body. The watchdogs on both sides decide "gone", not this.
+CONFIG_LWIP_TCP_SND_BUF_DEFAULT=32768

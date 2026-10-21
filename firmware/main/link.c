@@ -16,6 +16,11 @@
 /* The brain drops a body that has not said hello within 5 s (link.js). */
 #define HELLO_TIMEOUT_MS 5000
 
+/* esp_websocket_client aborts the connection when a send times out, so a send
+   waits well past a Wi-Fi stall and leaves "the brain is gone" to the 1 s
+   watchdogs. Not longer: the link task also runs the watchdog. */
+#define SEND_TIMEOUT_MS 300
+
 static EventGroupHandle_t bits;
 static esp_websocket_client_handle_t client;
 static const settings_t *settings;
@@ -93,7 +98,7 @@ static void on_event(void *arg, esp_event_base_t base, int32_t id, void *event) 
 }
 
 static void send_text(const char *s) {
-  esp_websocket_client_send_text(client, s, strlen(s), pdMS_TO_TICKS(100));
+  esp_websocket_client_send_text(client, s, strlen(s), pdMS_TO_TICKS(SEND_TIMEOUT_MS));
 }
 
 /* Connected: hello, then pong, ping and watch until the connection is lost
@@ -164,5 +169,5 @@ void link_start(const settings_t *s, const link_handlers_t *h) {
 
 bool link_send_audio(const int16_t *pcm, size_t n) {
   if (!welcomed || !esp_websocket_client_is_connected(client)) return false;
-  return esp_websocket_client_send_bin(client, (const char *)pcm, (int)(n * sizeof *pcm), pdMS_TO_TICKS(50)) >= 0;
+  return esp_websocket_client_send_bin(client, (const char *)pcm, (int)(n * sizeof *pcm), pdMS_TO_TICKS(SEND_TIMEOUT_MS)) >= 0;
 }
