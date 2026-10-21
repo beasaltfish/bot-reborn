@@ -37,8 +37,7 @@ computer as its brain.**
   barks back) and *simple commands* ("stop", "come here", "turn left" act at
   once). Both are just data you can edit on the admin page.
 - **It listens while its screen is on.** No wake word needed, though you can
-  turn one on. Say the stop word or hit the stop button and the car stops,
-  whatever it was doing.
+  turn one on. Hit the stop button and the car stops, whatever it was doing.
 - **Several characters, one brain.** Each robot is a character with its own
   name, voice, providers and keys, all set up from an admin page in your
   browser, in English or Chinese.

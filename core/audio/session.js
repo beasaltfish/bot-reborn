@@ -5,7 +5,7 @@
 // of those APIs exist in node:test, and pushing the logic out of them is the
 // only way this file can be tested at all (§10).
 
-import { classifyLabel, WAKE, STOP } from './keyword-lines.js';
+import { classifyLabel, WAKE } from './keyword-lines.js';
 import { RATE } from '../protocol.js';
 import { toInt16 } from './pcm.js';
 import { rms, aboveFloor } from './level.js';
@@ -61,12 +61,16 @@ export const LOGPROB_FLOOR = -1;
  * writing it this way is that nobody has to reconstruct the table from
  * scattered imperative switches, which is where combination defects breed.
  *
+ * The spotter listens for the wake word and nothing else, so with the wake
+ * word switched off it has nothing to do in any row.
+ *
  * @param {State} state
  * @param {boolean} bargeIn
  * @param {boolean} earconPlaying
+ * @param {boolean} wakeWord
  * @returns {{ kws: boolean, vad: boolean }}
  */
-export function wantedSubscriptions(state, bargeIn, earconPlaying) {
+export function wantedSubscriptions(state, bargeIn, earconPlaying, wakeWord) {
   const rows = [
     { when: earconPlaying, kws: false, vad: false },
     { when: state === 'SLEEPING', kws: true, vad: false },
@@ -75,7 +79,7 @@ export function wantedSubscriptions(state, bargeIn, earconPlaying) {
     { when: true, kws: true, vad: true },
   ];
   const row = /** @type {{ kws: boolean, vad: boolean }} */ (rows.find((r) => r.when));
-  return { kws: row.kws, vad: row.vad };
+  return { kws: row.kws && wakeWord, vad: row.vad };
 }
 
 export class Session {
@@ -386,9 +390,9 @@ export class Session {
           // THINKING, and putting it into LISTENING here would end the turn
           // early — brain.js still has its failure to report.
           //
-          // The generation check is the whole fix for the spike's second bug:
-          // an unconditional setState('LISTENING') here undoes the SLEEPING
-          // that `all stop` just set, one tick later and invisibly.
+          // The generation check: an unconditional setState('LISTENING') here
+          // would undo the state an emergency stop just set, one tick later
+          // and invisibly.
           if (started && gen === this.#gen) this.#setState('LISTENING');
         }
       },
@@ -398,17 +402,13 @@ export class Session {
 
   /** @param {string} label */
   #onKeyword(label) {
-    const kind = classifyLabel(label);
     // A label no shipped keyword file produces means somebody renamed one.
-    // Guessing at it is how a stop word quietly becomes a no-op.
-    if (kind === STOP) return this.onEmergencyStop();
-    // Switched off, the name is just a word somebody said. The spotter still
-    // runs, because the stop word lives in the same model and is the brake.
-    if (kind === WAKE && !this.#wakeWord) return;
-    // The stop word is answered in every state, above: it is the brake, and the
-    // car can be rolling in all of them. The wake word is not, and CAPTURING is
-    // where answering it does harm. #onWake plays the `wake` earcon there
-    // (`interrupting` covers SPEAKING and THINKING, not this), and an earcon
+    if (classifyLabel(label) !== WAKE) return;
+    // Switched off, the name is just a word somebody said.
+    if (!this.#wakeWord) return;
+    // Not in CAPTURING: that is where answering it does harm. #onWake plays
+    // the `wake` earcon there (`interrupting` covers SPEAKING and THINKING,
+    // not this), and an earcon
     // unsubscribes the whole pipeline for its 80 ms — punching a hole in the
     // middle of the sentence the VAD is recording. There is nothing to gain in
     // exchange: the session is already listening.
@@ -417,15 +417,15 @@ export class Session {
     // zero false triggers, which is a very conservative operating point, and
     // spending that headroom means buying false wakes. This is what makes them
     // safe to buy.
-    if (kind === WAKE && this.#state === 'CAPTURING') return;
-    if (kind === WAKE) return this.#onWake();
+    if (this.#state === 'CAPTURING') return;
+    this.#onWake();
   }
 
   /**
    * Spec §5.5. The wake word means "I am about to say a command", so the half
    * sentence behind it is the message and the VAD buffer is NOT cleared. During
    * playback it is the poor man's barge-in: it shuts the robot up and does
-   * nothing else. It must not share a branch with the stop word.
+   * nothing else. It must not share a branch with the emergency stop.
    */
   #onWake() {
     const interrupting = this.#state === 'SPEAKING' || this.#state === 'THINKING';
@@ -451,7 +451,7 @@ export class Session {
   }
 
   /**
-   * Spec §4.1 layer 1 and layer 2 both arrive here. The order is not
+   * The stop button (spec §4.1 layer 2) and the brain's own stop arrive here. The order is not
    * negotiable: stop the car FIRST, without going through any intermediate
    * layer, then let the state machine tidy itself. If the machine is wedged on
    * an await the car has already stopped; if the tidying throws, the car has
@@ -462,8 +462,7 @@ export class Session {
     this.#executor.stop();
     this.#abortTurn();
     this.#tts.cancel();
-    // The opposite of the wake word: "stop now, never mind the rest" — whatever
-    // is in hand is not wanted (§5.5).
+    // "Stop now, never mind the rest" — whatever is in hand is not wanted.
     this.#vad.clear();
     this.#brain?.resetHistory();
     this.#playEarcon('sleep');
@@ -522,8 +521,7 @@ export class Session {
    * the deadline has passed (Node's setTimeout against Date.now does, about
    * one time in three hundred). The reconcile then still sees the earcon
    * playing, and if nothing asked again the session would stay deaf for
-   * good — to the stop word as well, with no frames reaching #checkIdle to
-   * end a cruise. So an early wake-up books another.
+   * good, with no frames reaching #checkIdle to end a cruise. So an early wake-up books another.
    */
   #reopen = () => {
     const left = this.#earconUntil - this.#now();
@@ -533,7 +531,7 @@ export class Session {
 
   #reconcile() {
     const want = wantedSubscriptions(
-      this.#state, this.#config.bargeIn, this.#now() < this.#earconUntil,
+      this.#state, this.#config.bargeIn, this.#now() < this.#earconUntil, this.#wakeWord,
     );
     this.#gate('kws', want.kws, this.#onKwsFrame);
     this.#gate('vad', want.vad, this.#onVadFrame);

@@ -10,7 +10,7 @@ import { parseWav } from '../../server/audio/pcm.js';
 const skip = modelsPresent() ? false : 'models missing — run server/models/fetch.sh';
 
 test('the shipped keyword lines all use known tokens', { skip }, () => {
-  assert.match(loadKeywords(), /@all_stop/);
+  assert.match(loadKeywords(), /@hey_steven/);
 });
 
 test('the spotter hears nothing in silence', { skip }, () => {

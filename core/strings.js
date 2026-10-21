@@ -2,11 +2,14 @@
 // follows `lang`. The voice chain (STT → LLM → TTS) never reads it.
 
 /**
- * Spec §5.5. Both keywords are English and independent of `lang`; they identify
- * *this device* and control it physically, so they are not part of the UI's
- * language at all.
+ * Spec §5.5. The keyword is English and independent of `lang`; it identifies
+ * *this device*, so it is not part of the UI's language at all.
+ *
+ * There used to be a second one, the stop word "all stop". It was removed: most
+ * bodies do not move, an English phrase served Chinese speakers badly, and the
+ * robot had to be told never to say it. The stop button is the brake.
  */
-export const KEYWORDS = /** @type {const} */ (['hey steven', 'all stop']);
+export const KEYWORDS = /** @type {const} */ (['hey steven']);
 
 /**
  * NOTE: every value here may be read aloud by TTS, bypassing the LLM. None of

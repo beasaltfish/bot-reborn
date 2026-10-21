@@ -70,8 +70,11 @@ The wake word is still there, off, as a switch in settings. On, it brings back
 microphone opens, by the session and the hint alike, so flipping it lands on the
 next Listen — never on a robot that is asleep with no name left to wake it.
 
-The stop word is not part of that switch. It lives in the same keyword model,
-and it is the brake.
+There is no stop word any more. "all stop" used to be a second keyword in the
+same model, answered in every state; it was removed on 2026-10-21. Most bodies
+do not move, an English phrase served Chinese speakers badly, and the robot had
+to be told in its prompt never to say it. The stop button is the brake. A
+spoken brake can come back later as a feature of its own.
 
 ### Once it listens, the screen is its face
 
@@ -114,7 +117,7 @@ stateDiagram-v2
     SPEAKING --> LISTENING: a tap on the robot
     THINKING --> LISTENING: a tap on the robot
     LISTENING --> LISTENING: 30 s with nothing said — car stops, conversation forgotten
-    LISTENING --> LISTENING: stop word — brake, stay awake
+    LISTENING --> LISTENING: stop button — brake, stay awake
     LISTENING --> [*]: the screen goes off
 ```
 
@@ -143,7 +146,7 @@ stateDiagram-v2
     SPEAKING --> LISTENING: wake word interrupts
     THINKING --> LISTENING: wake word interrupts
     CAPTURING --> CAPTURING: wake word ignored here
-    SLEEPING --> SLEEPING: stop word — brake, stay asleep
+    LISTENING --> SLEEPING: stop button — brake, go to sleep
 ```
 
 | State | Eyes | Antenna | Also | Motion | Tint | Reads as |

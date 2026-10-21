@@ -53,7 +53,7 @@ export function createCheckApi(opts = {}) {
           toInt16(wav.samples), wav.rate);
       } else if (layer === 'llm') {
         text = await checkLlm(new OpenAiCompatLlm(config, { ...net, timeoutMs }), {
-          tools: TOOLS, systemPrompt: buildSystemPrompt({ replyLang: null, bargeIn: true }),
+          tools: TOOLS, systemPrompt: buildSystemPrompt({ replyLang: null }),
         });
       } else {
         text = await checkReflex(new Reflex(config, net), String(body?.heard ?? 'hello'), String(body?.robotSaid ?? ''));

@@ -322,6 +322,12 @@ All four lines validate against this model's `tokens.txt` (checked token by
 token). The pinyin line for the wake word is §5.5's dual spelling; the pinyin
 line for `all stop` is the same idea applied to a Chinese speaker's rendering.
 
+> **2026-10-21: the stop word is gone.** `stop.txt` and its two lines were
+> removed; only `name.txt` ships. The stop button is the brake. The lines and
+> the measurements below are kept as the record, for when a spoken brake comes
+> back as a feature of its own — the pinyin line never firing is the main thing
+> that would have to change.
+
 **Anything else on the line is fatal, not ignored.** An unknown token makes
 `EncodeKeywords()` return false, and `InitKeywords()` answers that with
 `SHERPA_ONNX_EXIT(-1)` — in wasm that aborts the whole module, and the page has

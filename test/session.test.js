@@ -144,28 +144,25 @@ export function harness(over = {}) {
 // --- §5.3, one assertion per row -------------------------------------------
 
 test('the subscription table has the five rows spec §5.3 has', () => {
-  assert.deepEqual(wantedSubscriptions('SLEEPING', true, false), { kws: true, vad: false });
-  assert.deepEqual(wantedSubscriptions('LISTENING', true, false), { kws: true, vad: true });
-  assert.deepEqual(wantedSubscriptions('CAPTURING', true, false), { kws: true, vad: true });
-  assert.deepEqual(wantedSubscriptions('THINKING', true, false), { kws: true, vad: true });
-  assert.deepEqual(wantedSubscriptions('SPEAKING', true, false), { kws: true, vad: true });
-  assert.deepEqual(wantedSubscriptions('SPEAKING', false, false), { kws: true, vad: false });
+  assert.deepEqual(wantedSubscriptions('SLEEPING', true, false, true), { kws: true, vad: false });
+  assert.deepEqual(wantedSubscriptions('LISTENING', true, false, true), { kws: true, vad: true });
+  assert.deepEqual(wantedSubscriptions('CAPTURING', true, false, true), { kws: true, vad: true });
+  assert.deepEqual(wantedSubscriptions('THINKING', true, false, true), { kws: true, vad: true });
+  assert.deepEqual(wantedSubscriptions('SPEAKING', true, false, true), { kws: true, vad: true });
+  assert.deepEqual(wantedSubscriptions('SPEAKING', false, false, true), { kws: true, vad: false });
 });
 
 test('an earcon gates everything, in every state', () => {
   for (const s of /** @type {const} */ (['SLEEPING', 'LISTENING', 'CAPTURING', 'THINKING', 'SPEAKING'])) {
-    assert.deepEqual(wantedSubscriptions(s, true, true), { kws: false, vad: false },
+    assert.deepEqual(wantedSubscriptions(s, true, true, true), { kws: false, vad: false },
       `${s} should be fully gated while an earcon plays`);
   }
 });
 
-test('the stop word is never gated out by a state — only by an earcon', () => {
-  // §5.5: "all stop" is valid in all states, no exceptions. A false for kws may
-  // only ever come from the earcon row.
-  for (const s of /** @type {const} */ (['SLEEPING', 'LISTENING', 'CAPTURING', 'THINKING', 'SPEAKING'])) {
-    for (const barge of [true, false]) {
-      assert.equal(wantedSubscriptions(s, barge, false).kws, true);
-    }
+test('without a wake word the spotter is off in every state, and the VAD is not', () => {
+  // The spotter has no other word to listen for.
+  for (const s of /** @type {const} */ (['LISTENING', 'CAPTURING', 'THINKING', 'SPEAKING'])) {
+    assert.deepEqual(wantedSubscriptions(s, true, false, false), { kws: false, vad: true });
   }
 });
 
@@ -272,34 +269,35 @@ test('the wake word does NOT clear the VAD buffer', () => {
   assert.equal(h.vad.cleared, 0);
 });
 
-test('the stop word DOES discard what is in hand', () => {
+test('the emergency stop DOES discard what is in hand', () => {
   // Opposite meaning, opposite cleanup: "stop now, never mind the rest".
   const h = harness();
   h.session.start();
   h.wake();
-  h.kws.hits.push('all_stop');
-  h.feed('kws');
+  h.session.onEmergencyStop();
   assert.ok(h.vad.cleared > 0);
   assert.equal(h.session.state, 'SLEEPING');
   assert.equal(h.took('executor.stop'), 1);
 });
 
-test('both spellings of each word behave identically (§11.2)', () => {
-  // The _zh lines are the same word spelled for a different mouth, not a
+test('both spellings of the wake word behave identically (§11.2)', () => {
+  // The _zh line is the same word spelled for a different mouth, not a
   // second keyword.
-  const a = harness();
-  a.session.start();
-  a.kws.hits.push('hey_steven_zh');
-  a.feed('kws');
-  assert.equal(a.session.state, 'LISTENING');
+  const h = harness();
+  h.session.start();
+  h.kws.hits.push('hey_steven_zh');
+  h.feed('kws');
+  assert.equal(h.session.state, 'LISTENING');
+});
 
-  const b = harness();
-  b.session.start();
-  b.wake();
-  b.kws.hits.push('all_stop_zh');
-  b.feed('kws');
-  assert.equal(b.session.state, 'SLEEPING');
-  assert.equal(b.took('executor.stop'), 1);
+test('the removed stop word is just an unknown label now', () => {
+  const h = harness();
+  h.session.start();
+  h.wake();
+  h.kws.hits.push('all_stop');
+  h.feed('kws');
+  assert.equal(h.took('executor.stop'), 0);
+  assert.equal(h.session.state, 'LISTENING');
 });
 
 test('a label no keyword file produces is ignored, not guessed at', () => {
@@ -310,13 +308,11 @@ test('a label no keyword file produces is ignored, not guessed at', () => {
   assert.equal(h.session.state, 'SLEEPING');
 });
 
-test('a stop word heard DURING playback stops the car, not just the mouth', async () => {
-  // The defect spec §5.5 names: the natural way to write "a keyword during
-  // playback cuts the TTS" puts both words in one branch, and the car keeps
-  // going. It is a safety defect, and the spike still has it.
+test('an emergency stop DURING playback stops the car, not just the mouth', async () => {
+  // The natural way to write "cut the TTS" shares a branch with the wake
+  // word's interruption, and the car keeps going.
   const h = await speakingSession();
-  h.kws.hits.push('all_stop');
-  h.feed('kws');
+  h.session.onEmergencyStop();
   assert.ok(h.took('tts.cancel') > 0, 'the mouth is shut');
   assert.equal(h.took('executor.stop'), 1, 'AND the car is stopped');
   assert.equal(h.session.state, 'SLEEPING');
@@ -329,15 +325,6 @@ test('a wake word heard during playback is only an interruption', async () => {
   assert.ok(h.took('tts.cancel') > 0);
   assert.equal(h.took('executor.stop'), 0, 'the car is not part of this');
   assert.equal(h.session.state, 'LISTENING');
-});
-
-test('the emergency button and the stop word take the same path (§4.1)', () => {
-  const h = harness();
-  h.session.start();
-  h.wake();
-  h.session.onEmergencyStop();
-  assert.equal(h.took('executor.stop'), 1);
-  assert.equal(h.session.state, 'SLEEPING');
 });
 
 // --- one turn --------------------------------------------------------------
@@ -482,10 +469,10 @@ test('SPEAKING brackets exactly the playback, not the whole turn', async () => {
   assert.equal(h.session.state, 'LISTENING');
 });
 
-test('a stop word mid-reply leaves the session ASLEEP, not listening', async () => {
+test('an emergency stop mid-reply leaves the session ASLEEP, not listening', async () => {
   // The spike's second bug: speak()'s tail did an unconditional
-  // setState('LISTENING'), which put back the SLEEPING that `all stop` had just
-  // set. §4.5's generation counter is exactly what covers this.
+  // setState('LISTENING'), which put back the SLEEPING the stop had just set.
+  // §4.5's generation counter is exactly what covers this.
   const h = harness();
   const brain = fakeBrain(h.session, h.calls);
   h.session.attach(brain);
@@ -498,8 +485,7 @@ test('a stop word mid-reply leaves the session ASLEEP, not listening', async () 
   brain.finish();                       // the brain reaches speakingTts.speak()
   await settle();
   assert.equal(h.session.state, 'SPEAKING');
-  h.kws.hits.push('all_stop');
-  h.feed('kws');
+  h.session.onEmergencyStop();
   assert.equal(h.session.state, 'SLEEPING');
   await settle();
   assert.equal(h.session.state, 'SLEEPING', 'the tail of speak() must not undo it');
@@ -710,7 +696,7 @@ test('the wake word is ignored while a sentence is being captured', async () => 
   assert.equal(h.session.state, 'CAPTURING', 'the capture was not interrupted');
 });
 
-test('the stop word is still answered while capturing — it is the brake', async () => {
+test('the emergency stop is still answered while capturing — it is the brake', async () => {
   const h = harness();
   h.session.attach(fakeBrain(h.session, h.calls));
   h.session.start();
@@ -718,8 +704,7 @@ test('the stop word is still answered while capturing — it is the brake', asyn
   h.vad.detected = true;
   h.feed('vad');
   assert.equal(h.session.state, 'CAPTURING');
-  h.kws.hits.push('all_stop');
-  h.feed('kws');
+  h.session.onEmergencyStop();
   assert.equal(h.took('executor.stop'), 1);
   assert.equal(h.session.state, 'SLEEPING');
 });
@@ -804,7 +789,7 @@ test('§5.3: the ear is not shut for a window with nothing playing in it', async
   // With bargeIn off, SPEAKING unsubscribes the VAD so the robot does not hear
   // itself. During the fetch there is no sound to hear, and the ear used to be
   // shut for the whole 1–2 s of it anyway.
-  const h = harness({ config: { ...defaultConfig('en'), bargeIn: false } });
+  const h = harness({ config: { ...defaultConfig('en'), bargeIn: false, wakeWord: true } });
   const brain = fakeBrain(h.session, h.calls);
   h.session.attach(brain);
   h.session.start();
@@ -844,7 +829,7 @@ test('without a wake word it starts awake, ears open', () => {
   assert.equal(h.session.state, 'LISTENING');
   assert.deepEqual(h.calls.filter((c) => c[0] === 'earcon').map((c) => c[1]), ['wake']);
   h.tick(80);
-  assert.deepEqual(h.names(), ['kws', 'vad'], 'the stop word is still heard');
+  assert.deepEqual(h.names(), ['vad'], 'no spotter: it has no word to listen for');
 });
 
 test('without a wake word, 30 s of silence still stops the car — and stays awake', () => {
@@ -874,12 +859,11 @@ test('without a wake word, saying its name does nothing', async () => {
   assert.equal(h.session.state, 'SPEAKING');
 });
 
-test('without a wake word, the stop word brakes and it stays awake', () => {
+test('without a wake word, the emergency stop brakes and it stays awake', () => {
   const h = awake();
   h.session.start();
   h.tick(80);
-  h.kws.hits.push('all_stop');
-  h.feed('kws');
+  h.session.onEmergencyStop();
   assert.equal(h.took('executor.stop'), 1);
   assert.equal(h.session.state, 'LISTENING');
 });
@@ -957,7 +941,7 @@ test('a gate timer that fires a hair early still reopens the ears', () => {
   // Node's setTimeout can run a fraction of a millisecond before a Date.now
   // deadline. Found in the brain-server review: the one reconcile it ran saw
   // the earcon "still playing", nothing scheduled another, and the session
-  // stayed deaf — to the stop word too — with a cruise running.
+  // stayed deaf with a cruise running.
   const h = harness();
   h.session.wake();
   h.tick(79.5);
