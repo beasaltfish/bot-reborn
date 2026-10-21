@@ -1,3 +1,4 @@
+#include <string.h>
 #include "link_policy.h"
 
 static const uint32_t RETRY_MS[] = {500, 1000, 2000, 5000};
@@ -9,9 +10,13 @@ uint32_t retry_next_ms(retry_t *r) {
   return wait;
 }
 
-void retry_welcomed(retry_t *r) { r->attempt = 0; }
+void retry_welcomed(retry_t *r) { r->attempt = 0; r->busy = false; }
 
-void retry_rejected(retry_t *r) { r->finished = true; }
+void retry_rejected(retry_t *r, const char *reason, uint32_t now_ms) {
+  if (strcmp(reason, "busy") != 0) { r->finished = true; return; }
+  if (!r->busy) { r->busy = true; r->busy_since_ms = now_ms; }
+  if ((uint32_t)(now_ms - r->busy_since_ms) >= LINK_BUSY_GIVE_UP_MS) r->finished = true;
+}
 
 void dog_start(dog_t *d, uint32_t now_ms) { d->live = true; d->last_heard_ms = now_ms; }
 

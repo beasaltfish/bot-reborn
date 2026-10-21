@@ -54,7 +54,7 @@ static void on_text(const char *s, size_t n) {
       printf("welcomed as %s\n", m.text);
     } else if (m.type == MSG_REJECT) {
       strlcpy(reject_reason, m.text, sizeof reject_reason);
-      retry_rejected(&retry);
+      retry_rejected(&retry, m.text, now_ms());
       xEventGroupSetBits(bits, LOST);
     }
     return;
@@ -128,6 +128,7 @@ static void link_task(void *arg) {
     led_set(LED_CONNECTING);
     xEventGroupClearBits(bits, CONNECTED | LOST);
     text.len = 0;
+    reject_reason[0] = '\0';
     frame_op = 0;
     if (esp_websocket_client_start(client) == ESP_OK) {
       EventBits_t b = xEventGroupWaitBits(bits, CONNECTED | LOST, pdFALSE, pdFALSE, pdMS_TO_TICKS(5000));
@@ -146,7 +147,11 @@ static void link_task(void *arg) {
       vTaskDelete(NULL);
     }
     uint32_t wait = retry_next_ms(&retry);
-    printf("%s %s; trying again in %u ms\n", had ? "lost" : "could not reach", settings->url, (unsigned)wait);
+    if (reject_reason[0]) {
+      printf("busy: another body has this character, or the brain has not let go of the last connection; trying again in %u ms\n", (unsigned)wait);
+    } else {
+      printf("%s %s; trying again in %u ms\n", had ? "lost" : "could not reach", settings->url, (unsigned)wait);
+    }
     vTaskDelay(pdMS_TO_TICKS(wait));
   }
 }

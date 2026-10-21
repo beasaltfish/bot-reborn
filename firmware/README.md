@@ -62,6 +62,10 @@ robot would hear itself and interrupt itself.
 | fast blink | no Wi-Fi |
 | short blink each second | looking for the brain |
 | slow on/off (1 s) | the brain refused it; the reason is on serial; fix it and `reboot` |
+
+`busy` alone is retried for 15 s first: it is usually the brain still holding
+the connection a Wi-Fi blip broke. Busy for longer means another body is using
+this character's token.
 | a blip every 3 s | sleeping |
 | steady | listening or speaking |
 | quick flicker | hearing you |
