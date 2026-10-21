@@ -17,6 +17,11 @@ test("SiliconFlow's flat message is read too, and an empty statusText gets its s
   assert.equal(err.message, 'TTS request failed: 402 Payment Required — Sorry, your account balance is insufficient');
 });
 
+test("FastAPI's detail is read too, as Unsloth Studio sends it", async () => {
+  const err = await requestError('Reflex', reply(400, JSON.stringify({ detail: 'Unknown model' })));
+  assert.equal(err.message, 'Reflex request failed: 400 Bad Request — Unknown model');
+});
+
 test('a plain-text body is shown, cut short', async () => {
   const err = await requestError('STT', reply(500, `oops ${'x'.repeat(500)}`, 'Internal Server Error'));
   assert.ok(err.message.startsWith('STT request failed: 500 Internal Server Error — oops '));

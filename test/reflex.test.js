@@ -118,6 +118,13 @@ test('judge: HTTP errors, bad shapes, throws and no question all fail quietly', 
   assert.equal(off.verdict, 'failed');
 });
 
+test('judge: a refused request says what the server said', async () => {
+  const { fetch } = answering({ detail: 'Unknown model' }, 400);
+  const v = await new Reflex(CFG, { fetch }).judge('l', '');
+  assert.equal(v.verdict, 'failed');
+  assert.equal(v.detail, 'Reflex request failed: 400 Bad Request — Unknown model');
+});
+
 test('judge: a slow answer times out as failed', async () => {
   const fetch = (/** @type {string} */ _u, /** @type {any} */ init) => new Promise((_, reject) => {
     init.signal.addEventListener('abort', () => reject(init.signal.reason));

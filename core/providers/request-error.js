@@ -27,14 +27,16 @@ const MAX_DETAIL = 200;
 
 /**
  * The provider's own explanation: OpenAI's `error.message`, SiliconFlow's flat
- * `message`, or the start of whatever text came back.
+ * `message`, FastAPI's `detail` (Unsloth Studio), or the start of whatever
+ * text came back.
  * @param {string} text
  * @returns {string}
  */
 function detailOf(text) {
   try {
     const json = JSON.parse(text);
-    const said = json?.error?.message ?? json?.message ?? (typeof json?.error === 'string' ? json.error : null);
+    const said = json?.error?.message ?? json?.message ?? (typeof json?.error === 'string' ? json.error : null)
+      ?? (typeof json?.detail === 'string' ? json.detail : null);
     if (typeof said === 'string' && said.trim()) return said.trim();
   } catch {
     // Not JSON: fall through to the raw text.

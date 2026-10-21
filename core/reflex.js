@@ -10,6 +10,8 @@
 // Every way this can go wrong ends in "ask the LLM as usual". The reflex is a
 // shortcut; a robot whose shortcut is down must still answer.
 
+import { requestError } from './providers/request-error.js';
+
 /** Sequential, so this is the most a normal sentence can wait. */
 export const TIMEOUT_MS = 1500;
 
@@ -82,7 +84,7 @@ export class Reflex {
         }),
         signal: both,
       });
-      if (!response.ok) return { verdict: 'failed', detail: `HTTP ${response.status}`, ms: ms() };
+      if (!response.ok) return { verdict: 'failed', detail: (await requestError('Reflex', response)).message, ms: ms() };
       const answer = (await response.json())?.answers?.[question.name];
       const choice = answer?.choice;
       const p = typeof answer?.probabilities?.[choice] === 'number' ? answer.probabilities[choice] : answer?.confidence;
