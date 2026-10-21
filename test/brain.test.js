@@ -102,24 +102,18 @@ test('the system prompt forbids inventing a long duration instead of cruising', 
 });
 
 test('buildSystemPrompt: replyLang null injects nothing', () => {
-  assert.equal(buildSystemPrompt({ replyLang: null, bargeIn: true }), SYSTEM_PROMPT);
+  assert.equal(buildSystemPrompt({ replyLang: null }), SYSTEM_PROMPT);
 });
 
 test('buildSystemPrompt: a recorded preference is injected', () => {
-  const p = buildSystemPrompt({ replyLang: 'zh', bargeIn: true });
+  const p = buildSystemPrompt({ replyLang: 'zh' });
   assert.match(p, /Always reply in Chinese, regardless of which language the user speaks\./);
 });
 
-test('buildSystemPrompt: bargeIn false forbids the emergency keyword only', () => {
-  const p = buildSystemPrompt({ replyLang: null, bargeIn: false });
-  assert.match(p, /Never say the words "all stop"/);
-  // The wake word is a coined name the robot cannot produce, so it is NOT
-  // forbidden — forbidding it would cost naturalness for nothing (spec §6.8).
-  assert.ok(!p.includes('steven'));
-});
-
-test('buildSystemPrompt: bargeIn true injects no forbidden words at all', () => {
-  assert.ok(!buildSystemPrompt({ replyLang: null, bargeIn: true }).includes('Never say'));
+test('buildSystemPrompt: no forbidden words are injected', () => {
+  // The wake word is a coined name the robot cannot produce, so forbidding it
+  // would cost naturalness for nothing (spec §6.8).
+  assert.ok(!buildSystemPrompt({ replyLang: null }).includes('Never say'));
 });
 
 test('the prompt itself contains no keyword', () => {
@@ -990,20 +984,19 @@ test('car and dry-run are offered every tool, none is offered no moving', () => 
 });
 
 test('the car prompt is the one it always was, word for word', () => {
-  const base = { replyLang: null, bargeIn: true };
+  const base = { replyLang: null };
   assert.equal(buildSystemPrompt(base), SYSTEM_PROMPT);
   assert.equal(buildSystemPrompt({ ...base, body: { motion: 'car' } }), SYSTEM_PROMPT);
   // dry-run is a car as far as the model knows: testing it must test the real prompt.
   assert.equal(buildSystemPrompt({ ...base, body: { motion: 'dry-run' } }), SYSTEM_PROMPT);
 });
 
-test('the still prompt has no wheels in it, and the two add-ons still apply', () => {
-  const p = buildSystemPrompt({ replyLang: 'en', bargeIn: false, body: { motion: 'none' } });
+test('the still prompt has no wheels in it, and the language add-on still applies', () => {
+  const p = buildSystemPrompt({ replyLang: 'en', body: { motion: 'none' } });
   assert.ok(p.startsWith(SYSTEM_PROMPT_STILL));
   assert.doesNotMatch(SYSTEM_PROMPT_STILL, /drive ∈|steer|cruise|duration_ms|wheels instead of legs/);
   assert.match(SYSTEM_PROMPT_STILL, /never pretend you moved/);
   assert.match(p, /Always reply in English/);
-  assert.match(p, /Never say the words "all stop"/);
 });
 
 test('handle: the LLM is asked with the tools for this body', async () => {

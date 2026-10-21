@@ -11,7 +11,6 @@
 // already contains a copy of it.
 
 export const WAKE = 'wake';
-export const STOP = 'stop';
 
 /**
  * A token line is "<symbol> <id>"; only the symbol may appear in a keyword.
@@ -55,15 +54,13 @@ export function labelsIn(lines) {
 }
 
 /**
- * Which of the two words a reported label belongs to. The `_zh` variants are
- * the dual spelling of the SAME word (§11.2) — one word, two ways of saying it
- * — not a second keyword, so they must classify identically.
+ * Which word a reported label belongs to. The `_zh` variant is the dual
+ * spelling of the SAME word (§11.2) — one word, two ways of saying it — not a
+ * second keyword, so it must classify identically.
  *
  * @param {string} label
- * @returns {'wake' | 'stop' | null}
+ * @returns {'wake' | null}
  */
 export function classifyLabel(label) {
-  return label.startsWith('all_stop') ? STOP
-    : label.startsWith('hey_steven') ? WAKE
-    : null;
+  return label.startsWith('hey_steven') ? WAKE : null;
 }

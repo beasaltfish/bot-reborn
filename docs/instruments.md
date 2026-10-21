@@ -268,7 +268,8 @@ silent test. If `vad.front()` loses the head of a real sentence, the 500 ms
 hand-rolled ring goes back in.
 
 - **⑦**: turn the motor on, shout each keyword 20 times and count misses; then
-  talk at it in ordinary conversation and count `all stop` false triggers.
+  talk at it in ordinary conversation and count false wakes. (`all stop` was
+  measured here too, until it was removed on 2026-10-21.)
 - **⑩**: record the three sample classes and replay them.
 - **⑯**: record once, then sweep `bufferSeconds` 30 → 15 → 10 → 5 over the same
   recordings, and finally record one clip longer than the buffer and see what

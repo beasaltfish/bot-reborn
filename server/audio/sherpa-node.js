@@ -1,4 +1,4 @@
-// The wake word, the stop word and the VAD, in Node. Same model, same
+// The wake word and the VAD, in Node. Same model, same
 // keyword lines and the same thresholds as the phone's old wasm KWS and VAD; only
 // the binding differs — a native addon taking ONNX files, where the phone had
 // a wasm bundle with the files packed inside.
@@ -38,13 +38,12 @@ export function loadSherpaNode() {
 }
 
 /**
- * name.txt + stop.txt, checked against the model's tokens first. An unknown
+ * name.txt, checked against the model's tokens first. An unknown
  * token aborted the whole wasm module on the phone (docs/hardware.md); here
  * it would be a native crash, which is no better.
  */
 export function loadKeywords(dir = MODEL_DIR) {
-  const lines = ['name.txt', 'stop.txt']
-    .map((f) => readFileSync(join(KEYWORD_DIR, f), 'utf8').trim()).join('\n');
+  const lines = readFileSync(join(KEYWORD_DIR, 'name.txt'), 'utf8').trim();
   const bad = unknownTokens(lines, parseTokens(readFileSync(join(dir, FILES.tokens), 'utf8')));
   if (bad.length) throw new Error(`keyword lines use tokens this model does not have: ${bad.join(' ')}`);
   return lines;

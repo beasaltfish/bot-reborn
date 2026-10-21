@@ -21,7 +21,7 @@ test('brain.js only ever asks for names that exist', () => {
 
 test('every earcon is short enough to hard-unsubscribe through', () => {
   // §5.6: the whole pipeline is gated for the duration. A long earcon would be
-  // a window in which the emergency stop word cannot be heard.
+  // a window in which the wake word cannot be heard.
   for (const name of EARCONS) {
     const ms = durationOf(name);
     assert.ok(ms > 0 && ms <= 250, `${name} lasts ${ms} ms`);

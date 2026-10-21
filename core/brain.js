@@ -176,7 +176,7 @@ likes and dislikes, and you remember how the user has just treated you.
   no code blocks, no parenthetical asides.`;
 
 /**
- * @param {{ replyLang: 'zh' | 'en' | null, bargeIn: boolean, body?: { motion: import('./config.js').Motion } }} cfg
+ * @param {{ replyLang: 'zh' | 'en' | null, body?: { motion: import('./config.js').Motion } }} cfg
  * @returns {string}
  */
 export function buildSystemPrompt(cfg) {
@@ -187,14 +187,6 @@ export function buildSystemPrompt(cfg) {
   if (cfg.replyLang) {
     prompt += `\nAlways reply in ${LANG_NAME[cfg.replyLang]}, `
             + 'regardless of which language the user speaks.';
-  }
-
-  // 2. The stripped-down path's forbidden word (spec §5.5, §6.8). Only the
-  //    emergency keyword: the wake word is coined, so the robot cannot say it.
-  //    This costs naturalness, so it is only paid when it is actually needed.
-  if (!cfg.bargeIn) {
-    prompt += '\nNever say the words "all stop". Say "not moving" '
-            + 'or "braked" instead.';
   }
 
   return prompt;
