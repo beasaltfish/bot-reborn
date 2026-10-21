@@ -12,6 +12,7 @@
     "admin:build": "vite build --config admin/vite.config.ts",
     "admin:dev": "vite --config admin/vite.config.ts",
     "test": "node --test \"test/**/*.test.js\" && vitest run --config admin/vite.config.ts",
+    "firmware:test": "cmake -S firmware/test -B firmware/build-host && cmake --build firmware/build-host && ctest --test-dir firmware/build-host --output-on-failure",
     "typecheck": "tsc --noEmit && tsc --noEmit -p admin"
   },
   "keywords": [],

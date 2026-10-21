@@ -44,3 +44,11 @@ admin/dist/
 
 # Cloudflare wrangler local cache
 .wrangler/
+
+# ESP32 firmware build output (idf.py, and the host tests' CMake tree).
+# dependencies.lock is committed.
+firmware/build/
+firmware/build-host/
+firmware/sdkconfig
+firmware/sdkconfig.old
+firmware/managed_components/
