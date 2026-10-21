@@ -47,6 +47,17 @@ describe('Editor', () => {
     });
   });
 
+  it('turns barge-in off for a body without echo cancellation', async () => {
+    const fake = installFakeApi([{ name: 'A' }]);
+    render(<Editor {...props()} />);
+    const box = await screen.findByLabelText(/Barge-in/);
+    expect(box).toBeChecked();
+    expect(screen.getByText(/without echo cancellation/)).toBeInTheDocument();
+    await userEvent.click(box);
+    await waitFor(() => expect(fake.patches()).toHaveLength(1), { timeout: 2000 });
+    expect(fake.patches()[0].body).toEqual({ config: { bargeIn: false } });
+  });
+
   it('picks how the body moves, and says when it takes effect', async () => {
     const fake = installFakeApi([{ name: 'A' }]);
     render(<Editor {...props()} />);

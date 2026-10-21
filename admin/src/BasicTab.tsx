@@ -40,6 +40,11 @@ export function BasicTab({ detail, update, onToken }: { detail: Detail; update(p
           <input type="checkbox" checked={c.wakeWord} onChange={(e) => update({ config: { wakeWord: e.target.checked } })} />
           {t('wakeWord')}
         </label>
+        <label className="check">
+          <input type="checkbox" checked={c.bargeIn} onChange={(e) => update({ config: { bargeIn: e.target.checked } })} />
+          {t('bargeIn')}
+          <small>{t('bargeInHint')}</small>
+        </label>
       </div>
       <div className="pairing">
         <PhoneLink token={detail.token} />
