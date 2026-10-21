@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "audio.h"
 #include "console.h"
 #include "led.h"
 #include "link.h"
@@ -18,16 +19,17 @@ static void on_message(const brain_msg_t *m) {
     case MSG_STATE:
       if (led_mode_for_state(m->text, &mode)) led_set(mode);
       break;
+    case MSG_HUSH:
+      audio_hush();
+      break;
     default:
       break;
   }
 }
 
-static void on_audio(const uint8_t *bytes, size_t n) { (void)bytes; (void)n; }
-
 static void on_lost(void) {}
 
-static const link_handlers_t HANDLERS = { on_message, on_audio, on_lost };
+static const link_handlers_t HANDLERS = { on_message, audio_play_bytes, on_lost };
 
 void app_main(void) {
   settings_load(&settings);
@@ -40,6 +42,7 @@ void app_main(void) {
     printf("not set up: type %s, then reboot (help lists commands)\n", !settings.ssid[0] ? "wifi <ssid> [pass]" : "token <32 hex>");
     vTaskDelay(pdMS_TO_TICKS(5000));
   }
+  audio_start();
   net_start(&settings);
   link_start(&settings, &HANDLERS);
 }
