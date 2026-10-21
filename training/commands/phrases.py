@@ -1,4 +1,4 @@
-"""Hand-written phrase bank for build.py.
+"""Phrase bank for build.py, distilled with Claude Code.
 
 `pass` is the biggest class on purpose: taking ordinary talk for a command (the
 robot lurches off) is worse than missing a command (the LLM still catches it).

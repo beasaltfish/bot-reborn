@@ -12,6 +12,10 @@
 
 *孩子：问题很多。机器人：脾气不小。* — [看带声音的短视频](https://youtube.com/shorts/3Y984t1W6nc)
 
+[![机器人听到一句口令就开动，旁边是反射模型服务的日志](docs/media/reflex.gif)](https://youtube.com/shorts/zPd0V5mH7p4)
+
+*一句口令，电脑上一个 0.8B 的小模型约 200 毫秒就给出动作，不经过大模型。* — [看带声音的短视频](https://youtube.com/shorts/zPd0V5mH7p4)
+
 **📖 完整的改造故事：[我把一台 30 块钱的玩具机器人，改成了会顶嘴的 AI 机器人](https://agentlenshq.com/zh-CN/maker/four-dollar-robot)**
 
 <table>
@@ -65,6 +69,34 @@
 显示表情。所有做决定的事——听到自己的名字、理解、决定做什么、回话——都在同一个
 Wi-Fi 下一台电脑上的小 Node 服务里运行，这就是机器人的大脑。
 
+大脑一开始在手机浏览器里，后来搬到了电脑上，原因有两个：一是所有听你说话的环节
+将来都能在自己的机器上本地运行（反射模型已经是）；二是身体可以换成比手机小得多的东西。ESP32-S3 身体正在
+做（[`firmware/`](firmware/README.md)）。事实证明，手机太重，车一后退就可能翻倒。
+
+## 反射模型
+
+喊"停"，车应该马上停，而不是等语音识别、大模型、语音合成走完一个来回。所以在大模型
+看到一句话之前，先由一个 0.8B 的决策模型读一遍，从几个简单动作里挑一个——`stop`、
+`forward`、`backward`、`left`、`right`、`keep_going`——或者选 `pass`，把这一轮交给
+大模型。它输出的是概率，不生成文字，所以快：在 Mac mini M4 上，从拿到转写文字到
+发出动作大约 200 毫秒。这一步不出声音，只出动作。
+
+![反射服务的日志：第一次请求加载模型用了 3.6 秒，之后每次 203–220 毫秒](docs/media/reflex-log.png)
+
+它在测试集上的准确率是 86.6%（164 条对了 142 条）。实际用起来比这个数字好，因为
+只有概率超过 0.8 才会动：拿不准的都交给大模型，慢一点，但车不会乱冲。反射这一层
+宁可慢，不能错。
+
+- **训练方法**：Unsloth 的决策模型教程
+  [Train your own decision model with Unsloth](https://unsloth.ai/docs/basics/train-your-own-decision-model-with-unsloth)
+- **数据集**：[`beasaltfish/robot-simple-commands`](https://huggingface.co/datasets/beasaltfish/robot-simple-commands)
+  ——由 [`training/commands/`](training/commands/) 生成
+- **模型**：[`beasaltfish/robot-simple-commands-qwen3.5-0.8b`](https://huggingface.co/beasaltfish/robot-simple-commands-qwen3.5-0.8b)
+  （[GGUF](https://huggingface.co/beasaltfish/robot-simple-commands-qwen3.5-0.8b-GGUF)）
+
+目前只支持英文。按设计，中文口令的得分应该会很低，于是交给大模型处理，但这一点还
+没实测过。
+
 ## 自己做一个
 
 1. **接线。** 引脚图、接线方法和各项测量数据在
@@ -98,9 +130,10 @@ Wi-Fi 下一台电脑上的小 Node 服务里运行，这就是机器人的大�
 
 ## 现状
 
-在一台机器人、一台手机上已经从头到尾跑通。有些硬件参数还没测。可配置反射和
-简单移动命令模型是新做的，还没在车上用真人声音试过，所以 0.8 的触发阈值只是
-初步的猜测。
+在一台机器人、一台手机上已经从头到尾跑通。有些硬件参数还没测。简单移动命令的
+反射已经在车上用真人声音试过（上面第三个视频），0.8 的阈值站得住；学狗叫那套预设
+的阈值还是初步的猜测。手机头重脚轻，后退时把车带翻过，这也是下一步换 ESP32 身体
+的原因之一。
 
 ## 更多
 

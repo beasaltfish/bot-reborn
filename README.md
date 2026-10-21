@@ -13,6 +13,10 @@ computer as its brain.**
 
 *Kid: has questions. Robot: has attitude.* — [watch the Short, with sound](https://youtube.com/shorts/3Y984t1W6nc)
 
+[![The robot driving off a spoken command, with the reflex model's server log beside it](docs/media/reflex.gif)](https://youtube.com/shorts/zPd0V5mH7p4)
+
+*A spoken move, answered in about 200 ms by a 0.8B model on the computer — no LLM call.* — [watch the Short, with sound](https://youtube.com/shorts/zPd0V5mH7p4)
+
 **📖 The whole build story: [I turned a $4 toy robot into an AI robot that talks back](https://agentlenshq.com/maker/four-dollar-robot)**
 
 <table>
@@ -74,6 +78,40 @@ body: it listens, plays, drives and shows a face. Everything that decides —
 hearing its name, understanding, choosing what to do, talking back — runs in a
 small Node server on a computer on the same Wi-Fi, the robot's brain.
 
+The brain started out inside the phone's browser and moved to the computer for
+two reasons: everything that hears you can, in time, run locally on your own
+machine — the reflex model already does — and the body can shrink to something
+much smaller than a phone. An ESP32-S3 body is on its way
+([`firmware/`](firmware/README.md)); a phone, it turns out, is heavy enough to
+tip the car over when it backs up.
+
+## The reflex model
+
+"Stop" should stop the car now, not after a speech-to-text, chat model and
+text-to-speech round trip. So before the chat model sees a line, a 0.8B
+decision model reads it and picks one simple move — `stop`, `forward`,
+`backward`, `left`, `right`, `keep_going` — or `pass`, which hands the turn to
+the chat model. It answers with a probability, not text, which is why it is
+fast: about 200 ms from transcript to move on a Mac mini M4, with no voice in
+the reply, only the action.
+
+![The reflex server's log: after a 3.6 s first call that loads the model, every request takes 203–220 ms](docs/media/reflex-log.png)
+
+It scores 86.6% on its test set (142 of 164). In use it does better than that
+number suggests, because a move fires only above 0.8: anything it is unsure of
+is passed to the chat model, which is slower but does not lurch the car off.
+Getting a reflex wrong is worse than getting it late.
+
+- **Trained with** Unsloth's decision-model recipe:
+  [Train your own decision model with Unsloth](https://unsloth.ai/docs/basics/train-your-own-decision-model-with-unsloth)
+- **Dataset:** [`beasaltfish/robot-simple-commands`](https://huggingface.co/datasets/beasaltfish/robot-simple-commands)
+  — built by [`training/commands/`](training/commands/)
+- **Model:** [`beasaltfish/robot-simple-commands-qwen3.5-0.8b`](https://huggingface.co/beasaltfish/robot-simple-commands-qwen3.5-0.8b)
+  ([GGUF](https://huggingface.co/beasaltfish/robot-simple-commands-qwen3.5-0.8b-GGUF))
+
+It is English only. A command in another language should score low and fall
+through to the chat model, but that is untested.
+
 ## Build your own
 
 1. **Wire it.** Pin map, wiring and measurements are in
@@ -112,9 +150,10 @@ sees them: it holds a token that says which character it is. See
 ## Status
 
 It works end to end on one robot and one phone. Some hardware numbers are
-still unmeasured. The configurable reflexes and the simple-commands model are
-new and not yet tried with a real voice on the car, so their 0.8 firing
-threshold is a first guess.
+still unmeasured. The simple-commands reflex has been driven by a real voice
+on the car (the third video above) and the 0.8 threshold holds up; the bark
+preset is still on its first guess. The phone is top-heavy and has tipped the
+car over backing up, which is part of why an ESP32 body is next.
 
 ## More
 

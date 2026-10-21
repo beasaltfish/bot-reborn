@@ -70,7 +70,7 @@ someone else, and moves too complex or too exact (distances, angles) for a fixed
 
 ## Limitations
 
-- English only, hand-written phrases. Real speech-recognition errors and unusual
+- English only, phrases distilled with Claude Code. Real speech-recognition errors and unusual
   phrasings outside the dataset may be misread.
 - Fixed actions only: no distances, angles or sequences; those go to the LLM via `pass`.
 - Made for one hobby robot. Do not use it where a wrong move could hurt someone.

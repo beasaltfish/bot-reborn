@@ -45,4 +45,5 @@ Labels: `stop`, `forward`, `backward`, `left`, `right`, `keep_going`, `pass`.
   meant for someone else, and moves too complex or too exact for a fixed action.
 - The split is by base phrase: every surface variant of a phrase (lower case, no
   punctuation, a leading "um" or "hey robot") lands on the same side.
-- English only. Phrases are hand-written; `build.py` and `phrases.py` regenerate the files.
+- English only. Phrases were distilled with Claude Code; `build.py` and `phrases.py`
+  regenerate the files.
