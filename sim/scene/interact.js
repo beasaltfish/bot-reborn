@@ -234,7 +234,40 @@ export function attachInteraction(world, getBench, setBench) {
     }
     const h = holeXY(hole);
     const w = boardToWorld(h.x, h.y);
+    // A hole under a part's board cannot take a wire on a real bench: the part
+    // is in the way. Aiming there means the part's pin, so the wire goes on
+    // the pin nearest the aim. That is also how a pin hanging off the board
+    // gets wired: a female jumper slipped over it.
+    const cover = coverOf(b, w.x, w.z);
+    if (cover) {
+      const own = pins(b).filter((q) => q.point.startsWith(`${cover}:`));
+      own.sort((p, q) => p.pos.distanceToSquared(at) - q.pos.distanceToSquared(at));
+      if (own[0]) return { kind: 'point', ...own[0] };
+    }
     return { kind: 'point', point: hole, pos: new THREE.Vector3(w.x, BOARD_TOP, w.z) };
+  }
+
+  /**
+   * The part whose board lies over a point of the board top, if any. Shrunk
+   * by a fifth of a pitch so a hole beside a part's edge stays free.
+   * World units are pitches (meshes.js).
+   * @param {Bench} b @param {number} x @param {number} z
+   * @returns {string | null}
+   */
+  function coverOf(b, x, z) {
+    for (const p of b.placed) {
+      if (p.discarded || !p.at || (drag?.kind === 'part' && drag.id === p.id)) continue;
+      const g = groupOf(p.id);
+      if (!g) continue;
+      const box = new THREE.Box3();
+      g.updateMatrixWorld();
+      g.traverse((o) => {
+        if (o instanceof THREE.Mesh && !o.userData.blot) box.expandByObject(o);
+      });
+      box.expandByScalar(-0.2);
+      if (x > box.min.x && x < box.max.x && z > box.min.z && z < box.max.z) return p.id;
+    }
+    return null;
   }
 
   /**

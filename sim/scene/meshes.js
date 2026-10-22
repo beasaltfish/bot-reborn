@@ -196,6 +196,8 @@ function contactShadow(w, d, x, y, z) {
   m.renderOrder = -1;
   // A blot reaches past its part's edge; it must not catch a click meant for the hole beside it.
   m.raycast = () => {};
+  // Nor does it count as the part's footprint (interact.js: which holes a part covers).
+  m.userData.blot = true;
   return m;
 }
 
