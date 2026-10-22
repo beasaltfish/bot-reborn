@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { PARTS, holeStrip, holeXY, holeAt } from '../../sim/parts.js';
+import { PARTS, holeStrip, holeXY, holeAt, stripHoles } from '../../sim/parts.js';
 import { TARGET } from '../../sim/target.js';
 
 // The simulator's rules (which holes are joined, what a wire reaches) all
@@ -59,4 +59,11 @@ test('every TARGET endpoint names a real pin', () => {
     assert.ok(exists(link.b), link.b);
     assert.ok(link.why.length > 0);
   }
+});
+
+test('stripHoles lists every hole joined on a strip', () => {
+  assert.deepEqual(stripHoles('col52-bottom'), ['bb:f52', 'bb:g52', 'bb:h52', 'bb:i52', 'bb:j52']);
+  assert.deepEqual(stripHoles('col3-top'), ['bb:a3', 'bb:b3', 'bb:c3', 'bb:d3', 'bb:e3']);
+  assert.equal(stripHoles('tp').length, 50);
+  assert.deepEqual(stripHoles('nowhere'), []);
 });

@@ -9,7 +9,7 @@
 // put back if the drop changes nothing.
 
 import * as THREE from 'three';
-import { PARTS, holeAt, holeXY } from '../parts.js';
+import { PARTS, holeAt, holeStrip, holeXY, stripHoles } from '../parts.js';
 import { place, addWire, removeWire, pinPoints } from '../bench.js';
 import { nets } from '../netlist.js';
 import { snapPart } from '../snap.js';
@@ -229,23 +229,67 @@ export function attachInteraction(world, getBench, setBench) {
       const taken = pinPoints(b, p).find((q) => q.hole === hole);
       if (taken) {
         const pin = pins(b).find((q) => q.point === taken.pin);
-        if (pin) return { kind: 'point', ...pin };
+        if (pin) return jumperFor(b, pin, at);
       }
     }
     const h = holeXY(hole);
     const w = boardToWorld(h.x, h.y);
     // A hole under a part's board cannot take a wire on a real bench: the part
-    // is in the way. Aiming there means the part's pin, so the wire goes on
-    // the pin nearest the aim. That is also how a pin hanging off the board
-    // gets wired: a female jumper slipped over it.
+    // is in the way. Aiming there means the part's nearest pin, and jumperFor()
+    // says where a jumper for that pin really goes.
     const cover = coverOf(b, w.x, w.z);
     if (cover) {
       const own = pins(b).filter((q) => q.point.startsWith(`${cover}:`));
       own.sort((p, q) => p.pos.distanceToSquared(at) - q.pos.distanceToSquared(at));
-      if (own[0]) return { kind: 'point', ...own[0] };
+      return own[0] ? jumperFor(b, own[0], at) : null;
     }
     return { kind: 'point', point: hole, pos: new THREE.Vector3(w.x, BOARD_TOP, w.z) };
   }
+
+  /**
+   * Where a wire meant for a pin really ends, the way it would on a bench.
+   * A pin seated in the board is under its part: the jumper goes in the free
+   * hole of the same strip nearest the aim, which joins it all the same. A
+   * pin in no hole (hanging off the board, or a part on the table) takes the
+   * jumper itself, a female end slipped over it. A strip with no free hole
+   * left takes nothing.
+   * @param {Bench} b
+   * @param {{ point: string, pos: THREE.Vector3 }} pin
+   * @param {THREE.Vector3} at
+   * @returns {Pick | null}
+   */
+  function jumperFor(b, pin, at) {
+    full = null;
+    const id = pin.point.slice(0, pin.point.indexOf(':'));
+    const placed = b.placed.find((p) => p.id === id && !p.discarded);
+    const home = placed?.at ? pinPoints(b, placed).find((q) => q.pin === pin.point)?.hole : null;
+    if (!placed || !home) return { kind: 'point', point: pin.point, pos: pin.pos };
+    const used = new Set();
+    for (const p of b.placed) {
+      if (p.discarded || !p.at || (drag?.kind === 'part' && drag.id === p.id)) continue;
+      for (const q of pinPoints(b, p)) if (q.hole) used.add(q.hole);
+    }
+    let best = null;
+    let bestD = Infinity;
+    for (const hole of stripHoles(holeStrip(home))) {
+      if (used.has(hole)) continue;
+      const h = holeXY(hole);
+      const w = boardToWorld(h.x, h.y);
+      if (coverOf(b, w.x, w.z)) continue;
+      const pos = new THREE.Vector3(w.x, BOARD_TOP, w.z);
+      const d = pos.distanceToSquared(at);
+      if (d < bestD) {
+        best = { kind: /** @type {const} */ ('point'), point: hole, pos };
+        bestD = d;
+      }
+    }
+    if (!best) full = pin.point;
+    return best;
+  }
+
+  /** The pin the last aim meant but could not reach: its strip had no free hole. */
+  /** @type {string | null} */
+  let full = null;
 
   /**
    * The part whose board lies over a point of the board top, if any. Shrunk
@@ -290,8 +334,12 @@ export function attachInteraction(world, getBench, setBench) {
    */
   function pick(e, forWire) {
     aimAt(e);
+    full = null;
+    // A seated pin with no free hole left on its strip takes no wire; the
+    // press then falls through to the part, which can still be picked up.
     const pin = nearestPin(e);
-    if (pin) return pin;
+    const seated = pin && pin.kind === 'point' ? jumperFor(getBench(), pin, pin.pos) : null;
+    if (seated) return seated;
     for (const hit of raycaster.intersectObjects(world.pickables, true)) {
       const owner = ownerOf(hit.object);
       if (!owner) continue;
@@ -516,6 +564,9 @@ export function attachInteraction(world, getBench, setBench) {
    */
   function stretch(d, e) {
     const t = endAt(d, e);
+    // Said while it holds, so a wire that will not go in is never a silent no.
+    if (!t && full) say(`No free hole left beside ${full.replace(':', ' ')}: the part covers its column`);
+    else if (d.moved || d.armed) say(d.armed ? 'Click a pin or a hole to end the wire · Esc to cancel' : 'Let go on a pin or a hole · Esc to cancel');
     aim.set(t?.kind === 'point' ? [d.fromPos, t.pos] : [d.fromPos]);
     fade(inTheWay());
     const end = t?.kind === 'point' ? t.pos : onPlane();

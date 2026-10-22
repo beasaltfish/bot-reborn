@@ -139,6 +139,23 @@ export function holeStrip(holeId) {
   return `col${m[2]}-${m[1] <= 'e' ? 'top' : 'bottom'}`;
 }
 
+/** @type {Map<string, string[]>} */
+const STRIPS = new Map();
+for (const id of XY.keys()) {
+  const s = holeStrip(id);
+  STRIPS.set(s, [...(STRIPS.get(s) ?? []), id]);
+}
+
+/**
+ * Every hole on a strip, in board order: where else a wire can go to reach a
+ * pin seated on it.
+ * @param {string} strip as holeStrip names it
+ * @returns {string[]}
+ */
+export function stripHoles(strip) {
+  return [...(STRIPS.get(strip) ?? [])];
+}
+
 /**
  * Where a hole is, in pitch units from the board's first column and top rail.
  * @param {string} holeId
