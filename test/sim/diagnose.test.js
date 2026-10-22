@@ -87,7 +87,7 @@ test('nextHint walks TARGET order and is null once everything is wired', () => {
 
 test('every fault code from the power-on rules has a text', () => {
   const codes = ['short-rails', 'mic-5v', 'mic-burnt', 'mic-unpowered', 'mic-right-slot', 'clocks-swapped', 'clock-missing',
-    'mic-data', 'amp-unpowered', 'amp-data', 'amp-shutdown', 'speaker', 'pins-shorted'];
+    'mic-data', 'amp-unpowered', 'amp-data', 'amp-shutdown', 'speaker', 'pins-shorted', 'bus-on-rail'];
   const o = { ...powerOn(emptyBench()), faults: codes.map((code) => ({ code, points: ['mic:VDD'] })) };
   const hints = diagnose(wired(), o);
   assert.equal(hints.length, codes.length);

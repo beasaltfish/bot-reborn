@@ -63,6 +63,7 @@ const FAULT_TEXT = {
   'amp-shutdown': 'The amp\'s SD pin is tied to GND, which shuts the amp down; leave SD unconnected.',
   speaker: 'The speaker is not joined to both screw terminals of the amp, or the terminals touch each other; one wire from each speaker pin to one terminal.',
   'pins-shorted': 'Two of GPIO 12 to 15 are joined, so the chips on them hear garbage; separate those wires.',
+  'bus-on-rail': 'One of GPIO 12 to 15 is joined to 3V3, 5V or GND, so it is stuck and the chip on it hears nothing; wire that pin to its own signal only.',
 };
 
 /**

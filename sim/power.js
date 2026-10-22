@@ -124,6 +124,19 @@ export function powerOn(b) {
     }
   }
 
+  // A bus pin tied to a rail is held at that level: the chip on it never sees
+  // a clock or data, and the GPIO fights the rail.
+  /** @type {Record<'mic' | 'amp', string[]>} */
+  const onBus = { mic: ['mic:SCK', 'mic:WS', 'mic:SD'], amp: ['amp:BCLK', 'amp:LRC', 'amp:DIN'] };
+  for (const p of BUS) {
+    const rail = RAILS.find((r) => n.same(p, r));
+    if (!rail) continue;
+    for (const who of /** @type {const} */ (['mic', 'amp'])) {
+      const hit = onBus[who].filter((q) => n.same(q, p));
+      if (hit.length) fault(who, 'silent', 'bus-on-rail', [p, rail, ...hit]);
+    }
+  }
+
   /** @param {Outcome['mic' | 'amp'][]} list */
   const worst = (list) => list.reduce((a, c) => (SEVERITY.indexOf(c) > SEVERITY.indexOf(a) ? c : a), /** @type {Outcome['mic' | 'amp']} */ ('ok'));
   return {

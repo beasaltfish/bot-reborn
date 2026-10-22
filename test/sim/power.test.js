@@ -153,3 +153,12 @@ test('a module straddling one strip shorts its own pins', () => {
   const o = powerOn(b);
   assert.equal(o.mic, 'silent');
 });
+
+test('a bus pin on a rail is a fault, not a working bench', () => {
+  // Everything per TARGET, but the mic's L/R ground wire lands on WS.
+  const links = TARGET.filter((l) => l.a !== 'mic:L/R').map(({ a, b }) => ({ a, b }));
+  const o = powerOn(addWire(wired(links), 'mic:WS', 'esp:GND', 'red'));
+  assert.equal(o.amp, 'silent');
+  assert.equal(o.mic, 'silent');
+  assert.ok(codes(o).includes('bus-on-rail'));
+});
