@@ -458,7 +458,10 @@ function addEspDetails(g, top, burnt) {
   g.add(box(18 * MM, 2.6 * MM, 15.5 * MM, mat('metal', burnt ? 0x3a332c : STEEL), far - (18 * MM) / 2 - 0.25 - 6.5 * MM, top + 0.8 * MM, 5));
   const near = 10.5 - (70 * MM) / 2;
   for (const z of [5 - 2.2, 5 + 2.2]) {
-    g.add(box(7.4 * MM, 3.2 * MM, 9 * MM, mat('metal', STEEL), near + (7.4 * MM) / 2 - 0.5, top, z));
+    // Named so the USB cable can find where to plug in.
+    const port = box(7.4 * MM, 3.2 * MM, 9 * MM, mat('metal', STEEL), near + (7.4 * MM) / 2 - 0.5, top, z);
+    port.name = 'usb';
+    g.add(port);
   }
   for (const z of [5 - 3.4, 5 + 3.4]) {
     g.add(box(1.4, 0.5, 1.1, mat('matte', 0xd8d8d4), near + 4.2, top, z));

@@ -111,7 +111,10 @@ async function pipelineFor(echo) {
  *   id: string, outcome: Outcome,
  *   onState(s: string): void, onLevel(up: number, down: number): void,
  *   onEnd(msg: string): void,
+ *   onLost?(): void, onWelcome?(): void,
  * }} o
+ * onLost: the brain dropped and the link is retrying by itself; onWelcome:
+ * the brain took this body in (first time or again after a drop).
  * @returns {Promise<{ stop(): void }>}
  */
 export async function startBody(o) {
@@ -156,7 +159,7 @@ export async function startBody(o) {
   link = connectBody({
     url: `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/body`,
     token: character.token,
-    onWelcome() {},
+    onWelcome() { if (!stopped) o.onWelcome?.(); },
     onMessage(msg) {
       if (msg.type === 'hush') player?.hush();
       else if (msg.type === 'state') o.onState(msg.state);
@@ -168,7 +171,7 @@ export async function startBody(o) {
       o.onLevel(up, down);
       if (shaped) player?.play(shaped);
     },
-    onLost() {},
+    onLost() { if (!stopped) o.onLost?.(); },
     onReject: (reason) => end(rejectMessage(reason)),
   });
 

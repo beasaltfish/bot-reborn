@@ -116,11 +116,12 @@ export function attachInteraction(world, getBench, setBench) {
 
   const tip = document.createElement('div');
   tip.style.cssText = [
-    'position:fixed', 'left:50%', 'bottom:18px', 'transform:translateX(-50%)', 'pointer-events:none',
+    'position:fixed', 'left:50%', 'bottom:56px', 'transform:translateX(-50%)', 'pointer-events:none',
     'font:500 12px/1 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif', 'letter-spacing:0.02em',
     'color:#f6eee3', 'background:rgba(36,28,21,0.62)', 'padding:6px 12px', 'border-radius:999px',
     'opacity:0', 'transition:opacity 120ms',
   ].join(';');
+  // Above the page's status line, which has the bottom edge.
   document.body.append(tip);
   /** @param {string | null} text */
   function say(text) {

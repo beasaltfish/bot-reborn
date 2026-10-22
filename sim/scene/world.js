@@ -25,7 +25,8 @@ import { BOARD_TOP, boardToWorld, buildBreadboard, buildPart, buildTable, buildW
  */
 const TABLE_SLOT = {
   esp32: { x: -10.5, z: 16 },
-  speaker: { x: -27, z: 15.5 },
+  // Far enough left that the USB plug, pushed into the ESP32, clears it.
+  speaker: { x: -34, z: 15.5 },
   max98357a: { x: 18, z: 15.5 },
   inmp441: { x: 29, z: 17.5 },
 };
@@ -100,6 +101,13 @@ export function createWorld(canvas) {
   let pending = false;
   /** @type {{ from: Pose, to: Pose, start: number } | null} */
   let move = null;
+  /**
+   * Called before each frame is drawn, with the camera already where it will
+   * be: things that animate (or follow the camera) update here, and say
+   * whether they want another frame. When none does, drawing stops.
+   * @type {Set<(now: number) => boolean>}
+   */
+  const tickers = new Set();
 
   function requestRender() {
     if (pending) return;
@@ -121,7 +129,10 @@ export function createWorld(canvas) {
         requestRender();
       }
     }
+    let again = false;
+    for (const t of tickers) if (t(now)) again = true;
     renderer.render(scene, camera);
+    if (again) requestRender();
   }
 
   /** The pose the camera is in now, whatever the user has done to it. */
@@ -327,6 +338,14 @@ export function createWorld(canvas) {
     show,
     view,
     requestRender,
+    /**
+     * @param {(now: number) => boolean} fn  true while it wants more frames
+     * @returns {() => void}  stops calling it
+     */
+    onFrame(fn) {
+      tickers.add(fn);
+      return () => { tickers.delete(fn); };
+    },
     canvas,
     scene,
     // The views swap between a perspective and an orthographic camera, so
