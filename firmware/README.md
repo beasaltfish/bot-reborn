@@ -7,6 +7,9 @@ brain. Design: `docs/superpowers/specs/2026-10-20-esp32-body-firmware-design.md`
 
 ## Wiring
 
+No hardware yet? Run `npm start` and open http://localhost:8787/sim/ to wire it on a
+virtual bench and talk to a character (English).
+
 Pins live in `main/board.h` and nowhere else. Defaults:
 
 ![The ESP32-S3 DevKitC clone, pin labels up](../docs/media/esp32-s3-board.jpg)

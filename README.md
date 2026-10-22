@@ -116,7 +116,9 @@ through to the chat model, but that is untested.
 
 1. **Wire it.** Pin map, wiring and measurements are in
    [`docs/hardware.md`](docs/hardware.md). Read its D6/D7 soldering warning
-   before you start.
+   before you start. No hardware yet? Run the brain (step 2), open
+   <http://localhost:8787/sim/> and wire the audio on a virtual bench; it opens
+   only on the computer the brain runs on.
 2. **Start the brain** on a computer on the same Wi-Fi as the phone:
 
    ```bash
