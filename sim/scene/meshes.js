@@ -586,6 +586,9 @@ export function dispose(root) {
   root.traverse((o) => {
     if (o instanceof THREE.Mesh) {
       o.geometry.dispose();
+      // An InstancedMesh's per-instance matrices are a buffer of their own,
+      // freed only by the mesh's dispose, not the geometry's.
+      if (o instanceof THREE.InstancedMesh) o.dispose();
       const m = o.material;
       if (!Array.isArray(m) && !shared.has(m)) m.dispose();
     }
