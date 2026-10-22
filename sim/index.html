@@ -12,8 +12,27 @@
       }
     }
   </script>
+  <style>
+    :root { color-scheme: dark; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #2b241e; }
+    #bench { display: block; width: 100vw; height: 100vh; touch-action: none; }
+    #view {
+      position: fixed; top: 14px; right: 14px;
+      min-width: 76px; padding: 7px 14px;
+      font: 600 13px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      letter-spacing: 0.02em;
+      color: #f6eee3; background: rgba(36, 28, 21, 0.62);
+      border: 1px solid rgba(255, 240, 220, 0.18); border-radius: 999px;
+      backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+      cursor: pointer;
+    }
+    #view:hover { background: rgba(36, 28, 21, 0.8); }
+    #view:focus-visible { outline: 2px solid #f0b46a; outline-offset: 2px; }
+  </style>
 </head>
 <body>
+  <canvas id="bench"></canvas>
+  <button id="view" type="button" title="Change view (hold Space to peek)">Tilted</button>
   <script type="module" src="./main.js"></script>
 </body>
 </html>
