@@ -327,6 +327,7 @@ export function createWorld(canvas) {
     show,
     view,
     requestRender,
+    canvas,
     scene,
     // The views swap between a perspective and an orthographic camera, so
     // this is read fresh each time rather than handed out once.

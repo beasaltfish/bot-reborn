@@ -194,6 +194,8 @@ function contactShadow(w, d, x, y, z) {
   m.rotation.x = -Math.PI / 2;
   m.position.set(x, y, z);
   m.renderOrder = -1;
+  // A blot reaches past its part's edge; it must not catch a click meant for the hole beside it.
+  m.raycast = () => {};
   return m;
 }
 

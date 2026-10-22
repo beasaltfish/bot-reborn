@@ -1,9 +1,11 @@
-// The wiring simulator's boot: read the saved bench, draw it, and the one
-// control the page has so far, the view toggle (hold Space to peek at the
-// other wiring view without changing the choice).
+// The wiring simulator's boot: read the saved bench, draw it, give it hands
+// (every change is saved as it is made), and the one control the page has so
+// far, the view toggle (hold Space to peek at the other wiring view without
+// changing the choice).
 
-import { load } from './bench.js';
+import { load, serialize } from './bench.js';
 import { createWorld } from './scene/world.js';
+import { attachInteraction } from './scene/interact.js';
 
 /** @typedef {import('./scene/world.js').ViewMode} ViewMode */
 
@@ -32,7 +34,13 @@ const isView = (v) => VIEWS.includes(/** @type {ViewMode} */ (v));
 const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById('bench'));
 const toggle = /** @type {HTMLButtonElement} */ (document.getElementById('view'));
 const world = createWorld(canvas);
-world.show(load(read(BENCH_KEY)));
+let bench = load(read(BENCH_KEY));
+world.show(bench);
+const hands = attachInteraction(world, () => bench, (b) => {
+  bench = b;
+  write(BENCH_KEY, serialize(b));
+  world.show(b);
+});
 
 // #view=top opens in that view without saving it: handy for a screenshot.
 const asked = new URLSearchParams(location.hash.slice(1)).get('view');
@@ -45,6 +53,7 @@ let peeking = null;
 /** @param {ViewMode} v */
 function go(v) {
   world.view(v);
+  hands.enable(v !== 'orbit');
   toggle.textContent = VIEW_NAMES[v];
 }
 go(view);
