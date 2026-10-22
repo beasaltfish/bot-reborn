@@ -7,8 +7,9 @@ brain. Design: `docs/superpowers/specs/2026-10-20-esp32-body-firmware-design.md`
 
 ## Wiring
 
-No hardware yet? Run `npm start` and open http://localhost:8787/sim/ to wire it on a
-virtual bench and talk to a character (English).
+No hardware yet, or want a practice run first? Run `npm start` and open
+http://localhost:8787/sim/ to wire it on a virtual bench and talk to a character
+(English). Wire the mic to 5V there and it burns a virtual part, not a real one.
 
 Pins live in `main/board.h` and nowhere else. Defaults:
 
