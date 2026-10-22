@@ -10,6 +10,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { PARTS, holeXY } from '../parts.js';
+import { pinPoints } from '../bench.js';
 import { BOARD_TOP, boardToWorld, buildBreadboard, buildPart, buildTable, buildWire, dispose } from './meshes.js';
 
 /** @typedef {import('../bench.js').Bench} Bench */
@@ -277,6 +278,37 @@ export function createWorld(canvas) {
     return g.localToWorld(anchor.clone());
   }
 
+  /**
+   * A red ring on each pin of a placed part that went into no hole. On a real
+   * bench it would be plain to see, hanging in the air; seen from above it
+   * looks the same as a seated pin, and a wire beside it looks connected.
+   * @param {THREE.Group} g
+   * @param {Map<string, THREE.Vector3>} anchors
+   * @param {{ pin: string, hole: string | null }[]} seats
+   * @param {import('../parts.js').PartDef} def
+   */
+  function markHanging(g, anchors, seats, def) {
+    for (const s of seats) {
+      if (s.hole) continue;
+      const name = s.pin.slice(s.pin.indexOf(':') + 1);
+      if (def.pins.find((q) => q.name === name)?.wireOnly) continue;
+      const a = anchors.get(name);
+      if (!a) continue;
+      // Its own geometry and material: dispose() frees them with the part.
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(0.42, 0.6, 24),
+        new THREE.MeshBasicMaterial({ color: 0xe5483a, depthTest: false }),
+      );
+      ring.renderOrder = 2;
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.set(a.x, a.y + 0.02, a.z);
+      ring.name = `hanging:${name}`;
+      // A marker, not a part of the part: clicks go through it.
+      ring.raycast = () => {};
+      g.add(ring);
+    }
+  }
+
   /** @param {Bench} b */
   function show(b) {
     /** @type {Map<Placed, THREE.Group>} */
@@ -290,6 +322,7 @@ export function createWorld(canvas) {
         g = group;
         g.name = `part:${p.id}`;
         g.userData = { kind: 'part', id: p.id, anchors };
+        if (p.at) markHanging(g, anchors, pinPoints(b, p), def);
         const at = p.at ? boardToWorld(p.at.x, p.at.y) : p.discarded
           ? { x: DISCARD.x + DISCARD.step * heap, z: DISCARD.z }
           : TABLE_SLOT[p.part];

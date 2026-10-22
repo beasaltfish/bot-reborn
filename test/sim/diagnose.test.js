@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { emptyBench, place, addWire } from '../../sim/bench.js';
+import { holeXY } from '../../sim/parts.js';
 import { TARGET } from '../../sim/target.js';
 import { powerOn } from '../../sim/power.js';
 import { diagnose, nextHint } from '../../sim/diagnose.js';
@@ -96,4 +97,25 @@ test('every fault code from the power-on rules has a text', () => {
     assert.ok(h.text.length > 10);
     assert.doesNotMatch(h.text, /Something is wrong/);
   }
+});
+
+test('pins in no hole are named first, by diagnose and by the Hint button', () => {
+  // Top row in h, so the bottom row (SD, VDD, GND) lands past row j, in the air.
+  const h = holeXY('bb:h47');
+  let b = place({ ...emptyBench(), usb: true }, 'mic', { x: h.x, y: h.y }, 0);
+  b = addWire(b, 'esp:5V', 'bb:j48', 'red');
+  const first = diagnose(b, powerOn(b))[0];
+  assert.equal(first.kind, 'hanging');
+  assert.match(first.text, /SD, VDD and GND/);
+  assert.deepEqual(first.points, ['mic:SD', 'mic:VDD', 'mic:GND']);
+  assert.equal(nextHint(b)?.kind, 'hanging');
+
+  // A jumper slipped straight onto a hanging pin reaches it: that pin is no longer named.
+  b = addWire(b, 'esp:3V3', 'mic:VDD', 'red');
+  assert.match(/** @type {any} */ (nextHint(b)).text, /SD and GND/);
+});
+
+test('a part on the table, or all its pins seated, gives no hanging hint', () => {
+  const b = wired();
+  assert.ok(!diagnose(b, powerOn(b)).some((x) => x.kind === 'hanging'));
 });

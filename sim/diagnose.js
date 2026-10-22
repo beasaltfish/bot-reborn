@@ -2,8 +2,9 @@
 // of TARGET and the power-on faults into hints; nextHint() is the Hint button,
 // which just names the first link still missing.
 //
-// Order, most specific first: swapped > neighbour-pin > off-by-one > fault >
-// missing. A guess about a particular wire beats a general consequence, and a
+// Order, most specific first: hanging > swapped > neighbour-pin > off-by-one >
+// fault > missing. Pins hanging in the air come first: no wiring can work
+// until they sit in holes. A guess about a particular wire beats a general consequence, and a
 // consequence beats "nothing is there". Each unmet link gets at most one guess
 // (the first that fits), so one mistake is not reported three ways.
 
@@ -13,7 +14,7 @@ import { nets } from './netlist.js';
 import { TARGET } from './target.js';
 
 /**
- * @typedef {{ kind: 'swapped' | 'neighbour-pin' | 'off-by-one' | 'missing' | 'fault', text: string, points: string[] }} Hint
+ * @typedef {{ kind: 'hanging' | 'swapped' | 'neighbour-pin' | 'off-by-one' | 'missing' | 'fault', text: string, points: string[] }} Hint
  */
 
 /**
@@ -149,7 +150,39 @@ export function diagnose(b, o) {
     text: FAULT_TEXT[/** @type {keyof typeof FAULT_TEXT} */ (f.code)] ?? `Something is wrong here (${f.code}).`,
     points: f.points,
   }));
-  return [...swapped, ...slips, ...offs, ...faults, ...missing];
+  return [...hanging(b), ...swapped, ...slips, ...offs, ...faults, ...missing];
+}
+
+/** @type {Record<string, string>} */
+const PART_NAME = { esp: 'The ESP32', mic: 'The mic', amp: 'The amp', spk: 'The speaker' };
+
+/**
+ * Pins of a part on the board that went into no hole and have no wire on them
+ * either: they touch nothing. From above they look seated, and a wire in the
+ * hole beside one looks connected, so this is said plainly and first.
+ * @param {import('./bench.js').Bench} b
+ * @returns {Hint[]}
+ */
+function hanging(b) {
+  /** @type {Hint[]} */
+  const out = [];
+  for (const p of b.placed) {
+    if (p.discarded || !p.at) continue;
+    const pins = PARTS[p.part].pins;
+    const loose = pinPoints(b, p)
+      .filter((s) => s.hole === null && !pins.find((q) => `${p.id}:${q.name}` === s.pin)?.wireOnly)
+      .map((s) => s.pin)
+      .filter((pin) => !b.wires.some((w) => w.a === pin || w.b === pin));
+    if (!loose.length) continue;
+    const names = loose.map((pin) => pin.slice(pin.indexOf(':') + 1));
+    const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+    out.push({
+      kind: 'hanging',
+      text: `${PART_NAME[p.id] ?? p.id}'s ${list} ${names.length === 1 ? 'pin is' : 'pins are'} in no hole and touch nothing: move it so every pin sits in a hole, or slip a jumper straight onto them.`,
+      points: loose,
+    });
+  }
+  return out;
 }
 
 /**
@@ -169,6 +202,8 @@ function unmetLinks(b) {
  * @returns {Hint | null}
  */
 export function nextHint(b) {
+  const loose = hanging(b)[0];
+  if (loose) return loose;
   const link = unmetLinks(b)[0];
   if (!link) return null;
   return { kind: 'missing', text: `Connect ${name(link.a)} to ${name(link.b)}. ${link.why}`, points: [link.a, link.b] };
