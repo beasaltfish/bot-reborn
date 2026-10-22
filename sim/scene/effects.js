@@ -143,6 +143,7 @@ export function createEffects(world) {
   const raw = { up: 0, down: 0, downAt: 0 };
   const shown = { up: 0, down: 0 };
   let phase = 0;
+  let lastTick = 0;
 
   /**
    * The robot is (or is no longer) a body: the waveform shows and the cone
@@ -187,13 +188,21 @@ export function createEffects(world) {
 
   /** @param {number} now @returns {boolean} still moving */
   function tickLevels(now) {
-    if (!alive) return false;
+    if (!alive) {
+      lastTick = 0;
+      return false;
+    }
     const down = now - raw.downAt > DOWN_STALE_MS ? 0 : raw.down;
     // Voice levels are small numbers; this makes ordinary speech fill the trace.
     const up = Math.min(1, raw.up * 5);
     const target = Math.min(1, down * 4);
-    shown.up += (up - shown.up) * 0.5;
-    shown.down += (target - shown.down) * (target > shown.down ? 0.6 : 0.2);
+    // Eased by elapsed time, not per frame, so the cone settles about 200 ms
+    // after the robot goes quiet whatever the frame rate.
+    const dt = Math.min(100, lastTick ? now - lastTick : 16);
+    lastTick = now;
+    const ease = (/** @type {number} */ tau) => 1 - Math.exp(-dt / tau);
+    shown.up += (up - shown.up) * ease(25);
+    shown.down += (target - shown.down) * ease(target > shown.down ? 18 : 60);
     placeCone(shown.down);
 
     history.copyWithin(0, 1);
@@ -236,6 +245,8 @@ export function createEffects(world) {
   }
 
   function tickFollowers() {
+    // The camera may have moved this frame; project with where it is now.
+    world.camera.updateMatrixWorld();
     const r = canvas.getBoundingClientRect();
     for (const [el, id] of followers) {
       if (!el.isConnected) {

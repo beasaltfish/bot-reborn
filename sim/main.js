@@ -196,19 +196,23 @@ async function connect(mine, id, name, outcome) {
   peeking = null;
   go(view);
   effects.setAlive(true);
+  // Every callback checks it still belongs to the current plug-in: a session
+  // unplugged while starting (Reset bench during the mic prompt) can still
+  // end, or report state, before its late stop() runs.
+  const live = () => mine === plugs;
   try {
     const started = await startBody({
       id,
       outcome,
       // The brain names its states in capitals (LISTENING); the line reads as a sentence.
-      onState: (s) => { line.state = s.toLowerCase(); line.lost = false; showLine(); },
-      onLevel: effects.levels,
-      onEnd: (msg) => { line.end = msg; effects.setAlive(false); showLine(); },
-      onLost: () => { line.lost = true; showLine(); },
-      onWelcome: () => { line.lost = false; if (line.state === 'connecting…') line.state = 'connected'; showLine(); },
+      onState: (s) => { if (!live()) return; line.state = s.toLowerCase(); line.lost = false; showLine(); },
+      onLevel: (up, down) => { if (live()) effects.levels(up, down); },
+      onEnd: (msg) => { if (!live()) return; line.end = msg; effects.setAlive(false); showLine(); },
+      onLost: () => { if (!live()) return; line.lost = true; showLine(); },
+      onWelcome: () => { if (!live()) return; line.lost = false; if (line.state === 'connecting…') line.state = 'connected'; showLine(); },
     });
     // Reset bench can pull the plug while this was starting.
-    if (mine === plugs) session = started;
+    if (live()) session = started;
     else started.stop();
   } finally {
     starting = false;
