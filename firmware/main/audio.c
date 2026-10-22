@@ -2,6 +2,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
+#include "driver/gpio.h"
 #include "driver/i2s_std.h"
 #include "board.h"
 #include "link.h"
@@ -69,7 +70,14 @@ void audio_start(void) {
   };
   esp_err_t err = i2s_new_channel(&chan, &tx, &rx);
   if (err == ESP_OK) err = i2s_channel_init_std_mode(tx, &std);
+  /* On the S3 the default mask is both slots even in mono: the mic would come
+     up at twice the rate, every other sample the empty right slot. */
+  std.slot_cfg.slot_mask = I2S_STD_SLOT_LEFT;
   if (err == ESP_OK) err = i2s_channel_init_std_mode(rx, &std);
+  /* BCLK and WS fan out to both chips over jumper wires; at full drive the
+     edges ring, the mic counts a clock twice and its samples come up wrong. */
+  if (err == ESP_OK) err = gpio_set_drive_capability(PIN_I2S_BCLK, GPIO_DRIVE_CAP_0);
+  if (err == ESP_OK) err = gpio_set_drive_capability(PIN_I2S_WS, GPIO_DRIVE_CAP_0);
   if (err == ESP_OK) err = i2s_channel_enable(tx);
   if (err == ESP_OK) err = i2s_channel_enable(rx);
   if (err != ESP_OK) {

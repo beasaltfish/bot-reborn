@@ -23,7 +23,7 @@
 /* INMP441's 24 bits sit at the top of a 32-bit slot; this many right shifts
    make 16-bit PCM. Smaller is louder (14 = ×4): tune it against the fake
    brain's uplink dBFS on the bench. */
-#define MIC_SHIFT 16
+#define MIC_SHIFT 14
 
 /* Until `url` is typed on the serial console. */
 #define DEFAULT_BODY_URL "ws://192.168.3.79:8787/body"
