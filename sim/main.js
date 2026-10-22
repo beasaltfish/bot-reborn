@@ -1,6 +1,6 @@
 // The wiring simulator's boot: read the saved bench, draw it, give it hands
-// (every change is saved as it is made), the view toggle (hold Space to peek
-// at the other wiring view without changing the choice), the panels, and the
+// (every change is saved as it is made), the three views side by side (hold
+// Space to peek at the other flat view without changing the choice), the panels, and the
 // USB cable that powers the bench up.
 //
 // Power-on is a moment (spec §7): nothing reacts while wiring. When the plug
@@ -42,7 +42,8 @@ function write(key, value) {
 const isView = (v) => VIEWS.includes(/** @type {ViewMode} */ (v));
 
 const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById('bench'));
-const toggle = /** @type {HTMLButtonElement} */ (document.getElementById('view'));
+const viewButtons = /** @type {HTMLButtonElement[]} */ ([...document.querySelectorAll('#views button')]);
+const peekHint = /** @type {HTMLElement} */ (document.getElementById('peek'));
 const world = createWorld(canvas);
 const effects = createEffects(world);
 // A page that was closed with the cable in is not powered when it opens again.
@@ -80,21 +81,33 @@ let peeking = null;
 /** The wiring view to go back to when the bench stops being a body. */
 let wiringView = view;
 
+/**
+ * What holding Space shows from a view: the other flat view, whose holes are
+ * the easy ones to aim at.
+ * @param {ViewMode} v @returns {ViewMode}
+ */
+const peekOf = (v) => (v === 'top' ? 'tilted' : 'top');
+
 /** @param {ViewMode} v */
 function go(v) {
   world.view(v);
-  hands.enable(v !== 'orbit');
-  toggle.textContent = VIEW_NAMES[v];
+  // The button stays on the choice while peeking: the peek is not a choice.
+  for (const b of viewButtons) b.setAttribute('aria-pressed', String(b.dataset.view === view));
+  peekHint.textContent = peeking ? `Release Space for ${VIEW_NAMES[view]}` : `Hold Space for ${VIEW_NAMES[peekOf(view)]}`;
 }
 setBench(bench);
 go(view);
 
-toggle.addEventListener('click', () => {
-  view = VIEWS[(VIEWS.indexOf(view) + 1) % VIEWS.length];
-  write(VIEW_KEY, view);
-  peeking = null;
-  go(view);
-});
+for (const b of viewButtons) {
+  b.addEventListener('click', () => {
+    const v = b.dataset.view;
+    if (!isView(v)) return;
+    view = v;
+    write(VIEW_KEY, view);
+    peeking = null;
+    go(view);
+  });
+}
 
 /** @param {KeyboardEvent} e */
 const isSpace = (e) => e.code === 'Space' && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement);
@@ -104,7 +117,7 @@ addEventListener('keydown', (e) => {
   // Space would also press a focused button; this key belongs to the bench.
   e.preventDefault();
   if (e.repeat || peeking) return;
-  peeking = view === 'top' ? 'tilted' : 'top';
+  peeking = peekOf(view);
   go(peeking);
 });
 const unpeek = () => {

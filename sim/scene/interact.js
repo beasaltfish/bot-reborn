@@ -528,15 +528,20 @@ export function attachInteraction(world, getBench, setBench) {
   /** @param {PointerEvent} e @param {{ x: number, y: number }} from */
   const wandered = (e, from) => Math.hypot(e.clientX - from.x, e.clientY - from.y) > CLICK_SLOP;
 
+  // Captured, so it runs before OrbitControls' own listener on the canvas: a
+  // press on a part, pin, hole or wire is ours and must not also turn the
+  // camera; a press on empty space is left to the controls.
   canvas.addEventListener('pointerdown', (e) => {
     if (!enabled || e.button !== 0 || !e.isPrimary) return;
     // The second click (or tap) of a wire drawn click-to-click: where it ends is settled on release.
     if (drag?.kind === 'wire' && drag.armed) {
+      e.stopImmediatePropagation();
       stretch(drag, e);
       return;
     }
     const t = pick(e, false);
     if (!t) return;
+    e.stopImmediatePropagation();
     canvas.setPointerCapture(e.pointerId);
     if (t.kind === 'point') {
       drag = { kind: 'wire', from: t.point, fromPos: t.pos, x: e.clientX, y: e.clientY, moved: false, armed: false, target: null, preview: null };
@@ -557,7 +562,7 @@ export function attachInteraction(world, getBench, setBench) {
         x: e.clientX, y: e.clientY, lifted: false, at: placed.at, last: e,
       };
     }
-  });
+  }, { capture: true });
 
   /** @type {PointerEvent | null} */
   let moved = null;
@@ -643,7 +648,7 @@ export function attachInteraction(world, getBench, setBench) {
   addEventListener('blur', () => cancel());
 
   return {
-    /** The wiring views take hands; the orbit view is look-only. */
+    /** Hands work in every view; this only pauses them (nothing calls it off today). */
     enable(on) {
       if (!on) cancel();
       enabled = on;
