@@ -79,3 +79,26 @@ test('a part on the table, and the amp terminal, have no holes', () => {
   assert.equal(amp.find((p) => p.pin === 'amp:+')?.hole, null);
   assert.notEqual(amp.find((p) => p.pin === 'amp:DIN')?.hole, null);
 });
+
+test('a saved bench that is not a whole bench loads as an empty one', () => {
+  const empty = emptyBench();
+  /** @param {(b: import('../../sim/bench.js').Bench) => unknown} edit */
+  const bad = (edit) => load(JSON.stringify(edit(structuredClone(empty))));
+  // No mic left to wire.
+  assert.deepEqual(bad((b) => ({ ...b, placed: b.placed.filter((p) => p.id !== 'mic') })), empty);
+  // Only a discarded mic.
+  assert.deepEqual(bad((b) => ({ ...b, placed: b.placed.map((p) => (p.id === 'mic' ? { ...p, discarded: true } : p)) })), empty);
+  // A discarded part holding a live id.
+  assert.deepEqual(bad((b) => ({ ...b, placed: [...b.placed.filter((p) => p.id !== 'mic'), { ...b.placed[1], id: 'mic', discarded: true, burnt: true }, { ...b.placed[1], id: 'mic-burnt1', discarded: false }] })), empty);
+  // A wire to a point nothing has.
+  assert.deepEqual(bad((b) => ({ ...b, wires: [{ id: 'w1', a: 'mic:NOPE', b: 'esp:3V3', color: 'red' }] })), empty);
+  assert.deepEqual(bad((b) => ({ ...b, wires: [{ id: 'w1', a: 'bb:z99', b: 'esp:3V3', color: 'red' }] })), empty);
+  // A wire to a discarded part's pin.
+  const swapped = swapBurnt(emptyBench(), 'mic');
+  const wire = { id: 'w1', a: 'mic-burnt1:VDD', b: 'esp:3V3', color: 'red' };
+  assert.deepEqual(load(JSON.stringify({ ...swapped, wires: [wire] })), empty);
+  // The good cases still load.
+  assert.deepEqual(load(serialize(swapped)), swapped);
+  const ok = addWire(swapped, 'mic:VDD', 'bb:a1', 'red');
+  assert.deepEqual(load(serialize(ok)), ok);
+});

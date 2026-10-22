@@ -6,7 +6,7 @@
 // business and is not stored. A part with an `at` is in the breadboard, `at`
 // being where its origin pin is, in breadboard pitch units (see parts.js).
 
-import { PARTS, holeAt } from './parts.js';
+import { PARTS, holeAt, holeXY } from './parts.js';
 
 /**
  * @typedef {{
@@ -148,6 +148,34 @@ function isWire(w) {
 }
 
 /**
+ * Is this a bench the rest of the code can live with? Each of the four starting
+ * instances must be there exactly once and live, a discarded part must carry a
+ * burnt id (never a live one), and a wire may only end on a real hole or on a
+ * pin of a live part; otherwise there could be no mic for good, or wires that
+ * cannot be drawn or deleted but still join nets.
+ * @param {Placed[]} placed
+ * @param {Wire[]} wires
+ */
+function isWhole(placed, wires) {
+  const live = placed.filter((p) => !p.discarded);
+  for (const [id, part] of START) {
+    if (live.filter((p) => p.id === id && p.part === part).length !== 1) return false;
+  }
+  if (live.length !== START.length) return false;
+  if (!placed.filter((p) => p.discarded).every((p) => /^[^:]+-burnt\d+$/.test(p.id))) return false;
+  /** @param {string} point */
+  const real = (point) => {
+    if (point.startsWith('bb:')) {
+      try { holeXY(point); return true; } catch { return false; }
+    }
+    const [id, pin] = point.split(':');
+    const p = live.find((q) => q.id === id);
+    return !!p && PARTS[p.part].pins.some((q) => q.name === pin);
+  };
+  return wires.every((w) => real(w.a) && real(w.b));
+}
+
+/**
  * Read a saved bench. Anything that does not look exactly like one is an empty
  * bench: a half-understood layout would be worse than starting over.
  * @param {string | null} text
@@ -161,6 +189,7 @@ export function load(text) {
     if (!Array.isArray(raw.wires) || !raw.wires.every(isWire)) return emptyBench();
     if (new Set(raw.placed.map((p) => p.id)).size !== raw.placed.length) return emptyBench();
     if (new Set(raw.wires.map((w) => w.id)).size !== raw.wires.length) return emptyBench();
+    if (!isWhole(raw.placed, raw.wires)) return emptyBench();
     return { v: 1, placed: raw.placed, wires: raw.wires, usb: raw.usb };
   } catch {
     return emptyBench();
