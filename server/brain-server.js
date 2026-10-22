@@ -1,15 +1,16 @@
-// The brain as a server: the admin page and its API for this machine only,
-// the phone's page on /phone/ for this network, the body link on /body for anyone with a character's token, and a robot for
-// each body that connects — built from that character's config (server/body
-// split spec §1.1, admin spec §2). Construction only; main.js decides where
-// the pieces come from.
+// The brain as a server: the admin page and its API, and the wiring simulator
+// on /sim/, for this machine only; the phone's page on /phone/ for this
+// network; the body link on /body for anyone with a character's token; and a
+// robot for each body that connects — built from that character's config
+// (server/body split spec §1.1, admin spec §2). Construction only; main.js
+// decides where the pieces come from.
 
 import { createServer } from 'node:http';
 import { createLink } from './link.js';
 import { startRobot } from './robot.js';
 import { listCharacters, findByToken, updateConfig, ready } from './characters.js';
 import { isLocalRequest } from './local-guard.js';
-import { serveStatic, servePhone, ADMIN_DIST, FIXTURES_DIR, PHONE_DIR, CORE_DIR } from './static.js';
+import { serveStatic, servePhone, serveSim, ADMIN_DIST, FIXTURES_DIR, PHONE_DIR, CORE_DIR, SIM_DIR, THREE_DIR } from './static.js';
 import { createAdminApi } from './admin-api.js';
 
 /**
@@ -36,6 +37,8 @@ export function createBrainServer(opts) {
       res.end('The admin page only opens on the computer the brain runs on.\n');
       return;
     }
+    // The simulator holds no key but is a bench tool, so it stays on this machine.
+    if (serveSim(req, res, { sim: SIM_DIR, three: THREE_DIR })) return;
     if ((req.url ?? '').startsWith('/api/')) return void api?.(req, res);
     if (!serveStatic(req, res, { root: opts.adminDist ?? ADMIN_DIST, fixtures: FIXTURES_DIR })) {
       res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });

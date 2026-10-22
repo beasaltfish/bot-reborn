@@ -101,3 +101,46 @@ export function servePhone(req, res, opts) {
   res.end(req.method === 'HEAD' ? undefined : readFileSync(file));
   return true;
 }
+
+export const SIM_DIR = fileURLToPath(new URL('../sim/', import.meta.url));
+export const THREE_DIR = fileURLToPath(new URL('../node_modules/three/', import.meta.url));
+
+/**
+ * The wiring simulator, for this machine only (the caller checks that): /sim/…
+ * from sim/, and the three.js it draws with at /sim/vendor/three/… straight
+ * from node_modules, so the page needs no bundler and no CDN.
+ *
+ * @param {import('node:http').IncomingMessage} req
+ * @param {import('node:http').ServerResponse} res
+ * @param {{ sim: string, three: string }} opts
+ * @returns {boolean} whether it answered
+ */
+export function serveSim(req, res, opts) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return false;
+  let path;
+  try { path = decodeURIComponent(new URL(req.url ?? '/', 'http://x').pathname); } catch { return false; }
+  if (path === '/sim') {
+    res.writeHead(301, { Location: '/sim/' });
+    res.end();
+    return true;
+  }
+  if (!path.startsWith('/sim/')) return false;
+  const vendor = '/sim/vendor/three/';
+  const [root, rest] = path.startsWith(vendor)
+    ? [opts.three, path.slice(vendor.length - 1)]
+    : [opts.sim, path.slice('/sim'.length)];
+  const base = resolve(root);
+  const file = resolve(base, '.' + (rest === '/' ? '/index.html' : rest));
+  if (!file.startsWith(base + sep) || !existsSync(file) || !statSync(file).isFile()) {
+    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('Not found\n');
+    return true;
+  }
+  // no-cache for the same reason as the phone's page: edits show on reload.
+  res.writeHead(200, {
+    'Content-Type': TYPES[extname(file)] ?? 'application/octet-stream',
+    'Cache-Control': 'no-cache',
+  });
+  res.end(req.method === 'HEAD' ? undefined : readFileSync(file));
+  return true;
+}

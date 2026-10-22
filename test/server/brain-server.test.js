@@ -133,3 +133,22 @@ test('the phone page is served to the network, the admin page only to this machi
   assert.equal((await fetch(`http://127.0.0.1:${port}/api/characters`, remote)).status, 403);
   await server.close();
 });
+
+test('the wiring simulator and its three.js are served to this machine only', async () => {
+  const chars = tempCharacters();
+  const server = createBrainServer({
+    dir: chars.dir, sfx: new Map(), earcons: renderEarcons(), log: () => {},
+    makeEars: () => onceEars(),
+  });
+  const port = await server.listen(0);
+  const page = await fetch(`http://127.0.0.1:${port}/sim/`);
+  assert.equal(page.status, 200);
+  assert.match(await page.text(), /Wiring Simulator/);
+  const lib = await fetch(`http://127.0.0.1:${port}/sim/vendor/three/build/three.module.js`);
+  assert.equal(lib.status, 200);
+  assert.match(String(lib.headers.get('content-type')), /javascript/);
+  // The forwarding header makes isLocalRequest say no, as for a LAN address.
+  const remote = { headers: { 'x-forwarded-for': '1.2.3.4' } };
+  assert.equal((await fetch(`http://127.0.0.1:${port}/sim/`, remote)).status, 403);
+  await server.close();
+});

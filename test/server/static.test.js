@@ -4,7 +4,7 @@ import { createServer } from 'node:http';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { servePhone } from '../../server/static.js';
+import { servePhone, serveSim } from '../../server/static.js';
 
 function tree() {
   const root = mkdtempSync(join(tmpdir(), 'phone-'));
@@ -60,4 +60,30 @@ test('nothing outside the two roots, and nothing but .js from core/', async () =
   assert.equal((await s.get('/api/characters')).status, 418);
   assert.equal((await s.get('/')).status, 418);
   s.close();
+});
+
+test('the simulator is served from sim/ and three/, and nothing outside them', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'sim-'));
+  const sim = join(root, 'sim');
+  const three = join(root, 'three');
+  mkdirSync(sim);
+  mkdirSync(three);
+  writeFileSync(join(sim, 'index.html'), '<p>sim</p>');
+  writeFileSync(join(three, 'three.js'), 'export {};');
+  writeFileSync(join(root, 'secret.txt'), 'nope');
+  const http = createServer((req, res) => {
+    if (!serveSim(req, res, { sim, three })) { res.writeHead(418); res.end(); }
+  });
+  await new Promise((r) => http.listen(0, () => r(undefined)));
+  const port = /** @type {import('node:net').AddressInfo} */ (http.address()).port;
+  const get = (/** @type {string} */ path) => fetch(`http://127.0.0.1:${port}${path}`, { redirect: 'manual' });
+  assert.equal((await get('/sim/')).status, 200);
+  assert.equal((await get('/sim')).headers.get('location'), '/sim/');
+  assert.equal((await get('/sim/vendor/three/three.js')).status, 200);
+  // fetch folds a literal /sim/../ away before sending, so the escape that can
+  // reach the server is the encoded one.
+  assert.equal((await get('/sim/..%2Fserver/main.js')).status, 404);
+  assert.equal((await get('/sim/vendor/three/..%2Fsecret.txt')).status, 404);
+  assert.equal((await get('/phone/')).status, 418);
+  http.close();
 });
