@@ -9,6 +9,8 @@ brain. Design: `docs/superpowers/specs/2026-10-20-esp32-body-firmware-design.md`
 
 Pins live in `main/board.h` and nowhere else. Defaults:
 
+![The ESP32-S3 DevKitC clone, pin labels up](../docs/media/esp32-s3-board.jpg)
+
 | Signal | GPIO | To |
 |---|---|---|
 | drive A / B | 4 / 5 | U3 inputs (were FT232H D4 / D5) |
