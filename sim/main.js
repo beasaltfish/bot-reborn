@@ -48,7 +48,9 @@ const effects = createEffects(world);
 // A page that was closed with the cable in is not powered when it opens again.
 let bench = { ...load(read(BENCH_KEY)), usb: false };
 const panels = createPanels({
-  hint: () => nextHint(bench)?.text ?? 'Looks complete — plug in USB.',
+  hint: () => (bench.placed.some((p) => p.burnt && !p.discarded)
+    ? 'A part burnt out; replace it first.'
+    : nextHint(bench)?.text ?? 'Looks complete — plug in USB.'),
   reset,
   replace: (id) => setBench(swapBurnt(bench, id)),
   follow: effects.follow,
@@ -154,7 +156,10 @@ async function plugIn() {
   setBench(bench);
   for (const id of outcome.burns) effects.smoke(id);
   effects.led(outcome.esp === 'brownout' ? 'blink' : 'on');
-  line = { end: null, lost: false, fault: diagnose(bench, outcome)[0]?.text ?? null, state: null, who: null };
+  // After a brown-out the short is the news; a guess about some other wire would mislead.
+  const hints = diagnose(bench, outcome);
+  const first = outcome.esp === 'brownout' ? hints.find((h) => h.kind === 'fault') : hints[0];
+  line = { end: null, lost: false, fault: first?.text ?? null, state: null, who: null };
   showLine();
   if (outcome.esp !== 'ok') return;
 
