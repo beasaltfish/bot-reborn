@@ -39,7 +39,7 @@ a breadboard row and fan out from there. On the usual ESP32-S3 DevKitC clone
 
 | MAX98357A (amp) | ESP32-S3 |
 |---|---|
-| Vin | 5V (louder) or 3V3 |
+| Vin | 5V (3V3 works too, quieter) |
 | GND | GND |
 | BCLK | GPIO 12 |
 | LRC | GPIO 13 |
