@@ -4,8 +4,10 @@
 // still needs a character's token to be let in (server/body split spec §3).
 //
 // "What it loads" differs by mode and both sets are allowed at once: built,
-// it is /assets/…; in dev mode it is the core/ modules it imports and Vite's
-// /@vite/client and /@vite/env. In the other mode those paths do not exist.
+// it is /assets/…; in dev mode it is the core/ modules it imports, Vite's
+// client and the React refresh preamble the admin page's plugin puts into
+// every page (DEV_RUNTIME, found by following the phone page's imports from
+// a LAN address). In the other mode those paths do not exist.
 // The admin and sim code in /assets/ goes to the network too; it holds no
 // key — the keys reach the admin page only through /api/, which stays here.
 
@@ -44,10 +46,13 @@ export function htmlFor(path) {
   return PAGES.find((p) => p.url === url) ?? null;
 }
 
+/** Library code Vite serves the phone's page in dev mode; no source of ours. */
+const DEV_RUNTIME = new Set(['/@vite/client', '/@vite/env', '/@react-refresh', '/node_modules/vite/dist/client/env.mjs']);
+
 /** @param {string} path */
 export function lanAllowed(path) {
   if (path.split('/').includes('..')) return false;
   if (path === '/phone' || path.startsWith('/phone/') || path.startsWith('/assets/')) return true;
-  if (path === '/@vite/client' || path === '/@vite/env') return true;
+  if (DEV_RUNTIME.has(path)) return true;
   return path.startsWith('/core/') && path.endsWith('.js') && !path.startsWith('/core/fixtures/');
 }

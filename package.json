@@ -10,6 +10,7 @@
     "start": "node server/main.js",
     "add-character": "node server/tools/add-character.js",
     "build": "vite build",
+    "dev": "node --watch-path=server --watch-path=core server/main.js --dev",
     "test": "node --test \"test/**/*.test.js\" && vitest run --config admin/vite.config.ts",
     "firmware:test": "cmake -S firmware/test -B firmware/build-host && cmake --build firmware/build-host && ctest --test-dir firmware/build-host --output-on-failure",
     "typecheck": "tsc --noEmit && tsc --noEmit -p admin"

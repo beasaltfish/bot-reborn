@@ -16,7 +16,7 @@ test('the network may open the phone page and what it loads', () => {
   for (const p of [
     '/phone', '/phone/', '/phone/style.css', '/phone/icons/icon.svg',
     '/assets/index-abc123.js', '/core/protocol.js', '/core/audio/pcm.js',
-    '/@vite/client', '/@vite/env',
+    '/@vite/client', '/@vite/env', '/@react-refresh', '/node_modules/vite/dist/client/env.mjs',
   ]) assert.equal(lanAllowed(p), true, p);
 });
 
