@@ -25,7 +25,7 @@ export function createDevPages(http, opts = {}) {
   const ready = import('vite').then(({ createServer }) => createServer({
     configFile: join(ROOT, 'vite.config.js'),
     appType: 'custom',
-    server: { middlewareMode: true, hmr: { server: http } },
+    server: { middlewareMode: true, ws: { server: http } },
   }));
   return {
     async serve(req, res) {
