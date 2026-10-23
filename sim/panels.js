@@ -89,17 +89,29 @@ function diagram() {
   // Each link from the ESP32 runs out on its own vertical lane, so a pin
   // feeding two chips (GND, the clocks) visibly fans out.
   let lane = 0;
+  /** @type {Map<string, { x: number, y: number, kind: string }[]>} */
+  const turns = new Map();
   TARGET.forEach((l, i) => {
     const a = where(l.a);
     const b = where(l.b);
-    const d = l.b.startsWith('esp:')
-      ? `M${b.x} ${b.y} H${180 + lane++ * 19} V${a.y} H${a.x}`
-      : `M${b.x} ${b.y} H${565} V${a.y} H${a.x}`;
+    let d;
+    if (l.b.startsWith('esp:')) {
+      const x = 180 + lane++ * 19;
+      d = `M${b.x} ${b.y} H${x} V${a.y} H${a.x}`;
+      turns.set(l.b, [...(turns.get(l.b) ?? []), { x, y: b.y, kind: kindOf(l) }]);
+    } else {
+      d = `M${b.x} ${b.y} H${565} V${a.y} H${a.x}`;
+    }
     s.append(svg('path', { d, class: `wire ${kindOf(l)}`, 'data-link': i }));
     const n = svg('text', { x: a.x - 13, y: a.y - 4, class: 'num', 'text-anchor': 'middle' });
     n.textContent = String(i + 1);
     s.append(n);
   });
+  // Wires off one pin share its run, and each turns away where a later one
+  // carries on. Only those turns get a dot: a crossing without one is no join.
+  for (const t of turns.values()) {
+    for (const { x, y, kind } of t.slice(0, -1)) s.append(svg('circle', { cx: x, cy: y, r: 3.4, class: `junction ${kind}` }));
+  }
   return s;
 }
 
