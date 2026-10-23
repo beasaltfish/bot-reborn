@@ -45,6 +45,8 @@ export function createDevPages(http, opts = {}) {
         vite.middlewares(req, res, () => resolve(false));
       });
     },
+    // Vite's hot reload knocks with its own subprotocols.
+    upgrades: (req) => /\bvite-(hmr|ping)\b/.test(String(req.headers['sec-websocket-protocol'] ?? '')),
     async close() {
       await (await ready).close();
     },

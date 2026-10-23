@@ -40,3 +40,43 @@ test('other upgrades on the same server are left alone', async () => {
     http.close();
   }
 });
+
+test('an upgrade nobody takes is refused, not left hanging', async () => {
+  // A socket handed to an upgrade listener outlives every HTTP timeout; left
+  // alone, anything on the network could pile them up.
+  const { createBrainServer } = await import('../../server/brain-server.js');
+  const { renderEarcons } = await import('../../server/audio/render.js');
+  const { tempCharacters } = await import('./helpers.js');
+  const server = createBrainServer({
+    dir: tempCharacters().dir, sfx: new Map(), earcons: renderEarcons(), log: () => {},
+    makeEars: () => { throw new Error('no robot expected'); },
+  });
+  const port = await server.listen(0);
+  try {
+    const got = await Promise.race([
+      opens(`ws://127.0.0.1:${port}/nope`),
+      new Promise((r) => setTimeout(() => r('no answer'), 2000)),
+    ]);
+    assert.equal(got, 'Unexpected server response: 400');
+  } finally {
+    await server.close();
+  }
+});
+
+test('a page server that throws is a 500, and the brain keeps serving', async () => {
+  const { createBrainServer } = await import('../../server/brain-server.js');
+  const { renderEarcons } = await import('../../server/audio/render.js');
+  const { tempCharacters } = await import('./helpers.js');
+  const server = createBrainServer({
+    dir: tempCharacters().dir, sfx: new Map(), earcons: renderEarcons(), log: () => {},
+    makeEars: () => { throw new Error('no robot expected'); },
+    // As when npm run build empties dist/ under a running brain.
+    pages: () => ({ serve: async () => { throw new Error('ENOENT'); }, close: async () => {} }),
+  });
+  const port = await server.listen(0);
+  try {
+    for (let i = 0; i < 2; i++) assert.equal((await fetch(`http://127.0.0.1:${port}/phone/`)).status, 500);
+  } finally {
+    await server.close();
+  }
+});

@@ -26,5 +26,7 @@ test('the network gets nothing else', () => {
     '/core/fixtures/check-en.wav', '/core/fixtures/README.md', '/core/strings.ts',
     '/server/main.js', '/admin/src/main.tsx', '/node_modules/three/build/three.module.js',
     '/@fs/etc/passwd', '/phone/../server/main.js', '/core/../server/main.js',
+    // Windows: Vite reads a backslash as a separator.
+    '/phone/..\\server\\brain-server.js', '/core/..\\server\\x.js',
   ]) assert.equal(lanAllowed(p), false, p);
 });

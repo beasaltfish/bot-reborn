@@ -8,6 +8,7 @@
 
 import { createServer } from 'node:http';
 import { createLink } from './link.js';
+import { BODY_PATH } from '../core/protocol.js';
 import { startRobot } from './robot.js';
 import { listCharacters, findByToken, updateConfig, ready } from './characters.js';
 import { isLocalRequest } from './local-guard.js';
@@ -36,6 +37,18 @@ export function createBrainServer(opts) {
     res.end(text);
   };
   const http = createServer(async (req, res) => {
+    try {
+      await route(req, res);
+    } catch (err) {
+      // A page that vanished mid-read (npm run build empties dist/) or a page
+      // Vite could not transform: one failed request, not every body dropped.
+      log(`serving ${req.url} failed: ${/** @type {Error} */ (err).message}`);
+      if (!res.headersSent) say(res, 500, 'Something went wrong serving this page.\n');
+      else res.destroy();
+    }
+  });
+  /** @param {import('node:http').IncomingMessage} req @param {import('node:http').ServerResponse} res */
+  async function route(req, res) {
     const path = pathOf(req);
     // The phone's page and what it loads first: they are for the whole
     // network, and hold no key. The body link is a WebSocket upgrade and
@@ -52,8 +65,15 @@ export function createBrainServer(opts) {
     }
     if ((req.url ?? '').startsWith('/api/')) return void api?.(req, res);
     if (!(await pages.serve(req, res))) say(res, 404, 'Not found\n');
-  });
+  }
   const pages = (opts.pages ?? (() => createDistPages({ dist: DIST_DIR, fixtures: FIXTURES_DIR })))(http);
+  // An upgrade socket outlives every HTTP timeout, so one nobody takes is
+  // refused here rather than left open: /body is the link's, hot reload is
+  // the dev pages', and nothing else is anyone's.
+  http.on('upgrade', (req, socket) => {
+    if (pathOf(req) === BODY_PATH || pages.upgrades?.(req)) return;
+    socket.end('HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n');
+  });
 
   /** Looked up when admitted, used when built: the same object in between. */
   /** @type {Map<string, import('./characters.js').Character>} */

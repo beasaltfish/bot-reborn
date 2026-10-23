@@ -16,8 +16,11 @@
 /**
  * What answers for the pages: the built ones (dist-pages.js) or Vite (dev-pages.js).
  * `serve` resolves false for a path that is not its own, and the brain says 404.
+ * `upgrades` says whether a WebSocket upgrade is its own (dev mode's hot
+ * reload); one nobody claims is refused.
  * @typedef {{
  *   serve(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse): Promise<boolean>,
+ *   upgrades?(req: import('node:http').IncomingMessage): boolean,
  *   close(): Promise<void>,
  * }} PageServer
  */
@@ -51,7 +54,8 @@ const DEV_RUNTIME = new Set(['/@vite/client', '/@vite/env', '/@react-refresh', '
 
 /** @param {string} path */
 export function lanAllowed(path) {
-  if (path.split('/').includes('..')) return false;
+  // Vite on Windows reads a backslash as a separator, so ..\ climbs too.
+  if (path.includes('\\') || path.split('/').includes('..')) return false;
   if (path === '/phone' || path.startsWith('/phone/') || path.startsWith('/assets/')) return true;
   if (DEV_RUNTIME.has(path)) return true;
   return path.startsWith('/core/') && path.endsWith('.js') && !path.startsWith('/core/fixtures/');
