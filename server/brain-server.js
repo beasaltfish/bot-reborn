@@ -1,6 +1,7 @@
 // The brain as a server: the admin page and its API, and the wiring simulator
-// on /sim/, for this machine only; the phone's page on /phone/ for this
-// network; the body link on /body for anyone with a character's token; and a
+// on /sim/, for this machine only; the phone's page on /phone/ and what it
+// loads for this network (server/pages.js says which addresses those are);
+// the body link on /body for anyone with a character's token; and a
 // robot for each body that connects — built from that character's config
 // (server/body split spec §1.1, admin spec §2). Construction only; main.js
 // decides where the pieces come from.
@@ -10,41 +11,49 @@ import { createLink } from './link.js';
 import { startRobot } from './robot.js';
 import { listCharacters, findByToken, updateConfig, ready } from './characters.js';
 import { isLocalRequest } from './local-guard.js';
-import { serveStatic, servePhone, serveSim, ADMIN_DIST, FIXTURES_DIR, PHONE_DIR, CORE_DIR, SIM_DIR, THREE_DIR } from './static.js';
+import { lanAllowed, pathOf } from './pages.js';
+import { createDistPages, DIST_DIR, FIXTURES_DIR } from './dist-pages.js';
 import { createAdminApi } from './admin-api.js';
 
 /**
  * @param {{
- *   dir: string, adminDist?: string,
+ *   dir: string,
+ *   pages?: (http: import('node:http').Server) => import('./pages.js').PageServer,
  *   fetch?: typeof fetch,
  *   makeEars: () => { kws: any, vad: any },
  *   sfx: Map<any, Int16Array>, earcons: Record<string, Int16Array>,
  *   log?: (line: string) => void, slackMs?: number, allowedOrigins?: string[],
- *   phoneDir?: string, coreDir?: string, addresses?: () => string[],
+ *   addresses?: () => string[],
  * }} opts
  */
 export function createBrainServer(opts) {
   const log = opts.log ?? console.log;
   /** @type {((req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) => Promise<void>) | null} */
   let api = null;
-  const http = createServer((req, res) => {
-    // The phone's page first: it is for the whole network, and holds no key.
-    if (servePhone(req, res, { phone: opts.phoneDir ?? PHONE_DIR, core: opts.coreDir ?? CORE_DIR })) return;
-    // The body link is a WebSocket upgrade and never reaches here; everything
-    // else is the admin page or its API, and both hold keys and tokens.
-    if (!isLocalRequest(req)) {
-      res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
-      res.end('The admin page only opens on the computer the brain runs on.\n');
+  /** @param {import('node:http').ServerResponse} res @param {number} status @param {string} text */
+  const say = (res, status, text) => {
+    res.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end(text);
+  };
+  const http = createServer(async (req, res) => {
+    const path = pathOf(req);
+    // The phone's page and what it loads first: they are for the whole
+    // network, and hold no key. The body link is a WebSocket upgrade and
+    // never reaches here.
+    if (path !== null && lanAllowed(path)) {
+      if (!(await pages.serve(req, res))) say(res, 404, 'Not found\n');
       return;
     }
-    // The simulator holds no key but is a bench tool, so it stays on this machine.
-    if (serveSim(req, res, { sim: SIM_DIR, three: THREE_DIR })) return;
-    if ((req.url ?? '').startsWith('/api/')) return void api?.(req, res);
-    if (!serveStatic(req, res, { root: opts.adminDist ?? ADMIN_DIST, fixtures: FIXTURES_DIR })) {
-      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
-      res.end('Not found\n');
+    // Everything else is the admin page or its API, both holding keys and
+    // tokens, or the simulator, a bench tool: this machine only.
+    if (!isLocalRequest(req)) {
+      say(res, 403, 'The admin page only opens on the computer the brain runs on.\n');
+      return;
     }
+    if ((req.url ?? '').startsWith('/api/')) return void api?.(req, res);
+    if (!(await pages.serve(req, res))) say(res, 404, 'Not found\n');
   });
+  const pages = (opts.pages ?? (() => createDistPages({ dist: DIST_DIR, fixtures: FIXTURES_DIR })))(http);
 
   /** Looked up when admitted, used when built: the same object in between. */
   /** @type {Map<string, import('./characters.js').Character>} */
@@ -93,8 +102,9 @@ export function createBrainServer(opts) {
       return new Promise((resolve) => http.listen(port, () =>
         resolve(/** @type {import('node:net').AddressInfo} */ (http.address()).port)));
     },
-    close() {
+    async close() {
       link.close();
+      await pages.close();
       return new Promise((resolve) => http.close(() => resolve(undefined)));
     },
   };

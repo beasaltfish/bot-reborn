@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request } from 'node:http';
 import { createBrainServer } from '../../server/brain-server.js';
+import { createDistPages, FIXTURES_DIR } from '../../server/dist-pages.js';
 import { renderEarcons } from '../../server/audio/render.js';
 import { connectFakeBody } from '../../server/fake-body.js';
 import { tempCharacters, fakeFetch, until } from './helpers.js';
@@ -13,7 +14,8 @@ const W = { 'X-Bot-Reborn': '1', 'Content-Type': 'application/json' };
 
 function dist() {
   const d = mkdtempSync(join(tmpdir(), 'dist-'));
-  writeFileSync(join(d, 'index.html'), '<!doctype html><title>admin</title>');
+  mkdirSync(join(d, 'admin'));
+  writeFileSync(join(d, 'admin', 'index.html'), '<!doctype html><title>admin</title>');
   mkdirSync(join(d, 'assets'));
   writeFileSync(join(d, 'assets', 'app.js'), 'console.log(1)');
   return d;
@@ -22,7 +24,7 @@ function dist() {
 async function rig() {
   const chars = tempCharacters();
   const server = createBrainServer({
-    dir: chars.dir, adminDist: dist(), fetch: fakeFetch(), sfx: new Map(), earcons: renderEarcons(),
+    dir: chars.dir, pages: () => createDistPages({ dist: dist(), fixtures: FIXTURES_DIR }), fetch: fakeFetch(), sfx: new Map(), earcons: renderEarcons(),
     makeEars: () => ({ kws: { accept: () => [] }, vad: { accept() {}, detected: false, drain: () => [], clear() {} } }),
     log: () => {},
   });
@@ -152,13 +154,13 @@ test('an empty characters directory still serves an empty list', async () => {
 test('an unbuilt page says how to build it', async () => {
   const chars = tempCharacters();
   const server = createBrainServer({
-    dir: chars.dir, adminDist: join(tmpdir(), 'no-such-dist'), sfx: new Map(), earcons: renderEarcons(),
+    dir: chars.dir, pages: () => createDistPages({ dist: join(tmpdir(), 'no-such-dist'), fixtures: FIXTURES_DIR }), sfx: new Map(), earcons: renderEarcons(),
     makeEars: () => { throw new Error('no body'); }, log: () => {},
   });
   const port = await server.listen(0);
   const res = await fetch(`http://127.0.0.1:${port}/`);
   assert.equal(res.status, 503);
-  assert.match(await res.text(), /npm run admin:build/);
+  assert.match(await res.text(), /npm run build/);
   await server.close();
 });
 

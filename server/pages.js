@@ -29,6 +29,15 @@ export const PAGES = [
   { url: '/phone/dev.html', html: 'phone/dev.html', lan: true },
 ];
 
+/**
+ * The request's path, decoded, so a rule sees /phone/../ however it was spelled.
+ * @param {import('node:http').IncomingMessage} req
+ * @returns {string | null} null for a path that does not decode
+ */
+export function pathOf(req) {
+  try { return decodeURIComponent(new URL(req.url ?? '/', 'http://x').pathname); } catch { return null; }
+}
+
 /** @param {string} path @returns {Page | null} */
 export function htmlFor(path) {
   const url = path.endsWith('/index.html') ? path.slice(0, -'index.html'.length) : path;

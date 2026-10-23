@@ -14,7 +14,7 @@ import { OpenAiCompatLlm } from '../core/providers/llm-openai-compat.js';
 import { Reflex } from '../core/reflex.js';
 import { TOOLS, buildSystemPrompt } from '../core/brain.js';
 import { parseWav } from './audio/pcm.js';
-import { FIXTURES_DIR } from './static.js';
+import { FIXTURES_DIR } from './dist-pages.js';
 import { makeStt, makeTtsSource } from './providers/pick.js';
 
 /** Spec §6.7's net, the same one every provider gets at runtime. */
