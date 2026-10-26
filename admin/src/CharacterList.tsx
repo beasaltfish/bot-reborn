@@ -1,3 +1,4 @@
+import { Brand } from './Brand';
 import { lang, setLang, t } from './i18n';
 import type { Summary } from './types';
 
@@ -13,6 +14,7 @@ export function CharacterList(props: {
 }) {
   return (
     <nav className="list">
+      <Brand />
       <h1>{t('characters')}</h1>
       {props.list.map((c) => (
         <button

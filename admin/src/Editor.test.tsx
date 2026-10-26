@@ -4,6 +4,8 @@ import userEvent from '@testing-library/user-event';
 import { Editor } from './Editor';
 import { installFakeApi } from './test/fakeApi';
 import { REFLEX_PRESETS } from '../../core/reflex-presets.js';
+import { DEFAULT_STATE } from '../../core/config.js';
+import { DEFAULT_PERSONA } from '../../core/brain.js';
 import type { EditorSlot } from './types';
 
 const props = (over: Partial<EditorSlot> = {}): EditorSlot =>
@@ -63,7 +65,7 @@ describe('Editor', () => {
     render(<Editor {...props()} />);
     const body = await screen.findByLabelText('Body');
     expect(body).toHaveValue('car');
-    expect(screen.getByText(/next time the body connects/)).toBeInTheDocument();
+    expect(screen.getByText('Takes effect the next time the body connects.')).toBeInTheDocument();
     await userEvent.selectOptions(body, 'dry-run');
     await waitFor(() => expect(fake.patches()).toHaveLength(1), { timeout: 2000 });
     expect(fake.patches()[0].body).toEqual({ config: { body: { motion: 'dry-run' } } });
@@ -130,10 +132,20 @@ describe('Editor', () => {
     expect(check).toHaveBeenLastCalledWith('llm', expect.objectContaining({ llm: expect.any(Object) }));
   });
 
-  it('marks the reflex optional', async () => {
+  it('reflex: the switch says what is missing while on and incomplete', async () => {
     installFakeApi([{ name: 'A' }]);
     render(<Editor {...props({ initialTab: 'reflex' })} />);
-    expect(await screen.findByText(/Optional/)).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'On' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('On, but not running yet. Needs: Provider, API key, Model, a question')).toBeInTheDocument();
+  });
+
+  it('reflex: the switch says when it is running', async () => {
+    const fake = installFakeApi([{ name: 'A' }]);
+    const c = fake.chars.get('A')!;
+    c.config.reflex = { ...c.config.reflex, baseURL: 'http://studio/v1', apiKey: 'k', model: 'jev-latest' };
+    render(<Editor {...props({ initialTab: 'reflex' })} />);
+    await userEvent.selectOptions(await screen.findByLabelText('Reflex preset'), 'commands');
+    expect(screen.getByText(/^On — /)).toBeInTheDocument();
   });
 
   it('shows the replace button and deletes only after confirming', async () => {
@@ -222,8 +234,90 @@ describe('Editor', () => {
     expect(screen.getByRole('note')).toHaveTextContent(/move/);
   });
 
-  it('reflex: Try asks the typed sentence and shows the answer', async () => {
+  it('persona: empty shows the default as a hint, and can start from it', async () => {
+    const fake = installFakeApi([{ name: 'A' }]);
+    render(<Editor {...props()} />);
+    const box = await screen.findByLabelText('Persona') as HTMLTextAreaElement;
+    expect(box.value).toBe('');
+    expect(box.placeholder).toBe(DEFAULT_PERSONA);
+    await userEvent.click(screen.getByRole('button', { name: 'Start from the default' }));
+    expect(box.value).toBe(DEFAULT_PERSONA);
+    expect(screen.queryByRole('button', { name: 'Start from the default' })).toBeNull();
+    await userEvent.clear(box);
+    await userEvent.type(box, 'A bare board');
+    await waitFor(() => expect(fake.chars.get('A')?.config.persona).toBe('A bare board'), { timeout: 2000 });
+  });
+
+  it('reflex: Try with something missing names all of it and asks nothing', async () => {
     installFakeApi([{ name: 'A' }]);
+    const tryReflex = vi.fn();
+    render(<Editor {...props({ initialTab: 'reflex' })} tryReflex={tryReflex} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Try' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Still needed: Provider, API key, Model, a question, Person said');
+    expect(tryReflex).not.toHaveBeenCalled();
+  });
+
+  it('reflex: switching it off keeps the question, and saves only the switch', async () => {
+    const fake = installFakeApi([{ name: 'A' }]);
+    render(<Editor {...props({ initialTab: 'reflex' })} />);
+    await userEvent.selectOptions(await screen.findByLabelText('Reflex preset'), 'commands');
+    await waitFor(() => expect(fake.patches()).toHaveLength(1), { timeout: 2000 });
+    await userEvent.click(screen.getByRole('button', { name: 'Off' }));
+    await waitFor(() => expect(fake.patches()).toHaveLength(2), { timeout: 2000 });
+    expect(fake.patches()[1].body).toEqual({ config: { reflex: { enabled: false } } });
+    expect(screen.getByText(/^Off — /)).toBeInTheDocument();
+    expect(screen.getByLabelText('Reflex preset')).toHaveValue('commands');
+    expect(screen.getByLabelText('Instructions')).toBeInTheDocument();
+  });
+
+  it('reflex: saves the question under a name, and the list shows it picked', async () => {
+    const fake = installFakeApi([{ name: 'A' }]);
+    vi.spyOn(window, 'prompt').mockReturnValueOnce('  Loose turns ');
+    render(<Editor {...props({ initialTab: 'reflex' })} />);
+    const preset = await screen.findByLabelText('Reflex preset');
+    await userEvent.selectOptions(preset, 'commands');
+    await userEvent.click(screen.getByRole('button', { name: 'Remove option left' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save as preset' }));
+    expect(preset).toHaveValue('saved:Loose turns');
+    await waitFor(() => expect(fake.chars.get('A')?.savedReflexes).toHaveLength(1), { timeout: 2000 });
+    const [s] = fake.chars.get('A')!.savedReflexes;
+    expect(s.name).toBe('Loose turns');
+    expect(s.question.options.map((o) => o.choice)).not.toContain('left');
+  });
+
+  it('reflex: saving under a name in use asks first, and a no saves nothing', async () => {
+    const fake = installFakeApi([{ name: 'A' }]);
+    fake.chars.get('A')!.savedReflexes = [{ name: 'Mine', threshold: 0.8, state: DEFAULT_STATE, question: REFLEX_PRESETS[0].question }];
+    vi.spyOn(window, 'prompt').mockReturnValueOnce('Mine');
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false);
+    render(<Editor {...props({ initialTab: 'reflex' })} />);
+    await userEvent.selectOptions(await screen.findByLabelText('Reflex preset'), 'commands');
+    await userEvent.click(screen.getByRole('button', { name: 'Save as preset' }));
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText('Reflex preset')).toHaveValue('commands');
+  });
+
+  it('reflex: a saved preset can be picked, renamed and deleted', async () => {
+    const fake = installFakeApi([{ name: 'A' }]);
+    fake.chars.get('A')!.savedReflexes = [{ name: 'Mine', threshold: 0.6, state: DEFAULT_STATE, question: REFLEX_PRESETS[0].question }];
+    vi.spyOn(window, 'prompt').mockReturnValueOnce('Ours');
+    vi.spyOn(window, 'confirm').mockReturnValueOnce(true);
+    render(<Editor {...props({ initialTab: 'reflex' })} />);
+    const preset = await screen.findByLabelText('Reflex preset');
+    await userEvent.selectOptions(preset, 'saved:Mine');
+    expect(screen.getByLabelText('Fire at probability')).toHaveValue(0.6);
+    await userEvent.click(screen.getByRole('button', { name: 'Rename preset' }));
+    expect(preset).toHaveValue('saved:Ours');
+    await userEvent.click(screen.getByRole('button', { name: 'Delete preset' }));
+    expect(preset).toHaveValue('bark');
+    expect(screen.getByLabelText('Instructions')).toBeInTheDocument();
+    await waitFor(() => expect(fake.chars.get('A')?.savedReflexes).toEqual([]), { timeout: 2000 });
+  });
+
+  it('reflex: Try asks the typed sentence and shows the answer', async () => {
+    const fake = installFakeApi([{ name: 'A' }]);
+    const c = fake.chars.get('A')!;
+    c.config.reflex = { ...c.config.reflex, baseURL: 'http://studio/v1', apiKey: 'k', model: 'jev-latest' };
     const tryReflex = vi.fn().mockResolvedValueOnce('“turn left” → fired (left 0.97, 180 ms) → move');
     render(<Editor {...props({ initialTab: 'reflex' })} tryReflex={tryReflex} />);
     await userEvent.selectOptions(await screen.findByLabelText('Reflex preset'), 'commands');

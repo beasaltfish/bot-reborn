@@ -65,17 +65,30 @@ were all found exactly that way.
 npm install
 server/models/fetch.sh   # once: the wake-word and VAD models
 npm start                # the brain on :8787, and the admin page in your browser
+npm run dev              # the same, for changing the pages: edits show without a build
 ```
 
-The admin page is at `http://localhost:8787/` and opens only on that machine.
-The phone's page is at `http://<this machine>:8787/phone/`; a phone needs
-Chrome's `unsafely-treat-insecure-origin-as-secure` flag set to that origin
-before it may use USB or the microphone there (the README has the steps).
+The admin page is at `http://localhost:8787/` and opens only on that machine,
+as does the wiring simulator at `/sim/`. The phone's page is at
+`http://<this machine>:8787/phone/`; a phone needs Chrome's
+`unsafely-treat-insecure-origin-as-secure` flag set to that origin before it
+may use USB or the microphone there (the README has the steps).
 `server/fake-body.js` drives the whole brain from a WAV file, with no phone.
+
+All three pages are one Vite build (`vite.config.js`, into `dist/`).
+`npm start` runs it when any page, `core/` or the config is newer than
+`dist/`, and does not start if it fails: the phone runs the built pages, and
+an old build would hand it a `core/` the brain no longer speaks.
+`npm run build` runs it by hand. `npm run dev` skips it: Vite runs inside the
+brain, on the same address and port, so a phone keeps its flag. A saved page
+file reloads the page (admin's React components update in place, keeping
+their state); a saved file under `server/` or `core/` restarts the brain, and
+a connected body reconnects. Which addresses the network may open, in either
+mode, is the table in `server/pages.js`.
 
 ```bash
 npm test             # node --test and the admin page's vitest — no browser
-npm run typecheck    # tsc --noEmit, strict, over core/, server/, phone/, test/ and admin/
+npm run typecheck    # tsc --noEmit, strict, over core/, server/, phone/, sim/, test/ and admin/
 ```
 
 ### Trying Volcengine (豆包语音) with a real key

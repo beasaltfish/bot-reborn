@@ -5,7 +5,7 @@
 import { REFLEX_PRESETS } from '../../core/reflex-presets.js';
 import { CAN_DO } from '../../core/config.js';
 import { isPlain } from './merge';
-import type { Motion, ReflexCall, ReflexConfig, ReflexQuestion } from './types';
+import type { Motion, ReflexCall, ReflexConfig, ReflexQuestion, SavedReflex } from './types';
 
 export const DRIVES = ['forward', 'backward'] as const;
 export const STEERS = ['left', 'right', 'straight'] as const;
@@ -39,16 +39,27 @@ export function fromUnsloth(text: string, base: ReflexQuestion | null):
     { choice, description: description as string, actions: kept.get(choice) ?? [] })) } };
 }
 
-export function presetIdOf(r: ReflexConfig): 'none' | 'bark' | 'commands' | 'custom' {
+export type PresetId = 'none' | 'bark' | 'commands' | 'custom' | `saved:${string}`;
+
+/**
+ * By question, as before. A saved one comes first: saving a built-in under a
+ * name (with its own threshold, say) is asking to see that name.
+ */
+export function presetIdOf(r: ReflexConfig, saved: SavedReflex[] = []): PresetId {
   if (!r.question) return 'none';
-  const same = REFLEX_PRESETS.find((p) => JSON.stringify(p.question) === JSON.stringify(r.question));
+  const q = JSON.stringify(r.question);
+  const mine = saved.find((s) => JSON.stringify(s.question) === q);
+  if (mine) return `saved:${mine.name}`;
+  const same = REFLEX_PRESETS.find((p) => JSON.stringify(p.question) === q);
   return same ? same.id : 'custom';
 }
 
 /** A copy, so editing the character never edits the preset. */
-export function presetPatch(id: string): Partial<ReflexConfig> {
+export function presetPatch(id: string, saved: SavedReflex[] = []): Partial<ReflexConfig> {
   if (id === 'none') return { question: null };
-  const p = REFLEX_PRESETS.find((x) => x.id === id);
+  const p = id.startsWith('saved:')
+    ? saved.find((s) => s.name === id.slice('saved:'.length))
+    : REFLEX_PRESETS.find((x) => x.id === id);
   if (!p) return {};
   return structuredClone({ threshold: p.threshold, state: p.state, question: p.question as ReflexQuestion });
 }

@@ -19,7 +19,7 @@ const QUESTION = {
 };
 /** @type {import('../core/config.js').ReflexLayer} */
 const CFG = { baseURL: 'http://studio:8888/v1', apiKey: 'sk-unsloth-x', model: 'jev-latest',
-  threshold: 0.8, state: DEFAULT_STATE, question: QUESTION };
+  enabled: true, threshold: 0.8, state: DEFAULT_STATE, question: QUESTION };
 
 test('the timeout is the spec\'s', () => {
   assert.equal(TIMEOUT_MS, 1500);

@@ -10,5 +10,5 @@
     "strict": true,
     "types": ["node", "w3c-web-usb"]
   },
-  "include": ["core/**/*.js", "phone/**/*.js", "phone/**/*.d.ts", "test/**/*.js", "server/**/*.js"]
+  "include": ["core/**/*.js", "phone/**/*.js", "phone/**/*.d.ts", "sim/**/*.js", "test/**/*.js", "server/**/*.js", "vite.config.js"]
 }

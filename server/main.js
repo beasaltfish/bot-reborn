@@ -2,12 +2,17 @@
 // Characters are made on that page; a body on the same Wi-Fi connects to
 // ws://<this machine>:<port>/body, and a phone opens the page this brain
 // serves at http://<this machine>:<port>/phone/ (the admin page's QR code).
+//
+// `npm run dev`: the same, with the pages from Vite instead of dist/ — edits
+// reload the page, and node --watch-path restarts the brain when server/ or
+// core/ change, so it never runs a core/ older than the one the pages get.
 
 import { spawn } from 'node:child_process';
 import { listCharacters, CHARACTERS_DIR } from './characters.js';
 import { createBrainServer } from './brain-server.js';
 import { lanAddresses } from './admin-api.js';
-import { prepareAdmin, buildAdmin } from './admin-build.js';
+import { prepareBuild } from './build.js';
+import { createDevPages } from './dev-pages.js';
 import { renderEarcons, loadSfx } from './audio/render.js';
 import {
   modelsPresent, loadSherpaNode, loadKeywords, createSpotter, createVoiceDetector,
@@ -15,12 +20,18 @@ import {
 import { BODY_PATH } from '../core/protocol.js';
 
 const PORT = Number(process.env.PORT ?? 8787);
+const DEV = process.argv.includes('--dev');
 
 if (!modelsPresent()) {
   console.error('Models missing. Run: server/models/fetch.sh');
   process.exit(1);
 }
-prepareAdmin({ buildAdmin: () => { console.log('Building the admin page…'); buildAdmin(); } });
+if (!DEV) try {
+  prepareBuild();
+} catch (err) {
+  console.error(`The pages could not be built (${/** @type {Error} */ (err).message}), so the brain does not start: a phone would get pages older than the brain. Fix the error above and run npm start again.`);
+  process.exit(1);
+}
 for (const p of listCharacters().problems) console.error(`skipped ${p}`);
 
 const sherpa = loadSherpaNode();
@@ -30,6 +41,7 @@ const server = createBrainServer({
   makeEars: () => ({ kws: createSpotter(sherpa, keywords), vad: createVoiceDetector(sherpa) }),
   sfx: loadSfx(),
   earcons: renderEarcons(),
+  ...(DEV ? { pages: (/** @type {import('node:http').Server} */ http) => createDevPages(http) } : {}),
 });
 const port = await server.listen(PORT);
 
@@ -42,7 +54,9 @@ for (const ip of lan) {
 }
 console.log('phone: Chrome must treat that address as secure — chrome://flags/#unsafely-treat-insecure-origin-as-secure');
 
-if (process.env.BOT_REBORN_NO_OPEN !== '1') openBrowser(admin);
+if (DEV) console.log('dev mode: edits reload the page; server/ and core/ edits restart the brain');
+// Not in dev mode: every restart would open another tab.
+else if (process.env.BOT_REBORN_NO_OPEN !== '1') openBrowser(admin);
 
 /** Best effort: a machine with no browser just doesn't get one. @param {string} url */
 function openBrowser(url) {

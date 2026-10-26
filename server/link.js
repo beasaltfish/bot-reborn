@@ -36,7 +36,18 @@ export function createLink(opts) {
   const allowed = new Set(opts.allowedOrigins ?? []);
   // A body's frames are 100 ms of PCM (3.2 kB). The ws default is 100 MiB a
   // frame, buffered before anyone has said hello.
-  const wss = new WebSocketServer({ server: opts.server, path: BODY_PATH, maxPayload: 64 * 1024 });
+  const wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
+  // Only /body is ours. Attached to the server with a path, ws answers every
+  // other upgrade with a 400 — and in dev mode Vite's hot reload upgrades on
+  // this same server.
+  /** @param {import('node:http').IncomingMessage} req @param {import('node:stream').Duplex} socket @param {Buffer} head */
+  const onUpgrade = (req, socket, head) => {
+    let path;
+    try { path = new URL(req.url ?? '/', 'http://x').pathname; } catch { return; }
+    if (path !== BODY_PATH) return;
+    wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
+  };
+  opts.server.on('upgrade', onUpgrade);
   /** Character id → its body. One body per character (spec §1.1). */
   /** @type {Map<string, import('ws').WebSocket>} */ const active = new Map();
 
@@ -141,6 +152,7 @@ export function createLink(opts) {
 
   return {
     close() {
+      opts.server.off('upgrade', onUpgrade);
       for (const ws of wss.clients) ws.terminate();
       wss.close();
     },

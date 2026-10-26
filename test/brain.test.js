@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { TOOLS, SYSTEM_PROMPT, SYSTEM_PROMPT_STILL, toolsFor, buildSystemPrompt, validate, Brain } from '../core/brain.js';
+import {
+  TOOLS, SYSTEM_PROMPT, SYSTEM_PROMPT_STILL, DEFAULT_PERSONA, MAX_PERSONA, toolsFor, buildSystemPrompt, validate, Brain,
+} from '../core/brain.js';
 import { MIN_DURATION_MS } from '../phone/executor.js';
 import { KEYWORDS } from '../core/strings.js';
 
@@ -60,7 +62,7 @@ test('the prompt makes the robot the subject, not a car it drives', () => {
   // "Robot" was the next wrong answer: a robot is still a machine, and a
   // machine does not get teased or run off. It is cast as alive.
   assert.match(SYSTEM_PROMPT, /You are a small living creature/);
-  assert.match(SYSTEM_PROMPT, /You are not a robot, a car, or a machine/);
+  assert.match(SYSTEM_PROMPT, /You are not a robot or a machine/);
   assert.match(SYSTEM_PROMPT, /Never call yourself a car/);
   for (const tool of TOOLS) {
     assert.ok(!/\bcars?\b/i.test(tool.function.description),
@@ -997,6 +999,34 @@ test('the still prompt has no wheels in it, and the language add-on still applie
   assert.doesNotMatch(SYSTEM_PROMPT_STILL, /drive ∈|steer|cruise|duration_ms|wheels instead of legs/);
   assert.match(SYSTEM_PROMPT_STILL, /never pretend you moved/);
   assert.match(p, /Always reply in English/);
+});
+
+test('a persona replaces who it is, and nothing the tools or the speaker need', () => {
+  const persona = '你是一块刚接好线的面包板，还没有身体，有点自嘲。';
+  for (const motion of /** @type {const} */ (['car', 'none'])) {
+    const p = buildSystemPrompt({ replyLang: null, persona, body: { motion } });
+    assert.ok(p.startsWith(persona), motion);
+    assert.doesNotMatch(p, /curious, playful/, motion);
+    assert.match(p, /Your reply is read aloud/, motion);
+  }
+  const car = buildSystemPrompt({ replyLang: null, persona, body: { motion: 'car' } });
+  assert.match(car, /MUST call a tool/);
+  assert.match(car, /wheels instead of legs/);
+  assert.match(buildSystemPrompt({ replyLang: null, persona, body: { motion: 'none' } }), /never pretend you moved/);
+});
+
+test('an empty persona is the default one, and a long one is cut', () => {
+  assert.equal(buildSystemPrompt({ replyLang: null, persona: '  \n ' }), SYSTEM_PROMPT);
+  assert.ok(SYSTEM_PROMPT.startsWith(DEFAULT_PERSONA));
+  const p = buildSystemPrompt({ replyLang: null, persona: 'x'.repeat(MAX_PERSONA + 50) });
+  assert.ok(p.startsWith('x'.repeat(MAX_PERSONA) + '\n\n'));
+});
+
+test('the face is the persona\'s to claim: no body part mentions one', () => {
+  const persona = 'A bare circuit board.';
+  for (const motion of /** @type {const} */ (['car', 'none'])) {
+    assert.doesNotMatch(buildSystemPrompt({ replyLang: null, persona, body: { motion } }), /face/, motion);
+  }
 });
 
 test('handle: the LLM is asked with the tools for this body', async () => {

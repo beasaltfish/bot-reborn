@@ -1,46 +1,78 @@
-// The brain as a server: the admin page and its API for this machine only,
-// the phone's page on /phone/ for this network, the body link on /body for anyone with a character's token, and a robot for
-// each body that connects — built from that character's config (server/body
-// split spec §1.1, admin spec §2). Construction only; main.js decides where
-// the pieces come from.
+// The brain as a server: the admin page and its API, and the wiring simulator
+// on /sim/, for this machine only; the phone's page on /phone/ and what it
+// loads for this network (server/pages.js says which addresses those are);
+// the body link on /body for anyone with a character's token; and a
+// robot for each body that connects — built from that character's config
+// (server/body split spec §1.1, admin spec §2). Construction only; main.js
+// decides where the pieces come from.
 
 import { createServer } from 'node:http';
 import { createLink } from './link.js';
+import { BODY_PATH } from '../core/protocol.js';
 import { startRobot } from './robot.js';
 import { listCharacters, findByToken, updateConfig, ready } from './characters.js';
 import { isLocalRequest } from './local-guard.js';
-import { serveStatic, servePhone, ADMIN_DIST, FIXTURES_DIR, PHONE_DIR, CORE_DIR } from './static.js';
+import { lanAllowed, pathOf } from './pages.js';
+import { createDistPages, DIST_DIR, FIXTURES_DIR } from './dist-pages.js';
 import { createAdminApi } from './admin-api.js';
 
 /**
  * @param {{
- *   dir: string, adminDist?: string,
+ *   dir: string,
+ *   pages?: (http: import('node:http').Server) => import('./pages.js').PageServer,
  *   fetch?: typeof fetch,
  *   makeEars: () => { kws: any, vad: any },
  *   sfx: Map<any, Int16Array>, earcons: Record<string, Int16Array>,
  *   log?: (line: string) => void, slackMs?: number, allowedOrigins?: string[],
- *   phoneDir?: string, coreDir?: string, addresses?: () => string[],
+ *   addresses?: () => string[],
  * }} opts
  */
 export function createBrainServer(opts) {
   const log = opts.log ?? console.log;
   /** @type {((req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) => Promise<void>) | null} */
   let api = null;
-  const http = createServer((req, res) => {
-    // The phone's page first: it is for the whole network, and holds no key.
-    if (servePhone(req, res, { phone: opts.phoneDir ?? PHONE_DIR, core: opts.coreDir ?? CORE_DIR })) return;
-    // The body link is a WebSocket upgrade and never reaches here; everything
-    // else is the admin page or its API, and both hold keys and tokens.
+  /** @param {import('node:http').ServerResponse} res @param {number} status @param {string} text */
+  const say = (res, status, text) => {
+    res.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end(text);
+  };
+  const http = createServer(async (req, res) => {
+    try {
+      await route(req, res);
+    } catch (err) {
+      // A page that vanished mid-read (npm run build empties dist/) or a page
+      // Vite could not transform: one failed request, not every body dropped.
+      log(`serving ${req.url} failed: ${/** @type {Error} */ (err).message}`);
+      if (!res.headersSent) say(res, 500, 'Something went wrong serving this page.\n');
+      else res.destroy();
+    }
+  });
+  /** @param {import('node:http').IncomingMessage} req @param {import('node:http').ServerResponse} res */
+  async function route(req, res) {
+    const path = pathOf(req);
+    // The phone's page and what it loads first: they are for the whole
+    // network, and hold no key. The body link is a WebSocket upgrade and
+    // never reaches here.
+    if (path !== null && lanAllowed(path)) {
+      if (!(await pages.serve(req, res))) say(res, 404, 'Not found\n');
+      return;
+    }
+    // Everything else is the admin page or its API, both holding keys and
+    // tokens, or the simulator, a bench tool: this machine only.
     if (!isLocalRequest(req)) {
-      res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
-      res.end('The admin page only opens on the computer the brain runs on.\n');
+      say(res, 403, 'The admin page only opens on the computer the brain runs on.\n');
       return;
     }
     if ((req.url ?? '').startsWith('/api/')) return void api?.(req, res);
-    if (!serveStatic(req, res, { root: opts.adminDist ?? ADMIN_DIST, fixtures: FIXTURES_DIR })) {
-      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
-      res.end('Not found\n');
-    }
+    if (!(await pages.serve(req, res))) say(res, 404, 'Not found\n');
+  }
+  const pages = (opts.pages ?? (() => createDistPages({ dist: DIST_DIR, fixtures: FIXTURES_DIR })))(http);
+  // An upgrade socket outlives every HTTP timeout, so one nobody takes is
+  // refused here rather than left open: /body is the link's, hot reload is
+  // the dev pages', and nothing else is anyone's.
+  http.on('upgrade', (req, socket) => {
+    if (pathOf(req) === BODY_PATH || pages.upgrades?.(req)) return;
+    socket.end('HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n');
   });
 
   /** Looked up when admitted, used when built: the same object in between. */
@@ -90,8 +122,9 @@ export function createBrainServer(opts) {
       return new Promise((resolve) => http.listen(port, () =>
         resolve(/** @type {import('node:net').AddressInfo} */ (http.address()).port)));
     },
-    close() {
+    async close() {
       link.close();
+      await pages.close();
       return new Promise((resolve) => http.close(() => resolve(undefined)));
     },
   };

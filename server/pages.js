@@ -1,0 +1,62 @@
+// The brain's pages, in one table: which address is which page, and which
+// addresses the network may open. Everything here is for this machine only
+// except the phone's page and what it loads — it holds no key, and a body
+// still needs a character's token to be let in (server/body split spec §3).
+//
+// "What it loads" differs by mode and both sets are allowed at once: built,
+// it is /assets/…; in dev mode it is the core/ modules it imports, Vite's
+// client and the React refresh preamble the admin page's plugin puts into
+// every page (DEV_RUNTIME, found by following the phone page's imports from
+// a LAN address). In the other mode those paths do not exist.
+// The admin and sim code in /assets/ goes to the network too; it holds no
+// key — the keys reach the admin page only through /api/, which stays here.
+
+/** @typedef {{ url: string, html: string, lan: boolean }} Page */
+
+/**
+ * What answers for the pages: the built ones (dist-pages.js) or Vite (dev-pages.js).
+ * `serve` resolves false for a path that is not its own, and the brain says 404.
+ * `upgrades` says whether a WebSocket upgrade is its own (dev mode's hot
+ * reload); one nobody claims is refused.
+ * @typedef {{
+ *   serve(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse): Promise<boolean>,
+ *   upgrades?(req: import('node:http').IncomingMessage): boolean,
+ *   close(): Promise<void>,
+ * }} PageServer
+ */
+
+/** `html` is relative to the repo root, and is where the build puts it under dist/. */
+/** @type {readonly Page[]} */
+export const PAGES = [
+  { url: '/', html: 'admin/index.html', lan: false },
+  { url: '/sim/', html: 'sim/index.html', lan: false },
+  { url: '/phone/', html: 'phone/index.html', lan: true },
+  { url: '/phone/dev.html', html: 'phone/dev.html', lan: true },
+];
+
+/**
+ * The request's path, decoded, so a rule sees /phone/../ however it was spelled.
+ * @param {import('node:http').IncomingMessage} req
+ * @returns {string | null} null for a path that does not decode
+ */
+export function pathOf(req) {
+  try { return decodeURIComponent(new URL(req.url ?? '/', 'http://x').pathname); } catch { return null; }
+}
+
+/** @param {string} path @returns {Page | null} */
+export function htmlFor(path) {
+  const url = path.endsWith('/index.html') ? path.slice(0, -'index.html'.length) : path;
+  return PAGES.find((p) => p.url === url) ?? null;
+}
+
+/** Library code Vite serves the phone's page in dev mode; no source of ours. */
+const DEV_RUNTIME = new Set(['/@vite/client', '/@vite/env', '/@react-refresh', '/node_modules/vite/dist/client/env.mjs']);
+
+/** @param {string} path */
+export function lanAllowed(path) {
+  // Vite on Windows reads a backslash as a separator, so ..\ climbs too.
+  if (path.includes('\\') || path.split('/').includes('..')) return false;
+  if (path === '/phone' || path.startsWith('/phone/') || path.startsWith('/assets/')) return true;
+  if (DEV_RUNTIME.has(path)) return true;
+  return path.startsWith('/core/') && path.endsWith('.js') && !path.startsWith('/core/fixtures/');
+}
