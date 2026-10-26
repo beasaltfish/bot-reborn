@@ -10,7 +10,7 @@ import type { Motion, ReflexCall, ReflexConfig, ReflexQuestion, SavedReflex } fr
 export const DRIVES = ['forward', 'backward'] as const;
 export const STEERS = ['left', 'right', 'straight'] as const;
 
-const KIND: Record<ReflexCall['name'], string> = { move: 'move', cruise: 'cruise', stop: 'stop', play_sound: 'sound' };
+const KIND: Record<ReflexCall['name'], string> = { move: 'move', cruise: 'cruise', stop: 'stop', play_sound: 'sound', pose: 'pose' };
 
 export function toUnsloth(q: ReflexQuestion): string {
   const criteria = Object.fromEntries(q.options.map((o) => [o.choice, o.description]));

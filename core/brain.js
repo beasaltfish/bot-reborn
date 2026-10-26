@@ -9,6 +9,7 @@ import { MIN_DURATION_MS } from './motion.js';
 import { SOUNDS } from './audio/sfx.js';
 import { t } from './strings.js';
 import { CAN_DO } from './config.js';
+import { POSES } from './poses.js';
 
 const DRIVE_VALUES = ['forward', 'backward'];
 const STEER_VALUES = ['left', 'right', 'straight'];
@@ -98,6 +99,18 @@ export const TOOLS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'pose',
+      description: 'Do a trick with your whole body: sit, shake (offer a paw), spin (turn round once). Use it when someone gives you that command, or on your own when a dog would.',
+      parameters: {
+        type: 'object',
+        required: ['name'],
+        properties: { name: { enum: [...POSES] } },
+      },
+    },
+  },
 ];
 
 const MOTION_TOOLS = new Set(['move', 'cruise', 'stop']);
@@ -105,10 +118,19 @@ const MOTION_TOOLS = new Set(['move', 'cruise', 'stop']);
 /**
  * The tools a body gets (body motion spec §3). A dry-run is a car as far as
  * the model can tell: what is being tested is the real prompt.
+ *
+ * `pose` is a pet's alone: it is the one action that needs a body that is a
+ * whole cartoon animal, and offering it to a car would be offering it a tool
+ * the validator then drops on every use.
  * @param {import('./config.js').Motion} [motion]
  */
 export function toolsFor(motion = 'car') {
-  return motion === 'none' ? TOOLS.filter((t) => !MOTION_TOOLS.has(t.function.name)) : TOOLS;
+  if (motion === 'pet') {
+    return TOOLS.filter((t) => t.function.name === 'pose' || t.function.name === 'play_sound');
+  }
+  return motion === 'none'
+    ? TOOLS.filter((t) => t.function.name !== 'pose' && !MOTION_TOOLS.has(t.function.name))
+    : TOOLS.filter((t) => t.function.name !== 'pose');
 }
 
 // --- System prompt (spec §6.8) ---------------------------------------------
@@ -167,13 +189,31 @@ const RULES_SPOKEN = `- Reply in the same language the user spoke. This instruct
 - Your reply is read aloud. Use plain spoken language — no markdown, no lists,
   no code blocks, no parenthetical asides.`;
 
+// A pet is a third body, not a variant of the other two: it has no wheels and
+// no voice, so it gets neither the wheels' rules nor the spoken ones.
+const BODY_PET = `You are a golden retriever living on a small screen. You cannot talk: you
+bark, yip, whimper and growl. You can sit, shake a paw, and spin round once.`;
+
+const RULES_PET = `- When someone tells you to sit, shake, or spin — in any language — call
+  \`pose\` with that pose. Add \`play_sound\` if it fits: a bark on a command
+  of yours is what makes it a trick and not a diagram.
+- Everything else is yours to answer the way a dog would: a sound, a pose, or
+  both. A greeting may get a yip and a wagging spin; a telling-off may get a
+  whimper and a sit.
+- Never write words. Nobody will hear them.`;
+
 /**
  * @param {{ replyLang: 'zh' | 'en' | null, persona?: string, body?: { motion: import('./config.js').Motion } }} cfg
  * @returns {string}
  */
 export function buildSystemPrompt(cfg) {
-  const still = cfg.body?.motion === 'none';
+  const motion = cfg.body?.motion;
   const persona = cfg.persona?.trim().slice(0, MAX_PERSONA) || DEFAULT_PERSONA;
+  // A pet gets no reply-language line either: there is no reply to put in a
+  // language, and the model reading one would only learn to write one.
+  if (motion === 'pet') return [persona, BODY_PET, RULES_PET].join('\n\n');
+
+  const still = motion === 'none';
   const rules = still
     ? `${RULES_STILL}\n${RULES_SPOKEN}`
     : `${RULES_WHEELS}\n${RULES_SPOKEN}\n- duration_ms: default 600; use ${MIN_DURATION_MS} for "just a little".`;
@@ -193,6 +233,8 @@ export function buildSystemPrompt(cfg) {
 export const SYSTEM_PROMPT = buildSystemPrompt({ replyLang: null });
 /** The default creature with no body that moves (body motion spec §3, §4.1 ②). */
 export const SYSTEM_PROMPT_STILL = buildSystemPrompt({ replyLang: null, body: { motion: 'none' } });
+/** The cartoon dog on a screen (pet screen spec §4.3). */
+export const SYSTEM_PROMPT_PET = buildSystemPrompt({ replyLang: null, body: { motion: 'pet' } });
 
 // --- The validator (spec §6.6) ---------------------------------------------
 //
@@ -203,7 +245,8 @@ export const SYSTEM_PROMPT_STILL = buildSystemPrompt({ replyLang: null, body: { 
 /**
  * @typedef {{ drive: string, steer: string, duration_ms: number }} Step
  * @typedef {{ kind: 'move', steps: Step[] } | { kind: 'cruise', drive: string, steer: string }
- *   | { kind: 'stop' } | { kind: 'sound', name: import('./audio/sfx.js').SoundName }} Action
+ *   | { kind: 'stop' } | { kind: 'sound', name: import('./audio/sfx.js').SoundName }
+ *   | { kind: 'pose', name: import('./poses.js').Pose }} Action
  */
 
 /**
@@ -287,6 +330,13 @@ export function validate(toolCalls) {
         else drop(`play_sound: rejected — ${JSON.stringify(args)}; name must be one of ${SOUNDS.join('/')}`);
         break;
       }
+      case 'pose': {
+        // A trick is not a request to move: it does not set hadMoveIntent, so
+        // a refused pose never earns the "I could not do that" beep.
+        if (POSES.includes(args.name)) actions.push({ kind: 'pose', name: args.name });
+        else drop(`pose: rejected — ${JSON.stringify(args)}; name must be one of ${POSES.join('/')}`);
+        break;
+      }
       default:
         drop(`${call.name}: no such tool`);
     }
@@ -318,7 +368,8 @@ export class Brain {
   /**
    * @param {{
    *   llm: { chat(messages: object[], tools: object[], opts?: { signal?: AbortSignal }): Promise<{ text: string, toolCalls: any[], rawMessage: object }> },
-   *   executor: { move(steps: Step[]): Promise<void>, cruise(d: string, s: string): Promise<void>, stop(): Promise<void> },
+   *   executor: { move(steps: Step[]): Promise<void>, cruise(d: string, s: string): Promise<void>, stop(): Promise<void>,
+   *               pose?(name: import('./poses.js').Pose): Promise<void> },
    *   tts: { speak(text: string, opts?: { signal?: AbortSignal }): Promise<void> },
    *   earcon: (name: import('./audio/earcon.js').EarconName) => void,
    *   sound?: (name: import('./audio/sfx.js').SoundName) => Promise<void>,
@@ -398,7 +449,8 @@ export class Brain {
       // the apiFailed line would be the answer to the user changing their mind.
       if (turn.signal.aborted) return;
       this.#fail('llm', /** @type {Error} */ (err));
-      await this.#say(t(this.#config.lang, 'apiFailed'), turn);
+      // A pet has no voice to say it with: the earcon is its whole apology.
+      if (this.#motion() !== 'pet') await this.#say(t(this.#config.lang, 'apiFailed'), turn);
       return;
     }
 
@@ -414,13 +466,24 @@ export class Brain {
     const checked = validate(reply.toolCalls);
     const { replyLang, reasons } = checked;
     let { actions, hadMoveIntent } = checked;
-    // Body motion spec §4.1 ④: a body with no wheels was offered no moving,
-    // and a model that moves anyway is dropped like any other refused call.
-    // Not a refusal the person should hear: the sentence beside it is the answer.
-    if (this.#config.body?.motion === 'none') {
-      for (const a of actions) if (a.kind !== 'sound') reasons.push(`${a.kind}: this body cannot move`);
-      actions = actions.filter((a) => a.kind === 'sound');
-      hadMoveIntent = false;
+    // Every body carries out what CAN_DO says it can and nothing else (body
+    // motion spec §4.1 ④). A body was offered no moving and a model that
+    // moves anyway is dropped like any other refused call. Not a refusal the
+    // person should hear: the sentence beside it is the answer.
+    const motion = this.#motion();
+    const can = CAN_DO[motion] ?? CAN_DO.car;
+    const refused = actions.filter((a) => !can.includes(a.kind));
+    if (refused.length > 0) {
+      // The wording is the car's, kept: "this body cannot move" is what the
+      // admin has been reading since a body became a config field. A pose is
+      // not moving, so it says its own name.
+      for (const a of refused) {
+        reasons.push(a.kind === 'pose' ? 'pose: this body cannot pose' : `${a.kind}: this body cannot move`);
+      }
+      actions = actions.filter((a) => can.includes(a.kind));
+      // A pet and a still body were never offered moving, so a dropped move is
+      // not something to beep about: it is the model going off-script.
+      if (motion === 'none' || motion === 'pet') hadMoveIntent = false;
     }
 
     // One line per turn, whatever happened. `calls: []` next to a sentence
@@ -444,7 +507,9 @@ export class Brain {
     // Spec §6.3: actions and content are not mutually exclusive. Dispatch
     // first, then speak — the beep says an instruction ran, the sentence says
     // WHICH one, and that difference is how a misheard command gets caught.
-    const moved = actions.some((a) => a.kind !== 'sound');
+    // A pose is not a move either: it is the pet's answer, the way a bark is,
+    // and a beep on top of it would be a third thing in the room.
+    const moved = actions.some((a) => a.kind !== 'sound' && a.kind !== 'pose');
     if (actions.length > 0) this.#dispatch(actions, turn.signal);
     // done says "an instruction for the car ran". A turn that only made a
     // sound has already answered out loud, and a beep would land on it.
@@ -454,8 +519,18 @@ export class Brain {
     // make the list non-empty and the refusal silent.
     else if (hadMoveIntent) this.#beep();
 
+    // The user's call (pet screen spec §4.3): a dog barks, it does not talk.
+    // The reply is not shown or spoken anywhere; the trace is the only place
+    // that can answer "the model wrote a sentence, why is it silent".
+    if (this.#motion() === 'pet') {
+      if (reply.text) this.#trace(`[turn] pet does not speak: ${JSON.stringify(reply.text)}`);
+      return;
+    }
     if (reply.text) await this.#say(reply.text, turn);
   }
+
+  /** @returns {import('./config.js').Motion} */
+  #motion() { return this.#config.body?.motion ?? 'car'; }
 
   /**
    * Every spoken line goes through here.
@@ -520,16 +595,18 @@ export class Brain {
     });
     const did = actions.map((a) => a.kind === 'sound'
       ? `play_sound ${a.name}`
-      : a.kind === 'move'
-        ? `move ${a.steps.map((s) => `${s.drive}/${s.steer} ${s.duration_ms}ms`).join(', ')}`
-        : a.kind === 'cruise' ? `cruise ${a.drive}/${a.steer}` : a.kind);
+      : a.kind === 'pose'
+        ? `pose ${a.name}`
+        : a.kind === 'move'
+          ? `move ${a.steps.map((s) => `${s.drive}/${s.steer} ${s.duration_ms}ms`).join(', ')}`
+          : a.kind === 'cruise' ? `cruise ${a.drive}/${a.steer}` : a.kind);
     this.#pushUser(`${text}\n[Before you could think, your reflexes answered: ${did.length ? did.join('; ') : 'nothing'}]`);
     this.#trimHistory();
     if (actions.length === 0) return;
     this.#dispatch(actions, this.#turn?.signal);
     // The same rule as an LLM turn: done says an instruction for the car ran.
-    // A bark has already answered out loud.
-    if (actions.some((a) => a.kind !== 'sound')) this.#earcon('done');
+    // A bark has already answered out loud, and a pose is the pet's answer.
+    if (actions.some((a) => a.kind !== 'sound' && a.kind !== 'pose')) this.#earcon('done');
   }
 
   /**
@@ -620,6 +697,11 @@ export class Brain {
       ordered = cruiseAt === -1 ? actions : actions.slice(0, cruiseAt + 1);
     }
 
+    // A pose goes first (pet screen spec §4.6): a trick and its bark are one
+    // gesture, and a bark that lands a second before the dog sits reads as two
+    // unrelated things. Stable, so two poses keep the model's order.
+    ordered = [...ordered.filter((a) => a.kind === 'pose'), ...ordered.filter((a) => a.kind !== 'pose')];
+
     // Sequential inside, unawaited outside: each action still waits for the
     // previous one's motion to end (which is what restores the ordering the
     // awaited version had), while handle() returns immediately — the
@@ -641,6 +723,7 @@ export class Brain {
   /** @param {Action} action @returns {Promise<void>} */
   #run(action) {
     if (action.kind === 'sound') return this.#sound(action.name);
+    if (action.kind === 'pose') return this.#executor.pose?.(action.name) ?? Promise.resolve();
     if (action.kind === 'move') return this.#executor.move(action.steps);
     if (action.kind === 'cruise') return this.#executor.cruise(action.drive, action.steer);
     return this.#executor.stop();

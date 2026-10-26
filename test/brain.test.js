@@ -9,9 +9,9 @@ import { KEYWORDS } from '../core/strings.js';
 /** @param {string} name @returns {any} */
 const byName = (name) => TOOLS.find((t) => t.function.name === name);
 
-test('there are exactly the five tools: spec §6.2 plus play_sound', () => {
+test('there are exactly the six tools: spec §6.2 plus play_sound and pose', () => {
   assert.deepEqual(TOOLS.map((t) => t.function.name).sort(),
-    ['cruise', 'move', 'play_sound', 'set_reply_language', 'stop']);
+    ['cruise', 'move', 'play_sound', 'pose', 'set_reply_language', 'stop']);
 });
 
 test('play_sound offers exactly the four sounds', () => {
@@ -278,7 +278,7 @@ function deferred() {
   return { promise, resolve };
 }
 
-/** @param {{ motion?: 'car' | 'dry-run' | 'none', reply?: any, gateMotion?: boolean, reflex?: any, holdSound?: boolean }} [opts] */
+/** @param {{ motion?: 'car' | 'dry-run' | 'none' | 'pet', reply?: any, gateMotion?: boolean, reflex?: any, holdSound?: boolean }} [opts] */
 function brainHarness({ motion = 'car', reply, gateMotion = false, reflex = null, holdSound = false } = {}) {
   /** @type {any[]} */
   const events = [];
@@ -310,6 +310,8 @@ function brainHarness({ motion = 'car', reply, gateMotion = false, reflex = null
       await gate.promise;
     },
     stop() { events.push({ op: 'stop' }); return Promise.resolve(); },
+    /** @param {any} name */
+    async pose(name) { events.push({ op: 'pose', name }); },
   };
   const llm = {
     /** @type {any[]} */
@@ -338,7 +340,7 @@ function brainHarness({ motion = 'car', reply, gateMotion = false, reflex = null
     soundGates.push(gate);
     await gate.promise;
   };
-  /** @type {{ lang: 'en' | 'zh', replyLang: 'en' | 'zh' | null, bargeIn: boolean, body: { motion: 'car' | 'dry-run' | 'none' } }} */
+  /** @type {{ lang: 'en' | 'zh', replyLang: 'en' | 'zh' | null, bargeIn: boolean, body: { motion: 'car' | 'dry-run' | 'none' | 'pet' } }} */
   const config = { lang: 'zh', replyLang: null, bargeIn: true, body: { motion } };
   /** @type {Array<'en' | 'zh' | null>} */
   const langChanges = [];
@@ -977,12 +979,13 @@ test('a refused move beside a sound still beeps the error (rule 4)', async () =>
   assert.deepEqual(h.events, [{ op: 'sound', name: 'bark' }, { op: 'earcon', name: 'error' }]);
 });
 
-test('car and dry-run are offered every tool, none is offered no moving', () => {
-  assert.equal(toolsFor('car'), TOOLS);
-  assert.equal(toolsFor('dry-run'), TOOLS);
-  assert.equal(toolsFor(), TOOLS);
-  assert.deepEqual(toolsFor('none').map((t) => t.function.name).sort(),
-    ['play_sound', 'set_reply_language']);
+test('car and dry-run are offered every tool but pose, none is offered no moving', () => {
+  const everyToolButPose = TOOLS.filter((t) => t.function.name !== 'pose').map((t) => t.function.name).sort();
+  const names = (/** @type {any} */ m = 'car') => toolsFor(m).map((t) => t.function.name).sort();
+  assert.deepEqual(names('car'), everyToolButPose);
+  assert.deepEqual(names('dry-run'), everyToolButPose);
+  assert.deepEqual(names(), everyToolButPose);
+  assert.deepEqual(names('none'), ['play_sound', 'set_reply_language']);
 });
 
 test('the car prompt is the one it always was, word for word', () => {
@@ -1056,4 +1059,116 @@ test('handle: none — a move the model makes up anyway is dropped, says why, an
   assert.deepEqual(h.events, [{ op: 'sound', name: 'yip' }, { op: 'speak', text: '好的！' }]);
   assert.match(h.traced.join('\n'), /dropped — move: this body cannot move/);
   assert.match(h.traced.join('\n'), /dropped — cruise: this body cannot move/);
+});
+
+// --- The pet body: it poses and barks, and it never speaks ------------------
+
+test('pose offers exactly the three poses', () => {
+  assert.deepEqual(byName('pose').function.parameters.properties.name.enum, ['sit', 'shake', 'spin']);
+});
+
+test('toolsFor: pet gets pose and play_sound only; others never get pose', () => {
+  const names = (/** @type {any} */ m) => toolsFor(m).map((t) => t.function.name).sort();
+  assert.deepEqual(names('pet'), ['play_sound', 'pose']);
+  assert.deepEqual(names('car'), ['cruise', 'move', 'play_sound', 'set_reply_language', 'stop']);
+  assert.deepEqual(names('dry-run'), names('car'));
+  assert.deepEqual(names('none'), ['play_sound', 'set_reply_language']);
+});
+
+test('pose: rejected unless one of the three', () => {
+  const r = validate([
+    { id: 'a', name: 'pose', args: { name: 'roll' }, rawArguments: '{"name":"roll"}' },
+    { id: 'b', name: 'pose', args: { name: 'sit' }, rawArguments: '{"name":"sit"}' },
+  ]);
+  assert.deepEqual(r.actions, [{ kind: 'pose', name: 'sit' }]);
+  assert.equal(r.dropped, 1);
+  assert.equal(r.hadMoveIntent, false, 'a pose is not a request to move');
+  assert.match(r.reasons[0], /pose: rejected.*sit\/shake\/spin/);
+});
+
+test('pet prompt: a dog that poses and barks, no driving, no spoken rules', () => {
+  const p = buildSystemPrompt({ replyLang: 'zh', body: { motion: 'pet' } });
+  assert.match(p, /golden retriever/i);
+  assert.match(p, /`pose`/);
+  assert.doesNotMatch(p, /wheels|cruise|read aloud|Always reply in/);
+});
+
+test('the car and still prompts are unchanged by pet', () => {
+  // The pet branch is a third body, not an edit to the first two: the words
+  // that make the car a car and the still thing still are exactly as they were.
+  assert.equal(buildSystemPrompt({ replyLang: null }), SYSTEM_PROMPT);
+  assert.equal(buildSystemPrompt({ replyLang: null, body: { motion: 'none' } }), SYSTEM_PROMPT_STILL);
+  for (const p of [SYSTEM_PROMPT, SYSTEM_PROMPT_STILL]) {
+    assert.doesNotMatch(p, /golden retriever|`pose`|never write words/i);
+  }
+});
+
+test('pet never speaks, even when the model writes words', async () => {
+  // The user's call (spec §4.3): a dog barks. A model that answers in words
+  // anyway is not sent to the voice, and the trace says why it went quiet.
+  const h = brainHarness({ motion: 'pet', reply: say('汪！', [
+    { id: 'p1', name: 'pose', args: { name: 'sit' } },
+    { id: 's1', name: 'play_sound', args: { name: 'bark' } },
+  ]) });
+  await h.brain.handle('坐下');
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(h.events.filter((e) => e.op === 'speak'), [], 'nothing is read aloud');
+  assert.deepEqual(h.events.filter((e) => e.op === 'pose'), [{ op: 'pose', name: 'sit' }]);
+  assert.deepEqual(h.events.filter((e) => e.op === 'sound'), [{ op: 'sound', name: 'bark' }]);
+  assert.deepEqual(h.events.filter((e) => e.op === 'earcon'), [], 'a pose is its own answer: no done beep');
+  assert.match(h.traced.join('\n'), /\[turn\] pet does not speak/);
+});
+
+test('pet: an LLM failure only beeps — the line saying so is words', async () => {
+  const h = brainHarness({ motion: 'pet', reply: new Error('401 from provider') });
+  await h.brain.handle('坐下');
+  assert.deepEqual(h.events, [{ op: 'earcon', name: 'error' }]);
+  assert.equal(h.faults.length, 1, 'the fault still reaches the caller');
+});
+
+test('pose runs before the sound in the same turn, so the dog moves as it barks', async () => {
+  const h = brainHarness({ motion: 'pet', reply: say('', [
+    { id: 's1', name: 'play_sound', args: { name: 'bark' } },
+    { id: 'p1', name: 'pose', args: { name: 'spin' } },
+  ]) });
+  await h.brain.handle('转圈');
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(h.events, [{ op: 'pose', name: 'spin' }, { op: 'sound', name: 'bark' }]);
+});
+
+test('pet drops move/cruise/stop even if the model calls them', async () => {
+  const h = brainHarness({ motion: 'pet', reply: say('', [
+    { id: 'm1', name: 'move', args: { steps: [{ drive: 'forward', steer: 'straight', duration_ms: 600 }] } },
+    { id: 'c1', name: 'cruise', args: { drive: 'forward', steer: 'straight' } },
+    { id: 'x1', name: 'stop', args: {} },
+    { id: 'p1', name: 'pose', args: { name: 'shake' } },
+  ]) });
+  await h.brain.handle('往前走');
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(h.events, [{ op: 'pose', name: 'shake' }]);
+  assert.match(h.traced.join('\n'), /dropped — move: this body cannot/);
+  assert.match(h.traced.join('\n'), /dropped — cruise: this body cannot/);
+  assert.match(h.traced.join('\n'), /dropped — stop: this body cannot/);
+});
+
+test('reflex fired on a pet: it poses and barks without asking the LLM', async () => {
+  const h = brainHarness({ motion: 'pet', reply: say('never'), reflex: judgeSaying('fired', [
+    { name: 'pose', args: { name: 'sit' }, rawArguments: '{"name":"sit"}' },
+    ...BARK,
+  ]) });
+  await h.brain.handle('坐下');
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(h.llm.calls.length, 0);
+  assert.deepEqual(h.events, [{ op: 'pose', name: 'sit' }, { op: 'sound', name: 'bark' }]);
+  assert.match(/** @type {any} */ (h.brain.history[0]).content, /you reflexes answered: pose sit; play_sound bark|reflexes answered: pose sit; play_sound bark/);
+});
+
+test('a car drops a pose the reflex fired, and says why', async () => {
+  const h = brainHarness({ reply: say('never'), reflex: judgeSaying('fired', [
+    { name: 'pose', args: { name: 'sit' }, rawArguments: '{"name":"sit"}' },
+  ]) });
+  await h.brain.handle('坐下');
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(h.events, []);
+  assert.match(h.traced.join('\n'), /\[reflex\] pose dropped: body "car" does not do pose/);
 });
