@@ -130,7 +130,6 @@ export function LayerTab({ id, layer, config, endpoints, update, check }: {
 
   return (
     <div className="fields">
-      {layer === 'reflex' && <p className="hint">{t('optional')}</p>}
       <label>{t('provider')}
         <select aria-label={t('provider')} value={selected?.id ?? ''} onChange={(e) => pickFrom(e.target.value)}>
           <option value="">{t('pickProvider')}</option>

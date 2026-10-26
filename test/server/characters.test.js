@@ -87,6 +87,20 @@ test('the file on disk is { name, token, config, endpoints }', () => {
   assert.deepEqual(Object.keys(JSON.parse(readFileSync(c.path, 'utf8'))), ['name', 'token', 'config', 'endpoints']);
 });
 
+test('saved reflexes sit beside the config, and a patch replaces the whole list', async () => {
+  const { REFLEX_PRESETS } = await import('../../core/reflex-presets.js');
+  const dir = tmp();
+  const c = createCharacter('a', dir);
+  const saved = { name: 'Mine', threshold: 0.7, state: c.config.reflex.state, question: REFLEX_PRESETS[0].question };
+  patchCharacter(c.path, { savedReflexes: [saved] });
+  assert.deepEqual(JSON.parse(readFileSync(c.path, 'utf8')).savedReflexes, [saved]);
+  assert.deepEqual(characterById('a', dir)?.savedReflexes, [saved]);
+  assert.equal(characterById('a', dir)?.config.savedReflexes, undefined, 'never in what the body reads');
+  patchCharacter(c.path, { savedReflexes: [] });
+  assert.deepEqual(characterById('a', dir)?.savedReflexes, []);
+  assert.throws(() => patchCharacter(c.path, { savedReflexes: [{ name: '' }] }), /name/);
+});
+
 test('a robot saving its reply language keeps what was edited by hand meanwhile', async () => {
   // Found in review: the robot wrote back the whole file as it was at hello,
   // so a token changed while it was online came back, silently.

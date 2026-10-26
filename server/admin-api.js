@@ -19,7 +19,10 @@ const MAX_BODY = 64 * 1024;
 export function createAdminApi(opts) {
   const check = createCheckApi({ fetch: opts.fetch, timeoutMs: opts.checkTimeoutMs });
   /** @param {import('./characters.js').Character} c @param {Set<string>} online */
-  const detail = (c, online) => ({ id: c.id, name: c.name, token: c.token, config: c.config, endpoints: c.endpoints ?? [], online: online.has(c.id) });
+  const detail = (c, online) => ({
+    id: c.id, name: c.name, token: c.token, config: c.config, endpoints: c.endpoints ?? [],
+    savedReflexes: c.savedReflexes ?? [], online: online.has(c.id),
+  });
 
   /**
    * @param {import('node:http').IncomingMessage} req
@@ -91,7 +94,7 @@ export function createAdminApi(opts) {
       }
       if (req.method === 'GET') return send(200, detail(c, online));
       if (req.method === 'PATCH') {
-        patchCharacter(c.path, { name: body?.name, config: body?.config, endpoints: body?.endpoints });
+        patchCharacter(c.path, { name: body?.name, config: body?.config, endpoints: body?.endpoints, savedReflexes: body?.savedReflexes });
         return send(200, detail(/** @type {any} */ (characterById(id, opts.dir)), online));
       }
       if (req.method === 'DELETE') {

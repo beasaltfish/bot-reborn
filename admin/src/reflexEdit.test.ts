@@ -69,6 +69,16 @@ describe('presets', () => {
     expect(presetPatch('none')).toEqual({ question: null });
     expect(presetPatch('custom')).toEqual({});
   });
+
+  it('a saved one is named by its name, ahead of a built-in it may equal', () => {
+    const saved = [{ name: 'Mine', threshold: 0.6, state: 'Person said: {person}', question: REFLEX_PRESETS[1].question }];
+    expect(presetIdOf(withQ(REFLEX_PRESETS[1].question), saved)).toBe('saved:Mine');
+    expect(presetIdOf(withQ(REFLEX_PRESETS[0].question), saved)).toBe('bark');
+    const p = presetPatch('saved:Mine', saved);
+    expect(p).toEqual({ threshold: 0.6, state: 'Person said: {person}', question: REFLEX_PRESETS[1].question });
+    expect(p.question).not.toBe(saved[0].question);
+    expect(presetPatch('saved:Gone', saved)).toEqual({});
+  });
 });
 
 describe('unsupported', () => {

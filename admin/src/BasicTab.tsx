@@ -1,3 +1,4 @@
+import { DEFAULT_PERSONA, MAX_PERSONA } from '../../core/brain.js';
 import { t } from './i18n';
 import { PhoneLink } from './PhoneLink';
 import { TokenBox } from './TokenBox';
@@ -36,6 +37,18 @@ export function BasicTab({ detail, update, onToken }: { detail: Detail; update(p
           </select>
           <small>{t('motionHint')}</small>
         </label>
+        <label>{t('persona')}
+          <textarea
+            aria-label={t('persona')} rows={6} maxLength={MAX_PERSONA} placeholder={DEFAULT_PERSONA}
+            value={c.persona} onChange={(e) => update({ config: { persona: e.target.value } })}
+          />
+          <small>{t('personaHint')}</small>
+        </label>
+        {!c.persona.trim() && (
+          <button type="button" className="secondary" onClick={() => update({ config: { persona: DEFAULT_PERSONA } })}>
+            {t('personaFromDefault')}
+          </button>
+        )}
         <label className="check">
           <input type="checkbox" checked={c.wakeWord} onChange={(e) => update({ config: { wakeWord: e.target.checked } })} />
           {t('wakeWord')}

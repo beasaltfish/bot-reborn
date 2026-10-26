@@ -195,6 +195,20 @@ test('the phone addresses are the Wi-Fi ones: private, not tunnels, not bridges'
   assert.deepEqual(lanAddressesFrom(ifaces), ['192.168.3.79', '10.0.0.7', '172.20.1.1']);
 });
 
+test('saved reflexes come back with the character, and are checked before they are written', async () => {
+  const { REFLEX_PRESETS } = await import('../../core/reflex-presets.js');
+  const r = await rig();
+  await r.call('/api/characters', { method: 'POST', headers: W, body: JSON.stringify({ name: 'rex' }) });
+  const fresh = await r.call('/api/characters/rex');
+  assert.deepEqual(fresh.body.savedReflexes, []);
+  const saved = { name: 'Mine', threshold: 0.7, state: fresh.body.config.reflex.state, question: REFLEX_PRESETS[1].question };
+  const ok = await r.call('/api/characters/rex', { method: 'PATCH', headers: W, body: JSON.stringify({ savedReflexes: [saved] }) });
+  assert.deepEqual(ok.body.savedReflexes, [saved]);
+  const bad = await r.call('/api/characters/rex', { method: 'PATCH', headers: W, body: JSON.stringify({ savedReflexes: [{ ...saved, question: null }] }) });
+  assert.equal(bad.status, 400);
+  await r.server.close();
+});
+
 test('endpoints are kept per character, and checked before they are written', async () => {
   const r = await rig();
   await r.call('/api/characters', { method: 'POST', headers: W, body: JSON.stringify({ name: 'rex' }) });

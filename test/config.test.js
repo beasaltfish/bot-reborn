@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CONFIG_KEY, STICKY, defaultConfig, loadConfig, saveConfig, resetSticky, layerReady,
-  reflexReady, normalizeReflex, CAN_DO, DEFAULT_STATE } from '../core/config.js';
+  reflexReady, reflexMissing, normalizeReflex, CAN_DO, DEFAULT_STATE } from '../core/config.js';
 
 /** A localStorage stand-in. The real one is not available in node, and every
  * function under test takes it as a parameter for exactly this reason. */
@@ -185,10 +185,18 @@ const QUESTION = {
   ],
 };
 
+test('persona: empty by default, a stored string kept, anything else empty', () => {
+  assert.equal(defaultConfig().persona, '');
+  const read = (/** @type {unknown} */ persona) => loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ persona }) })).persona;
+  assert.equal(read('一块面包板'), '一块面包板');
+  assert.equal(read(42), '');
+  assert.equal(loadConfig(fakeStorage({ [CONFIG_KEY]: '{}' })).persona, '');
+});
+
 test('reflex is off by default: no layer and no question', () => {
   const d = defaultConfig();
   assert.deepEqual(d.reflex, {
-    baseURL: '', apiKey: '', model: '', threshold: 0.8, state: DEFAULT_STATE, question: null,
+    baseURL: '', apiKey: '', model: '', enabled: true, threshold: 0.8, state: DEFAULT_STATE, question: null,
   });
   assert.equal(DEFAULT_STATE, 'Robot said: "{robot}"\nPerson said: "{person}"');
   assert.equal(reflexReady(d.reflex), false);
@@ -205,10 +213,30 @@ test('a config saved before the question existed loads with the reflex off', () 
 });
 
 test('a stored reflex with a question survives the read, and is on', () => {
-  const reflex = { ...LAYER, threshold: 0.6, state: 'Person said: {person}', question: QUESTION };
+  const reflex = { ...LAYER, enabled: true, threshold: 0.6, state: 'Person said: {person}', question: QUESTION };
   const r = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ reflex }) })).reflex;
   assert.deepEqual(r, reflex);
   assert.equal(reflexReady(r), true);
+});
+
+test('a reflex switched off keeps its question and does not run', () => {
+  const reflex = { ...LAYER, enabled: false, question: QUESTION };
+  const r = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ reflex }) })).reflex;
+  assert.equal(r.enabled, false);
+  assert.deepEqual(r.question, QUESTION);
+  assert.equal(reflexReady(r), false);
+  assert.deepEqual(reflexMissing(r), []);
+});
+
+test('normalizeReflex: a reflex saved before the switch existed is on', () => {
+  assert.equal(normalizeReflex({ ...LAYER, question: QUESTION }).enabled, true);
+  assert.equal(normalizeReflex({ enabled: 'no' }).enabled, true);
+});
+
+test('reflexMissing names what the reflex still needs, in page order', () => {
+  assert.deepEqual(reflexMissing(defaultConfig().reflex), ['baseURL', 'apiKey', 'model', 'question']);
+  assert.deepEqual(reflexMissing({ ...defaultConfig().reflex, ...LAYER }), ['question']);
+  assert.deepEqual(reflexMissing({ ...defaultConfig().reflex, ...LAYER, apiKey: '', question: /** @type {any} */ (QUESTION) }), ['apiKey']);
 });
 
 test('normalizeReflex: bad threshold and state fall back to the defaults', () => {

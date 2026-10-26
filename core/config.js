@@ -64,12 +64,28 @@ export function layerReady(layer) {
 }
 
 /**
- * The reflex runs only with somewhere to ask AND something to ask. A layer
- * with a key but no question is a character that has not picked one yet.
+ * What the reflex still needs before it could run, in the order the admin
+ * page asks for them. Empty means complete, switched on or not: the page's
+ * Try reads this, so a reflex can be tried while it is off.
+ * @param {ReflexLayer} r
+ * @returns {Array<'baseURL' | 'apiKey' | 'model' | 'question'>}
+ */
+export function reflexMissing(r) {
+  /** @type {Array<'baseURL' | 'apiKey' | 'model' | 'question'>} */
+  const missing = [];
+  for (const k of /** @type {const} */ (['baseURL', 'apiKey', 'model'])) if (!r[k]) missing.push(k);
+  if (r.question === null) missing.push('question');
+  return missing;
+}
+
+/**
+ * The reflex runs only with somewhere to ask AND something to ask, and only
+ * while switched on. A layer with a key but no question is a character that
+ * has not picked one yet; one switched off keeps its question for later.
  * @param {ReflexLayer} r
  */
 export function reflexReady(r) {
-  return layerReady(r) && r.question !== null;
+  return r.enabled !== false && reflexMissing(r).length === 0;
 }
 
 const isPlain = (/** @type {unknown} */ v) => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -87,6 +103,8 @@ export function normalizeReflex(raw) {
   return {
     ...d,
     ...p,
+    // Only an explicit false is off: every reflex saved before the switch was on.
+    enabled: p.enabled !== false,
     threshold: typeof t === 'number' && t >= 0 && t <= 1 ? t : d.threshold,
     state: typeof p.state === 'string' && p.state.includes('{person}') ? p.state : d.state,
     question: normalizeQuestion(p.question),
@@ -148,7 +166,7 @@ export function defaultConfig(_navLang = globalThis.navigator?.language) {
     // Configurable reflex spec §2. Off until it has both a provider and a
     // question: reflexReady() asks for the three connection fields AND a
     // question, so no key, or no preset picked, means today's robot exactly.
-    reflex: { baseURL: '', apiKey: '', model: '', threshold: DEFAULT_THRESHOLD, state: DEFAULT_STATE, question: null },
+    reflex: { baseURL: '', apiKey: '', model: '', enabled: true, threshold: DEFAULT_THRESHOLD, state: DEFAULT_STATE, question: null },
     // English, always, as of 2026-09-17. This is an open-source project and the
     // default has to be the language its readers share; a Chinese phone landing
     // on a Chinese UI made the source's default and the running default two
@@ -171,6 +189,9 @@ export function defaultConfig(_navLang = globalThis.navigator?.language) {
     wakeWord: false,
     // car: every character made before this field existed had one.
     body: { motion: 'car' },
+    // Who it is, in the admin's words; empty is brain.js's DEFAULT_PERSONA.
+    // Only this part of the system prompt is theirs (see buildSystemPrompt).
+    persona: '',
 
     /**
      * What has been measured about THIS car (spec §7 of the 2026-09-17 design;
@@ -223,6 +244,7 @@ export function loadConfig(storage = globalThis.localStorage) {
       // Anything but the three names reads as car, the robot as it was before
       // this field existed — a typo must not take a car's wheels away.
       body: { motion: MOTIONS.includes(p.body?.motion) ? p.body.motion : d.body.motion },
+      persona: typeof p.persona === 'string' ? p.persona : d.persona,
       // Spread over the default, so a config stored before this field existed
       // loads as "never measured" rather than as undefined. Reading
       // undefined.steerSwapped throws at startup, and the product would refuse
@@ -260,7 +282,7 @@ export function resetSticky(cfg) {
  * @typedef {{ name: typeof REFLEX_TOOLS[number], args: Record<string, unknown> }} ReflexCall
  * @typedef {{ choice: string, description: string, actions: ReflexCall[] }} ReflexOption
  * @typedef {{ name: string, instructions: string, options: ReflexOption[] }} ReflexQuestion
- * @typedef {Layer & { threshold: number, state: string, question: ReflexQuestion | null }} ReflexLayer
+ * @typedef {Layer & { enabled: boolean, threshold: number, state: string, question: ReflexQuestion | null }} ReflexLayer
  * @typedef {{
  *   stt: Layer & { prompt: string },
  *   llm: Layer,
@@ -272,6 +294,7 @@ export function resetSticky(cfg) {
  *   ttsPath: 'webaudio' | 'loopback' | 'speechSynthesis',
  *   wakeWord: boolean,
  *   body: { motion: Motion },
+ *   persona: string,
  *   calibration: Calibration,
  * }} Config
  *

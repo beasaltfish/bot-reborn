@@ -1,15 +1,16 @@
 // An in-memory brain behind fetch, speaking the same /api as admin-api.js.
 import { vi } from 'vitest';
-import type { Config, Detail } from '../types';
+import type { Config, Detail, SavedReflex } from '../types';
 import { deepMerge } from '../merge';
 
 export function blankConfig(): Config {
   const layer = () => ({ baseURL: '', apiKey: '', model: '' });
   return {
     stt: { ...layer(), prompt: '' }, llm: layer(), tts: { ...layer(), voice: '' },
-    reflex: { ...layer(), threshold: 0.8, state: 'Robot said: "{robot}"\nPerson said: "{person}"', question: null },
+    reflex: { ...layer(), enabled: true, threshold: 0.8, state: 'Robot said: "{robot}"\nPerson said: "{person}"', question: null },
     lang: 'en', replyLang: null, bargeIn: true, wakeWord: false,
     body: { motion: 'car' },
+    persona: '',
   };
 }
 
@@ -18,7 +19,7 @@ export function installFakeApi(seed: Array<{ name: string; online?: boolean }> =
   let n = 0;
   const token = () => (++n).toString(16).padStart(32, '0');
   const make = (name: string, online = false): Detail =>
-    ({ id: name, name, token: token(), online, config: blankConfig(), endpoints: [] });
+    ({ id: name, name, token: token(), online, config: blankConfig(), endpoints: [], savedReflexes: [] as SavedReflex[] });
   for (const s of seed) chars.set(s.name, make(s.name, s.online));
   const calls: Array<{ method: string; path: string; body: any; headers: Record<string, string> }> = [];
   const state = { down: false, addresses: ['192.168.1.5'] as string[] };
@@ -53,6 +54,7 @@ export function installFakeApi(seed: Array<{ name: string; online?: boolean }> =
       if (body.name !== undefined) c.name = body.name;
       if (body.config) c.config = deepMerge(c.config, body.config);
       if (body.endpoints) c.endpoints = body.endpoints;
+      if (body.savedReflexes) c.savedReflexes = body.savedReflexes;
       return json(200, c);
     }
     if (method === 'DELETE') { chars.delete(c.id); return json(200, {}); }

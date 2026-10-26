@@ -12,14 +12,17 @@ import { dirname, join } from 'node:path';
 import { defaultConfig, loadConfig, layerReady } from '../core/config.js';
 import { startingPreset, voicesFor } from '../core/provider-presets.js';
 import { checkEndpoints, endpointsFrom, storedEndpoints, withEndpointIds } from './endpoints.js';
+import { checkSavedReflexes, storedSavedReflexes } from './saved-reflexes.js';
 
 export const HOME = process.env.BOT_REBORN_HOME ?? join(homedir(), '.bot-reborn');
 export const CHARACTERS_DIR = join(HOME, 'characters');
 
 /**
  * `endpoints` are the provider entries and their keys (see endpoints.js). They
- * sit beside `config`, not in it, so the body never has to read them.
- * @typedef {{ id: string, name: string, token: string, config: any, endpoints: import('./endpoints.js').Endpoint[], path: string }} Character
+ * sit beside `config`, not in it, so the body never has to read them; so do
+ * `savedReflexes`, the admin's own reflex presets (see saved-reflexes.js).
+ * @typedef {{ id: string, name: string, token: string, config: any, endpoints: import('./endpoints.js').Endpoint[],
+ *             savedReflexes?: import('./saved-reflexes.js').SavedReflex[], path: string }} Character
  */
 
 const TOKEN = /^[0-9a-f]{32}$/;
@@ -128,7 +131,10 @@ export function listCharacters(dir = CHARACTERS_DIR) {
       // A file written before endpoints existed has its keys in a table; its
       // entries are worked out from that until the next write keeps them.
       const endpoints = Array.isArray(raw.endpoints) ? storedEndpoints(raw.endpoints) : endpointsFrom(config, keysFrom(raw.keys));
-      characters.push({ id, name: typeof raw.name === 'string' ? raw.name : id, token: raw.token, config: withEndpointIds(config, endpoints), endpoints, path });
+      characters.push({
+        id, name: typeof raw.name === 'string' ? raw.name : id, token: raw.token, config: withEndpointIds(config, endpoints), endpoints,
+        savedReflexes: storedSavedReflexes(raw.savedReflexes), path,
+      });
     } catch (err) {
       problems.push(`${path}: ${/** @type {Error} */ (err).message}`);
     }
@@ -155,7 +161,11 @@ export function findByToken(characters, token) {
 /** It holds API keys: readable by this user only. @param {Character} c */
 export function saveCharacter(c) {
   mkdirSync(join(c.path, '..'), { recursive: true, mode: 0o700 });
-  const raw = { name: c.name, token: c.token, config: c.config, ...(c.endpoints?.length ? { endpoints: c.endpoints } : {}) };
+  const raw = {
+    name: c.name, token: c.token, config: c.config,
+    ...(c.endpoints?.length ? { endpoints: c.endpoints } : {}),
+    ...(c.savedReflexes?.length ? { savedReflexes: c.savedReflexes } : {}),
+  };
   writeFileSync(c.path, JSON.stringify(raw, null, 2) + '\n', { mode: 0o600 });
   // writeFileSync's mode only applies when it creates the file.
   chmodSync(c.path, 0o600);
@@ -217,10 +227,11 @@ export function updateConfig(path, change) {
  * The admin page's edit. The name is only the display name: the file, and so
  * the id, stay put, and a body online under this character stays online.
  * @param {string} path
- * @param {{ name?: unknown, config?: unknown, endpoints?: unknown }} patch
+ * @param {{ name?: unknown, config?: unknown, endpoints?: unknown, savedReflexes?: unknown }} patch
  */
 export function patchCharacter(path, patch) {
   const endpoints = patch.endpoints === undefined ? undefined : checkEndpoints(patch.endpoints);
+  const savedReflexes = patch.savedReflexes === undefined ? undefined : checkSavedReflexes(patch.savedReflexes);
   if (patch.name !== undefined) {
     if (typeof patch.name !== 'string') throw new Error('name must be a string');
     checkName(patch.name);
@@ -235,6 +246,7 @@ export function patchCharacter(path, patch) {
     if (patch.name !== undefined) raw.name = patch.name;
     if (patch.config !== undefined) raw.config = deepMerge(raw.config, patch.config);
     if (endpoints !== undefined) raw.endpoints = endpoints;
+    if (savedReflexes !== undefined) raw.savedReflexes = savedReflexes;
   });
 }
 

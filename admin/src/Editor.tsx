@@ -4,7 +4,7 @@ import { deepMerge } from './merge';
 import { useAutoSave } from './useAutoSave';
 import { BasicTab } from './BasicTab';
 import { LayerTab } from './LayerTab';
-import { ReflexTab } from './ReflexTab';
+import { ReflexSwitch, ReflexTab } from './ReflexTab';
 import { Dot } from './CharacterList';
 import { runCheck, runTry, type CheckFn, type TryFn } from './checks';
 import { t, type Key } from './i18n';
@@ -35,7 +35,10 @@ export function Editor(props: EditorSlot & { check?: CheckFn; tryReflex?: TryFn 
   if (!detail) return null;
 
   const update = (p: Patch) => {
-    setDetail((d) => (d ? { ...d, ...(p.name !== undefined ? { name: p.name } : {}), ...(p.endpoints ? { endpoints: p.endpoints } : {}), config: deepMerge(d.config, p.config) } : d));
+    setDetail((d) => (d ? {
+      ...d, ...(p.name !== undefined ? { name: p.name } : {}), ...(p.endpoints ? { endpoints: p.endpoints } : {}),
+      ...(p.savedReflexes ? { savedReflexes: p.savedReflexes } : {}), config: deepMerge(d.config, p.config),
+    } : d));
     save.queue(p);
   };
 
@@ -67,10 +70,11 @@ export function Editor(props: EditorSlot & { check?: CheckFn; tryReflex?: TryFn 
       </div>
       <div role="tabpanel" className="panel">
         {save.error && <p role="alert" className="error">{t('saveFailed')}{save.error}</p>}
+        {tab === 'reflex' && <ReflexSwitch reflex={detail.config.reflex} update={update} />}
         {tab === 'basic'
           ? <BasicTab detail={detail} update={update} onToken={(token) => setDetail((d) => (d ? { ...d, token } : d))} />
           : <LayerTab key={tab} id={id} layer={tab} config={detail.config} endpoints={detail.endpoints} update={update} check={props.check ?? runCheck} />}
-        {tab === 'reflex' && <ReflexTab config={detail.config} update={update} tryIt={props.tryReflex ?? runTry} />}
+        {tab === 'reflex' && <ReflexTab config={detail.config} saved={detail.savedReflexes ?? []} update={update} tryIt={props.tryReflex ?? runTry} />}
       </div>
     </section>
   );

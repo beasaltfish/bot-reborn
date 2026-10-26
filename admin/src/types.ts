@@ -24,10 +24,15 @@ export interface ReflexCall { name: 'move' | 'cruise' | 'stop' | 'play_sound'; a
 export interface ReflexOption { choice: string; description: string; actions: ReflexCall[] }
 export interface ReflexQuestion { name: string; instructions: string; options: ReflexOption[] }
 export interface ReflexConfig extends LayerConfig {
+  /** Off keeps the question; the brain just does not ask it. */
+  enabled: boolean;
   threshold: number;
   state: string;
   question: ReflexQuestion | null;
 }
+
+/** One the admin saved on this character; see server/saved-reflexes.js. */
+export interface SavedReflex { name: string; threshold: number; state: string; question: ReflexQuestion }
 
 export type Motion = 'car' | 'dry-run' | 'none';
 
@@ -41,6 +46,8 @@ export interface Config {
   bargeIn: boolean;
   wakeWord: boolean;
   body: { motion: Motion };
+  /** Empty means brain.js's DEFAULT_PERSONA. */
+  persona: string;
 }
 
 export type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K] };
@@ -50,10 +57,14 @@ export interface Patch {
   config?: DeepPartial<Config>;
   /** The whole list of providers, as it should be after this edit. */
   endpoints?: Endpoint[];
+  /** The whole list of saved reflex presets, likewise. */
+  savedReflexes?: SavedReflex[];
 }
 
 export interface Summary { id: string; name: string; ready: boolean; online: boolean }
-export interface Detail { id: string; name: string; token: string; config: Config; endpoints: Endpoint[]; online: boolean }
+export interface Detail {
+  id: string; name: string; token: string; config: Config; endpoints: Endpoint[]; savedReflexes: SavedReflex[]; online: boolean;
+}
 
 export interface EditorSlot {
   id: string;
