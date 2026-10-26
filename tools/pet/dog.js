@@ -26,8 +26,8 @@ const CUSHION_DARK = '#b96a4f';
 const BG = '#cfe6d8';
 const FLOOR = '#b9d8c5';
 
-const lerp = (a, b, t) => a + (b - a) * t;
-const num = (n) => Math.round(n * 10) / 10;
+const lerp = (/** @type {number} */ a, /** @type {number} */ b, /** @type {number} */ t) => a + (b - a) * t;
+const num = (/** @type {number} */ n) => Math.round(n * 10) / 10;
 
 /**
  * @param {{ breathe?: number, blink?: number, tail?: number, sit?: number,
