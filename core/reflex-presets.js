@@ -9,7 +9,7 @@ const move = (drive, steer) =>
   [{ name: /** @type {const} */ ('move'), args: { steps: [{ drive, steer, duration_ms: 600 }] } }];
 
 /**
- * @type {Array<{ id: 'bark' | 'commands', threshold: number, state: string,
+ * @type {Array<{ id: 'bark' | 'commands' | 'pet', threshold: number, state: string,
  *                 question: import('./config.js').ReflexQuestion }>}
  */
 export const REFLEX_PRESETS = [
@@ -65,6 +65,37 @@ export const REFLEX_PRESETS = [
         { choice: 'keep_going', description: 'Keep driving forward with no set end, until told to stop.',
           actions: [{ name: 'cruise', args: { drive: 'forward', steer: 'straight' } }] },
         { choice: 'pass', description: 'Not a simple move command; let the robot think and answer.', actions: [] },
+      ],
+    },
+  },
+  {
+    // The pet screen's own question (pet screen spec §4.2): the commands are
+    // three tricks and a bark, and everything else — chat, praise, a question —
+    // falls through to the LLM, which is where a dog's personality lives.
+    id: 'pet',
+    threshold: 0.8,
+    state: DEFAULT_STATE,
+    question: {
+      name: 'command',
+      instructions:
+        'A person is talking to a pet dog that lives on a small screen. "Robot said" is the dog\'s last '
+        + 'line, if any; "Person said" is a speech-recognition transcript of what the person said. '
+        + 'Is the person giving the dog one of these simple commands right now? Anything else, '
+        + 'including questions, chat, praise, other commands and words meant for someone else, is pass.',
+      options: [
+        { choice: 'sit', description: 'Sit, or sit down (坐下, 坐).', actions: [
+          { name: 'pose', args: { name: 'sit' } },
+          { name: 'play_sound', args: { name: 'bark' } },
+        ] },
+        { choice: 'shake', description: 'Shake hands, or give a paw (握手, 给我爪子).', actions: [
+          { name: 'pose', args: { name: 'shake' } },
+          { name: 'play_sound', args: { name: 'bark' } },
+        ] },
+        { choice: 'spin', description: 'Spin, turn around once (转圈, 转一圈).', actions: [
+          { name: 'pose', args: { name: 'spin' } },
+          { name: 'play_sound', args: { name: 'bark' } },
+        ] },
+        { choice: 'pass', description: 'Not one of these commands; let the dog think and answer.', actions: [] },
       ],
     },
   },

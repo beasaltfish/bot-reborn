@@ -102,3 +102,20 @@ describe('new questions and options', () => {
     expect(freshChoice({ ...q, options: [...q.options, { choice: next, description: '', actions: [] }] })).not.toBe(next);
   });
 });
+
+describe('the pet preset', () => {
+  const pet = /** @type {any} */ (REFLEX_PRESETS.find((p) => p.id === 'pet'));
+  if (!pet) throw new Error('the pet preset must exist');
+
+  it('is named by itself, and a pet is the only body that does all of it', () => {
+    expect(presetIdOf(withQ(pet.question))).toBe('pet');
+    expect(unsupported(withQ(pet.question), 'pet')).toEqual([]);
+    expect(unsupported(withQ(pet.question), 'car')).toEqual(['pose']);
+  });
+
+  it('copies its threshold, state and question like any other', () => {
+    const p = presetPatch('pet');
+    expect(p).toEqual({ threshold: pet.threshold, state: pet.state, question: pet.question });
+    expect(p.question).not.toBe(pet.question);
+  });
+});

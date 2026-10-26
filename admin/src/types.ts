@@ -34,7 +34,7 @@ export interface ReflexConfig extends LayerConfig {
 /** One the admin saved on this character; see server/saved-reflexes.js. */
 export interface SavedReflex { name: string; threshold: number; state: string; question: ReflexQuestion }
 
-export type Motion = 'car' | 'dry-run' | 'none';
+export type Motion = 'car' | 'dry-run' | 'none' | 'pet';
 
 export interface Config {
   stt: LayerConfig;

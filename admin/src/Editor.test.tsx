@@ -376,3 +376,41 @@ describe('Editor', () => {
     expect(screen.getByRole('button', { name: 'Remove option pass' })).toBeDisabled();
   });
 });
+
+it('pet: the body can be picked, and the preset fills in the three tricks', async () => {
+  const fake = installFakeApi([{ name: 'A' }]);
+  render(<Editor {...props()} />);
+  const body = await screen.findByLabelText('Body');
+  expect(screen.getByRole('option', { name: 'Pet on a screen — poses and barks, never speaks' })).toBeInTheDocument();
+  await userEvent.selectOptions(body, 'pet');
+  await waitFor(() => expect(fake.patches()).toHaveLength(1), { timeout: 2000 });
+  expect(fake.patches()[0].body).toEqual({ config: { body: { motion: 'pet' } } });
+});
+
+it('pet: the reflex preset writes a question the editor can show', async () => {
+  const fake = installFakeApi([{ name: 'A' }]);
+  render(<Editor {...props({ initialTab: 'reflex' })} />);
+  await userEvent.selectOptions(await screen.findByLabelText('Reflex preset'), 'pet');
+  await waitFor(() => expect(fake.patches()).toHaveLength(1), { timeout: 2000 });
+  expect(fake.patches()[0].body.config.reflex.question?.options.map((o: any) => o.choice))
+    .toEqual(['sit', 'shake', 'spin', 'pass']);
+  expect(screen.getByLabelText('Reflex preset')).toHaveValue('pet');
+});
+
+it('pet: an action can be a pose, and the pose is picked from the three', async () => {
+  const fake = installFakeApi([{ name: 'A' }]);
+  render(<Editor {...props({ initialTab: 'reflex' })} />);
+  await userEvent.selectOptions(await screen.findByLabelText('Reflex preset'), 'commands');
+  await waitFor(() => expect(fake.patches()).toHaveLength(1), { timeout: 2000 });
+  const kind = screen.getByLabelText('stop action 1');
+  expect(screen.getAllByRole('option', { name: 'pose' }).length).toBeGreaterThan(0);
+  await userEvent.selectOptions(kind, 'pose');
+  const pick = await screen.findByLabelText(/pose$/);
+  expect(pick.tagName).toBe('SELECT');
+  const select = pick as HTMLSelectElement;
+  const values = [...select.options].map((o) => o.value);
+  expect(values).toEqual(['sit', 'shake', 'spin']);
+  await userEvent.selectOptions(pick, 'spin');
+  await waitFor(() => expect(fake.chars.get('A')?.config.reflex.question?.options[0].actions)
+    .toEqual([{ name: 'pose', args: { name: 'spin' } }]), { timeout: 2000 });
+});

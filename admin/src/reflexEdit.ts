@@ -39,7 +39,7 @@ export function fromUnsloth(text: string, base: ReflexQuestion | null):
     { choice, description: description as string, actions: kept.get(choice) ?? [] })) } };
 }
 
-export type PresetId = 'none' | 'bark' | 'commands' | 'custom' | `saved:${string}`;
+export type PresetId = 'none' | 'bark' | 'commands' | 'pet' | 'custom' | `saved:${string}`;
 
 /**
  * By question, as before. A saved one comes first: saving a built-in under a
