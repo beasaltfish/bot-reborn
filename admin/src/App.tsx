@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { Brand } from './Brand';
 import { CharacterList } from './CharacterList';
 import { NewCharacter } from './NewCharacter';
 import { useCharacters } from './useCharacters';
@@ -42,7 +43,11 @@ export function App({ pollMs = 2000, renderEditor }: {
       <>
         {banner}
         <main className="empty">
-          <button type="button" className="first" onClick={() => setCreating(true)}>{t('firstCharacter')}</button>
+          <div className="welcome">
+            <Brand big />
+            <p className="tagline">{t('tagline')}</p>
+            <button type="button" className="first" onClick={() => setCreating(true)}>{t('firstCharacter')}</button>
+          </div>
         </main>
       </>
     );

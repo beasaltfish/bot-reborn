@@ -2,6 +2,8 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { Editor } from './Editor';
+import '@fontsource/fredoka/latin-600.css';
+import '@fontsource/fredoka/latin-700.css';
 import './styles.css';
 
 createRoot(document.getElementById('root') as HTMLElement).render(
