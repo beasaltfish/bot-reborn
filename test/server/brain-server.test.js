@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import WebSocket from 'ws';
 import { createBrainServer } from '../../server/brain-server.js';
 import { renderEarcons } from '../../server/audio/render.js';
-import { PROTOCOL } from '../../core/protocol.js';
+import { PROTOCOL, SCREEN_PATH } from '../../core/protocol.js';
 import { fakeFetch, until, tempCharacters } from './helpers.js';
 
 /** Ears that hear one loud second after `frames` frames, once. */
@@ -113,5 +113,56 @@ test('a dry-run character answers a body with no car, and only the brain sees th
   assert.ok(lines.includes('[a] dry-run: move forward/straight 600ms'));
   assert.ok(!b.msgs.some((m) => m.type === 'move'));
   b.ws.close();
+  await server.close();
+});
+
+/** A screen client: hello, then collect binary frames. @param {number} port @param {string} token */
+async function screen(port, token) {
+  const ws = new WebSocket(`ws://127.0.0.1:${port}${SCREEN_PATH}`);
+  /** @type {any[]} */ const texts = [];
+  /** @type {Buffer[]} */ const frames = [];
+  ws.on('message', (d, bin) => { if (bin) frames.push(/** @type {Buffer} */ (d)); else texts.push(JSON.parse(String(d))); });
+  await new Promise((r) => ws.once('open', r));
+  ws.send(JSON.stringify({ type: 'hello', protocol: PROTOCOL, token }));
+  return { ws, texts, frames };
+}
+
+test('/screen is taken by the screen link, welcomes a token, and streams the pet', async () => {
+  const chars = tempCharacters();
+  const a = chars.add('a', (cfg) => { cfg.body.motion = 'pet'; });
+  const server = createBrainServer({
+    dir: chars.dir, fetch: fakeFetch(), sfx: new Map(), earcons: renderEarcons(),
+    makeEars: () => onceEars(), log: () => {},
+    petFrames: new Map([['idle', { fps: 10, loop: true, frames: [Buffer.from('i0'), Buffer.from('i1')] }]]),
+  });
+  const port = await server.listen(0);
+  const s = await screen(port, a.token);
+  await until(() => s.texts.length > 0);
+  assert.deepEqual(s.texts[0], { type: 'welcome', name: 'a' }, 'the upgrade was not answered with a 400');
+
+  // Before its body is up there is nothing to animate; once it is, frames flow.
+  assert.equal(s.frames.length, 0);
+  const b = await body(port, a.token);
+  await until(() => s.frames.length > 0);
+  assert.equal(s.frames[0].toString(), 'i0');
+  assert.deepEqual(b.msgs[0], { type: 'welcome', name: 'a' });
+  b.ws.close(); s.ws.close();
+  await server.close();
+});
+
+test('a screen with a bad token is refused, and the body path still takes its own', async () => {
+  const chars = tempCharacters();
+  const a = chars.add('a');
+  const server = createBrainServer({
+    dir: chars.dir, fetch: fakeFetch(), sfx: new Map(), earcons: renderEarcons(),
+    makeEars: () => onceEars(), log: () => {},
+  });
+  const port = await server.listen(0);
+  const s = await screen(port, '0'.repeat(32));
+  await until(() => s.texts.length > 0);
+  assert.deepEqual(s.texts[0], { type: 'reject', reason: 'token' });
+  const b = await body(port, a.token);
+  assert.deepEqual(b.msgs[0], { type: 'welcome', name: 'a' });
+  b.ws.close(); s.ws.close();
   await server.close();
 });

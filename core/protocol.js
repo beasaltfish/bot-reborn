@@ -23,6 +23,13 @@ export const FRAME_MS = 100;
 
 export const BODY_PATH = '/body';
 
+/**
+ * Where a body with a screen gets its frames (pet screen spec §5). A second
+ * socket, not a second frame type: a body that does not have a screen never
+ * opens it, so it can never mistake a JPEG for PCM.
+ */
+export const SCREEN_PATH = '/screen';
+
 /** Both sides ping this often; any frame at all counts as being alive. */
 export const HEARTBEAT_MS = 300;
 
