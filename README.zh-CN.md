@@ -1,3 +1,5 @@
+<p align="center"><img src="admin/src/logo.svg" width="128" alt="bot-reborn logo: a little robot hatching from an eggshell"></p>
+
 # bot-reborn
 
 [English](README.md) | 中文
@@ -15,6 +17,10 @@
 [![机器人听到一句口令就开动，旁边是反射模型服务的日志](docs/media/reflex.gif)](https://youtube.com/shorts/zPd0V5mH7p4)
 
 *一句口令，电脑上一个 0.8B 的小模型约 200 毫秒就给出动作，不经过大模型。* — [看带声音的短视频](https://youtube.com/shorts/zPd0V5mH7p4)
+
+[![面包板上的 ESP32-S3，接着麦克风和功放，在跟人对话](docs/media/breadboard-zh.gif)](https://youtube.com/shorts/Y80lk1O1Z-0)
+
+*让它用三个词证明自己活着，它说：“两根铜线。”* — [看带声音的短视频](https://youtube.com/shorts/Y80lk1O1Z-0)
 
 **📖 完整的改造故事：[我把一台 30 块钱的玩具机器人，改成了会顶嘴的 AI 机器人](https://agentlenshq.com/zh-CN/maker/four-dollar-robot)**
 
@@ -70,8 +76,8 @@
 Wi-Fi 下一台电脑上的小 Node 服务里运行，这就是机器人的大脑。
 
 大脑一开始在手机浏览器里，后来搬到了电脑上，原因有两个：一是所有听你说话的环节
-将来都能在自己的机器上本地运行（反射模型已经是）；二是身体可以换成比手机小得多的东西。ESP32-S3 身体正在
-做（[`firmware/`](firmware/README.md)）。事实证明，手机太重，车一后退就可能翻倒。
+将来都能在自己的机器上本地运行（反射模型已经是）；二是身体可以换成比手机小得多的东西。ESP32-S3 身体已经
+能在面包板上听和说了，还没装上车（[`firmware/`](firmware/README.md)）。事实证明，手机太重，车一后退就可能翻倒。
 
 ## 反射模型
 

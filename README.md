@@ -1,3 +1,5 @@
+<p align="center"><img src="admin/src/logo.svg" width="128" alt="bot-reborn logo: a little robot hatching from an eggshell"></p>
+
 # bot-reborn
 
 English | [中文](README.zh-CN.md)
@@ -16,6 +18,10 @@ computer as its brain.**
 [![The robot driving off a spoken command, with the reflex model's server log beside it](docs/media/reflex.gif)](https://youtube.com/shorts/zPd0V5mH7p4)
 
 *A spoken move, answered in about 200 ms by a 0.8B model on the computer — no LLM call.* — [watch the Short, with sound](https://youtube.com/shorts/zPd0V5mH7p4)
+
+[![An ESP32-S3 on a breadboard with a mic and an amp, talking back](docs/media/breadboard.gif)](https://youtube.com/shorts/Y80lk1O1Z-0)
+
+*Asked to prove it's alive in three words: "Two copper wires."* — [watch the Short, with sound](https://youtube.com/shorts/Y80lk1O1Z-0)
 
 **📖 The whole build story: [I turned a $4 toy robot into an AI robot that talks back](https://agentlenshq.com/maker/four-dollar-robot)**
 
@@ -81,8 +87,8 @@ small Node server on a computer on the same Wi-Fi, the robot's brain.
 The brain started out inside the phone's browser and moved to the computer for
 two reasons: everything that hears you can, in time, run locally on your own
 machine — the reflex model already does — and the body can shrink to something
-much smaller than a phone. An ESP32-S3 body is on its way
-([`firmware/`](firmware/README.md)); a phone, it turns out, is heavy enough to
+much smaller than a phone. An ESP32-S3 body already hears and talks on a
+breadboard, with no wheels yet ([`firmware/`](firmware/README.md)); a phone, it turns out, is heavy enough to
 tip the car over when it backs up.
 
 ## The reflex model
