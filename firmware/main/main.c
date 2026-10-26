@@ -10,6 +10,7 @@
 #include "link.h"
 #include "motor.h"
 #include "net.h"
+#include "screen.h"
 #include "settings.h"
 
 static settings_t settings;
@@ -47,6 +48,9 @@ void app_main(void) {
   settings_load(&settings);
   motor_start(&settings.calib);
   led_start();
+  /* Before the console, so the colour test's lines are on the wire with the
+     rest of the boot log. */
+  screen_start();
   console_start(&settings);
   printf("body: protocol %d, brain at %s\n", PROTO_VERSION, settings.url);
 
