@@ -104,7 +104,9 @@ const overlaps = (a, b) => a.x0 < b.x1 && b.x0 < a.x1 && a.z0 < b.z1 && b.z0 < a
 
 /**
  * A free spot on the table for a footprint centred on (x, z): the nearest one,
- * searched in rings of one pitch out to 40. Boards and parts lying loose are
+ * searched in rings of one pitch out to RING_LIMIT. A breadboard is 65 pitches
+ * long, so the search has to reach well past one: stopping short used to hand
+ * back the starting spot, taken or not. Boards and parts lying loose are
  * in the way; parts seated on a board are not (the board is). Ids in `ignore`
  * are the things being carried, and do not block themselves.
  * @param {Bench} b
@@ -127,7 +129,7 @@ export function freeSpot(b, footprint, x, z, ignore = []) {
   const home = { x: Math.round(x), z: Math.round(z) };
   if (free(home.x, home.z)) return home;
 
-  for (let r = 1; r <= 40; r++) {
+  for (let r = 1; r <= RING_LIMIT; r++) {
     /** @type {[number, number][]} */
     const ring = [];
     for (let dx = -r; dx <= r; dx++) {
@@ -143,6 +145,9 @@ export function freeSpot(b, footprint, x, z, ignore = []) {
   return home;
 }
 
+/** As far as freeSpot looks, in pitches: past the table's edge from its middle. */
+const RING_LIMIT = 160;
+
 /** Where the parts bin puts new things down when nothing says where: in front of the opening bench. */
 const BIN_DROP = { x: 0, z: 40 };
 
@@ -150,7 +155,8 @@ const BIN_DROP = { x: 0, z: 40 };
  * Where a part or board taken from the bin with a click goes: the free spot
  * nearest the front of the bench, as its origin (multi-screen spec §5.1).
  * A board's origin stays on the hole grid, so its holes line up with the
- * other boards'; rounding can nudge it, so the rounded spot is checked again.
+ * other boards'; rounding moves it half a pitch at most, which the one pitch
+ * of margin it is searched with absorbs.
  * @param {Bench} b
  * @param {import('./parts.js').PartDef['id'] | 'breadboard'} kind
  * @returns {{ x: number, z: number }}

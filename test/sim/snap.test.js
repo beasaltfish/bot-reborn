@@ -107,7 +107,9 @@ test('a turned part blocks the ground it covers once turned', () => {
 
 test('things taken from the bin twice never land on top of each other or the opening parts', () => {
   let b = emptyBench();
-  for (const kind of /** @type {const} */ (['breadboard', 'breadboard', 'inmp441', 'inmp441'])) {
+  // A screen first, then boards: the first board fills the spot in front, so
+  // the second has to look further than one board's length away.
+  for (const kind of /** @type {const} */ (['screen-ili9341-ips', 'breadboard', 'breadboard', 'breadboard', 'inmp441', 'inmp441'])) {
     const at = spotForNew(b, kind);
     b = kind === 'breadboard' ? addBoard(b, at).bench : addPart(b, kind, at).bench;
   }
