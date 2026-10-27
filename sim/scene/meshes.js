@@ -7,7 +7,7 @@
 // (pin names, column numbers) is drawn on canvases once and kept.
 
 import * as THREE from 'three';
-import { PARTS, holeAt } from '../parts.js';
+import { PARTS, BOARD_OUTLINE, holeAt } from '../parts.js';
 
 /** @typedef {import('../parts.js').PartDef} PartDef */
 
@@ -17,11 +17,8 @@ export const MM = 1 / 2.54;
 /** Height of the breadboard's top above the table. */
 export const BOARD_TOP = 8.5 * MM;
 
-/** The board's outline in breadboard pitch coordinates (holes run 0–62 by 0–17). */
-const BOARD = { x0: -1.6, x1: 63.6, y0: -1.8, y1: 18.8 };
-
 /** Where the board's middle is, in pitch coordinates; the world's origin sits under it. */
-const BOARD_MID = { x: (BOARD.x0 + BOARD.x1) / 2, y: (BOARD.y0 + BOARD.y1) / 2 };
+const BOARD_MID = { x: (BOARD_OUTLINE.x0 + BOARD_OUTLINE.x1) / 2, y: (BOARD_OUTLINE.y0 + BOARD_OUTLINE.y1) / 2 };
 
 /**
  * Breadboard pitch coordinates to world x/z, the board lying in the middle of
@@ -284,19 +281,19 @@ function holePoints() {
  */
 export function buildBreadboard() {
   const g = new THREE.Group();
-  const w = BOARD.x1 - BOARD.x0;
-  const d = BOARD.y1 - BOARD.y0;
+  const w = BOARD_OUTLINE.x1 - BOARD_OUTLINE.x0;
+  const d = BOARD_OUTLINE.y1 - BOARD_OUTLINE.y0;
   const mid = boardToWorld(BOARD_MID.x, BOARD_MID.y);
   const print = texture('breadboard', () => canvasTexture(w, d, 24, (ctx) => {
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, w, d);
-    ctx.translate(-BOARD.x0, -BOARD.y0);
+    ctx.translate(-BOARD_OUTLINE.x0, -BOARD_OUTLINE.y0);
     // The centre channel and the grooves that set the rails apart.
     ctx.fillStyle = 'rgba(120,112,98,0.32)';
-    ctx.fillRect(BOARD.x0, 8.1, w, 0.8);
+    ctx.fillRect(BOARD_OUTLINE.x0, 8.1, w, 0.8);
     ctx.fillStyle = 'rgba(120,112,98,0.16)';
-    ctx.fillRect(BOARD.x0, 1.85, w, 0.3);
-    ctx.fillRect(BOARD.x0, 14.85, w, 0.3);
+    ctx.fillRect(BOARD_OUTLINE.x0, 1.85, w, 0.3);
+    ctx.fillRect(BOARD_OUTLINE.x0, 14.85, w, 0.3);
     // Red beside each + rail, blue beside each −, the way the real board is printed.
     for (const [y, color] of /** @type {const} */ ([[-0.75, '#d0453c'], [1.6, '#2f63c4'], [15.4, '#d0453c'], [17.75, '#2f63c4']])) {
       ctx.fillStyle = color;

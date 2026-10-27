@@ -4,7 +4,12 @@
 //
 // Lengths are in breadboard pitch units (one unit = 2.54 mm) unless a field
 // says mm. Point ids everywhere are "<instanceId>:<pinName>" ("mic:VDD",
-// "esp:GPIO12") or "bb:<hole>" for a breadboard hole.
+// "esp:GPIO12") or "<boardId>:<hole>" for a breadboard hole ("bb2:a6").
+//
+// A breadboard is an instance with a place on the table (multi-screen spec
+// §5.3): its holes are named locally ("a6", "tp7") and the table maps a point
+// to a board and a hole. Two boards can be joined edge to edge, and a part can
+// straddle the seam, so a pin's hole is looked up in table space, not stored.
 
 /**
  * x,y in pitch units, part-local, the part's origin being its first pin.
@@ -121,19 +126,31 @@ const XY = new Map();
 /** @type {Map<string, string>} */
 const AT = new Map();
 for (const [row, y] of Object.entries(ROW_Y)) {
-  for (let c = 1; c <= BREADBOARD.cols; c++) XY.set(`bb:${row}${c}`, { x: c - 1, y });
+  for (let c = 1; c <= BREADBOARD.cols; c++) XY.set(`${row}${c}`, { x: c - 1, y });
 }
 for (const [rail, y] of Object.entries(RAIL_Y)) {
-  for (let n = 1; n <= RAIL_HOLES; n++) XY.set(`bb:${rail}${n}`, { x: railX(n), y });
+  for (let n = 1; n <= RAIL_HOLES; n++) XY.set(`${rail}${n}`, { x: railX(n), y });
 }
 for (const [id, { x, y }] of XY) AT.set(`${x},${y}`, id);
 
+/** The board's outline in local pitch coordinates (holes run 0–62 by 0–17). */
+export const BOARD_OUTLINE = { x0: -1.6, x1: 63.6, y0: -1.8, y1: 18.8 };
+
 /**
- * Which strip a hole is on; holes on one strip are joined.
- * @param {string} holeId 'bb:a12' → 'col12-top', 'bb:g12' → 'col12-bottom', 'bb:tp7' → 'tp'
+ * How far apart two boards' origins are when they are joined: long edges side
+ * by side, or end to end. Both are whole pitches, so both boards' holes are on
+ * one grid — and `long` is 21 so that a DevKitC's two rows (10 pitches apart)
+ * land a row on each board.
+ */
+export const JOIN = { long: 21, short: 66 };
+
+/**
+ * Which strip a hole is on, in the board's own names; holes on one strip are
+ * joined.
+ * @param {string} holeId 'a12' → 'col12-top', 'g12' → 'col12-bottom', 'tp7' → 'tp'
  */
 export function holeStrip(holeId) {
-  const m = /^bb:(?:([a-j])(\d+)|(tp|tn|bp|bn)\d+)$/.exec(holeId);
+  const m = /^(?:([a-j])(\d+)|(tp|tn|bp|bn)\d+)$/.exec(holeId);
   if (!m || !XY.has(holeId)) throw new Error(`not a breadboard hole: ${holeId}`);
   if (m[3]) return m[3];
   return `col${m[2]}-${m[1] <= 'e' ? 'top' : 'bottom'}`;
@@ -150,7 +167,7 @@ for (const id of XY.keys()) {
  * Every hole on a strip, in board order: where else a wire can go to reach a
  * pin seated on it.
  * @param {string} strip as holeStrip names it
- * @returns {string[]}
+ * @returns {string[]} local hole names
  */
 export function stripHoles(strip) {
   return [...(STRIPS.get(strip) ?? [])];
@@ -158,7 +175,7 @@ export function stripHoles(strip) {
 
 /**
  * Where a hole is, in pitch units from the board's first column and top rail.
- * @param {string} holeId
+ * @param {string} holeId local hole name
  */
 export function holeXY(holeId) {
   const xy = XY.get(holeId);
@@ -171,8 +188,110 @@ export function holeXY(holeId) {
  * rounded to the nearest pitch, so a part dragged a little off still lands.
  * @param {number} x
  * @param {number} y
- * @returns {string | null}
+ * @returns {string | null} local hole name
  */
 export function holeAt(x, y) {
   return AT.get(`${Math.round(x)},${Math.round(y)}`) ?? null;
+}
+
+/**
+ * @typedef {0 | 90 | 180 | 270} Rot
+ * @typedef {{ id: string, x: number, z: number, rot: Rot }} Board
+ *   x, z: integers, where the board's local (0, 0) sits on the table.
+ */
+
+/**
+ * A point on a board to a point on the table: turn it clockwise (seen from
+ * above), then shift it to where the board stands.
+ * @param {Board} bd
+ * @param {number} x local
+ * @param {number} y local
+ */
+export function boardToTable(bd, x, y) {
+  let lx = x;
+  let ly = y;
+  // Quarter turns clockwise on a y-down plane: (x, y) → (-y, x).
+  for (let i = 0; i < bd.rot / 90; i++) [lx, ly] = [-ly, lx];
+  return { x: bd.x + lx, z: bd.z + ly };
+}
+
+/**
+ * The inverse of boardToTable: which point of which board a table point is.
+ * @param {Board} bd
+ * @param {number} x table
+ * @param {number} z table
+ */
+export function tableToBoard(bd, x, z) {
+  let lx = x - bd.x;
+  let ly = z - bd.z;
+  // The inverse of a clockwise quarter turn is a counter-clockwise one: (x, y) → (y, -x).
+  for (let i = 0; i < bd.rot / 90; i++) [lx, ly] = [ly, -lx];
+  return { x: lx, y: ly };
+}
+
+/**
+ * The hole under a table point, on whichever board has one there, as a point
+ * id ("bb2:a6"); null between holes, off every board, or in the seam.
+ * @param {Board[]} boards
+ * @param {number} x
+ * @param {number} z
+ * @returns {string | null}
+ */
+export function holeOnTable(boards, x, z) {
+  for (const bd of boards) {
+    const local = tableToBoard(bd, x, z);
+    const hole = holeAt(local.x, local.y);
+    if (hole) return `${bd.id}:${hole}`;
+  }
+  return null;
+}
+
+/**
+ * Boards joined edge to edge, as groups of ids; every board is in exactly one
+ * group. Two boards are joined when they have the same rotation and one's
+ * origin sits at a join offset in the other's local frame.
+ * @param {Board[]} boards
+ * @returns {string[][]}
+ */
+export function boardGroups(boards) {
+  /** @type {Map<string, string>} */
+  const parent = new Map();
+  /** @param {string} id */
+  const find = (id) => {
+    let root = id;
+    while (parent.get(root) !== root) root = /** @type {string} */ (parent.get(root));
+    for (let q = id; q !== root; ) {
+      const next = /** @type {string} */ (parent.get(q));
+      parent.set(q, root);
+      q = next;
+    }
+    return root;
+  };
+  /** @param {string} a @param {string} b */
+  const union = (a, b) => {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) parent.set(rb, ra);
+  };
+  for (const bd of boards) parent.set(bd.id, bd.id);
+
+  /** @param {Board} a @param {Board} b */
+  const joined = (a, b) => {
+    if (a.rot !== b.rot) return false;
+    const { x, y } = tableToBoard(a, b.x, b.z);
+    return (x === 0 && Math.abs(y) === JOIN.long) || (y === 0 && Math.abs(x) === JOIN.short);
+  };
+  for (let i = 0; i < boards.length; i++) {
+    for (let j = i + 1; j < boards.length; j++) {
+      if (joined(boards[i], boards[j])) union(boards[i].id, boards[j].id);
+    }
+  }
+
+  /** @type {Map<string, string[]>} */
+  const groups = new Map();
+  for (const bd of boards) {
+    const root = find(bd.id);
+    groups.set(root, [...(groups.get(root) ?? []), bd.id]);
+  }
+  return [...groups.values()];
 }
