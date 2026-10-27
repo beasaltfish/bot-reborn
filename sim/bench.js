@@ -151,7 +151,8 @@ export function moveBoard(b, id, at, rot, alone) {
   if (!old) throw new Error(`no board ${id}`);
   const group = boardGroups(b.boards).find((g) => g.includes(id)) ?? [id];
   const moving = alone ? [id] : group;
-  const delta = (/** @type {number} */ n) => ((n % 360) + 360) % 360;
+  /** @type {(n: number) => Rot} */
+  const delta = (n) => /** @type {Rot} */ (((n % 360) + 360) % 360);
   const drot = delta(rot - old.rot);
 
   // A part whose pins are in this board and in another board it is not moving
