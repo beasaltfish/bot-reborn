@@ -84,6 +84,12 @@ test('a part thrown away and replaced does not inherit its wires', () => {
   assert.ok(again.bench.wires.every((w) => !w.a.startsWith('mic2:') && !w.b.startsWith('mic2:')));
 });
 
+test('there is no second ESP32 to take from the box', () => {
+  // load() needs exactly one, so a bench with a second could never be read
+  // back: a reload would silently start over. The bin has no ESP32 anyway.
+  assert.throws(() => addPart(emptyBench(), 'esp32', { x: 0, z: 30 }), /one ESP32/);
+});
+
 test('the ESP32 cannot go in the bin', () => {
   assert.deepEqual(trash(emptyBench(), 'esp'), { refused: 'esp' });
   assert.deepEqual(trash(straddling(), 'esp'), { refused: 'esp' });

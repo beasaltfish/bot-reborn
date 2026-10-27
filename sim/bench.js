@@ -68,6 +68,9 @@ function nextId(b, prefix) {
  * @returns {{ bench: Bench, id: string }}
  */
 export function addPart(b, part, at) {
+  // The ESP32 is the bench's one fixed piece, and load() insists on exactly
+  // one: a second would be a bench that cannot be read back.
+  if (PARTS[part].prefix === 'esp') throw new Error('the bench has one ESP32');
   const id = nextId(b, PARTS[part].prefix);
   const placed = { id, part, at: { x: at.x, z: at.z }, rot: /** @type {Rot} */ (0), seated: false, burnt: false };
   return { bench: { ...b, placed: [...b.placed, placed] }, id };
