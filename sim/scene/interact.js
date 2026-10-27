@@ -1,29 +1,36 @@
-// Hands on the bench: picking parts up and pushing them into the breadboard,
-// drawing wires between pins and holes, pulling wires out, and lighting up
-// everything joined to the point under the cursor. Only in the wiring views;
-// the orbit view is for looking.
+// Hands on the bench: picking parts and boards up, putting them anywhere on
+// the table, pushing parts into any board, joining boards edge to edge,
+// drawing wires between pins and holes, pulling wires out, dropping things in
+// the bin, and lighting up everything joined to the point under the cursor.
+// Only in the wiring views; the orbit view is for looking.
 //
 // Nothing here keeps the bench. Each change is a new bench handed to
 // `setBench`, which saves it and redraws; what the hands hold meanwhile (a
-// lifted part, a wire being drawn) is moved about in the scene directly and
-// put back if the drop changes nothing.
+// lifted part, a board and its group, a wire being drawn) is moved about in
+// the scene directly and put back if the drop changes nothing.
+//
+// Table coordinates are world x/z, one unit per breadboard pitch: what
+// bench.js stores is what the scene stands things at.
 
 import * as THREE from 'three';
-import { PARTS, holeAt, holeStrip, holeXY, stripHoles } from '../parts.js';
-import { place, addWire, removeWire, pinPoints } from '../bench.js';
+import {
+  PARTS, boardGroups, boardToTable, holeStrip, holeOnTable, holeXY, stripHoles,
+} from '../parts.js';
+import { place, moveBoard, trash, addPart, addBoard, addWire, removeWire, pinPoints, isHole } from '../bench.js';
 import { nets } from '../netlist.js';
-import { snapPart } from '../snap.js';
-import { BOARD_TOP, boardToWorld, buildWire, dispose, worldToBoard } from './meshes.js';
-
-export { snapPart };
+import { snapPart, snapBoard, freeSpot } from '../snap.js';
+import { BOARD_TOP, MM, buildWire, dispose } from './meshes.js';
 
 /** @typedef {import('../bench.js').Bench} Bench */
 /** @typedef {import('../bench.js').Placed} Placed */
+/** @typedef {import('../parts.js').PartDef['id']} PartId */
 /** @typedef {ReturnType<typeof import('./world.js').createWorld>} World */
 /**
  * What is under the cursor: a point a wire can end on (a pin or a hole), a
- * part to pick up, or a wire to pull out.
- * @typedef {{ kind: 'point', point: string, pos: THREE.Vector3 } | { kind: 'part', id: string } | { kind: 'wire', id: string }} Pick
+ * part to pick up, a board to pick up, or a wire to pull out.
+ * @typedef {{ kind: 'point', point: string, pos: THREE.Vector3 }
+ *   | { kind: 'part', id: string } | { kind: 'board', id: string }
+ *   | { kind: 'wire', id: string }} Pick
  */
 
 /** How far a press may wander, in CSS pixels, and still be a click. */
@@ -40,6 +47,24 @@ const PALETTE = ['#f2c230', '#2e9e57', '#2f6fd0', '#e9782b', '#8b54c9', '#f2f0ea
 const RED = '#d23a2e';
 const BLACK = '#1d1d1f';
 
+/** @param {number} t */
+const easeOut = (t) => 1 - (1 - t) ** 3;
+/** @param {number} n */
+const deg = (n) => -THREE.MathUtils.degToRad(n);
+/** @param {string} point @returns {[string, string]} */
+const split = (point) => [point.slice(0, point.indexOf(':')), point.slice(point.indexOf(':') + 1)];
+
+/**
+ * A board's tooth turns; the table's x/z quarter turn clockwise seen from above.
+ * @param {number} x @param {number} z @param {number} rot
+ */
+function turnAboutPivot(x, z, rot) {
+  let rx = x;
+  let rz = z;
+  for (let i = 0; i < rot / 90; i++) [rx, rz] = [-rz, rx];
+  return { x: rx, z: rz };
+}
+
 /**
  * What a point carries, by its name: the 3V3/5V pins and the + rails are
  * power, GND and the − rails are ground.
@@ -47,7 +72,7 @@ const BLACK = '#1d1d1f';
  * @returns {'power' | 'ground' | null}
  */
 function role(point) {
-  const rail = /^bb:(tp|tn|bp|bn)\d+$/.exec(point);
+  const rail = /^[^:]+:(tp|tn|bp|bn)\d+$/.exec(point);
   if (rail) return rail[1].endsWith('p') ? 'power' : 'ground';
   const pin = point.slice(point.indexOf(':') + 1).replace(/\.\d+$/, '');
   if (pin === '3V3' || pin === '5V' || pin === 'VDD' || pin === 'Vin') return 'power';
@@ -69,9 +94,6 @@ function wireColor(b, a, z) {
   const signals = b.wires.filter((w) => w.color !== RED && w.color !== BLACK).length;
   return PALETTE[signals % PALETTE.length];
 }
-
-/** @param {number} t */
-const easeOut = (t) => 1 - (1 - t) ** 3;
 
 /**
  * A ring per point, drawn over everything so a lit hole under a part or a
@@ -100,12 +122,24 @@ function markers(color, size) {
 }
 
 /**
+ * Every screen's parts panel starts a drag through here: the parts panel has
+ * no bench of its own, and the hands do (multi-screen spec §5.1).
+ * @type {((part: PartId | 'breadboard', e: PointerEvent) => void) | null}
+ */
+let beginCarryHook = null;
+/** @param {PartId | 'breadboard'} part @param {PointerEvent} e */
+export function beginCarry(part, e) {
+  beginCarryHook?.(part, e);
+}
+
+/**
  * @param {World} world
  * @param {() => Bench} getBench
  * @param {(b: Bench) => void} setBench  saves and redraws
+ * @param {{ say(text: string): void }} opts  the page's status line, for what a drop refused
  * @returns {{ enable(on: boolean): void }}
  */
-export function attachInteraction(world, getBench, setBench) {
+export function attachInteraction(world, getBench, setBench, opts) {
   const { canvas, scene } = world;
   const raycaster = new THREE.Raycaster();
   const boardTop = new THREE.Plane(new THREE.Vector3(0, 1, 0), -BOARD_TOP);
@@ -136,15 +170,22 @@ export function attachInteraction(world, getBench, setBench) {
    *   kind: 'part', id: string, def: import('../parts.js').PartDef, group: THREE.Object3D,
    *   rot: Placed['rot'], home: { pos: THREE.Vector3, rotY: number },
    *   offset: THREE.Vector3, x: number, y: number, lifted: boolean,
-   *   at: { x: number, y: number } | null, last: PointerEvent,
+   *   at: { x: number, z: number } | null, raw: { x: number, z: number }, last: PointerEvent,
    * }} PartDrag
+   * @typedef {{
+   *   kind: 'board', id: string, group: THREE.Object3D, rot: Placed['rot'], baseRot: Placed['rot'],
+   *   home: { pos: THREE.Vector3, rotY: number }, offset: THREE.Vector3,
+   *   x: number, y: number, lifted: boolean, at: { x: number, z: number },
+   *   raw: { x: number, z: number }, last: PointerEvent,
+   *   members: { g: THREE.Object3D, pos: THREE.Vector3, rotY: number }[],
+   * }} BoardDrag
    * @typedef {{
    *   kind: 'wire', from: string, fromPos: THREE.Vector3, x: number, y: number,
    *   moved: boolean, armed: boolean, target: string | null, preview: THREE.Object3D | null,
    * }} WireDrag
    * @typedef {{ kind: 'pull', id: string, x: number, y: number }} WirePull
    */
-  /** @type {PartDrag | WireDrag | WirePull | null} */
+  /** @type {PartDrag | BoardDrag | WireDrag | WirePull | null} */
   let drag = null;
 
   // ---- Where things are -------------------------------------------------
@@ -156,7 +197,7 @@ export function attachInteraction(world, getBench, setBench) {
     raycaster.setFromCamera(ndc, world.camera);
   }
 
-  /** Where the ray meets the board's top plane (also over the table). */
+  /** Where the ray meets the table's top plane: table coordinates, x/z. */
   function onPlane() {
     return raycaster.ray.intersectPlane(boardTop, new THREE.Vector3());
   }
@@ -170,17 +211,21 @@ export function attachInteraction(world, getBench, setBench) {
 
   /** @param {string} id */
   const groupOf = (id) => scene.getObjectByName(`part:${id}`) ?? null;
+  /** @param {string} id */
+  const boardOf = (id) => scene.getObjectByName(`board:${id}`) ?? null;
+  /** The drag id in the hand, whichever kind it is. */
+  const heldId = () => (drag?.kind === 'part' || drag?.kind === 'board' ? drag.id : null);
 
   /**
-   * Every pin a wire can end on, with where on screen its wire end sits.
-   * Discarded parts are in the bin; the part in the hand is not a target.
+   * Every pin a wire can end on, with where on screen its wire end sits. The
+   * part in the hand is not a target.
    * @param {Bench} b
    */
   function pins(b) {
     /** @type {{ point: string, pos: THREE.Vector3 }[]} */
     const out = [];
     for (const p of b.placed) {
-      if (p.discarded || (drag?.kind === 'part' && drag.id === p.id)) continue;
+      if (drag?.kind === 'part' && drag.id === p.id) continue;
       const g = groupOf(p.id);
       if (!g) continue;
       g.updateMatrixWorld();
@@ -213,27 +258,29 @@ export function attachInteraction(world, getBench, setBench) {
   }
 
   /**
-   * The hole at a point of the board top. A hole with a pin in it is that
-   * pin: a wire pushed there would be on the pin's strip anyway, and the
-   * pin is what the user sees.
+   * The hole at a point of the table. A hole with a pin in it is that pin: a
+   * wire pushed there would be on the pin's strip anyway, and the pin is what
+   * the user sees.
    * @param {THREE.Vector3} at
    * @returns {Pick | null}
    */
   function holeUnder(at) {
-    const { x, y } = worldToBoard(at.x, at.z);
-    const hole = holeAt(x, y);
-    if (!hole) return null;
     const b = getBench();
+    const hole = holeOnTable(b.boards, at.x, at.z);
+    if (!hole) return null;
     for (const p of b.placed) {
-      if (p.discarded || !p.at) continue;
+      if (!p.seated) continue;
       const taken = pinPoints(b, p).find((q) => q.hole === hole);
       if (taken) {
         const pin = pins(b).find((q) => q.point === taken.pin);
         if (pin) return jumperFor(b, pin, at);
       }
     }
-    const h = holeXY(hole);
-    const w = boardToWorld(h.x, h.y);
+    const [boardId, local] = split(hole);
+    const bd = b.boards.find((x) => x.id === boardId);
+    if (!bd) return null;
+    const h = holeXY(local);
+    const w = boardToTable(bd, h.x, h.y);
     // A hole under a part's board cannot take a wire on a real bench: the part
     // is in the way. Aiming there means the part's nearest pin, and jumperFor()
     // says where a jumper for that pin really goes.
@@ -248,7 +295,7 @@ export function attachInteraction(world, getBench, setBench) {
 
   /**
    * Where a wire meant for a pin really ends, the way it would on a bench.
-   * A pin seated in the board is under its part: the jumper goes in the free
+   * A pin seated in a board is under its part: the jumper goes in the free
    * hole of the same strip nearest the aim, which joins it all the same. A
    * pin in no hole (hanging off the board, or a part on the table) takes the
    * jumper itself, a female end slipped over it. A strip with no free hole
@@ -260,26 +307,31 @@ export function attachInteraction(world, getBench, setBench) {
    */
   function jumperFor(b, pin, at) {
     full = null;
-    const id = pin.point.slice(0, pin.point.indexOf(':'));
-    const placed = b.placed.find((p) => p.id === id && !p.discarded);
-    const home = placed?.at ? pinPoints(b, placed).find((q) => q.pin === pin.point)?.hole : null;
+    const [id, name] = split(pin.point);
+    const placed = b.placed.find((p) => p.id === id);
+    const home = placed?.seated ? pinPoints(b, placed).find((q) => q.pin === `${id}:${name}`)?.hole : null;
     if (!placed || !home) return { kind: 'point', point: pin.point, pos: pin.pos };
+    const [boardId, local] = split(home);
+    const bd = b.boards.find((x) => x.id === boardId);
+    if (!bd) return { kind: 'point', point: pin.point, pos: pin.pos };
+    /** @type {Set<string | null>} */
     const used = new Set();
     for (const p of b.placed) {
-      if (p.discarded || !p.at || (drag?.kind === 'part' && drag.id === p.id)) continue;
-      for (const q of pinPoints(b, p)) if (q.hole) used.add(q.hole);
+      if (!p.seated || (drag?.kind === 'part' && drag.id === p.id)) continue;
+      for (const q of pinPoints(b, p)) used.add(q.hole);
     }
     let best = null;
     let bestD = Infinity;
-    for (const hole of stripHoles(holeStrip(home))) {
-      if (used.has(hole)) continue;
+    for (const hole of stripHoles(holeStrip(local))) {
+      const point = `${boardId}:${hole}`;
+      if (used.has(point)) continue;
       const h = holeXY(hole);
-      const w = boardToWorld(h.x, h.y);
+      const w = boardToTable(bd, h.x, h.y);
       if (coverOf(b, w.x, w.z)) continue;
       const pos = new THREE.Vector3(w.x, BOARD_TOP, w.z);
       const d = pos.distanceToSquared(at);
       if (d < bestD) {
-        best = { kind: /** @type {const} */ ('point'), point: hole, pos };
+        best = { kind: /** @type {const} */ ('point'), point, pos };
         bestD = d;
       }
     }
@@ -292,15 +344,14 @@ export function attachInteraction(world, getBench, setBench) {
   let full = null;
 
   /**
-   * The part whose board lies over a point of the board top, if any. Shrunk
-   * by a fifth of a pitch so a hole beside a part's edge stays free.
-   * World units are pitches (meshes.js).
+   * The part whose board lies over a point of the table, if any. Shrunk by a
+   * fifth of a pitch so a hole beside a part's edge stays free.
    * @param {Bench} b @param {number} x @param {number} z
    * @returns {string | null}
    */
   function coverOf(b, x, z) {
     for (const p of b.placed) {
-      if (p.discarded || !p.at || (drag?.kind === 'part' && drag.id === p.id)) continue;
+      if (!p.seated || (drag?.kind === 'part' && drag.id === p.id)) continue;
       const g = groupOf(p.id);
       if (!g) continue;
       const box = new THREE.Box3();
@@ -344,13 +395,17 @@ export function attachInteraction(world, getBench, setBench) {
       const owner = ownerOf(hit.object);
       if (!owner) continue;
       const { kind, id } = owner.userData;
-      if (kind === 'board') return holeUnder(hit.point);
+      if (kind === 'board') {
+        const hole = holeUnder(hit.point);
+        if (hole) return hole;
+        // The plastic between holes is the handle (spec §5.3: boards are parts too).
+        return forWire ? null : { kind: 'board', id };
+      }
       if (forWire) continue;
       if (kind === 'wire') return { kind: 'wire', id };
       if (kind === 'part') {
         const placed = getBench().placed.find((p) => p.id === id);
-        // A discarded part stays in the bin, and the speaker only lives on the table.
-        return placed && !placed.discarded && PARTS[placed.part].onBoard ? { kind: 'part', id } : null;
+        return placed ? { kind: 'part', id } : null;
       }
     }
     return null;
@@ -364,9 +419,13 @@ export function attachInteraction(world, getBench, setBench) {
    * @param {string} point
    */
   function position(b, point) {
-    if (point.startsWith('bb:')) {
-      const h = holeXY(point);
-      const w = boardToWorld(h.x, h.y);
+    if (isHole(b, point)) {
+      const [boardId, local] = split(point);
+      const bd = b.boards.find((x) => x.id === boardId);
+      if (!bd) return null;
+      let xy;
+      try { xy = holeXY(local); } catch { return null; }
+      const w = boardToTable(bd, xy.x, xy.y);
       return new THREE.Vector3(w.x, BOARD_TOP, w.z);
     }
     return pins(b).find((p) => p.point === point)?.pos ?? null;
@@ -463,7 +522,7 @@ export function attachInteraction(world, getBench, setBench) {
     d.lifted = true;
     light(null);
     canvas.style.cursor = 'grabbing';
-    say('R to rotate · drop it off the board to put it back');
+    say('R to rotate · drop it on the table, or on a board');
   }
 
   /** @param {PartDrag} d */
@@ -472,20 +531,21 @@ export function attachInteraction(world, getBench, setBench) {
     const p = onPlane();
     if (!p) return;
     const origin = p.add(d.offset);
-    const { x, y } = worldToBoard(origin.x, origin.z);
-    d.at = snapPart(d.def, x, y, d.rot);
+    const x = clamp(origin.x, world.tableBounds.x0, world.tableBounds.x1);
+    const z = clamp(origin.z, world.tableBounds.z0, world.tableBounds.z1);
+    d.raw = { x, z };
+    d.at = snapPart(getBench(), d.def, x, z, d.rot);
     if (d.at) {
-      const w = boardToWorld(d.at.x, d.at.y);
-      d.group.position.set(w.x, BOARD_TOP + HOVER, w.z);
+      d.group.position.set(d.at.x, BOARD_TOP + HOVER, d.at.z);
       // Ring the holes the pins would go into, so the user sees which strips before letting go.
       /** @type {Placed} */
-      const trial = { id: d.id, part: d.def.id, at: d.at, rot: d.rot, onBoard: true, burnt: false, discarded: false };
+      const trial = { id: d.id, part: d.def.id, at: d.at, rot: d.rot, seated: true, burnt: false };
       aim.set(pinPoints(getBench(), trial).flatMap((q) => (q.hole ? [/** @type {THREE.Vector3} */ (position(getBench(), q.hole))] : [])));
     } else {
-      d.group.position.set(origin.x, BOARD_TOP + HOVER, origin.z);
+      d.group.position.set(x, BOARD_TOP + HOVER, z);
       aim.set([]);
     }
-    d.group.rotation.y = -THREE.MathUtils.degToRad(d.rot);
+    d.group.rotation.y = deg(d.rot);
     world.requestRender();
   }
 
@@ -503,21 +563,46 @@ export function attachInteraction(world, getBench, setBench) {
     d.group.rotation.y = d.home.rotY;
   }
 
-  /** @param {PartDrag} d */
+  /**
+   * Let go of a part: onto a board if its pins are over holes, otherwise onto
+   * the table at the nearest free spot, or into the bin.
+   * @param {PartDrag} d
+   */
   function drop(d) {
     const b = getBench();
-    const was = b.placed.find((p) => p.id === d.id && !p.discarded);
-    // Back on the table a part lies the way its slot was laid out for:
-    // turned, the amp would lie across the ESP32 beside it.
-    const rot = d.at ? d.rot : 0;
-    const same = was && was.rot === rot && (was.at === null ? d.at === null : d.at !== null && was.at.x === d.at.x && was.at.y === d.at.y);
-    if (!was || same) {
+    const was = b.placed.find((p) => p.id === d.id);
+    if (!was) return;
+    if (world.trashAt(d.raw.x, d.raw.z)) {
+      const after = trash(b, d.id);
+      if ('refused' in after) {
+        putBack(d);
+        opts.say('The ESP32 stays: it is the only one, and the bench is built around it.');
+      } else {
+        setBench(after);
+      }
+      return;
+    }
+
+    let at = d.at;
+    if (!at) {
+      // Loose on the table: inside the table, and clear of everything else.
+      const { w, d: dd } = d.def.size;
+      const fp = { w: w * MM, d: dd * MM };
+      const cx = clamp(d.raw.x + fp.w / 2, world.tableBounds.x0 + fp.w / 2, world.tableBounds.x1 - fp.w / 2);
+      const cz = clamp(d.raw.z + fp.d / 2, world.tableBounds.z0 + fp.d / 2, world.tableBounds.z1 - fp.d / 2);
+      const spot = freeSpot(b, fp, cx, cz, [d.id]);
+      at = { x: spot.x - fp.w / 2, z: spot.z - fp.d / 2 };
+    }
+    const seated = at === d.at;
+    const same = was.rot === d.rot && was.seated === seated
+      && was.at.x === at.x && was.at.z === at.z;
+    if (same) {
       putBack(d);
       world.requestRender();
       return;
     }
-    setBench(place(b, d.id, d.at, rot));
-    if (d.at) seat(d.id);
+    setBench(place(b, d.id, at, d.rot, seated));
+    if (seated) seat(d.id);
   }
 
   /**
@@ -542,6 +627,113 @@ export function attachInteraction(world, getBench, setBench) {
       if (t < 1) requestAnimationFrame(tick);
     };
     tick(start);
+  }
+
+  // ---- Boards -----------------------------------------------------------
+
+  /**
+   * Everything that rides with a board: the boards it is joined to and every
+   * part plugged into any of them.
+   * @param {Bench} b @param {string} id
+   */
+  function ridersOf(b, id) {
+    const ids = boardGroups(b.boards).find((g) => g.includes(id)) ?? [id];
+    /** @type {{ g: THREE.Object3D, pos: THREE.Vector3, rotY: number }[]} */
+    const riders = [];
+    for (const bd of b.boards) {
+      if (bd.id === id || !ids.includes(bd.id)) continue;
+      const g = boardOf(bd.id);
+      if (g) riders.push({ g, pos: g.position.clone(), rotY: g.rotation.y });
+    }
+    for (const p of b.placed) {
+      if (!p.seated) continue;
+      const on = pinPoints(b, p).some((q) => q.hole && ids.includes(split(q.hole)[0]));
+      const g = on ? groupOf(p.id) : null;
+      if (g) riders.push({ g, pos: g.position.clone(), rotY: g.rotation.y });
+    }
+    return riders;
+  }
+
+  /** @param {BoardDrag} d */
+  function liftBoard(d) {
+    d.lifted = true;
+    light(null);
+    canvas.style.cursor = 'grabbing';
+    const b = getBench();
+    const joined = (boardGroups(b.boards).find((g) => g.includes(d.id)) ?? [d.id]).length > 1;
+    opts.say(joined
+      ? 'Hold Alt to take one board off its neighbours.'
+      : 'Drop it near another board to join them.');
+    d.members = ridersOf(b, d.id);
+  }
+
+  /** @param {BoardDrag} d */
+  function carryBoard(d) {
+    aimAt(d.last);
+    const p = onPlane();
+    if (!p) return;
+    const origin = p.add(d.offset);
+    const x = clamp(origin.x, world.tableBounds.x0, world.tableBounds.x1);
+    const z = clamp(origin.z, world.tableBounds.z0, world.tableBounds.z1);
+    d.raw = { x, z };
+    d.at = snapBoard(getBench(), d.id, x, z, d.rot);
+    const drot = ((d.rot - d.baseRot) + 360) % 360;
+    d.group.position.set(d.at.x, d.home.pos.y, d.at.z);
+    d.group.rotation.y = deg(d.rot);
+    // The group is one rigid piece: every rider keeps its place about the
+    // board in the hand, and turns with it.
+    for (const m of d.members) {
+      const r = turnAboutPivot(m.pos.x - d.home.pos.x, m.pos.z - d.home.pos.z, drot);
+      m.g.position.set(d.at.x + r.x, m.pos.y, d.at.z + r.z);
+      m.g.rotation.y = m.rotY + deg(drot);
+    }
+    world.requestRender();
+  }
+
+  /** @param {BoardDrag} d */
+  function turnBoard(d) {
+    d.rot = /** @type {Placed['rot']} */ ((d.rot + 90) % 360);
+    d.offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), -Math.PI / 2);
+    carryBoard(d);
+  }
+
+  /** @param {BoardDrag} d */
+  function putBoardBack(d) {
+    d.group.position.copy(d.home.pos);
+    d.group.rotation.y = d.home.rotY;
+    for (const m of d.members) {
+      m.g.position.copy(m.pos);
+      m.g.rotation.y = m.rotY;
+    }
+  }
+
+  /**
+   * Let go of a board: into the bin, joined to its neighbours, or where it
+   * was dropped. Taking one board off a group with a part across it is
+   * refused and the board springs back.
+   * @param {BoardDrag} d @param {boolean} alone
+   */
+  function dropBoard(d, alone) {
+    const b = getBench();
+    if (world.trashAt(d.raw.x, d.raw.z)) {
+      setBench(/** @type {Bench} */ (trash(b, d.id)));
+      return;
+    }
+    const bd = b.boards.find((x) => x.id === d.id);
+    if (!bd) return;
+    if (bd.x === d.at.x && bd.z === d.at.z && bd.rot === d.rot) {
+      putBoardBack(d);
+      world.requestRender();
+      return;
+    }
+    const moved = moveBoard(b, d.id, d.at, d.rot, alone);
+    if ('refused' in moved) {
+      putBoardBack(d);
+      opts.say('A part sits across both boards — lift it off before pulling them apart.');
+      world.requestRender();
+      return;
+    }
+    setBench(moved);
   }
 
   // ---- Wires ------------------------------------------------------------
@@ -593,9 +785,15 @@ export function attachInteraction(world, getBench, setBench) {
 
   // ---- The hand ---------------------------------------------------------
 
+  /** @param {number} v @param {number} lo @param {number} hi */
+  function clamp(v, lo, hi) {
+    return Math.min(hi, Math.max(lo, v));
+  }
+
   /** Let go of whatever is held, changing nothing. */
   function cancel() {
     if (drag?.kind === 'part' && drag.lifted) putBack(drag);
+    if (drag?.kind === 'board' && drag.lifted) putBoardBack(drag);
     if (drag?.kind === 'wire' && drag.preview) {
       scene.remove(drag.preview);
       dispose(drag.preview);
@@ -611,6 +809,49 @@ export function attachInteraction(world, getBench, setBench) {
 
   /** @param {PointerEvent} e @param {{ x: number, y: number }} from */
   const wandered = (e, from) => Math.hypot(e.clientX - from.x, e.clientY - from.y) > CLICK_SLOP;
+
+  /**
+   * A press in the parts bin: the thing exists from the first move, under the
+   * hand, and the rest is the ordinary drag (multi-screen spec §5.1).
+   * @param {PartId | 'breadboard'} part @param {PointerEvent} e
+   */
+  function startCarry(part, e) {
+    aimAt(e);
+    const p = onPlane();
+    if (!p) return;
+    const b = getBench();
+    if (part === 'breadboard') {
+      const added = addBoard(b, { x: p.x, z: p.z });
+      setBench(added.bench);
+      const bd = added.bench.boards.find((x) => x.id === added.id);
+      const group = boardOf(added.id);
+      if (!bd || !group) return;
+      drag = {
+        kind: 'board', id: added.id, group, rot: bd.rot, baseRot: bd.rot,
+        home: { pos: group.position.clone(), rotY: group.rotation.y },
+        offset: new THREE.Vector3(0, 0, 0),
+        x: e.clientX, y: e.clientY, lifted: false,
+        at: { x: bd.x, z: bd.z }, raw: { x: p.x, z: p.z }, last: e, members: [],
+      };
+      liftBoard(drag);
+      carryBoard(drag);
+      return;
+    }
+    const added = addPart(b, part, { x: p.x, z: p.z });
+    setBench(added.bench);
+    const placed = added.bench.placed.find((q) => q.id === added.id);
+    const group = groupOf(added.id);
+    if (!placed || !group) return;
+    drag = {
+      kind: 'part', id: added.id, def: PARTS[placed.part], group,
+      rot: placed.rot, home: { pos: group.position.clone(), rotY: group.rotation.y },
+      offset: new THREE.Vector3(0, 0, 0),
+      x: e.clientX, y: e.clientY, lifted: false, at: placed.at, raw: { x: p.x, z: p.z }, last: e,
+    };
+    lift(drag);
+    carry(drag);
+  }
+  beginCarryHook = startCarry;
 
   // Captured, so it runs before OrbitControls' own listener on the canvas: a
   // press on a part, pin, hole or wire is ours and must not also turn the
@@ -634,8 +875,21 @@ export function attachInteraction(world, getBench, setBench) {
       world.requestRender();
     } else if (t.kind === 'wire') {
       drag = { kind: 'pull', id: t.id, x: e.clientX, y: e.clientY };
+    } else if (t.kind === 'board') {
+      const b = getBench();
+      const bd = b.boards.find((x) => x.id === t.id);
+      const group = boardOf(t.id);
+      const p = onPlane();
+      if (!bd || !group || !p) return;
+      drag = {
+        kind: 'board', id: t.id, group, rot: bd.rot, baseRot: bd.rot,
+        home: { pos: group.position.clone(), rotY: group.rotation.y },
+        offset: group.position.clone().sub(p).setY(0),
+        x: e.clientX, y: e.clientY, lifted: false,
+        at: { x: bd.x, z: bd.z }, raw: { x: bd.x, z: bd.z }, last: e, members: [],
+      };
     } else {
-      const placed = /** @type {Placed} */ (getBench().placed.find((p) => p.id === t.id && !p.discarded));
+      const placed = /** @type {Placed} */ (getBench().placed.find((p) => p.id === t.id));
       const group = groupOf(t.id);
       const p = onPlane();
       if (!group || !p) return;
@@ -643,8 +897,12 @@ export function attachInteraction(world, getBench, setBench) {
         kind: 'part', id: t.id, def: PARTS[placed.part], group, rot: placed.rot,
         home: { pos: group.position.clone(), rotY: group.rotation.y },
         offset: group.position.clone().sub(p).setY(0),
-        x: e.clientX, y: e.clientY, lifted: false, at: placed.at, last: e,
+        x: e.clientX, y: e.clientY, lifted: false,
+        at: placed.seated ? { x: placed.at.x, z: placed.at.z } : null,
+        raw: { x: p.x - group.position.x + placed.at.x, z: p.z - group.position.z + placed.at.z },
+        last: e,
       };
+      drag.raw = { x: placed.at.x, z: placed.at.z };
     }
   }, { capture: true });
 
@@ -668,13 +926,17 @@ export function attachInteraction(world, getBench, setBench) {
       if (e.buttons !== 0) return;
       const t = pick(e, false);
       light(t?.kind === 'point' ? t.point : null);
-      canvas.style.cursor = t?.kind === 'part' ? 'grab' : t?.kind === 'wire' ? 'pointer' : t ? 'crosshair' : '';
+      canvas.style.cursor = t?.kind === 'part' || t?.kind === 'board' ? 'grab' : t?.kind === 'wire' ? 'pointer' : t ? 'crosshair' : '';
       return;
     }
     if (drag.kind === 'part') {
       drag.last = e;
       if (!drag.lifted && wandered(e, drag)) lift(drag);
       if (drag.lifted) carry(drag);
+    } else if (drag.kind === 'board') {
+      drag.last = e;
+      if (!drag.lifted && wandered(e, drag)) liftBoard(drag);
+      if (drag.lifted) carryBoard(drag);
     } else if (drag.kind === 'wire') {
       if (!drag.moved && wandered(e, drag)) {
         drag.moved = true;
@@ -712,6 +974,19 @@ export function attachInteraction(world, getBench, setBench) {
       aim.set([]);
       canvas.style.cursor = '';
       if (wasLifted) drop(d);
+      else putBack(d);
+      world.requestRender();
+      return;
+    }
+    if (d.kind === 'board') {
+      d.last = e;
+      const wasLifted = d.lifted;
+      if (wasLifted) carryBoard(d);
+      drag = null;
+      say(null);
+      canvas.style.cursor = '';
+      if (wasLifted) dropBoard(d, e.altKey);
+      else putBoardBack(d);
       world.requestRender();
       return;
     }
@@ -727,7 +1002,10 @@ export function attachInteraction(world, getBench, setBench) {
   addEventListener('keydown', (e) => {
     if (!drag || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
     if (e.code === 'Escape') cancel();
-    else if (e.code === 'KeyR' && !e.repeat && !e.metaKey && !e.ctrlKey && drag.kind === 'part' && drag.lifted) turn(drag);
+    else if (e.code === 'KeyR' && !e.repeat && !e.metaKey && !e.ctrlKey) {
+      if (drag.kind === 'part' && drag.lifted) turn(drag);
+      if (drag.kind === 'board' && drag.lifted) turnBoard(drag);
+    }
   });
   addEventListener('blur', () => cancel());
 
