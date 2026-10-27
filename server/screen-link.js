@@ -9,6 +9,7 @@
 
 import { WebSocketServer } from 'ws';
 import { PROTOCOL, SCREEN_PATH, encode, parse } from '../core/protocol.js';
+import { DEFAULT_SIZE } from '../core/screens.js';
 
 /**
  * @param {{ server: import('node:http').Server,
@@ -102,11 +103,15 @@ export function createScreenLink(opts) {
     /**
      * Send one frame to every screen of this character. A screen that cannot
      * take it right now is skipped: frames are dropped, never queued (spec §5).
-     * @param {string} id @param {Buffer} jpeg
+     * The animator hands over a frame number as a `pick(size)`; for now every
+     * screen asks for the default size (the size in hello arrives next).
+     * @param {string} id @param {import('./pet/frames.js').FramePick} pick
      */
-    show(id, jpeg) {
+    show(id, pick) {
       const set = screens.get(id);
       if (!set) return;
+      const jpeg = pick(DEFAULT_SIZE);
+      if (!jpeg) return;
       for (const ws of set) {
         if (ws.readyState !== ws.OPEN) continue;
         if (ws.bufferedAmount > maxBuffered) continue;

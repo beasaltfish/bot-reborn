@@ -6,8 +6,14 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
- * @typedef {{ fps: number, loop: boolean, frames: Buffer[] }} Animation
- * @typedef {Map<string, Animation>} PetFrames
+ * One animation, rendered for every size the screen table mentions. `count` is
+ * the number of frames the animator walks through; `bySize` holds the same
+ * frame at the same index for each panel (multi-screen spec §4).
+ * @typedef {{ fps: number, loop: boolean, count: number, bySize: Map<string, Buffer[]> }} PetAnim
+ * @typedef {Map<string, PetAnim>} PetFrames
+ * A screen asks for its own size; a size with no frames is undefined, and the
+ * screen stays blank rather than the robot falling over.
+ * @typedef {(size: string) => Buffer | undefined} FramePick
  */
 
 /** @param {string} name @param {number} i */
@@ -32,6 +38,14 @@ export function loadPetFrames(dir, log = () => {}) {
     return frames;
   }
 
+  // A manifest without `sizes` predates the screen table: its frames sit one
+  // directory up and every read below would miss. One line, not one per anim.
+  const sizes = manifest?.sizes;
+  if (!Array.isArray(sizes) || sizes.length === 0) {
+    log('pet: frames are from before screen sizes — run npm run pet:render');
+    return frames;
+  }
+
   for (const [name, anim] of Object.entries(manifest?.anims ?? {})) {
     const a = /** @type {any} */ (anim);
     const count = Number(a?.frames);
@@ -40,19 +54,27 @@ export function loadPetFrames(dir, log = () => {}) {
       log(`pet: ${name} has no usable fps/frames in the manifest`);
       continue;
     }
-    /** @type {Buffer[]} */ const jpegs = [];
-    for (let i = 0; i < count; i++) {
-      try {
-        jpegs.push(readFileSync(join(dir, framePath(name, i))));
-      } catch {
-        // Half an animation would stutter every time it played; leaving it out
-        // means the animator ignores that pose and logs it once.
-        log(`pet: ${name} is missing ${framePath(name, i)} — the animation is left out`);
-        jpegs.length = 0;
-        break;
+    /** @type {Map<string, Buffer[]>} */ const bySize = new Map();
+    let complete = true;
+    for (const size of sizes) {
+      /** @type {Buffer[]} */ const jpegs = [];
+      for (let i = 0; i < count; i++) {
+        try {
+          jpegs.push(readFileSync(join(dir, String(size), framePath(name, i))));
+        } catch {
+          // Half an animation would stutter every time it played; leaving it out
+          // means the animator ignores that pose and logs it once.
+          log(`pet: ${name} is missing ${join(String(size), framePath(name, i))} — the animation is left out`);
+          complete = false;
+          break;
+        }
       }
+      if (!complete) break;
+      bySize.set(String(size), jpegs);
     }
-    if (jpegs.length === count) frames.set(name, { fps, loop: a.loop === true, frames: jpegs });
+    // One size short means the animation cannot play on every screen at the
+    // same moment, so none of them gets it.
+    if (complete) frames.set(name, { fps, loop: a.loop === true, count, bySize });
   }
   return frames;
 }

@@ -133,7 +133,10 @@ test('/screen is taken by the screen link, welcomes a token, and streams the pet
   const server = createBrainServer({
     dir: chars.dir, fetch: fakeFetch(), sfx: new Map(), earcons: renderEarcons(),
     makeEars: () => onceEars(), log: () => {},
-    petFrames: new Map([['idle', { fps: 10, loop: true, frames: [Buffer.from('i0'), Buffer.from('i1')] }]]),
+    petFrames: new Map([['idle', {
+      fps: 10, loop: true, count: 2,
+      bySize: new Map([['320x240', [Buffer.from('i0'), Buffer.from('i1')]]]),
+    }]]),
   });
   const port = await server.listen(0);
   const s = await screen(port, a.token);

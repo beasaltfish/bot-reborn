@@ -49,7 +49,7 @@ test('a screen with a token is welcomed, then gets frames as binary', async () =
   const r = await rig();
   const s = await hello(r.url);
   assert.deepEqual(s.texts[0], { type: 'welcome', name: 'n-a' });
-  r.link.show('a', Buffer.from('jpg'));
+  r.link.show('a', () => Buffer.from('jpg'));
   await until(() => s.frames.length === 1);
   assert.equal(s.frames[0].toString(), 'jpg');
   s.ws.close();
@@ -78,7 +78,7 @@ test('several screens on one character all get the frame', async () => {
   const one = await hello(r.url);
   const two = await hello(r.url);
   assert.equal(r.link.count('a'), 2);
-  r.link.show('a', Buffer.from('x'));
+  r.link.show('a', () => Buffer.from('x'));
   await until(() => one.frames.length === 1 && two.frames.length === 1);
   one.ws.close(); two.ws.close();
   r.close();
@@ -87,7 +87,7 @@ test('several screens on one character all get the frame', async () => {
 test('a frame for a character with no screen is a no-op', async () => {
   const r = await rig();
   assert.equal(r.link.count('nobody'), 0);
-  r.link.show('nobody', Buffer.from('x'));
+  r.link.show('nobody', () => Buffer.from('x'));
   r.close();
 });
 
@@ -102,7 +102,7 @@ test('a frame is skipped when the socket is over its buffer, never queued', asyn
   const s = await hello(r.url);
   try {
     assert.deepEqual(s.texts[0], { type: 'welcome', name: 'n-a' });
-    for (let i = 0; i < 5; i++) r.link.show('a', Buffer.alloc(1024, i));
+    for (let i = 0; i < 5; i++) r.link.show('a', () => Buffer.alloc(1024, i));
     await new Promise((res) => setTimeout(res, 100));
     assert.equal(s.frames.length, 0, 'nothing was queued');
   } finally {

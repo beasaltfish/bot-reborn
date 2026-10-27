@@ -6,15 +6,16 @@
 // low frame rate; a pose interrupts it at once, plays once, and hands back to
 // idle from idle's first frame.
 
-/** @typedef {{ fps: number, loop: boolean, frames: Buffer[] }} Animation */
+/** @typedef {import('./frames.js').PetAnim} PetAnim */
+/** @typedef {import('./frames.js').FramePick} FramePick */
 
 export class Animator {
   /** @type {import('./frames.js').PetFrames} */ #frames;
-  /** @type {(jpeg: Buffer) => void} */ #show;
+  /** @type {(pick: FramePick) => void} */ #show;
   /** @type {(ms: number, fn: () => void) => () => void} */ #after;
   /** @type {(line: string) => void} */ #log;
   /** @type {(() => void) | null} */ #cancel = null;
-  /** @type {Animation | null} */ #anim = null;
+  /** @type {PetAnim | null} */ #anim = null;
   /** @type {string} */ #name = '';
   #index = 0;
   #running = false;
@@ -22,7 +23,7 @@ export class Animator {
   /**
    * @param {{
    *   frames: import('./frames.js').PetFrames,
-   *   show: (jpeg: Buffer) => void,
+   *   show: (pick: FramePick) => void,
    *   after?: (ms: number, fn: () => void) => () => void,
    *   log?: (line: string) => void,
    * }} deps
@@ -80,8 +81,20 @@ export class Animator {
     this.#anim = this.#frames.get(name) ?? null;
     this.#index = index;
     if (!this.#anim) return;
-    this.#show(this.#anim.frames[index]);
+    this.#emit(index);
     this.#schedule();
+  }
+
+  /**
+   * Hand out THIS frame, whatever happens to the animation afterwards. The
+   * pick closes over the animation and the index, so a screen that asks a
+   * moment later still gets the frame that was current when show() ran.
+   * @param {number} index
+   */
+  #emit(index) {
+    const anim = this.#anim;
+    if (!anim) return;
+    this.#show((size) => anim.bySize.get(size)?.[index]);
   }
 
   #schedule() {
@@ -97,9 +110,9 @@ export class Animator {
     const anim = this.#anim;
     if (!this.#running || !anim) return;
     const next = this.#index + 1;
-    if (next < anim.frames.length) {
+    if (next < anim.count) {
       this.#index = next;
-      this.#show(anim.frames[next]);
+      this.#emit(next);
       this.#schedule();
       return;
     }
@@ -107,7 +120,7 @@ export class Animator {
     // the idle's own animation rather than a cut (the art ends on that frame).
     if (anim.loop) {
       this.#index = 0;
-      this.#show(anim.frames[0]);
+      this.#emit(0);
       this.#schedule();
       return;
     }

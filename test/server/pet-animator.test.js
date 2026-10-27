@@ -9,22 +9,38 @@ import { FakeClock } from './fake-clock.js';
 
 const buf = (/** @type {string} */ s) => Buffer.from(s);
 
+/**
+ * One animation with frames for two sizes: `wide` for a 320×240 screen,
+ * `square` for a 240×240 one. The numbers say which frame it is.
+ * @param {number} fps @param {boolean} loop @param {string[]} wide @param {string[]} square
+ */
+const sized = (fps, loop, wide, square) => ({
+  fps, loop, count: wide.length,
+  bySize: new Map([['320x240', wide.map(buf)], ['240x240', square.map(buf)]]),
+});
+
 /** Idle: 3 frames at 10 fps, looping. Sit: 2 frames, once. */
 function rig() {
   const clock = new FakeClock();
   /** @type {Buffer[]} */ const shown = [];
+  /** @type {string[][]} */ const pairs = [];
   /** @type {string[]} */ const logged = [];
   const frames = new Map([
-    ['idle', { fps: 10, loop: true, frames: [buf('i0'), buf('i1'), buf('i2')] }],
-    ['sit', { fps: 10, loop: false, frames: [buf('s0'), buf('s1')] }],
+    ['idle', sized(10, true, ['i0', 'i1', 'i2'], ['j0', 'j1', 'j2'])],
+    ['sit', sized(10, false, ['s0', 's1'], ['t0', 't1'])],
   ]);
   const animator = new Animator({
     frames,
-    show: (jpeg) => shown.push(jpeg),
+    show: (pick) => {
+      const wide = pick('320x240');
+      const square = pick('240x240');
+      shown.push(/** @type {Buffer} */ (wide));
+      pairs.push([wide?.toString() ?? 'none', square?.toString() ?? 'none']);
+    },
     after: clock.after,
     log: (line) => logged.push(line),
   });
-  return { clock, shown, logged, frames, animator };
+  return { clock, shown, pairs, logged, frames, animator };
 }
 
 const names = (/** @type {Buffer[]} */ shown) => shown.map((b) => b.toString());
@@ -46,10 +62,32 @@ test('pose switches at once, plays once, and returns to idle from frame 0', asyn
   assert.deepEqual(names(r.shown), ['i0', 's0', 's1', 'i0'], 's1, then straight back to idle');
 });
 
+test('every size is handed the same frame of the same animation', async () => {
+  const r = rig();
+  r.animator.start();
+  await r.clock.advance(200);
+  r.animator.pose('sit');
+  await r.clock.advance(100);
+  assert.deepEqual(r.pairs, [
+    ['i0', 'j0'], ['i1', 'j1'], ['i2', 'j2'], ['s0', 't0'], ['s1', 't1'],
+  ]);
+});
+
+test('a pick for a size with no frames is undefined, not a crash', () => {
+  /** @type {(Buffer | undefined)[]} */ const picked = [];
+  const animator = new Animator({
+    frames: new Map([['idle', sized(10, true, ['i0'], ['j0'])]]),
+    show: (pick) => picked.push(pick('999x1')),
+    after: () => () => {},
+  });
+  animator.start();
+  assert.deepEqual(picked, [undefined]);
+});
+
 test('a pose during a pose restarts with the new one', async () => {
   const r = rig();
   const frames = r.frames;
-  frames.set('shake', { fps: 10, loop: false, frames: [buf('h0'), buf('h1')] });
+  frames.set('shake', sized(10, false, ['h0', 'h1'], ['k0', 'k1']));
   r.animator.start();
   r.animator.pose('sit');
   await r.clock.advance(100);
@@ -95,23 +133,58 @@ test('loads nothing from a missing directory, and says so once', () => {
   assert.equal(logged.length, 1);
 });
 
-test('loads the manifest\'s frames in order, and leaves out an animation with a hole', () => {
+test('loads every size of a sized manifest, in order', () => {
   const dir = mkdtempSync(join(tmpdir(), 'pet-frames-'));
-  mkdirSync(join(dir, 'idle'), { recursive: true });
-  mkdirSync(join(dir, 'sit'), { recursive: true });
-  writeFileSync(join(dir, 'idle', '000.jpg'), 'a');
-  writeFileSync(join(dir, 'idle', '001.jpg'), 'b');
-  writeFileSync(join(dir, 'sit', '000.jpg'), 'c');
+  for (const [size, prefix] of [['320x240', 'a'], ['240x240', 'b']]) {
+    mkdirSync(join(dir, size, 'idle'), { recursive: true });
+    writeFileSync(join(dir, size, 'idle', '000.jpg'), `${prefix}0`);
+    writeFileSync(join(dir, size, 'idle', '001.jpg'), `${prefix}1`);
+  }
   writeFileSync(join(dir, 'manifest.json'), JSON.stringify({
-    width: 320, height: 240,
-    anims: { idle: { fps: 8, loop: true, frames: 2 }, sit: { fps: 10, loop: false, frames: 2 } },
+    sizes: ['320x240', '240x240'],
+    anims: { idle: { fps: 8, loop: true, frames: 2 } },
   }));
   /** @type {string[]} */ const logged = [];
   const frames = loadPetFrames(dir, (l) => logged.push(l));
-  assert.deepEqual([...frames.keys()], ['idle'], 'sit is missing its second frame');
-  assert.deepEqual(frames.get('idle')?.frames.map(String), ['a', 'b']);
-  assert.equal(frames.get('idle')?.fps, 8);
-  assert.equal(frames.get('idle')?.loop, true);
+  const idle = frames.get('idle');
+  assert.equal(idle?.fps, 8);
+  assert.equal(idle?.loop, true);
+  assert.equal(idle?.count, 2);
+  assert.deepEqual(idle?.bySize.get('320x240')?.map(String), ['a0', 'a1']);
+  assert.deepEqual(idle?.bySize.get('240x240')?.map(String), ['b0', 'b1']);
+  assert.deepEqual(logged, []);
+});
+
+test('one size missing one frame leaves the whole animation out, with one line', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'pet-frames-'));
+  for (const [size, prefix] of [['320x240', 'a'], ['240x240', 'b']]) {
+    mkdirSync(join(dir, size, 'idle'), { recursive: true });
+    writeFileSync(join(dir, size, 'idle', '000.jpg'), `${prefix}0`);
+  }
+  // The 320×240 column is complete; the 240×240 one stops after its first frame.
+  writeFileSync(join(dir, '320x240', 'idle', '001.jpg'), 'a1');
+  writeFileSync(join(dir, 'manifest.json'), JSON.stringify({
+    sizes: ['320x240', '240x240'],
+    anims: { idle: { fps: 8, loop: true, frames: 2 } },
+  }));
+  /** @type {string[]} */ const logged = [];
+  const frames = loadPetFrames(dir, (l) => logged.push(l));
+  assert.equal(frames.size, 0, 'a stuttering half-animation is worse than none');
   assert.equal(logged.length, 1);
-  assert.match(logged[0], /sit/);
+  assert.match(logged[0], /idle/);
+});
+
+test('a manifest from before screen sizes is refused with one line saying how to fix it', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'pet-frames-'));
+  mkdirSync(join(dir, 'idle'), { recursive: true });
+  writeFileSync(join(dir, 'idle', '000.jpg'), 'a');
+  writeFileSync(join(dir, 'manifest.json'), JSON.stringify({
+    width: 320, height: 240,
+    anims: { idle: { fps: 8, loop: true, frames: 1 } },
+  }));
+  /** @type {string[]} */ const logged = [];
+  const frames = loadPetFrames(dir, (l) => logged.push(l));
+  assert.equal(frames.size, 0);
+  assert.equal(logged.length, 1);
+  assert.match(logged[0], /npm run pet:render/);
 });

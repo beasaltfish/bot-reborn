@@ -38,7 +38,7 @@ export const ECHO_SLACK_MS = 300;
  *   log?: (line: string) => void,
  *   slackMs?: number,
  *   petFrames?: import('./pet/frames.js').PetFrames,
- *   screen?: (jpeg: Buffer) => void,
+ *   screen?: (pick: import('./pet/frames.js').FramePick) => void,
  * }} deps
  */
 export function startRobot(conn, deps) {
@@ -52,7 +52,7 @@ export function startRobot(conn, deps) {
   // A pet has nothing to drive: its body is the screen, and the animator is
   // what moves. Started here so a connected body is already showing idle.
   const animator = motion === 'pet' && deps.petFrames
-    ? new Animator({ frames: deps.petFrames, show: (jpeg) => deps.screen?.(jpeg), log })
+    ? new Animator({ frames: deps.petFrames, show: (pick) => deps.screen?.(pick), log })
     : null;
   const executor = makeExecutor(motion, conn, log, animator);
   animator?.start();

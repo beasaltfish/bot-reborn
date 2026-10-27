@@ -129,7 +129,7 @@ export function createBrainServer(opts) {
         petFrames: opts.petFrames,
         // Frames go to whichever screens this character has right now; with
         // none, the animator still runs and show() is a no-op.
-        screen: (jpeg) => screen.show(c.id, jpeg),
+        screen: (pick) => screen.show(c.id, pick),
         log: (line) => log(`[${c.name}] ${line}`),
       });
       conn.onClose(() => robot.stop());
