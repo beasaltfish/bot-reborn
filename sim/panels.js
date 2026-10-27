@@ -1,7 +1,8 @@
 // The page around the bench: the three buttons (Wiring diagram, Hint, Reset
 // bench), the one-line status at the bottom, the wiring diagram itself, the
-// character picker that opens when the bench powers up, and a Replace button
-// over each burnt part. Plain DOM; what any of it means is main.js's business.
+// character picker that opens when the bench powers up. Plain DOM; what any of
+// it means is main.js's business. A burnt part is not swapped out any more:
+// it stays on the bench until the user drops it in the bin (spec §5.4).
 //
 // Nothing here is shown by default but the buttons: explanations wait until
 // asked for (spec §5).
@@ -121,7 +122,6 @@ function diagram() {
  * @param {{
  *   hint(): string,
  *   reset(): void,
- *   replace(id: string): void,
  *   follow(el: HTMLElement, id: string): void,
  * }} opts
  */
@@ -252,25 +252,5 @@ export function createPanels(opts) {
     f?.();
   });
 
-  // ---- Replace, over each burnt part ----
-  /** @type {Map<string, HTMLElement>} */
-  const replacers = new Map();
-  /** @param {string[]} ids  the burnt parts still on the bench */
-  function burnt(ids) {
-    for (const [id, b] of replacers) {
-      if (ids.includes(id)) continue;
-      b.remove();
-      replacers.delete(id);
-    }
-    for (const id of ids) {
-      if (replacers.has(id)) continue;
-      const b = el('button', { type: 'button', class: 'pill replace', title: 'Throw the burnt one away and take a fresh one from the box' }, ['Replace']);
-      b.addEventListener('click', () => opts.replace(id));
-      document.body.append(b);
-      replacers.set(id, b);
-      opts.follow(b, id);
-    }
-  }
-
-  return { status: setStatus, pick, closePicker, burnt };
+  return { status: setStatus, pick, closePicker };
 }

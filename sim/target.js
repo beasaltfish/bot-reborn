@@ -8,6 +8,9 @@
 // (spk with amp, spk2 with amp2…), so a second amp is wired the same way as
 // the first (multi-screen spec §5.6).
 
+import { screenById } from '../core/screens.js';
+import { PARTS } from './parts.js';
+
 /** @typedef {{ a: string, b: string, why: string }} Link */
 
 /** @param {string} id @returns {Link[]} */
@@ -41,6 +44,39 @@ function speakerLinks(spk, amp) {
   ];
 }
 
+/**
+ * One screen's wires, taken from the model's own pin roles (multi-screen spec
+ * §5.5): the firmware's pins on the ESP32 side, and the module's choice of
+ * 3V3 or 5V on the power side. MISO, SD_CS and NC have no target.
+ * @param {string} id
+ * @param {string} modelId
+ * @returns {Link[]}
+ */
+function screenLinks(id, modelId) {
+  const model = screenById(modelId);
+  if (!model) return [];
+  /** @param {import('../core/screens.js').PinRole} role */
+  const silk = (role) => model.pins.find((p) => p.role === role)?.silk;
+  /** @type {Link[]} */
+  const links = [];
+  /** @param {import('../core/screens.js').PinRole} role @param {string} to @param {string} why */
+  const add = (role, to, why) => {
+    const name = silk(role);
+    if (name) links.push({ a: `${id}:${name}`, b: to, why });
+  };
+  add('SCK', 'esp:GPIO11', 'The panel is clocked on GPIO 11.');
+  add('MOSI', 'esp:GPIO10', 'The picture reaches the panel on GPIO 10.');
+  add('CS', 'esp:GPIO9', 'Chip select is GPIO 9: the firmware drives the panel it finds there, and only one kind.');
+  add('DC', 'esp:GPIO8', 'GPIO 8 tells the panel whether a byte is a pixel or an order.');
+  add('RST', 'esp:GPIO18', 'GPIO 18 resets the panel, so the firmware can start it from scratch.');
+  add('VCC', model.vcc === '5v' ? 'esp:5V' : 'esp:3V3', model.vcc === '5v'
+    ? 'This module has its own regulator, so 5V is what it wants.'
+    : 'This module takes 3V3 only; 5V would burn it.');
+  add('GND', 'esp:GND', 'The panel needs the ESP32\'s ground.');
+  add('BL', 'esp:3V3', 'The backlight is lit from 3V3; the board\'s own pull-up can do it, but a wire is sure.');
+  return links;
+}
+
 /** The opening bench: the four instance names the diagram and the tests use. */
 /** @type {Link[]} */
 export const TARGET = [...micLinks('mic'), ...ampLinks('amp'), ...speakerLinks('spk', 'amp')];
@@ -68,5 +104,9 @@ export function targetFor(b) {
     const amp = amps[i];
     if (amp) links.push(...speakerLinks(spk.id, amp.id));
   });
+  for (const p of b.placed.filter((q) => q.part.startsWith('screen-')).sort((a, c) => number(a.id) - number(c.id))) {
+    const model = PARTS[p.part].model;
+    if (model) links.push(...screenLinks(p.id, model));
+  }
   return links;
 }

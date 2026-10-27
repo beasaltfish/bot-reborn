@@ -26,3 +26,13 @@ test('sizeKey and the default', () => {
   assert.equal(screenById('ili9341-ips')?.invert, true);
   assert.equal(screenById('nope'), undefined);
 });
+
+test('every screen has the shape the simulator draws and judges', () => {
+  for (const s of SCREENS) {
+    assert.ok(s.pcb.w > 0 && s.pcb.d > 0, s.id);
+    assert.ok(s.glass.w > 0 && s.glass.d > 0, s.id);
+    assert.ok(['on', 'off'].includes(s.blDefault), s.id);
+    // A round panel's glass is a disc: as wide as it is tall.
+    if (s.round) assert.equal(s.glass.w, s.glass.d, s.id);
+  }
+});

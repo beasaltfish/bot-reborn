@@ -6,6 +6,7 @@ import {
   boardToTable, tableToBoard, holeOnTable, boardGroups,
 } from '../../sim/parts.js';
 import { TARGET } from '../../sim/target.js';
+import { SCREENS } from '../../core/screens.js';
 
 // The simulator's rules (which holes are joined, what a wire reaches) all
 // rest on these tables, so what they promise is pinned down here.
@@ -113,4 +114,18 @@ test('joined boards are one group, and only the given joins count', () => {
   assert.deepEqual(groups([
     bb1, { id: 'bb2', x: 0, z: 21, rot: 0 }, { id: 'bb3', x: 0, z: 42, rot: 0 },
   ]), [['bb1', 'bb2', 'bb3']]);
+});
+
+test('every model in the table is a part, with its pins in silk order', () => {
+  for (const model of SCREENS) {
+    const def = PARTS[`screen-${model.id}`];
+    assert.ok(def, model.id);
+    assert.equal(def.label, model.label);
+    assert.equal(def.prefix, 'scr');
+    assert.equal(def.onBoard, true);
+    assert.deepEqual(def.pins.map((p) => p.name), model.pins.map((p) => p.silk));
+    assert.deepEqual(def.pins.map((p) => p.x), model.pins.map((_, i) => i));
+    assert.ok(def.pins.every((p) => p.y === 0));
+    assert.deepEqual(def.pins.map((p) => p.role), model.pins.map((p) => p.role));
+  }
 });

@@ -18,21 +18,72 @@
       "vcc": "5v",
       "round": false,
       "verified": false,
+      "blDefault": "off",
+      "pcb": {
+        "w": 72,
+        "d": 52
+      },
+      "glass": {
+        "w": 50,
+        "d": 37
+      },
       "pins": [
-        { "silk": "VCC", "role": "VCC" },
-        { "silk": "GND", "role": "GND" },
-        { "silk": "CS", "role": "CS" },
-        { "silk": "RESET", "role": "RST" },
-        { "silk": "DC", "role": "DC" },
-        { "silk": "SDI(MOSI)", "role": "MOSI" },
-        { "silk": "SCK", "role": "SCK" },
-        { "silk": "LED", "role": "BL" },
-        { "silk": "SDO(MISO)", "role": "MISO" },
-        { "silk": "T_CLK", "role": "NC" },
-        { "silk": "T_CS", "role": "NC" },
-        { "silk": "T_DIN", "role": "NC" },
-        { "silk": "T_DO", "role": "NC" },
-        { "silk": "T_IRQ", "role": "NC" }
+        {
+          "silk": "VCC",
+          "role": "VCC"
+        },
+        {
+          "silk": "GND",
+          "role": "GND"
+        },
+        {
+          "silk": "CS",
+          "role": "CS"
+        },
+        {
+          "silk": "RESET",
+          "role": "RST"
+        },
+        {
+          "silk": "DC",
+          "role": "DC"
+        },
+        {
+          "silk": "SDI(MOSI)",
+          "role": "MOSI"
+        },
+        {
+          "silk": "SCK",
+          "role": "SCK"
+        },
+        {
+          "silk": "LED",
+          "role": "BL"
+        },
+        {
+          "silk": "SDO(MISO)",
+          "role": "MISO"
+        },
+        {
+          "silk": "T_CLK",
+          "role": "NC"
+        },
+        {
+          "silk": "T_CS",
+          "role": "NC"
+        },
+        {
+          "silk": "T_DIN",
+          "role": "NC"
+        },
+        {
+          "silk": "T_DO",
+          "role": "NC"
+        },
+        {
+          "silk": "T_IRQ",
+          "role": "NC"
+        }
       ]
     },
     {
@@ -53,21 +104,72 @@
       "vcc": "5v",
       "round": false,
       "verified": false,
+      "blDefault": "off",
+      "pcb": {
+        "w": 86,
+        "d": 50
+      },
+      "glass": {
+        "w": 58,
+        "d": 43
+      },
       "pins": [
-        { "silk": "VCC", "role": "VCC" },
-        { "silk": "GND", "role": "GND" },
-        { "silk": "LCD_CS", "role": "CS" },
-        { "silk": "LCD_RST", "role": "RST" },
-        { "silk": "LCD_RS", "role": "DC" },
-        { "silk": "SDI", "role": "MOSI" },
-        { "silk": "SCK", "role": "SCK" },
-        { "silk": "LED", "role": "BL" },
-        { "silk": "SDO", "role": "MISO" },
-        { "silk": "CTP_SCL", "role": "NC" },
-        { "silk": "CTP_RST", "role": "NC" },
-        { "silk": "CTP_SDA", "role": "NC" },
-        { "silk": "CTP_INT", "role": "NC" },
-        { "silk": "SD_CS", "role": "SD_CS" }
+        {
+          "silk": "VCC",
+          "role": "VCC"
+        },
+        {
+          "silk": "GND",
+          "role": "GND"
+        },
+        {
+          "silk": "LCD_CS",
+          "role": "CS"
+        },
+        {
+          "silk": "LCD_RST",
+          "role": "RST"
+        },
+        {
+          "silk": "LCD_RS",
+          "role": "DC"
+        },
+        {
+          "silk": "SDI",
+          "role": "MOSI"
+        },
+        {
+          "silk": "SCK",
+          "role": "SCK"
+        },
+        {
+          "silk": "LED",
+          "role": "BL"
+        },
+        {
+          "silk": "SDO",
+          "role": "MISO"
+        },
+        {
+          "silk": "CTP_SCL",
+          "role": "NC"
+        },
+        {
+          "silk": "CTP_RST",
+          "role": "NC"
+        },
+        {
+          "silk": "CTP_SDA",
+          "role": "NC"
+        },
+        {
+          "silk": "CTP_INT",
+          "role": "NC"
+        },
+        {
+          "silk": "SD_CS",
+          "role": "SD_CS"
+        }
       ]
     },
     {
@@ -88,15 +190,48 @@
       "vcc": "3v3",
       "round": false,
       "verified": false,
+      "blDefault": "on",
+      "pcb": {
+        "w": 58,
+        "d": 35
+      },
+      "glass": {
+        "w": 41,
+        "d": 31
+      },
       "pins": [
-        { "silk": "GND", "role": "GND" },
-        { "silk": "VCC", "role": "VCC" },
-        { "silk": "SCL", "role": "SCK" },
-        { "silk": "SDA", "role": "MOSI" },
-        { "silk": "RES", "role": "RST" },
-        { "silk": "DC", "role": "DC" },
-        { "silk": "CS", "role": "CS" },
-        { "silk": "BLK", "role": "BL" }
+        {
+          "silk": "GND",
+          "role": "GND"
+        },
+        {
+          "silk": "VCC",
+          "role": "VCC"
+        },
+        {
+          "silk": "SCL",
+          "role": "SCK"
+        },
+        {
+          "silk": "SDA",
+          "role": "MOSI"
+        },
+        {
+          "silk": "RES",
+          "role": "RST"
+        },
+        {
+          "silk": "DC",
+          "role": "DC"
+        },
+        {
+          "silk": "CS",
+          "role": "CS"
+        },
+        {
+          "silk": "BLK",
+          "role": "BL"
+        }
       ]
     },
     {
@@ -117,14 +252,44 @@
       "vcc": "3v3",
       "round": false,
       "verified": false,
+      "blDefault": "on",
+      "pcb": {
+        "w": 31,
+        "d": 39
+      },
+      "glass": {
+        "w": 24,
+        "d": 24
+      },
       "pins": [
-        { "silk": "GND", "role": "GND" },
-        { "silk": "VCC", "role": "VCC" },
-        { "silk": "SCL", "role": "SCK" },
-        { "silk": "SDA", "role": "MOSI" },
-        { "silk": "RES", "role": "RST" },
-        { "silk": "DC", "role": "DC" },
-        { "silk": "BLK", "role": "BL" }
+        {
+          "silk": "GND",
+          "role": "GND"
+        },
+        {
+          "silk": "VCC",
+          "role": "VCC"
+        },
+        {
+          "silk": "SCL",
+          "role": "SCK"
+        },
+        {
+          "silk": "SDA",
+          "role": "MOSI"
+        },
+        {
+          "silk": "RES",
+          "role": "RST"
+        },
+        {
+          "silk": "DC",
+          "role": "DC"
+        },
+        {
+          "silk": "BLK",
+          "role": "BL"
+        }
       ]
     },
     {
@@ -145,15 +310,48 @@
       "vcc": "5v",
       "round": false,
       "verified": false,
+      "blDefault": "off",
+      "pcb": {
+        "w": 57,
+        "d": 35
+      },
+      "glass": {
+        "w": 36,
+        "d": 29
+      },
       "pins": [
-        { "silk": "LED", "role": "BL" },
-        { "silk": "SCK", "role": "SCK" },
-        { "silk": "SDA", "role": "MOSI" },
-        { "silk": "A0", "role": "DC" },
-        { "silk": "RESET", "role": "RST" },
-        { "silk": "CS", "role": "CS" },
-        { "silk": "GND", "role": "GND" },
-        { "silk": "VCC", "role": "VCC" }
+        {
+          "silk": "LED",
+          "role": "BL"
+        },
+        {
+          "silk": "SCK",
+          "role": "SCK"
+        },
+        {
+          "silk": "SDA",
+          "role": "MOSI"
+        },
+        {
+          "silk": "A0",
+          "role": "DC"
+        },
+        {
+          "silk": "RESET",
+          "role": "RST"
+        },
+        {
+          "silk": "CS",
+          "role": "CS"
+        },
+        {
+          "silk": "GND",
+          "role": "GND"
+        },
+        {
+          "silk": "VCC",
+          "role": "VCC"
+        }
       ]
     },
     {
@@ -174,14 +372,44 @@
       "vcc": "3v3",
       "round": true,
       "verified": false,
+      "blDefault": "on",
+      "pcb": {
+        "w": 37,
+        "d": 37
+      },
+      "glass": {
+        "w": 32,
+        "d": 32
+      },
       "pins": [
-        { "silk": "VCC", "role": "VCC" },
-        { "silk": "GND", "role": "GND" },
-        { "silk": "SCL", "role": "SCK" },
-        { "silk": "SDA", "role": "MOSI" },
-        { "silk": "DC", "role": "DC" },
-        { "silk": "CS", "role": "CS" },
-        { "silk": "RST", "role": "RST" }
+        {
+          "silk": "VCC",
+          "role": "VCC"
+        },
+        {
+          "silk": "GND",
+          "role": "GND"
+        },
+        {
+          "silk": "SCL",
+          "role": "SCK"
+        },
+        {
+          "silk": "SDA",
+          "role": "MOSI"
+        },
+        {
+          "silk": "DC",
+          "role": "DC"
+        },
+        {
+          "silk": "CS",
+          "role": "CS"
+        },
+        {
+          "silk": "RST",
+          "role": "RST"
+        }
       ]
     }
   ]

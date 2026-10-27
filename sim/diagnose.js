@@ -78,6 +78,18 @@ const FAULT_TEXT = {
   'pins-shorted': 'Two of GPIO 12 to 15 are joined, so the chips on them hear garbage; separate those wires.',
   'bus-on-rail': 'One of GPIO 12 to 15 is joined to 3V3, 5V or GND, so it is stuck and the chip on it hears nothing; wire that pin to its own signal only.',
   'mics-same-slot': 'Two mics are both wired for the left slot and share the data line, so what the ESP32 hears is noise; take one out, or wire one for the right slot.',
+  'screen-burnt': 'This panel already burnt and stays dead; take it to the bin and wire a fresh one the same way.',
+  'screen-5v': 'This module takes 3V3 at most and its VCC was on 5V, so it burnt; take it to the bin and wire VCC to 3V3.',
+  'screen-unpowered': 'The panel has no power, so it stays black; wire its VCC to 3V3 or 5V, and its GND to GND.',
+  'screen-needs-5v': 'This module has its own regulator and wants 5V on VCC; on 3V3 the panel stays dark.',
+  'screen-backlight': 'The backlight is off, so the glass is dark; wire the backlight pin to 3V3.',
+  'screen-spi-swapped': 'SCK and MOSI are swapped, so the panel is initialised with nonsense and stays white; swap those two wires.',
+  'screen-signal': 'SCK, MOSI, DC or RST is not where the firmware sends it, so the panel never initialises and stays white; check those wires against the diagram.',
+  'screen-cs': 'The panel is not selected: CS goes to GPIO 9, so the firmware never talks to it and the glass stays white.',
+  'screens-mixed': 'Two different screen models are both selected, and the firmware drives one kind of screen at a time; take one off, or wire only one CS to GPIO 9.',
+  'screen-pins-shorted': 'Two of GPIO 8 to 11 and 18 are joined, so the panel hears nonsense and stays white; separate those wires.',
+  'screen-bus-on-rail': 'One of the panel\'s signal pins is held at 3V3, 5V or GND, so it never sees its signal and the glass stays white; give that pin its own wire.',
+  'bl-on-gpio': 'The backlight is on a GPIO, which works but is not how the diagram wires it; the backlight pin belongs on 3V3.',
 };
 
 /**

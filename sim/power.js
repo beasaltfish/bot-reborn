@@ -11,13 +11,16 @@
 // silent beats noise beats quiet beats ok.
 
 import { nets } from './netlist.js';
+import { PARTS } from './parts.js';
+import { screenById } from '../core/screens.js';
 
 /**
  * @typedef {'ok' | 'silent' | 'noise'} Path
+ * @typedef {'off' | 'dark' | 'white' | 'garbage' | 'ready'} ScreenShow
  * @typedef {{ kind: 'mic', path: Path }
  *   | { kind: 'amp', path: Path | 'quiet' }
  *   | { kind: 'speaker', playing: boolean }
- *   | { kind: 'screen', show: 'off' | 'dark' | 'white' | 'garbage' | 'ready' }
+ *   | { kind: 'screen', show: ScreenShow }
  * } PartState
  * @typedef {{
  *   esp: 'ok' | 'brownout' | 'off',
@@ -31,6 +34,8 @@ import { nets } from './netlist.js';
 
 const RAILS = ['esp:3V3', 'esp:5V', 'esp:GND'];
 const BUS = ['esp:GPIO12', 'esp:GPIO13', 'esp:GPIO14', 'esp:GPIO15'];
+/** The panel's own signals, on the pins board.h gives them (multi-screen spec §5.5). */
+const SCREEN_BUS = ['esp:GPIO8', 'esp:GPIO9', 'esp:GPIO10', 'esp:GPIO11', 'esp:GPIO18'];
 
 /** @type {Outcome['mic' | 'amp'][]} */
 const SEVERITY = ['ok', 'quiet', 'noise', 'silent'];
@@ -48,12 +53,14 @@ export function powerOn(b) {
   const mics = b.placed.filter((p) => p.part === 'inmp441');
   const amps = b.placed.filter((p) => p.part === 'max98357a');
   const speakers = b.placed.filter((p) => p.part === 'speaker');
+  const screens = b.placed.filter((p) => p.part.startsWith('screen-'));
 
   /** @type {Record<string, PartState>} */
   const parts = {};
   for (const p of mics) parts[p.id] = { kind: 'mic', path: 'silent' };
   for (const p of amps) parts[p.id] = { kind: 'amp', path: 'silent' };
   for (const p of speakers) parts[p.id] = { kind: 'speaker', playing: false };
+  for (const p of screens) parts[p.id] = { kind: 'screen', show: 'off' };
 
   /** No power at all: every instance is its resting state. */
   if (!b.usb) return { esp: 'off', mic: 'silent', amp: 'silent', burns: [], faults: [], parts, screenModel: null };
@@ -204,5 +211,141 @@ export function powerOn(b) {
     ? /** @type {Outcome['amp']} */ (best(amps.map((p) => /** @type {any} */ (parts[p.id]).path)))
     : 'silent';
 
-  return { esp: 'ok', mic, amp, burns, faults, parts, screenModel: null };
+  /** Screens that got through every rule but the mixed-model one. */
+  /** @type {{ id: string, model: string }[]} */
+  const candidates = [];
+  for (const p of screens) {
+    const id = p.id;
+    const model = screenById(PARTS[p.part].model ?? '');
+    if (!model) continue;
+
+    /** @param {import('../core/screens.js').PinRole} role @returns {string | null} */
+    const pointOf = (role) => {
+      const pin = PARTS[p.part].pins.find((q) => q.role === role);
+      return pin ? `${id}:${pin.name}` : null;
+    };
+    /** @param {import('../core/screens.js').PinRole} role @param {string} target */
+    const on = (role, target) => {
+      const point = pointOf(role);
+      return !!point && n.same(point, target);
+    };
+    /** @param {string} code @param {string[]} points */
+    const fault = (code, points) => faults.push({ code, points });
+
+    /** @type {ScreenShow | null} */
+    let show = null;
+
+    // In order, first hit wins (spec §5.5): the panel cannot do better than
+    // what stopped it here.
+    if (p.burnt) {
+      show = 'off';
+      fault('screen-burnt', [pointOf('VCC') ?? `${id}:VCC`]);
+    } else if (model.vcc === '3v3' && on('VCC', 'esp:5V')) {
+      burns.push(id);
+      show = 'off';
+      fault('screen-5v', [pointOf('VCC') ?? `${id}:VCC`, 'esp:5V']);
+    } else if (!(on('VCC', 'esp:3V3') || on('VCC', 'esp:5V')) || !on('GND', 'esp:GND')) {
+      show = 'off';
+      fault('screen-unpowered', [pointOf('VCC'), pointOf('GND')].filter(/** @returns {p is string} */ (p) => !!p));
+    } else if (model.vcc === '5v' && on('VCC', 'esp:3V3')) {
+      // The regulator on the module drops what is left below what the panel needs.
+      show = 'off';
+      fault('screen-needs-5v', [pointOf('VCC') ?? `${id}:VCC`, 'esp:3V3']);
+    }
+
+    if (show === null) {
+      const bl = pointOf('BL');
+      let lit = true;
+      if (bl) {
+        if (n.same(bl, 'esp:3V3') || n.same(bl, 'esp:5V')) lit = true;
+        else if (n.same(bl, 'esp:GND')) lit = false;
+        else if (n.members(bl).some((q) => /^esp:GPIO\d/.test(q))) {
+          // It works, but nothing in the diagram drives a backlight from a GPIO.
+          lit = true;
+          fault('bl-on-gpio', [bl]);
+        } else {
+          // In a hole on its own, or on the table with no wire: the module's
+          // own pull-up (or lack of one) decides.
+          const floating = !b.wires.some((w) => n.same(w.a, bl))
+            && !n.members(bl).some((q) => q !== bl && !/^bb\d+:/.test(q) && !q.startsWith(`${id}:`));
+          lit = floating && model.blDefault === 'on';
+        }
+      }
+      if (!lit) {
+        show = 'dark';
+        fault('screen-backlight', bl ? [bl] : []);
+      }
+    }
+
+    // A GPIO shared with another GPIO, or held at a rail, never carries the
+    // panel's signal. Being on 3V3 is RST's alternative and GND is CS's, so
+    // those two are not faults.
+    if (show === null) {
+      for (const role of /** @type {const} */ (['SCK', 'MOSI', 'DC', 'RST', 'CS'])) {
+        const point = pointOf(role);
+        if (!point) continue;
+        const group = SCREEN_BUS.filter((g) => n.same(g, point));
+        if (group.length >= 2) {
+          show = 'white';
+          fault('screen-pins-shorted', [...group, point]);
+          break;
+        }
+        const rail = RAILS.find((r) => n.same(point, r));
+        if (rail && !((role === 'RST' && rail === 'esp:3V3') || (role === 'CS' && rail === 'esp:GND'))) {
+          show = 'white';
+          fault('screen-bus-on-rail', [point, rail]);
+          break;
+        }
+      }
+    }
+
+    if (show === null) {
+      if (on('SCK', 'esp:GPIO10') && on('MOSI', 'esp:GPIO11')) {
+        show = 'white';
+        fault('screen-spi-swapped', [pointOf('SCK'), pointOf('MOSI')].filter(/** @returns {p is string} */ (p) => !!p));
+      } else {
+        /** @type {string[]} */
+        const wrong = [];
+        for (const [role, target] of /** @type {const} */ ([
+          ['SCK', 'esp:GPIO11'], ['MOSI', 'esp:GPIO10'], ['DC', 'esp:GPIO8'],
+        ])) {
+          const point = pointOf(role);
+          if (point && !on(role, target)) wrong.push(point);
+        }
+        const rst = pointOf('RST');
+        if (rst && !(on('RST', 'esp:GPIO18') || on('RST', 'esp:3V3'))) wrong.push(rst);
+        if (wrong.length) {
+          show = 'white';
+          fault('screen-signal', wrong);
+        }
+      }
+    }
+
+    if (show === null && pointOf('CS') && !(on('CS', 'esp:GPIO9') || on('CS', 'esp:GND'))) {
+      show = 'white';
+      fault('screen-cs', [pointOf('CS') ?? `${id}:CS`]);
+    }
+
+    if (show === null) candidates.push({ id, model: model.id });
+    else parts[id] = { kind: 'screen', show };
+  }
+
+  // The firmware initialises one kind of panel. Two models on chip select 9
+  // both get orders for a panel they are not, which is a garbled glass.
+  const models = new Set(candidates.map((c) => c.model));
+  /** @type {string | null} */
+  let screenModel = null;
+  if (models.size > 1) {
+    for (const c of candidates) parts[c.id] = { kind: 'screen', show: 'garbage' };
+    const points = candidates.map((c) => {
+      const pin = PARTS[`screen-${c.model}`].pins.find((q) => q.role === 'CS') ?? PARTS[`screen-${c.model}`].pins.find((q) => q.role === 'VCC');
+      return pin ? `${c.id}:${pin.name}` : c.id;
+    });
+    faults.push({ code: 'screens-mixed', points });
+  } else {
+    for (const c of candidates) parts[c.id] = { kind: 'screen', show: 'ready' };
+    if (candidates.length) screenModel = candidates[0].model;
+  }
+
+  return { esp: 'ok', mic, amp, burns, faults, parts, screenModel };
 }

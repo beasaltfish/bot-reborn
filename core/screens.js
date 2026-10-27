@@ -18,6 +18,9 @@ import table from './screens.json' with { type: 'json' };
  *   spiMode: 0 | 3, pclkHz: number,
  *   vcc: '5v' | '3v3',                   // '5v': has its own regulator, 5V is fine; '3v3': 5V burns it
  *   round: boolean, verified: boolean,
+ *   blDefault: 'on' | 'off',             // is the backlight on when its pin is left floating?
+ *   pcb: { w: number, d: number },       // the board, mm
+ *   glass: { w: number, d: number },     // the lit area, mm (a disc when round)
  *   pins: ScreenPin[],                   // header order, as printed on the module
  * }} Screen
  */

@@ -7,7 +7,7 @@
 // goes in, the circuit is judged once, what burns burns, and the bench either
 // comes alive as a body or shows why not. Pulling the plug ends it.
 
-import { emptyBench, load, serialize, swapBurnt } from './bench.js';
+import { emptyBench, load, serialize } from './bench.js';
 import { powerOn } from './power.js';
 import { diagnose, nextHint } from './diagnose.js';
 import { characterChoices, startBody } from './body.js';
@@ -49,11 +49,10 @@ const effects = createEffects(world);
 // A page that was closed with the cable in is not powered when it opens again.
 let bench = { ...load(read(BENCH_KEY)), usb: false };
 const panels = createPanels({
-  hint: () => (bench.placed.some((p) => p.burnt && !p.discarded)
-    ? 'A part burnt out; replace it first.'
+  hint: () => (bench.placed.some((p) => p.burnt)
+    ? 'A part burnt out; drag it to the bin and take a new one from Parts.'
     : nextHint(bench)?.text ?? 'Looks complete — plug in USB.'),
   reset,
-  replace: (id) => setBench(swapBurnt(bench, id)),
   follow: effects.follow,
 });
 
@@ -64,7 +63,6 @@ function setBench(b) {
   world.show(b);
   usb.refresh();
   effects.refresh();
-  panels.burnt(b.placed.filter((p) => p.burnt && !p.discarded).map((p) => p.id));
 }
 
 const hands = attachInteraction(world, () => bench, setBench);
@@ -162,9 +160,9 @@ async function plugIn() {
   bench = { ...bench, usb: true };
   const outcome = powerOn(bench);
   // What burns is marked now, before anything else is shown, so a reload
-  // remembers it; it stays burnt until it is replaced.
+  // remembers it; it stays burnt until the user drops it in the bin.
   if (outcome.burns.length) {
-    bench = { ...bench, placed: bench.placed.map((p) => (outcome.burns.includes(p.id) && !p.discarded ? { ...p, burnt: true } : p)) };
+    bench = { ...bench, placed: bench.placed.map((p) => (outcome.burns.includes(p.id) ? { ...p, burnt: true } : p)) };
   }
   setBench(bench);
   for (const id of outcome.burns) effects.smoke(id);

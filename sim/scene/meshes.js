@@ -401,7 +401,8 @@ const LOOKS = {
  */
 export function buildPart(def, state) {
   if (def.id === 'speaker') return buildSpeaker(state.burnt);
-  const look = LOOKS[def.id];
+  // Screens are drawn from the screen table (Task 7); the fixed parts from LOOKS.
+  const look = LOOKS[/** @type {keyof typeof LOOKS} */ (def.id)];
   const g = new THREE.Group();
   /** @type {Map<string, THREE.Vector3>} */
   const anchors = new Map();

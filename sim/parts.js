@@ -11,20 +11,26 @@
 // to a board and a hole. Two boards can be joined edge to edge, and a part can
 // straddle the seam, so a pin's hole is looked up in table space, not stored.
 
+import { SCREENS } from '../core/screens.js';
+
 /**
  * x,y in pitch units, part-local, the part's origin being its first pin.
  * `wireOnly` pins (a screw terminal) never go into a breadboard hole.
- * @typedef {{ name: string, x: number, y: number, wireOnly?: boolean }} Pin
+ * `role` is what a screen's silk name means ("LED" is BL), so the power rules
+ * can ask for a pin by its job instead of its printing.
+ * @typedef {{ name: string, x: number, y: number, wireOnly?: boolean, role?: import('../core/screens.js').PinRole }} Pin
  */
 
 /**
  * `internal` lists pins the part joins inside itself. `onBoard` false means the
  * part may not be pushed into the breadboard (the speaker); it is wired only.
  * `prefix` is the stem of its instance ids: mic, mic2, mic3…
+ * `model` is the screen table row a screen part is built from.
  * @typedef {{
- *   id: 'esp32' | 'inmp441' | 'max98357a' | 'speaker',
+ *   id: 'esp32' | 'inmp441' | 'max98357a' | 'speaker' | `screen-${string}`,
  *   label: string,
  *   prefix: string,
+ *   model?: string,
  *   size: { w: number, d: number, h: number },
  *   pins: Pin[], internal: string[][],
  *   onBoard: boolean,
@@ -62,8 +68,8 @@ const ESP_PINS = [...espRow(ESP_TOP, 0, espSeen), ...espRow(ESP_BOTTOM, 10, espS
 /** @param {string} base */
 const sameNet = (base) => ESP_PINS.map((p) => p.name).filter((n) => n === base || n.startsWith(`${base}.`));
 
-/** @type {Record<PartDef['id'], PartDef>} */
-export const PARTS = {
+/** @type {Record<string, PartDef>} */
+const FIXED = {
   esp32: {
     id: 'esp32',
     label: 'ESP32-S3',
@@ -113,6 +119,28 @@ export const PARTS = {
     onBoard: false,
   },
 };
+
+/**
+ * One part per screen model, built from the table (multi-screen spec §3): the
+ * pins in the module's own silk order, all in one row, and the physical size
+ * the scene draws. Adding a model to the table adds it here too.
+ * @type {Record<string, PartDef>}
+ */
+const SCREEN_PARTS = Object.fromEntries(SCREENS.map((model) => [`screen-${model.id}`, {
+  // The template literal type is wider than string; the key proves the shape.
+  id: /** @type {PartDef['id']} */ (`screen-${model.id}`),
+  label: model.label,
+  prefix: 'scr',
+  model: model.id,
+  size: { w: model.pcb.w, d: model.pcb.d, h: 3 },
+  pins: model.pins.map((pin, i) => ({ name: pin.silk, x: i, y: 0, role: pin.role })),
+  internal: [],
+  onBoard: true,
+}]));
+
+/** Every part the bench knows: the fixed four, then one per screen model. */
+/** @type {Record<string, PartDef>} */
+export const PARTS = { ...FIXED, ...SCREEN_PARTS };
 
 export const BREADBOARD = /** @type {const} */ ({ cols: 63, rows: 'abcdefghij', rails: ['tp', 'tn', 'bp', 'bn'] });
 
