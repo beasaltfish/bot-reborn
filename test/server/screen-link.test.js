@@ -25,14 +25,24 @@ async function rig(opts = {}) {
   };
 }
 
-/** Connect, say hello, resolve with the first reply (welcome or reject). */
-async function hello(/** @type {string} */ url, protocol = PROTOCOL, token = 'a') {
+/**
+ * Connect, say hello, resolve with the first reply (welcome or reject).
+ * `screen` is left out of the message when undefined: an old firmware's hello.
+ */
+async function hello(/** @type {string} */ url, protocol = PROTOCOL, token = 'a', /** @type {any} */ screen = undefined) {
   const ws = new WebSocket(url);
   /** @type {any[]} */ const texts = [];
   /** @type {Buffer[]} */ const frames = [];
-  ws.on('message', (d, bin) => { if (bin) frames.push(/** @type {Buffer} */ (d)); else texts.push(JSON.parse(String(d))); });
+  ws.on('message', (d, bin) => {
+    if (bin) { frames.push(/** @type {Buffer} */ (d)); return; }
+    const msg = JSON.parse(String(d));
+    texts.push(msg);
+    // A real screen answers pings; without this the watchdog (50 ms here)
+    // hangs up in the middle of a test that waits.
+    if (msg.type === 'ping') ws.send(JSON.stringify({ type: 'pong' }));
+  });
   await new Promise((r) => ws.once('open', r));
-  ws.send(JSON.stringify({ type: 'hello', protocol, token }));
+  ws.send(JSON.stringify({ type: 'hello', protocol, token, ...(screen === undefined ? {} : { screen }) }));
   await until(() => texts.length > 0);
   return { ws, texts, frames };
 }
@@ -52,6 +62,55 @@ test('a screen with a token is welcomed, then gets frames as binary', async () =
   r.link.show('a', () => Buffer.from('jpg'));
   await until(() => s.frames.length === 1);
   assert.equal(s.frames[0].toString(), 'jpg');
+  s.ws.close();
+  r.close();
+});
+
+test('a hello without a size is a 320×240 screen', async () => {
+  const r = await rig();
+  const s = await hello(r.url);
+  /** @type {string[]} */ const asked = [];
+  r.link.show('a', (size) => { asked.push(size); return Buffer.from(size); });
+  assert.deepEqual(asked, ['320x240'], 'the old firmware sends no screen field');
+  await until(() => s.frames.length === 1);
+  assert.equal(s.frames[0].toString(), '320x240');
+  s.ws.close();
+  r.close();
+});
+
+test('two screens of different sizes each get their own picture', async () => {
+  const r = await rig();
+  const wide = await hello(r.url, PROTOCOL, 'a', { w: 320, h: 240 });
+  const square = await hello(r.url, PROTOCOL, 'a', { w: 240, h: 240 });
+  r.link.show('a', (size) => Buffer.from(size));
+  await until(() => wide.frames.length === 1 && square.frames.length === 1);
+  assert.equal(wide.frames[0].toString(), '320x240');
+  assert.equal(square.frames[0].toString(), '240x240');
+  wide.ws.close(); square.ws.close();
+  r.close();
+});
+
+test('a malformed size is refused', async () => {
+  const r = await rig();
+  const bad = [{ w: '320', h: 240 }, { w: 0, h: 240 }, { w: 320 }, [320, 240], { w: 4096, h: 240 }];
+  for (const screen of bad) {
+    const s = await hello(r.url, PROTOCOL, 'a', screen);
+    assert.deepEqual(s.texts[0], { type: 'reject', reason: 'screen' }, JSON.stringify(screen));
+    s.ws.close();
+  }
+  assert.equal(r.link.count('a'), 0);
+  r.close();
+});
+
+test('a size with no frames stays connected, blank, and is logged once', async () => {
+  const r = await rig();
+  const s = await hello(r.url, PROTOCOL, 'a', { w: 480, h: 320 });
+  assert.deepEqual(s.texts[0], { type: 'welcome', name: 'n-a' });
+  for (let i = 0; i < 5; i++) r.link.show('a', () => undefined);
+  await new Promise((res) => setTimeout(res, 100));
+  assert.equal(s.frames.length, 0);
+  assert.equal(r.link.count('a'), 1, 'the screen is not disconnected');
+  assert.equal(r.logged.filter((l) => l.includes('480x320')).length, 1, 'one line, not one per frame');
   s.ws.close();
   r.close();
 });

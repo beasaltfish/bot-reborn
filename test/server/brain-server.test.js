@@ -116,14 +116,22 @@ test('a dry-run character answers a body with no car, and only the brain sees th
   await server.close();
 });
 
-/** A screen client: hello, then collect binary frames. @param {number} port @param {string} token */
-async function screen(port, token) {
+/**
+ * A screen client: hello, then collect binary frames.
+ * @param {number} port @param {string} token @param {{ w: number, h: number }} [size]
+ */
+async function screen(port, token, size = undefined) {
   const ws = new WebSocket(`ws://127.0.0.1:${port}${SCREEN_PATH}`);
   /** @type {any[]} */ const texts = [];
   /** @type {Buffer[]} */ const frames = [];
-  ws.on('message', (d, bin) => { if (bin) frames.push(/** @type {Buffer} */ (d)); else texts.push(JSON.parse(String(d))); });
+  ws.on('message', (d, bin) => {
+    if (bin) { frames.push(/** @type {Buffer} */ (d)); return; }
+    const msg = JSON.parse(String(d));
+    texts.push(msg);
+    if (msg.type === 'ping') ws.send(JSON.stringify({ type: 'pong' }));
+  });
   await new Promise((r) => ws.once('open', r));
-  ws.send(JSON.stringify({ type: 'hello', protocol: PROTOCOL, token }));
+  ws.send(JSON.stringify({ type: 'hello', protocol: PROTOCOL, token, ...(size === undefined ? {} : { screen: size }) }));
   return { ws, texts, frames };
 }
 
@@ -135,7 +143,10 @@ test('/screen is taken by the screen link, welcomes a token, and streams the pet
     makeEars: () => onceEars(), log: () => {},
     petFrames: new Map([['idle', {
       fps: 10, loop: true, count: 2,
-      bySize: new Map([['320x240', [Buffer.from('i0'), Buffer.from('i1')]]]),
+      bySize: new Map([
+        ['320x240', [Buffer.from('i0'), Buffer.from('i1')]],
+        ['240x240', [Buffer.from('j0'), Buffer.from('j1')]],
+      ]),
     }]]),
   });
   const port = await server.listen(0);
@@ -150,6 +161,31 @@ test('/screen is taken by the screen link, welcomes a token, and streams the pet
   assert.equal(s.frames[0].toString(), 'i0');
   assert.deepEqual(b.msgs[0], { type: 'welcome', name: 'a' });
   b.ws.close(); s.ws.close();
+  await server.close();
+});
+
+test('two screens of one character each get their own size', async () => {
+  const chars = tempCharacters();
+  const a = chars.add('a', (cfg) => { cfg.body.motion = 'pet'; });
+  const server = createBrainServer({
+    dir: chars.dir, fetch: fakeFetch(), sfx: new Map(), earcons: renderEarcons(),
+    makeEars: () => onceEars(), log: () => {},
+    petFrames: new Map([['idle', {
+      fps: 10, loop: true, count: 2,
+      bySize: new Map([
+        ['320x240', [Buffer.from('i0'), Buffer.from('i1')]],
+        ['240x240', [Buffer.from('j0'), Buffer.from('j1')]],
+      ]),
+    }]]),
+  });
+  const port = await server.listen(0);
+  const wide = await screen(port, a.token, { w: 320, h: 240 });
+  const square = await screen(port, a.token, { w: 240, h: 240 });
+  const b = await body(port, a.token);
+  await until(() => wide.frames.length > 0 && square.frames.length > 0);
+  assert.equal(wide.frames[0].toString(), 'i0');
+  assert.equal(square.frames[0].toString(), 'j0', 'the same frame, in the square screen\'s own size');
+  b.ws.close(); wide.ws.close(); square.ws.close();
   await server.close();
 });
 
