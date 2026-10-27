@@ -31,13 +31,17 @@ const num = (/** @type {number} */ n) => Math.round(n * 10) / 10;
 /** Scales need more than one decimal: 0.7375 and 0.7 are visibly different. */
 const num4 = (/** @type {number} */ n) => Math.round(n * 10000) / 10000;
 
-// The dog and cushion, measured over every frame of every animation, as half
-// extents about the middle of the 320×240 scene (x 48..275, y 43..225), plus
-// 2 px so a tail tip at full wag cannot touch the glass's edge. A round screen
-// only shows the inscribed circle, so that circle has to hold this box.
-const CONTENT_HALF_W = 118;
-const CONTENT_HALF_H = 108;
-const CONTENT_RADIUS = Math.hypot(CONTENT_HALF_W, CONTENT_HALF_H);
+// The dog and cushion, measured over every frame of every animation: x 48..275,
+// y 43..225 of the 320×240 scene. A round screen only shows the inscribed
+// circle, so the round fit centres on this box rather than on the scene (the
+// dog sits low in its scene, and centring the scene left the sky empty).
+const CONTENT_CX = (48 + 275) / 2;
+const CONTENT_CY = (43 + 225) / 2;
+// The radius the content needs about that centre. Not the box's corner
+// distance: the box's corners are empty air (the cushion is an ellipse, the
+// head is round). The pixel test fails below ~131; 133 leaves a little for
+// art changes. That test, not this number, is what actually guards it.
+const CONTENT_RADIUS = 133;
 
 /**
  * Map the 320×240 scene into a w×h canvas: scale s, then shift by (dx, dy).
@@ -46,11 +50,13 @@ const CONTENT_RADIUS = Math.hypot(CONTENT_HALF_W, CONTENT_HALF_H);
  * @returns {{ scale: number, dx: number, dy: number }}
  */
 export function fitDog(w, h, round) {
-  const scale = round
-    // 2 px of margin: an anti-aliased ear must not reach the circle's edge.
-    ? (Math.min(w, h) / 2 - 2) / CONTENT_RADIUS
-    : Math.min(w / W, h / H);
-  return { scale, dx: (w - W * scale) / 2, dy: (h - H * scale) / 2 };
+  if (!round) {
+    const scale = Math.min(w / W, h / H);
+    return { scale, dx: (w - W * scale) / 2, dy: (h - H * scale) / 2 };
+  }
+  // 2 px of margin: an anti-aliased ear must not reach the circle's edge.
+  const scale = (Math.min(w, h) / 2 - 2) / CONTENT_RADIUS;
+  return { scale, dx: w / 2 - CONTENT_CX * scale, dy: h / 2 - CONTENT_CY * scale };
 }
 
 /**
