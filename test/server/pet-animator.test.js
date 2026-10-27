@@ -188,3 +188,26 @@ test('a manifest from before screen sizes is refused with one line saying how to
   assert.equal(logged.length, 1);
   assert.match(logged[0], /npm run pet:render/);
 });
+
+test('with no logger, the missing-frames hint still reaches the console', () => {
+  // main.js loads the frames with no logger of its own. If the default were a
+  // no-op, the one line a person needs — "run npm run pet:render" — would be
+  // written into nothing, and the brain would just show a blank screen.
+  const dir = mkdtempSync(join(tmpdir(), 'pet-frames-'));
+  mkdirSync(join(dir, 'idle'), { recursive: true });
+  writeFileSync(join(dir, 'idle', '000.jpg'), 'a');
+  writeFileSync(join(dir, 'manifest.json'), JSON.stringify({
+    width: 320, height: 240,
+    anims: { idle: { fps: 8, loop: true, frames: 1 } },
+  }));
+  /** @type {string[]} */ const said = [];
+  const real = console.log;
+  console.log = (/** @type {any[]} */ ...args) => { said.push(args.join(' ')); };
+  try {
+    loadPetFrames(dir);
+  } finally {
+    console.log = real;
+  }
+  assert.equal(said.length, 1);
+  assert.match(said[0], /npm run pet:render/);
+});

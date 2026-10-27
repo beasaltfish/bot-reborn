@@ -27,7 +27,10 @@ const framePath = (name, i) => join(name, `${String(i).padStart(3, '0')}.jpg`);
  * @param {(line: string) => void} [log]
  * @returns {PetFrames}
  */
-export function loadPetFrames(dir, log = () => {}) {
+// The default logger is the console, not a no-op: server/main.js loads the
+// frames without one, and the line that says "run npm run pet:render" is the
+// only thing that turns a blank screen into a fix.
+export function loadPetFrames(dir, log = console.log) {
   /** @type {PetFrames} */ const frames = new Map();
   /** @type {any} */
   let manifest;
