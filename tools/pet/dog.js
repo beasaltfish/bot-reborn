@@ -23,18 +23,45 @@ const COLLAR = '#c65b48';
 const TAG = '#f5c451';
 const CUSHION = '#d98a6a';
 const CUSHION_DARK = '#b96a4f';
-const BG = '#cfe6d8';
-const FLOOR = '#b9d8c5';
+export const BG = '#cfe6d8';
+export const FLOOR = '#b9d8c5';
 
 const lerp = (/** @type {number} */ a, /** @type {number} */ b, /** @type {number} */ t) => a + (b - a) * t;
 const num = (/** @type {number} */ n) => Math.round(n * 10) / 10;
+/** Scales need more than one decimal: 0.7375 and 0.7 are visibly different. */
+const num4 = (/** @type {number} */ n) => Math.round(n * 10000) / 10000;
+
+// The dog and cushion, measured over every frame of every animation, as half
+// extents about the middle of the 320×240 scene (x 48..275, y 43..225), plus
+// 2 px so a tail tip at full wag cannot touch the glass's edge. A round screen
+// only shows the inscribed circle, so that circle has to hold this box.
+const CONTENT_HALF_W = 118;
+const CONTENT_HALF_H = 108;
+const CONTENT_RADIUS = Math.hypot(CONTENT_HALF_W, CONTENT_HALF_H);
+
+/**
+ * Map the 320×240 scene into a w×h canvas: scale s, then shift by (dx, dy).
+ * 320×240 must be the identity, so the author's panel is untouched.
+ * @param {number} w @param {number} h @param {boolean} round
+ * @returns {{ scale: number, dx: number, dy: number }}
+ */
+export function fitDog(w, h, round) {
+  const scale = round
+    // 2 px of margin: an anti-aliased ear must not reach the circle's edge.
+    ? (Math.min(w, h) / 2 - 2) / CONTENT_RADIUS
+    : Math.min(w / W, h / H);
+  return { scale, dx: (w - W * scale) / 2, dy: (h - H * scale) / 2 };
+}
 
 /**
  * @param {{ breathe?: number, blink?: number, tail?: number, sit?: number,
  *           paw?: number, turn?: number }} [p]
- * @returns {string} an SVG document, 320×240
+ * @param {{ w: number, h: number, round: boolean }} [size]
+ * @returns {string} an SVG document on that canvas; default 320×240
  */
-export function drawDog(p = {}) {
+export function drawDog(p = {}, size) {
+  const canvas = size ?? { w: W, h: H, round: false };
+  const { scale, dx, dy } = fitDog(canvas.w, canvas.h, canvas.round);
   const breathe = p.breathe ?? 0;
   const blink = p.blink ?? 0;
   const tail = p.tail ?? 0;
@@ -120,9 +147,10 @@ export function drawDog(p = {}) {
       <path d="M ${pawX - 14} ${num(pawY2 - 10)} q 5 5 10 0" stroke="${FUR_DARK}" stroke-width="2" fill="none" stroke-linecap="round"/>
     </g>` : '';
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 240" width="320" height="240">
-  <rect width="320" height="240" fill="${BG}"/>
-  <rect y="176" width="320" height="64" fill="${FLOOR}"/>
+  // Everything that is the same at every size: the cushion and the dog. The
+  // background and the floor are NOT in here — they stretch to the canvas,
+  // and even on a round screen the floor reaches the glass's lower edge.
+  const scene = `
   <ellipse cx="160" cy="196" rx="112" ry="30" fill="${CUSHION_DARK}"/>
   <ellipse cx="160" cy="192" rx="104" ry="26" fill="${CUSHION}"/>
   <ellipse cx="160" cy="190" rx="78" ry="16" fill="#e39c7c"/>
@@ -141,6 +169,22 @@ export function drawDog(p = {}) {
     ${ear(-1)}${ear(1)}
     ${face}
     ${raisedPaw}
+  </g>`;
+
+  // The author's 320×240 panel: byte-for-byte the picture that existed before
+  // other sizes did, with no wrapper group to shift the numbers.
+  if (scale === 1 && dx === 0 && dy === 0) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 240" width="320" height="240">
+  <rect width="320" height="240" fill="${BG}"/>
+  <rect y="176" width="320" height="64" fill="${FLOOR}"/>${scene}
+</svg>`;
+  }
+
+  const floorY = dy + 176 * scale;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${canvas.w} ${canvas.h}" width="${canvas.w}" height="${canvas.h}">
+  <rect width="${canvas.w}" height="${canvas.h}" fill="${BG}"/>
+  <rect y="${num(floorY)}" width="${canvas.w}" height="${num(canvas.h - floorY)}" fill="${FLOOR}"/>
+  <g transform="translate(${num(dx)} ${num(dy)}) scale(${num4(scale)})">${scene}
   </g>
 </svg>`;
 }
