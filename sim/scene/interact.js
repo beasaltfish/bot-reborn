@@ -170,13 +170,14 @@ export function attachInteraction(world, getBench, setBench, opts) {
    *   kind: 'part', id: string, def: import('../parts.js').PartDef, group: THREE.Object3D,
    *   rot: Placed['rot'], home: { pos: THREE.Vector3, rotY: number },
    *   offset: THREE.Vector3, x: number, y: number, lifted: boolean,
-   *   at: { x: number, z: number } | null, raw: { x: number, z: number }, last: PointerEvent,
+   *   at: { x: number, z: number } | null, raw: { x: number, z: number },
+   *   origin: { x: number, z: number }, last: PointerEvent,
    * }} PartDrag
    * @typedef {{
    *   kind: 'board', id: string, group: THREE.Object3D, rot: Placed['rot'], baseRot: Placed['rot'],
    *   home: { pos: THREE.Vector3, rotY: number }, offset: THREE.Vector3,
    *   x: number, y: number, lifted: boolean, at: { x: number, z: number },
-   *   raw: { x: number, z: number }, last: PointerEvent,
+   *   raw: { x: number, z: number }, origin: { x: number, z: number }, last: PointerEvent,
    *   members: { g: THREE.Object3D, pos: THREE.Vector3, rotY: number }[],
    * }} BoardDrag
    * @typedef {{
@@ -533,7 +534,10 @@ export function attachInteraction(world, getBench, setBench, opts) {
     const origin = p.add(d.offset);
     const x = clamp(origin.x, world.tableBounds.x0, world.tableBounds.x1);
     const z = clamp(origin.z, world.tableBounds.z0, world.tableBounds.z1);
-    d.raw = { x, z };
+    // `raw` is where the hand is (the bin is judged there); `origin` is where
+    // the part's origin pin would land.
+    d.raw = { x: p.x, z: p.z };
+    d.origin = { x, z };
     d.at = snapPart(getBench(), d.def, x, z, d.rot);
     if (d.at) {
       d.group.position.set(d.at.x, BOARD_TOP + HOVER, d.at.z);
@@ -588,8 +592,8 @@ export function attachInteraction(world, getBench, setBench, opts) {
       // Loose on the table: inside the table, and clear of everything else.
       const { w, d: dd } = d.def.size;
       const fp = { w: w * MM, d: dd * MM };
-      const cx = clamp(d.raw.x + fp.w / 2, world.tableBounds.x0 + fp.w / 2, world.tableBounds.x1 - fp.w / 2);
-      const cz = clamp(d.raw.z + fp.d / 2, world.tableBounds.z0 + fp.d / 2, world.tableBounds.z1 - fp.d / 2);
+      const cx = clamp(d.origin.x + fp.w / 2, world.tableBounds.x0 + fp.w / 2, world.tableBounds.x1 - fp.w / 2);
+      const cz = clamp(d.origin.z + fp.d / 2, world.tableBounds.z0 + fp.d / 2, world.tableBounds.z1 - fp.d / 2);
       const spot = freeSpot(b, fp, cx, cz, [d.id]);
       at = { x: spot.x - fp.w / 2, z: spot.z - fp.d / 2 };
     }
@@ -675,7 +679,8 @@ export function attachInteraction(world, getBench, setBench, opts) {
     const origin = p.add(d.offset);
     const x = clamp(origin.x, world.tableBounds.x0, world.tableBounds.x1);
     const z = clamp(origin.z, world.tableBounds.z0, world.tableBounds.z1);
-    d.raw = { x, z };
+    d.raw = { x: p.x, z: p.z };
+    d.origin = { x, z };
     d.at = snapBoard(getBench(), d.id, x, z, d.rot);
     const drot = ((d.rot - d.baseRot) + 360) % 360;
     d.group.position.set(d.at.x, d.home.pos.y, d.at.z);
@@ -831,7 +836,7 @@ export function attachInteraction(world, getBench, setBench, opts) {
         home: { pos: group.position.clone(), rotY: group.rotation.y },
         offset: new THREE.Vector3(0, 0, 0),
         x: e.clientX, y: e.clientY, lifted: false,
-        at: { x: bd.x, z: bd.z }, raw: { x: p.x, z: p.z }, last: e, members: [],
+        at: { x: bd.x, z: bd.z }, raw: { x: p.x, z: p.z }, origin: { x: p.x, z: p.z }, last: e, members: [],
       };
       liftBoard(drag);
       carryBoard(drag);
@@ -846,7 +851,8 @@ export function attachInteraction(world, getBench, setBench, opts) {
       kind: 'part', id: added.id, def: PARTS[placed.part], group,
       rot: placed.rot, home: { pos: group.position.clone(), rotY: group.rotation.y },
       offset: new THREE.Vector3(0, 0, 0),
-      x: e.clientX, y: e.clientY, lifted: false, at: placed.at, raw: { x: p.x, z: p.z }, last: e,
+      x: e.clientX, y: e.clientY, lifted: false, at: placed.at, raw: { x: p.x, z: p.z },
+      origin: { x: p.x, z: p.z }, last: e,
     };
     lift(drag);
     carry(drag);
@@ -886,7 +892,7 @@ export function attachInteraction(world, getBench, setBench, opts) {
         home: { pos: group.position.clone(), rotY: group.rotation.y },
         offset: group.position.clone().sub(p).setY(0),
         x: e.clientX, y: e.clientY, lifted: false,
-        at: { x: bd.x, z: bd.z }, raw: { x: bd.x, z: bd.z }, last: e, members: [],
+        at: { x: bd.x, z: bd.z }, raw: { x: bd.x, z: bd.z }, origin: { x: bd.x, z: bd.z }, last: e, members: [],
       };
     } else {
       const placed = /** @type {Placed} */ (getBench().placed.find((p) => p.id === t.id));
@@ -899,10 +905,10 @@ export function attachInteraction(world, getBench, setBench, opts) {
         offset: group.position.clone().sub(p).setY(0),
         x: e.clientX, y: e.clientY, lifted: false,
         at: placed.seated ? { x: placed.at.x, z: placed.at.z } : null,
-        raw: { x: p.x - group.position.x + placed.at.x, z: p.z - group.position.z + placed.at.z },
+        raw: { x: placed.at.x, z: placed.at.z },
+        origin: { x: placed.at.x, z: placed.at.z },
         last: e,
       };
-      drag.raw = { x: placed.at.x, z: placed.at.z };
     }
   }, { capture: true });
 

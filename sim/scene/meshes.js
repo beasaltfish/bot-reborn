@@ -21,24 +21,6 @@ export const BOARD_TOP = 8.5 * MM;
 /** Where the board's middle is, in pitch coordinates; the world's origin sits under it. */
 const BOARD_MID = { x: (BOARD_OUTLINE.x0 + BOARD_OUTLINE.x1) / 2, y: (BOARD_OUTLINE.y0 + BOARD_OUTLINE.y1) / 2 };
 
-/**
- * Breadboard pitch coordinates to world x/z, the board lying in the middle of
- * the table with its first column on the left and its top rail at the back.
- * @param {number} x
- * @param {number} y
- */
-export function boardToWorld(x, y) {
-  return { x: x - BOARD_MID.x, z: y - BOARD_MID.y };
-}
-
-/**
- * @param {number} x
- * @param {number} z
- */
-export function worldToBoard(x, z) {
-  return { x: x + BOARD_MID.x, y: z + BOARD_MID.y };
-}
-
 /** How far a male header's pins reach below the part: they stand the part off the table. */
 const PIN_LEN = 8.5 * MM;
 /** The black plastic collar of a header, one pitch tall. */
