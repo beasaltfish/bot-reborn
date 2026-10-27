@@ -8,6 +8,7 @@
 
 import * as THREE from 'three';
 import { PARTS, BOARD_OUTLINE, holeAt } from '../parts.js';
+import { screenById } from '../../core/screens.js';
 
 /** @typedef {import('../parts.js').PartDef} PartDef */
 
@@ -276,14 +277,17 @@ function holePoints() {
 }
 
 /**
- * The breadboard. The board body is the pickable mesh (named 'breadboard');
- * the holes are one InstancedMesh, a few hundred squares in a single draw call.
+ * The breadboard, in its own coordinates: local (0, 0) is the board's origin,
+ * so the world can stand several of them anywhere by moving and turning this
+ * group (multi-screen spec §5.3). The body is the pickable mesh (named
+ * 'breadboard'); the holes are one InstancedMesh, a few hundred squares in a
+ * single draw call.
  */
 export function buildBreadboard() {
   const g = new THREE.Group();
   const w = BOARD_OUTLINE.x1 - BOARD_OUTLINE.x0;
   const d = BOARD_OUTLINE.y1 - BOARD_OUTLINE.y0;
-  const mid = boardToWorld(BOARD_MID.x, BOARD_MID.y);
+  const mid = { x: BOARD_MID.x, z: BOARD_MID.y };
   const print = texture('breadboard', () => canvasTexture(w, d, 24, (ctx) => {
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, w, d);
@@ -325,10 +329,9 @@ export function buildBreadboard() {
   body.userData = { kind: 'board' };
   g.add(body);
 
-  const holes = boxes(0.62, 0.02, 0.62, mat('matte', 0x3b3934), holePoints().map(({ x, y }) => {
-    const p = boardToWorld(x, y);
-    return { x: p.x, y: BOARD_TOP - 0.012, z: p.z };
-  }));
+  const holes = boxes(0.62, 0.02, 0.62, mat('matte', 0x3b3934), holePoints().map(({ x, y }) => (
+    { x, y: BOARD_TOP - 0.012, z: y }
+  )));
   holes.name = 'holes';
   g.add(holes);
   g.add(contactShadow(w + 6, d + 6, mid.x, 0.02, mid.z + 0.6));
@@ -340,6 +343,133 @@ export function buildBreadboard() {
  * @param {string} name
  */
 const printed = (name) => name.replace(/^GPIO/, '').replace(/\.\d+$/, '');
+
+/**
+ * What the scene keeps for a screen's glass: the canvas the brain's frames are
+ * drawn on, the texture that puts it on the panel, and the look it is showing.
+ * @typedef {{
+ *   canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D,
+ *   texture: THREE.CanvasTexture,
+ * }} ScreenGlass
+ */
+
+/** @param {CanvasRenderingContext2D} ctx @param {number} w @param {number} h */
+function snow(ctx, w, h) {
+  // A panel initialised with the wrong orders: coloured snow, different every frame.
+  const cell = 4;
+  for (let y = 0; y < h; y += cell) {
+    for (let x = 0; x < w; x += cell) {
+      ctx.fillStyle = `rgb(${Math.random() * 256 | 0},${Math.random() * 256 | 0},${Math.random() * 256 | 0})`;
+      ctx.fillRect(x, y, cell, cell);
+    }
+  }
+}
+
+/**
+ * Paint a screen's glass for the look it is in. Unlit on purpose: a panel makes
+ * its own light, so the picture must not be shaded by the bench's sun.
+ * @param {ScreenGlass} scr
+ * @param {'off' | 'dark' | 'white' | 'garbage' | 'ready'} show
+ * @param {ImageBitmap | null} image  the last frame the brain sent, if any
+ */
+export function drawScreen(scr, show, image) {
+  const { canvas, ctx } = scr;
+  const w = canvas.width;
+  const h = canvas.height;
+  ctx.fillStyle = '#05070a';
+  ctx.fillRect(0, 0, w, h);
+  if (show === 'white') {
+    ctx.fillStyle = '#eef1f4';
+    ctx.fillRect(0, 0, w, h);
+  } else if (show === 'garbage') {
+    snow(ctx, w, h);
+  } else if ((show === 'ready' || show === 'dark') && image) {
+    // Dark: the backlight is off, and all that is left is a hint of the picture.
+    ctx.globalAlpha = show === 'dark' ? 0.06 : 1;
+    ctx.drawImage(image, 0, 0, w, h);
+    ctx.globalAlpha = 1;
+  }
+  scr.texture.needsUpdate = true;
+}
+
+/**
+ * A screen module from the table (multi-screen spec §5): its PCB (a disc for a
+ * round one), the glass as a canvas the world paints, one row of header pins
+ * and the silk names. Sizes are the model's own millimetres.
+ * @param {PartDef} def
+ * @param {import('../../core/screens.js').Screen} model
+ * @param {{ onBoard: boolean, burnt: boolean }} state
+ * @returns {{ group: THREE.Group, anchors: Map<string, THREE.Vector3>, screen: ScreenGlass }}
+ */
+export function buildScreen(def, model, state) {
+  const g = new THREE.Group();
+  const w = model.pcb.w * MM;
+  const d = model.pcb.d * MM;
+  const lift = state.onBoard ? COLLAR : PIN_LEN;
+  const cx = (def.pins.length - 1) / 2;
+  // The PCB stands away from its header, which is at the panel's near edge.
+  const cz = d / 2 - 0.5;
+  const pcbColor = state.burnt ? charred(0x1f4d33) : 0x1f4d33;
+  const pcb = mat('matte', pcbColor);
+
+  if (model.round) {
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(w / 2, w / 2, 0.07, 40), pcb);
+    disc.position.set(cx, lift + 0.035, cz);
+    g.add(disc);
+  } else {
+    g.add(box(w, 0.07, d, pcb, cx, lift, cz));
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = model.w;
+  canvas.height = model.h;
+  const ctx = /** @type {CanvasRenderingContext2D} */ (canvas.getContext('2d'));
+  const canvasTex = new THREE.CanvasTexture(canvas);
+  canvasTex.colorSpace = THREE.SRGBColorSpace;
+  canvasTex.anisotropy = 8;
+  const glassW = model.glass.w * MM;
+  const glassD = model.glass.d * MM;
+  const glass = new THREE.Mesh(
+    model.round ? new THREE.CircleGeometry(glassW / 2, 48) : new THREE.PlaneGeometry(glassW, glassD),
+    new THREE.MeshBasicMaterial({ map: canvasTex, toneMapped: false }),
+  );
+  glass.rotation.x = -Math.PI / 2;
+  glass.position.set(cx, lift + 0.08, cz);
+  g.add(glass);
+
+  // The header, and the pads it goes through, exactly where parts.js has them.
+  const legs = def.pins;
+  g.add(boxes(0.78, 0.02, 0.78, mat('metal', GOLD), legs.map((p) => ({ x: p.x, y: lift + 0.07, z: p.y }))));
+  g.add(boxes(0.26, lift, 0.26, mat('metal', GOLD), legs.map((p) => ({ x: p.x, y: 0, z: p.y }))));
+  const silk = texture(`screen:${model.id}`, () => canvasTexture(w, d, 64, (c) => {
+    c.fillStyle = 'rgba(240,240,235,0.92)';
+    label(c, model.label, w / 2, 1.4, 0.5, w - 1);
+    for (const p of legs) label(c, p.name, p.x - (cx - w / 2), d - 1.3, 0.3, 1.6);
+  }));
+  g.add(decal(silk, w, d, cx, lift + 0.075, cz, state.burnt));
+  g.add(contactShadow(w + 2, d + 2, cx, 0.03, cz + 0.4));
+
+  /** @type {Map<string, THREE.Vector3>} */
+  const anchors = new Map();
+  for (const p of legs) anchors.set(p.name, new THREE.Vector3(p.x, lift + 0.09, p.y));
+  return { group: g, anchors, screen: { canvas, ctx, texture: canvasTex } };
+}
+
+/** The bin in the table's right-front corner: a dark open box, fixed furniture. */
+export function buildBin() {
+  const g = new THREE.Group();
+  const m = mat('matte', 0x3a3f45);
+  const w = 14;
+  const h = 6;
+  const wall = 0.8;
+  g.add(box(w, h, wall, m, 0, 0, -w / 2 + wall / 2));
+  g.add(box(w, h, wall, m, 0, 0, w / 2 - wall / 2));
+  g.add(box(wall, h, w - wall * 2, m, -w / 2 + wall / 2, 0, 0));
+  g.add(box(wall, h, w - wall * 2, m, w / 2 - wall / 2, 0, 0));
+  g.add(box(w, 0.3, w, mat('matte', 0x22262a), 0, 0, 0));
+  g.name = 'bin';
+  return g;
+}
 
 /**
  * What differs between the boards with male headers.
@@ -387,6 +517,7 @@ const LOOKS = {
  * @typedef {{
  *   group: THREE.Group,
  *   anchors: Map<string, THREE.Vector3>,
+ *   screen?: ScreenGlass,
  * }} PartMesh
  * `anchors`, in the group's frame: where a wire's end sits on each pin.
  */
@@ -401,7 +532,9 @@ const LOOKS = {
  */
 export function buildPart(def, state) {
   if (def.id === 'speaker') return buildSpeaker(state.burnt);
-  // Screens are drawn from the screen table (Task 7); the fixed parts from LOOKS.
+  // A screen comes from the table's own row: PCB, glass and pins.
+  const model = def.model ? screenById(def.model) : undefined;
+  if (model) return buildScreen(def, model, state);
   const look = LOOKS[/** @type {keyof typeof LOOKS} */ (def.id)];
   const g = new THREE.Group();
   /** @type {Map<string, THREE.Vector3>} */

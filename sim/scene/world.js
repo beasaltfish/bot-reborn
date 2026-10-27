@@ -4,39 +4,38 @@
 // idle bench costs the laptop nothing.
 //
 // Meshes are named so later code can find them without holding references:
-// a part's group is "part:<id>", a wire's "wire:<id>", the board "breadboard".
+// a part's group is "part:<id>", a wire's "wire:<id>", a board's "board:<id>".
 // Each carries userData { kind: 'part' | 'wire' | 'board', id }.
+//
+// Any number of boards and parts, anywhere on the table (multi-screen spec
+// §5.2-5.3): every board is its own mesh at its own place and turn, every part
+// stands at the table position bench.js gives it, and a screen's glass is a
+// canvas the brain's frames are painted onto.
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { PARTS, holeXY } from '../parts.js';
-import { pinPoints } from '../bench.js';
-import { BOARD_TOP, boardToWorld, buildBreadboard, buildPart, buildTable, buildWire, dispose } from './meshes.js';
+import { PARTS, BOARD_OUTLINE, holeXY } from '../parts.js';
+import { pinPoints, isHole } from '../bench.js';
+import { boardToTable } from '../parts.js';
+import {
+  BOARD_TOP, MM, buildBreadboard, buildBin, buildPart, buildTable, buildWire, drawScreen, dispose,
+} from './meshes.js';
 
 /** @typedef {import('../bench.js').Bench} Bench */
 /** @typedef {import('../bench.js').Placed} Placed */
 /** @typedef {'orbit' | 'tilted' | 'top'} ViewMode */
 
-/**
- * Where each kind of part rests when it is not in the board: the origin pin's
- * world x/z. Not stored in the bench (bench.js says so), so moving these
- * moves nobody's saved work. In front of the board, the ESP32 in the middle
- * where the user's own sits, the speaker to its left.
- * @type {Record<import('../parts.js').PartDef['id'], { x: number, z: number }>}
- */
-const TABLE_SLOT = {
-  esp32: { x: -10.5, z: 16 },
-  // Far enough left that the USB plug, pushed into the ESP32, clears it.
-  speaker: { x: -34, z: 15.5 },
-  max98357a: { x: 18, z: 15.5 },
-  inmp441: { x: 29, z: 17.5 },
-};
+/** Where the bin stands: the table's right-front corner, out of the way. */
+const BIN = { x: 98, z: 52, size: 14 };
 
-/** Burnt parts that were swapped out go in a heap behind the board, one after another. */
-const DISCARD = { x: 24, z: -19, step: 9 };
+/** Where things may be put. Big enough for several boards and a lot of parts. */
+const TABLE_BOUNDS = { x0: -120, x1: 120, z0: -70, z1: 70 };
 
-/** The stretch of table the views frame: the board and the slots in front of it. */
-const FRAME = { cx: 0, cz: 5, w: 84, d: 54 };
+/** The opening picture's frame: never smaller than this, whatever is on the table. */
+const FRAME_MIN = { cx: 0, cz: 5, w: 84, d: 54 };
+
+/** How much table to leave around the outermost thing when framing a view. */
+const FRAME_MARGIN = 8;
 
 /**
  * A camera pose the views and the moves between them are described in:
@@ -72,8 +71,11 @@ export function createWorld(canvas) {
   scene.add(sun);
 
   scene.add(buildTable());
-  const board = buildBreadboard();
-  scene.add(board);
+  /** Every board instance's mesh, grouped so a rebuild can prune them. */
+  const boards = new THREE.Group();
+  const bin = buildBin();
+  bin.position.set(BIN.x, 0, BIN.z);
+  scene.add(boards, bin);
 
   const persp = new THREE.PerspectiveCamera(40, 1, 1, 1000);
   const ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, ORTHO_DISTANCE * 2);
@@ -88,7 +90,7 @@ export function createWorld(canvas) {
   controls.addEventListener('start', () => { touched = true; });
 
   /** @type {THREE.Object3D[]} */
-  const pickables = [/** @type {THREE.Object3D} */ (board.getObjectByName('breadboard'))];
+  const pickables = [];
   const parts = new THREE.Group();
   const wires = new THREE.Group();
   scene.add(parts, wires);
@@ -98,6 +100,17 @@ export function createWorld(canvas) {
    * @type {Map<Placed, THREE.Group>}
    */
   let built = new Map();
+  /** @type {Map<string, THREE.Group>} */
+  let builtBoards = new Map();
+  /** The bench as it stands, for framing a view and painting screens. */
+  /** @type {Bench | null} */
+  let current = null;
+  /**
+   * Each screen's look, kept outside the mesh map so a moved part does not
+   * lose the picture it was showing: instance id → look and last frame.
+   * @type {Map<string, { show: import('../power.js').ScreenShow, image: ImageBitmap | null }>}
+   */
+  const screenLook = new Map();
 
   let pending = false;
   /** @type {{ from: Pose, to: Pose, start: number } | null} */
@@ -223,13 +236,48 @@ export function createWorld(canvas) {
     controls.update();
   }
 
+  /**
+   * The stretch of table the views frame: everything on it, with a margin,
+   * and never smaller than the opening picture. Recomputed when a view is
+   * chosen, not while something is being dragged — a camera that chases the
+   * hand is what makes people seasick.
+   * @param {Bench | null} b
+   */
+  function frameOf(b) {
+    let x0 = FRAME_MIN.cx - FRAME_MIN.w / 2;
+    let x1 = FRAME_MIN.cx + FRAME_MIN.w / 2;
+    let z0 = FRAME_MIN.cz - FRAME_MIN.d / 2;
+    let z1 = FRAME_MIN.cz + FRAME_MIN.d / 2;
+    for (const bd of b?.boards ?? []) {
+      const cx = bd.x + (BOARD_OUTLINE.x0 + BOARD_OUTLINE.x1) / 2;
+      const cz = bd.z + (BOARD_OUTLINE.y0 + BOARD_OUTLINE.y1) / 2;
+      let w = BOARD_OUTLINE.x1 - BOARD_OUTLINE.x0;
+      let d = BOARD_OUTLINE.y1 - BOARD_OUTLINE.y0;
+      if (bd.rot === 90 || bd.rot === 270) [w, d] = [d, w];
+      x0 = Math.min(x0, cx - w / 2 - FRAME_MARGIN);
+      x1 = Math.max(x1, cx + w / 2 + FRAME_MARGIN);
+      z0 = Math.min(z0, cz - d / 2 - FRAME_MARGIN);
+      z1 = Math.max(z1, cz + d / 2 + FRAME_MARGIN);
+    }
+    for (const p of b?.placed ?? []) {
+      // A part's footprint runs right and down from its origin pin.
+      const { w, d } = PARTS[p.part].size;
+      x0 = Math.min(x0, p.at.x - FRAME_MARGIN);
+      x1 = Math.max(x1, p.at.x + w * MM + FRAME_MARGIN);
+      z0 = Math.min(z0, p.at.z - FRAME_MARGIN);
+      z1 = Math.max(z1, p.at.z + d * MM + FRAME_MARGIN);
+    }
+    return { cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, w: x1 - x0, d: z1 - z0 };
+  }
+
   /** @param {ViewMode} m @returns {Pose} */
   function poseFor(m) {
-    const fitW = (FRAME.w * 1.06) / aspect;
-    const target = new THREE.Vector3(FRAME.cx, BOARD_TOP, FRAME.cz);
-    if (m === 'top') return { target, polar: 0.0001, azimuth: 0, height: Math.max(FRAME.d * 1.1, fitW), fov: NEAR_ORTHO_FOV, ortho: true };
+    const frame = frameOf(current);
+    const fitW = (frame.w * 1.06) / aspect;
+    const target = new THREE.Vector3(frame.cx, BOARD_TOP, frame.cz);
+    if (m === 'top') return { target, polar: 0.0001, azimuth: 0, height: Math.max(frame.d * 1.1, fitW), fov: NEAR_ORTHO_FOV, ortho: true };
     const polar = THREE.MathUtils.degToRad(m === 'tilted' ? 35 : 55);
-    const height = Math.max(FRAME.d * Math.cos(polar) * 1.25, fitW);
+    const height = Math.max(frame.d * Math.cos(polar) * 1.25, fitW);
     if (m === 'tilted') return { target, polar, azimuth: 0, height, fov: NEAR_ORTHO_FOV, ortho: true };
     return { target, polar, azimuth: THREE.MathUtils.degToRad(-12), height: height * 1.25, fov: 38, ortho: false };
   }
@@ -263,14 +311,15 @@ export function createWorld(canvas) {
    */
   function pointPosition(b, point) {
     const [id, pin] = splitPoint(point);
-    if (id === 'bb') {
+    const bd = b.boards.find((x) => x.id === id);
+    if (bd && isHole(b, point)) {
       // A saved bench may name a hole that no longer exists; skip that wire, don't fail the page.
       let xy;
-      try { xy = holeXY(point); } catch { return null; }
-      const p = boardToWorld(xy.x, xy.y);
+      try { xy = holeXY(pin); } catch { return null; }
+      const p = boardToTable(bd, xy.x, xy.y);
       return new THREE.Vector3(p.x, BOARD_TOP, p.z);
     }
-    const placed = b.placed.find((p) => p.id === id && !p.discarded);
+    const placed = b.placed.find((p) => p.id === id);
     const g = placed && built.get(placed);
     const anchor = g?.userData.anchors.get(pin);
     if (!g || !anchor) return null;
@@ -311,26 +360,52 @@ export function createWorld(canvas) {
 
   /** @param {Bench} b */
   function show(b) {
+    current = b;
+
+    // Boards: one mesh each, standing at its place and turned with its instance.
+    /** @type {Map<string, THREE.Group>} */
+    const nextBoards = new Map();
+    for (const bd of b.boards) {
+      let g = builtBoards.get(bd.id);
+      if (!g) {
+        g = buildBreadboard();
+        g.name = `board:${bd.id}`;
+        const body = g.getObjectByName('breadboard');
+        if (body) body.userData = { kind: 'board', id: bd.id };
+        boards.add(g);
+      }
+      g.position.set(bd.x, 0, bd.z);
+      // Quarter turns clockwise seen from above, as parts.js turns holes.
+      g.rotation.y = -THREE.MathUtils.degToRad(bd.rot);
+      nextBoards.set(bd.id, g);
+    }
+    for (const [id, g] of builtBoards) {
+      if (!nextBoards.has(id)) {
+        boards.remove(g);
+        dispose(g);
+      }
+    }
+    builtBoards = nextBoards;
+
     /** @type {Map<Placed, THREE.Group>} */
     const next = new Map();
-    let heap = 0;
     for (const p of b.placed) {
       let g = built.get(p);
       if (!g) {
         const def = PARTS[p.part];
-        const { group, anchors } = buildPart(def, { onBoard: p.at !== null, burnt: p.burnt });
-        g = group;
+        const made = buildPart(def, { onBoard: p.seated, burnt: p.burnt });
+        g = made.group;
         g.name = `part:${p.id}`;
-        g.userData = { kind: 'part', id: p.id, anchors };
-        if (p.at) markHanging(g, anchors, pinPoints(b, p), def);
-        const at = p.at ? boardToWorld(p.at.x, p.at.y) : p.discarded
-          ? { x: DISCARD.x + DISCARD.step * heap, z: DISCARD.z }
-          : TABLE_SLOT[p.part];
-        g.position.set(at.x, p.at ? BOARD_TOP : 0, at.z);
-        // Quarter turns clockwise seen from above, as bench.js turns the pins.
+        g.userData = { kind: 'part', id: p.id, anchors: made.anchors, screen: made.screen ?? null };
+        if (p.seated) markHanging(g, made.anchors, pinPoints(b, p), def);
         g.rotation.y = -THREE.MathUtils.degToRad(p.rot);
+        if (made.screen) {
+          const look = screenLook.get(p.id);
+          drawScreen(made.screen, look?.show ?? 'off', look?.image ?? null);
+        }
       }
-      if (p.discarded) heap++;
+      // Seated parts sit on the board's top; loose ones on the table.
+      g.position.set(p.at.x, p.seated ? BOARD_TOP : 0, p.at.z);
       next.set(p, g);
     }
     for (const [p, g] of built) {
@@ -357,9 +432,62 @@ export function createWorld(canvas) {
     }
 
     pickables.length = 0;
-    pickables.push(/** @type {THREE.Object3D} */ (board.getObjectByName('breadboard')), ...parts.children, ...wires.children);
+    pickables.push(...boards.children, ...parts.children, ...wires.children);
     requestRender();
   }
+
+  /**
+   * What each screen's glass looks like after power-on: off, dark, white,
+   * garbage or ready for a picture. The look outlives a rebuild of the mesh.
+   * @param {Record<string, import('../power.js').PartState>} states
+   */
+  function screens(states) {
+    for (const p of current?.placed ?? []) {
+      const state = states[p.id];
+      if (!state || state.kind !== 'screen') continue;
+      const look = screenLook.get(p.id) ?? { show: /** @type {const} */ ('off'), image: null };
+      look.show = state.show;
+      screenLook.set(p.id, look);
+      const scr = built.get(p)?.userData.screen;
+      if (scr) drawScreen(scr, look.show, look.image);
+    }
+    requestRender();
+  }
+
+  /**
+   * The brain sent a frame: every screen that is ready shows it. They all get
+   * the same picture, because the firmware drives one panel.
+   * @param {ImageBitmap} img
+   */
+  function paintScreens(img) {
+    let painted = false;
+    for (const [p, g] of built) {
+      const scr = g.userData.screen;
+      const look = screenLook.get(p.id);
+      if (!scr || !look || (look.show !== 'ready' && look.show !== 'dark')) continue;
+      look.image = img;
+      drawScreen(scr, look.show, img);
+      painted = true;
+    }
+    if (painted) requestRender();
+  }
+
+  /** Is this table point over the bin? @param {number} x @param {number} z */
+  function trashAt(x, z) {
+    return Math.abs(x - BIN.x) <= BIN.size / 2 && Math.abs(z - BIN.z) <= BIN.size / 2;
+  }
+
+  // A garbled panel is snow, and snow moves: keep drawing while one exists.
+  tickers.add(() => {
+    let any = false;
+    for (const [p, g] of built) {
+      if (screenLook.get(p.id)?.show !== 'garbage') continue;
+      any = true;
+      const scr = g.userData.screen;
+      if (scr) drawScreen(scr, 'garbage', null);
+    }
+    return any;
+  });
 
   new ResizeObserver(resize).observe(canvas);
   aspect = (canvas.clientWidth || 1) / (canvas.clientHeight || 1);
@@ -369,6 +497,10 @@ export function createWorld(canvas) {
 
   return {
     show,
+    screens,
+    paintScreens,
+    trashAt,
+    tableBounds: TABLE_BOUNDS,
     view,
     requestRender,
     /**
