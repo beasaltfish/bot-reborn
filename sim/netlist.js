@@ -1,14 +1,18 @@
 // Which points of the bench are electrically one: the bench state reduced to
-// nets. Union-find over breadboard strips, pins sitting in holes, the pins a
+// nets. Union-find over each board's strips, pins sitting in holes, the pins a
 // part joins inside itself, and wires. Power-on rules and the hover highlight
 // both read it; neither needs to know how the bench is laid out.
+//
+// Strips belong to a board instance ("bb2:col12-top"), and a part's holes come
+// from pinPoints, so a part straddling two joined boards is joined to a strip
+// on each — no special case (multi-screen spec §5.3).
 
 import { PARTS, BREADBOARD, holeStrip } from './parts.js';
 import { pinPoints } from './bench.js';
 
 /** @typedef {{ netOf(point: string): string, same(a: string, b: string): boolean, members(point: string): string[] }} Nets */
 
-/** Every hole on the board, grouped by strip; built once, the board never changes. */
+/** Every hole of one board, grouped by its local strip; the board never changes. */
 const STRIPS = (() => {
   /** @type {Map<string, string[]>} */
   const strips = new Map();
@@ -17,8 +21,8 @@ const STRIPS = (() => {
     const s = holeStrip(hole);
     strips.set(s, [...(strips.get(s) ?? []), hole]);
   };
-  for (const row of BREADBOARD.rows) for (let c = 1; c <= BREADBOARD.cols; c++) add(`bb:${row}${c}`);
-  for (const rail of BREADBOARD.rails) for (let n = 1; n <= 50; n++) add(`bb:${rail}${n}`);
+  for (const row of BREADBOARD.rows) for (let c = 1; c <= BREADBOARD.cols; c++) add(`${row}${c}`);
+  for (const rail of BREADBOARD.rails) for (let n = 1; n <= 50; n++) add(`${rail}${n}`);
   return [...strips.values()];
 })();
 
@@ -53,10 +57,11 @@ export function nets(b) {
     if (ra !== rc) parent.set(rc, ra);
   };
 
-  for (const holes of STRIPS) for (const h of holes) join(holes[0], h);
+  for (const bd of b.boards) {
+    for (const holes of STRIPS) for (const h of holes) join(`${bd.id}:${holes[0]}`, `${bd.id}:${h}`);
+  }
   for (const placed of b.placed) {
-    // A discarded part is in the bin, not on the bench: it joins nothing.
-    if (placed.discarded) continue;
+    // A burnt part is still plugged in and still conducts; it is only dead.
     for (const { pin, hole } of pinPoints(b, placed)) {
       if (hole) join(hole, pin);
       else if (!parent.has(pin)) parent.set(pin, pin);

@@ -20,9 +20,11 @@
 /**
  * `internal` lists pins the part joins inside itself. `onBoard` false means the
  * part may not be pushed into the breadboard (the speaker); it is wired only.
+ * `prefix` is the stem of its instance ids: mic, mic2, mic3…
  * @typedef {{
  *   id: 'esp32' | 'inmp441' | 'max98357a' | 'speaker',
  *   label: string,
+ *   prefix: string,
  *   size: { w: number, d: number, h: number },
  *   pins: Pin[], internal: string[][],
  *   onBoard: boolean,
@@ -65,6 +67,7 @@ export const PARTS = {
   esp32: {
     id: 'esp32',
     label: 'ESP32-S3',
+    prefix: 'esp',
     size: { w: 70, d: 28, h: 12 },
     pins: ESP_PINS,
     internal: [sameNet('GND'), sameNet('3V3')],
@@ -76,6 +79,7 @@ export const PARTS = {
   inmp441: {
     id: 'inmp441',
     label: 'INMP441 mic',
+    prefix: 'mic',
     size: { w: 14, d: 14, h: 3 },
     pins: [
       { name: 'L/R', x: 0, y: 0 }, { name: 'WS', x: 1, y: 0 }, { name: 'SCK', x: 2, y: 0 },
@@ -87,6 +91,7 @@ export const PARTS = {
   max98357a: {
     id: 'max98357a',
     label: 'MAX98357A amp',
+    prefix: 'amp',
     size: { w: 19, d: 24, h: 8 },
     pins: [
       { name: 'LRC', x: 0, y: 0 }, { name: 'BCLK', x: 1, y: 0 }, { name: 'DIN', x: 2, y: 0 },
@@ -101,6 +106,7 @@ export const PARTS = {
   speaker: {
     id: 'speaker',
     label: 'Speaker',
+    prefix: 'spk',
     size: { w: 40, d: 40, h: 15 },
     pins: [{ name: '+', x: 0, y: 0, wireOnly: true }, { name: '-', x: 2, y: 0, wireOnly: true }],
     internal: [],
