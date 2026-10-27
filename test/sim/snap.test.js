@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { PARTS } from '../../sim/parts.js';
-import { snapPart, snapBoard, freeSpot } from '../../sim/snap.js';
+import { snapPart, snapBoard, freeSpot, partFootprint, spotForNew } from '../../sim/snap.js';
 import { emptyBench, addBoard, addPart, place, pinPoints } from '../../sim/bench.js';
 
 // Where a dropped part or board lands decides which strips it joins, so the
@@ -82,6 +82,52 @@ test('a moved id is not in its own way', () => {
   const b = addPart(emptyBench(), 'inmp441', { x: 0, z: 30 }).bench;
   const id = /** @type {any} */ (b.placed.at(-1)).id;
   assert.deepEqual(freeSpot(b, { w: 4, d: 4 }, 0, 30, [id]), { x: 0, z: 30 });
+});
+
+test('a turned board is in the way where it really lies, not where it would unturned', () => {
+  // Turned a quarter, bb1 at (0, 0) runs from x -18.8..1.8 and z -1.6..63.6.
+  const b = { ...emptyBench(), boards: [{ id: 'bb1', x: 0, z: 0, rot: /** @type {const} */ (90) }], placed: [] };
+  const spot = freeSpot(b, { w: 4, d: 4 }, -10, 30);
+  const onBoard = spot.x + 2 > -18.8 && spot.x - 2 < 1.8 && spot.z + 2 > -1.6 && spot.z - 2 < 63.6;
+  assert.ok(!onBoard, JSON.stringify(spot));
+});
+
+test('a turned part blocks the ground it covers once turned', () => {
+  // The ESP32 is 70 x 28 mm; turned a quarter about its origin pin it lies
+  // along z, to the left of the pin, not along x.
+  const opening = emptyBench();
+  /** @type {Bench} */
+  const b = { ...opening, boards: [], placed: [{ ...opening.placed[0], at: { x: 0, z: 0 }, rot: 90 }] };
+  const fp = partFootprint(PARTS.esp32, 90);
+  assert.ok(Math.abs(fp.w - 28 / 2.54) < 1e-9 && Math.abs(fp.d - 70 / 2.54) < 1e-9, JSON.stringify(fp));
+  assert.ok(fp.dx < 0 && fp.dz > 0, 'the centre is left of and below the pin');
+  const spot = freeSpot(b, { w: 2, d: 2 }, -5, 12);
+  assert.notDeepEqual(spot, { x: -5, z: 12 }, 'that ground is under the turned ESP32');
+});
+
+test('things taken from the bin twice never land on top of each other or the opening parts', () => {
+  let b = emptyBench();
+  for (const kind of /** @type {const} */ (['breadboard', 'breadboard', 'inmp441', 'inmp441'])) {
+    const at = spotForNew(b, kind);
+    b = kind === 'breadboard' ? addBoard(b, at).bench : addPart(b, kind, at).bench;
+  }
+  // Every board and loose part, as a box; no two may overlap.
+  const boxes = [
+    ...b.boards.map((bd) => ({ id: bd.id, x0: bd.x - 1.6, x1: bd.x + 63.6, z0: bd.z - 1.8, z1: bd.z + 18.8 })),
+    ...b.placed.map((p) => {
+      const fp = partFootprint(PARTS[p.part], p.rot);
+      const cx = p.at.x + fp.dx;
+      const cz = p.at.z + fp.dz;
+      return { id: p.id, x0: cx - fp.w / 2, x1: cx + fp.w / 2, z0: cz - fp.d / 2, z1: cz + fp.d / 2 };
+    }),
+  ];
+  for (const [i, a] of boxes.entries()) {
+    for (const c of boxes.slice(i + 1)) {
+      const hit = a.x0 < c.x1 && c.x0 < a.x1 && a.z0 < c.z1 && c.z0 < a.z1;
+      assert.ok(!hit, `${a.id} overlaps ${c.id}`);
+    }
+  }
+  assert.ok(b.boards.every((bd) => Number.isInteger(bd.x) && Number.isInteger(bd.z)), 'boards stay on the hole grid');
 });
 
 /** Keeps the type checker honest about the helper's shape. */

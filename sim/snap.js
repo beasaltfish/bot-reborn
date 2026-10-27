@@ -63,24 +63,40 @@ export function snapBoard(b, id, x, z, rot) {
 }
 
 /**
- * A part's footprint on the table: its board starts at the origin pin, which
- * is its first pin, and runs right and down for its size.
- * @param {import('./bench.js').Placed} p
- * @returns {Box}
+ * A part's footprint, turned as it lies: its size on the table and where its
+ * middle is from the origin pin. The board of a part starts at the origin pin,
+ * which is its first pin, and runs right and down for its size before turning;
+ * turning is about that pin, the same quarter turns pinPoints makes.
+ * @param {PartDef} def @param {Rot} rot
+ * @returns {{ w: number, d: number, dx: number, dz: number }}
  */
-function partBox(p) {
-  const { w, d } = PARTS[p.part].size;
-  return { x0: p.at.x, x1: p.at.x + w * MM, z0: p.at.z, z1: p.at.z + d * MM };
+export function partFootprint(def, rot) {
+  const w = def.size.w * MM;
+  const d = def.size.d * MM;
+  let dx = w / 2;
+  let dz = d / 2;
+  for (let i = 0; i < rot / 90; i++) [dx, dz] = [-dz, dx];
+  const across = rot === 90 || rot === 270;
+  return { w: across ? d : w, d: across ? w : d, dx, dz };
 }
 
-/** @param {import('./parts.js').Board} bd @returns {Box} */
+/** @param {import('./bench.js').Placed} p @returns {Box} */
+function partBox(p) {
+  const fp = partFootprint(PARTS[p.part], p.rot);
+  const cx = p.at.x + fp.dx;
+  const cz = p.at.z + fp.dz;
+  return { x0: cx - fp.w / 2, x1: cx + fp.w / 2, z0: cz - fp.d / 2, z1: cz + fp.d / 2 };
+}
+
+/**
+ * A board's outline on the table, wherever it is turned to: the outline's
+ * corners carried through the same transform its holes go through.
+ * @param {import('./parts.js').Board} bd @returns {Box}
+ */
 function boardBox(bd) {
-  const cx = bd.x + (BOARD_OUTLINE.x0 + BOARD_OUTLINE.x1) / 2;
-  const cz = bd.z + (BOARD_OUTLINE.y0 + BOARD_OUTLINE.y1) / 2;
-  let w = BOARD_OUTLINE.x1 - BOARD_OUTLINE.x0;
-  let d = BOARD_OUTLINE.y1 - BOARD_OUTLINE.y0;
-  if (bd.rot === 90 || bd.rot === 270) [w, d] = [d, w];
-  return { x0: cx - w / 2, x1: cx + w / 2, z0: cz - d / 2, z1: cz + d / 2 };
+  const a = boardToTable(bd, BOARD_OUTLINE.x0, BOARD_OUTLINE.y0);
+  const c = boardToTable(bd, BOARD_OUTLINE.x1, BOARD_OUTLINE.y1);
+  return { x0: Math.min(a.x, c.x), x1: Math.max(a.x, c.x), z0: Math.min(a.z, c.z), z1: Math.max(a.z, c.z) };
 }
 
 /** @param {Box} a @param {Box} b */
@@ -125,4 +141,30 @@ export function freeSpot(b, footprint, x, z, ignore = []) {
     for (const [dx, dz] of ring) if (free(home.x + dx, home.z + dz)) return { x: home.x + dx, z: home.z + dz };
   }
   return home;
+}
+
+/** Where the parts bin puts new things down when nothing says where: in front of the opening bench. */
+const BIN_DROP = { x: 0, z: 40 };
+
+/**
+ * Where a part or board taken from the bin with a click goes: the free spot
+ * nearest the front of the bench, as its origin (multi-screen spec §5.1).
+ * A board's origin stays on the hole grid, so its holes line up with the
+ * other boards'; rounding can nudge it, so the rounded spot is checked again.
+ * @param {Bench} b
+ * @param {import('./parts.js').PartDef['id'] | 'breadboard'} kind
+ * @returns {{ x: number, z: number }}
+ */
+export function spotForNew(b, kind) {
+  if (kind === 'breadboard') {
+    const w = BOARD_OUTLINE.x1 - BOARD_OUTLINE.x0;
+    const d = BOARD_OUTLINE.y1 - BOARD_OUTLINE.y0;
+    const mid = { x: (BOARD_OUTLINE.x0 + BOARD_OUTLINE.x1) / 2, z: (BOARD_OUTLINE.y0 + BOARD_OUTLINE.y1) / 2 };
+    // One pitch of margin, so a rounded origin cannot touch a neighbour.
+    const spot = freeSpot(b, { w: w + 2, d: d + 2 }, BIN_DROP.x, BIN_DROP.z);
+    return { x: Math.round(spot.x - mid.x), z: Math.round(spot.z - mid.z) };
+  }
+  const fp = partFootprint(PARTS[kind], 0);
+  const spot = freeSpot(b, fp, BIN_DROP.x, BIN_DROP.z);
+  return { x: spot.x - fp.dx, z: spot.z - fp.dz };
 }

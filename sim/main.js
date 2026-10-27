@@ -10,7 +10,7 @@
 import { emptyBench, load, serialize, addPart, addBoard } from './bench.js';
 import { powerOn } from './power.js';
 import { PARTS } from './parts.js';
-import { freeSpot } from './snap.js';
+import { spotForNew } from './snap.js';
 import { targetFor } from './target.js';
 import { screenById } from '../core/screens.js';
 import { diagnose, nextHint } from './diagnose.js';
@@ -20,9 +20,6 @@ import { createWorld } from './scene/world.js';
 import { attachInteraction, beginCarry } from './scene/interact.js';
 import { attachUsb } from './scene/usb.js';
 import { createEffects } from './scene/effects.js';
-
-/** Millimetres to pitch units; parts.js gives sizes in mm. */
-const MM = 1 / 2.54;
 
 /** @typedef {import('./scene/world.js').ViewMode} ViewMode */
 
@@ -76,22 +73,15 @@ function setBench(b) {
 }
 
 /**
- * A click on a part in the bin: it lands near the middle of the table, moved
- * off anything already there. Touch screens get the same place a drag would.
+ * A click on a part in the bin: it lands in front of the bench, moved off
+ * anything already there. Touch screens get the same place a drag would.
  * @param {string} part
  */
 function addFromBin(part) {
-  if (part === 'breadboard') {
-    const added = addBoard(bench, { x: 0, z: 24 });
-    setBench(added.bench);
-    return;
-  }
-  const def = PARTS[part];
-  if (!def) return;
-  const fp = { w: def.size.w * MM, d: def.size.d * MM };
-  const spot = freeSpot(bench, fp, 0, 24, []);
-  const added = addPart(bench, /** @type {any} */ (part), { x: spot.x - fp.w / 2, z: spot.z - fp.d / 2 });
-  setBench(added.bench);
+  if (part !== 'breadboard' && !PARTS[part]) return;
+  const kind = /** @type {Parameters<typeof spotForNew>[1]} */ (part);
+  const at = spotForNew(bench, kind);
+  setBench(kind === 'breadboard' ? addBoard(bench, at).bench : addPart(bench, kind, at).bench);
 }
 
 const hands = attachInteraction(world, () => bench, setBench, { say: (text) => panels.status(text) });
