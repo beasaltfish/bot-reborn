@@ -544,18 +544,61 @@ export function buildScreen(def, model, state) {
   return { group: g, anchors, screen: { canvas, ctx, texture: canvasTex } };
 }
 
-/** The bin in the table's right-front corner: a dark open box, fixed furniture. */
+/** The trash-can glyph, white on clear, drawn once: lid, handle, a tapered body with three slats. */
+function binIcon() {
+  return texture('bin-icon', () => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const ctx = /** @type {CanvasRenderingContext2D} */ (c.getContext('2d'));
+    ctx.strokeStyle = ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.lineWidth = 8;
+    ctx.lineCap = ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(26, 34); ctx.lineTo(102, 34); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(50, 33); ctx.lineTo(54, 20); ctx.lineTo(74, 20); ctx.lineTo(78, 33); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(34, 44); ctx.lineTo(41, 110); ctx.lineTo(87, 110); ctx.lineTo(94, 44); ctx.closePath(); ctx.stroke();
+    ctx.lineWidth = 6;
+    for (const x of [52, 64, 76]) { ctx.beginPath(); ctx.moveTo(x, 56); ctx.lineTo(x, 98); ctx.stroke(); }
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  });
+}
+
+/** The bin's wall colours: at rest, and lit while what is held over it would go in. */
+export const BIN_COLORS = { rest: 0x4b525a, take: 0xc8463a };
+
+/**
+ * The bin: an open-topped box with a lip, a trash can on its front and on its
+ * floor (the floor is what the top view sees). Its walls have their own
+ * material, `userData.walls`, so the world can light them while something
+ * that would be thrown away is held over it.
+ */
 export function buildBin() {
   const g = new THREE.Group();
-  const m = mat('matte', 0x3a3f45);
+  const walls = new THREE.MeshLambertMaterial({ color: BIN_COLORS.rest });
   const w = 14;
   const h = 6;
   const wall = 0.8;
-  g.add(box(w, h, wall, m, 0, 0, -w / 2 + wall / 2));
-  g.add(box(w, h, wall, m, 0, 0, w / 2 - wall / 2));
-  g.add(box(wall, h, w - wall * 2, m, -w / 2 + wall / 2, 0, 0));
-  g.add(box(wall, h, w - wall * 2, m, w / 2 - wall / 2, 0, 0));
+  g.add(box(w, h, wall, walls, 0, 0, -w / 2 + wall / 2));
+  g.add(box(w, h, wall, walls, 0, 0, w / 2 - wall / 2));
+  g.add(box(wall, h, w - wall * 2, walls, -w / 2 + wall / 2, 0, 0));
+  g.add(box(wall, h, w - wall * 2, walls, w / 2 - wall / 2, 0, 0));
+  // A lip round the top, a shade lighter, so it reads as a container and not a block.
+  const lip = mat('matte', 0x6a727b);
+  const lw = 1.2;
+  g.add(box(w + 0.6, 0.5, lw, lip, 0, h, -w / 2 + lw / 2 - 0.3));
+  g.add(box(w + 0.6, 0.5, lw, lip, 0, h, w / 2 - lw / 2 + 0.3));
+  g.add(box(lw, 0.5, w - lw * 2 + 0.6, lip, -w / 2 + lw / 2 - 0.3, h, 0));
+  g.add(box(lw, 0.5, w - lw * 2 + 0.6, lip, w / 2 - lw / 2 + 0.3, h, 0));
   g.add(box(w, 0.3, w, mat('matte', 0x22262a), 0, 0, 0));
+  const icon = new THREE.MeshBasicMaterial({ map: binIcon(), transparent: true, depthWrite: false });
+  const floorIcon = new THREE.Mesh(new THREE.PlaneGeometry(8, 8), icon);
+  floorIcon.rotation.x = -Math.PI / 2;
+  floorIcon.position.y = 0.32;
+  const frontIcon = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 4.4), icon);
+  frontIcon.position.set(0, h / 2, w / 2 + 0.02);
+  g.add(floorIcon, frontIcon);
+  g.userData.walls = walls;
   g.name = 'bin';
   return g;
 }

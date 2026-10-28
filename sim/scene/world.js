@@ -18,15 +18,15 @@ import { PARTS, BOARD_OUTLINE, holeXY } from '../parts.js';
 import { pinPoints, isHole } from '../bench.js';
 import { boardToTable } from '../parts.js';
 import {
-  BOARD_TOP, MM, MAT_THICK, buildBreadboard, buildBin, buildMat, buildPart, buildTable, buildWire, drawScreen, dispose,
+  BOARD_TOP, MM, MAT_THICK, BIN_COLORS, buildBreadboard, buildBin, buildMat, buildPart, buildTable, buildWire, drawScreen, dispose,
 } from './meshes.js';
 
 /** @typedef {import('../bench.js').Bench} Bench */
 /** @typedef {import('../bench.js').Placed} Placed */
 /** @typedef {'orbit' | 'tilted' | 'top'} ViewMode */
 
-/** Where the bin stands: the table's right-front corner, out of the way. */
-const BIN = { x: 98, z: 52, size: 14 };
+/** Where the bin stands: at the end of the row of parts, beside the bench, where a hand reaches it. */
+const BIN = { x: 50, z: 20, size: 14 };
 
 /** Where things may be put. Big enough for several boards and a lot of parts. */
 const TABLE_BOUNDS = { x0: -120, x1: 120, z0: -70, z1: 70 };
@@ -272,6 +272,11 @@ export function createWorld(canvas) {
       z0 = Math.min(z0, p.at.z - FRAME_MARGIN);
       z1 = Math.max(z1, p.at.z + d * MM + FRAME_MARGIN);
     }
+    // The bin too: something to throw things into has to be in sight.
+    x0 = Math.min(x0, BIN.x - BIN.size / 2 - FRAME_MARGIN);
+    x1 = Math.max(x1, BIN.x + BIN.size / 2 + FRAME_MARGIN);
+    z0 = Math.min(z0, BIN.z - BIN.size / 2 - FRAME_MARGIN);
+    z1 = Math.max(z1, BIN.z + BIN.size / 2 + FRAME_MARGIN);
     return { cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, w: x1 - x0, d: z1 - z0 };
   }
 
@@ -482,6 +487,64 @@ export function createWorld(canvas) {
     return Math.abs(x - BIN.x) <= BIN.size / 2 && Math.abs(z - BIN.z) <= BIN.size / 2;
   }
 
+  /**
+   * Light the bin while what is held over it would go in ('take'); 'off' and
+   * 'refuse' leave it as it stands (what refuses is said in words instead).
+   * @param {'off' | 'take' | 'refuse'} state
+   */
+  function binHover(state) {
+    const walls = /** @type {THREE.MeshLambertMaterial} */ (bin.userData.walls);
+    walls.color.setHex(state === 'take' ? BIN_COLORS.take : BIN_COLORS.rest);
+    requestRender();
+  }
+
+  /** The bin will not take it: a quick shake, side to side, dying away. */
+  function binShake() {
+    const start = performance.now();
+    tickers.add(function shake(now) {
+      const t = (now - start) / 360;
+      if (t >= 1) {
+        bin.position.x = BIN.x;
+        tickers.delete(shake);
+        return false;
+      }
+      bin.position.x = BIN.x + Math.sin(t * Math.PI * 6) * 0.9 * (1 - t);
+      return true;
+    });
+    requestRender();
+  }
+
+  /**
+   * What was thrown away drops into the bin and shrinks out of sight. A copy
+   * falls, since the bench is redrawn without the thing at once; the copy
+   * shares its meshes' geometry and materials and is only taken off the scene.
+   * @param {THREE.Object3D} thing as it is held, where it is held
+   */
+  function binSwallow(thing) {
+    const ghost = thing.clone(true);
+    ghost.updateMatrixWorld(true);
+    // The size of the thing decides how small it must get to fit the opening.
+    const size = new THREE.Box3().setFromObject(ghost).getSize(new THREE.Vector3());
+    const fit = Math.min(1, (BIN.size * 0.6) / Math.max(size.x, size.z, 1e-6));
+    const from = ghost.position.clone();
+    const to = new THREE.Vector3(BIN.x, 1, BIN.z);
+    const scale0 = ghost.scale.clone();
+    scene.add(ghost);
+    const start = performance.now();
+    tickers.add(function fall(now) {
+      const t = Math.min(1, (now - start) / 260);
+      // Over the opening first, then in: it eases across and drops at the end.
+      const across = 1 - (1 - t) ** 2;
+      ghost.position.set(from.x + (to.x - from.x) * across, from.y + (to.y - from.y) * t * t, from.z + (to.z - from.z) * across);
+      ghost.scale.copy(scale0).multiplyScalar(fit * (1 - 0.7 * t * t) + (1 - fit) * (1 - across));
+      if (t < 1) return true;
+      scene.remove(ghost);
+      tickers.delete(fall);
+      return false;
+    });
+    requestRender();
+  }
+
   // A garbled panel is snow, and snow moves: keep drawing while one exists.
   tickers.add(() => {
     let any = false;
@@ -505,6 +568,9 @@ export function createWorld(canvas) {
     screens,
     paintScreens,
     trashAt,
+    binHover,
+    binShake,
+    binSwallow,
     tableBounds: TABLE_BOUNDS,
     view,
     requestRender,

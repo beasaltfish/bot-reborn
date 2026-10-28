@@ -20,6 +20,7 @@ import { place, moveBoard, trash, addPart, addBoard, addWire, removeWire, pinPoi
 import { nets } from '../netlist.js';
 import { snapPart, snapBoard, freeSpot, partFootprint } from '../snap.js';
 import { BOARD_TOP, buildWire, dispose } from './meshes.js';
+import { thunk, buzz } from './sounds.js';
 
 /** @typedef {import('../bench.js').Bench} Bench */
 /** @typedef {import('../bench.js').Placed} Placed */
@@ -163,6 +164,21 @@ export function attachInteraction(world, getBench, setBench, opts) {
     tip.style.opacity = text ? '1' : '0';
   }
 
+  /**
+   * Held over the bin, or taken off it: the bin lights for what it would
+   * take, and the tip says what letting go there will do.
+   * @param {PartDrag | BoardDrag} d
+   * @param {string | null} away  the tip to go back to off the bin
+   */
+  function hoverBin(d, away) {
+    const over = world.trashAt(d.raw.x, d.raw.z);
+    if (over === Boolean(d.overBin)) return;
+    d.overBin = over;
+    const esp = d.kind === 'part' && d.def.id === 'esp32';
+    world.binHover(!over ? 'off' : esp ? 'refuse' : 'take');
+    say(!over ? away : esp ? 'The ESP32 cannot go in the bin' : 'Let go to throw it away');
+  }
+
   let enabled = true;
 
   /**
@@ -171,7 +187,7 @@ export function attachInteraction(world, getBench, setBench, opts) {
    *   rot: Placed['rot'], home: { pos: THREE.Vector3, rotY: number },
    *   offset: THREE.Vector3, x: number, y: number, lifted: boolean,
    *   at: { x: number, z: number } | null, raw: { x: number, z: number },
-   *   origin: { x: number, z: number }, last: PointerEvent,
+   *   origin: { x: number, z: number }, last: PointerEvent, overBin?: boolean,
    * }} PartDrag
    * @typedef {{
    *   kind: 'board', id: string, group: THREE.Object3D, rot: Placed['rot'], baseRot: Placed['rot'],
@@ -179,7 +195,7 @@ export function attachInteraction(world, getBench, setBench, opts) {
    *   x: number, y: number, lifted: boolean, at: { x: number, z: number },
    *   raw: { x: number, z: number }, origin: { x: number, z: number }, last: PointerEvent,
    *   members: { g: THREE.Object3D, pos: THREE.Vector3, rotY: number }[],
-   *   alone: { g: THREE.Object3D, pos: THREE.Vector3, rotY: number }[],
+   *   alone: { g: THREE.Object3D, pos: THREE.Vector3, rotY: number }[], overBin?: boolean,
    * }} BoardDrag
    * @typedef {{
    *   kind: 'wire', from: string, fromPos: THREE.Vector3, x: number, y: number,
@@ -539,6 +555,7 @@ export function attachInteraction(world, getBench, setBench, opts) {
     // the part's origin pin would land.
     d.raw = { x: p.x, z: p.z };
     d.origin = { x, z };
+    hoverBin(d, 'R to rotate · drop it on the table, or on a board');
     d.at = snapPart(getBench(), d.def, x, z, d.rot);
     if (d.at) {
       d.group.position.set(d.at.x, BOARD_TOP + HOVER, d.at.z);
@@ -577,12 +594,17 @@ export function attachInteraction(world, getBench, setBench, opts) {
     const b = getBench();
     const was = b.placed.find((p) => p.id === d.id);
     if (!was) return;
+    world.binHover('off');
     if (world.trashAt(d.raw.x, d.raw.z)) {
       const after = trash(b, d.id);
       if ('refused' in after) {
         putBack(d);
+        world.binShake();
+        buzz();
         opts.say('The ESP32 stays: it is the only one, and the bench is built around it.');
       } else {
+        world.binSwallow(d.group);
+        thunk();
         setBench(after);
       }
       return;
@@ -686,6 +708,7 @@ export function attachInteraction(world, getBench, setBench, opts) {
     const z = clamp(origin.z, world.tableBounds.z0, world.tableBounds.z1);
     d.raw = { x: p.x, z: p.z };
     d.origin = { x, z };
+    hoverBin(d, null);
     d.at = snapBoard(getBench(), d.id, x, z, d.rot);
     const drot = ((d.rot - d.baseRot) + 360) % 360;
     d.group.position.set(d.at.x, d.home.pos.y, d.at.z);
@@ -732,7 +755,10 @@ export function attachInteraction(world, getBench, setBench, opts) {
    */
   function dropBoard(d, alone) {
     const b = getBench();
+    world.binHover('off');
     if (world.trashAt(d.raw.x, d.raw.z)) {
+      world.binSwallow(d.group);
+      thunk();
       setBench(/** @type {Bench} */ (trash(b, d.id)));
       return;
     }
@@ -809,6 +835,7 @@ export function attachInteraction(world, getBench, setBench, opts) {
 
   /** Let go of whatever is held, changing nothing. */
   function cancel() {
+    world.binHover('off');
     if (drag?.kind === 'part' && drag.lifted) putBack(drag);
     if (drag?.kind === 'board' && drag.lifted) putBoardBack(drag);
     if (drag?.kind === 'wire' && drag.preview) {
