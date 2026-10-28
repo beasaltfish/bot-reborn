@@ -63,6 +63,7 @@ const panels = createPanels({
   follow: effects.follow,
   add: (part) => addFromBin(part),
   carry: (part, e) => beginCarry(/** @type {any} */ (part), e),
+  start: (recipeId, screenId, mode, hooks) => startRun(recipeId, screenId, mode, hooks),
 });
 
 /** @param {import('./bench.js').Bench} b */
@@ -208,7 +209,12 @@ let runner = null;
  */
 function offerBack() {
   if (running || !keptBench(store())) return false;
-  panels.status('This bench was built for you.', { action: { label: 'Back to my bench', run: backToMine } });
+  panels.status('This bench was built for you.', {
+    actions: [
+      { label: 'Back to my bench', run: backToMine },
+      { label: 'Keep this one', run: keepThisOne },
+    ],
+  });
   return true;
 }
 
@@ -223,6 +229,12 @@ function backToMine() {
   dropKept(store());
   running = false;
   recipeOn = null;
+  showLine();
+}
+
+/** Makes the bench on the table the user's own: the kept one is dropped, the line goes. */
+function keepThisOne() {
+  dropKept(store());
   showLine();
 }
 
@@ -377,9 +389,11 @@ function reset() {
  * @param {string} recipeId
  * @param {string | undefined} screenId
  * @param {'watch' | 'step'} mode
+ * @param {{ onSay?(text: string): void, onEnd?(): void }} [hooks] where the
+ *   steps' words go instead of the status line, and when the run is over
  * @returns {{ next(): void, finish(): void, skip(): void, stop(): void } | null}
  */
-export function startRun(recipeId, screenId, mode) {
+export function startRun(recipeId, screenId, mode, hooks = {}) {
   const recipe = RECIPES.find((r) => r.id === recipeId);
   if (!recipe || running) return null;
   if (usb.plugged) {
@@ -399,8 +413,9 @@ export function startRun(recipeId, screenId, mode) {
     world,
     usb,
     hands,
-    say: (text) => panels.status(text),
+    say: (text) => (hooks.onSay ? hooks.onSay(text) : panels.status(text)),
     onDone: () => {
+      hooks.onEnd?.();
       running = false;
       recipeOn = null;
       runner = null;

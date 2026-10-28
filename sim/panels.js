@@ -1,4 +1,4 @@
-// The page around the bench: the buttons (Parts, Wiring diagram, Hint, Reset
+// The page around the bench: the buttons (Wire it for me, Parts, Wiring diagram, Hint, Reset
 // bench), the one-line status at the bottom, the parts bin, the wiring diagram
 // and the character picker that opens when the bench powers up. Plain DOM;
 // what any of it means is main.js's business. A burnt part is not swapped out
@@ -10,6 +10,7 @@
 import { TARGET } from './target.js';
 import { PARTS } from './parts.js';
 import { SCREENS } from '../core/screens.js';
+import { RECIPES, DEFAULT_SCREEN } from './recipes.js';
 
 /** @typedef {{ id: string, name: string, note: string | null }} Choice */
 
@@ -143,6 +144,8 @@ function diagram() {
  *   follow(el: HTMLElement, id: string): void,
  *   add(part: string): void,
  *   carry(part: string, e: PointerEvent): void,
+ *   start(recipeId: string, screenId: string | undefined, mode: 'watch' | 'step',
+ *     hooks: { onSay(text: string): void, onEnd(): void }): { next(): void, finish(): void, skip(): void, stop(): void } | null,
  * }} opts
  */
 export function createPanels(opts) {
@@ -272,6 +275,67 @@ export function createPanels(opts) {
   partsClose.addEventListener('click', () => showParts(false));
   document.body.append(bar, bubble, status, picker, panel, partsPanel);
 
+  // ---- Wire it for me ----
+  const wireBtn = el('button', { type: 'button', class: 'pill' }, ['Wire it for me']);
+  bar.prepend(wireBtn);
+  const recipeBoxes = RECIPES.map((r, i) => {
+    const input = /** @type {HTMLInputElement} */ (el('input', { type: 'radio', name: 'recipe', value: r.id }));
+    if (i === 0) input.setAttribute('checked', '');
+    return input;
+  });
+  const screenSel = el('select', { 'aria-label': 'Screen' }, SCREENS.map((s) => {
+    const o = el('option', { value: s.id }, [s.label]);
+    if (s.id === DEFAULT_SCREEN) o.setAttribute('selected', '');
+    return o;
+  }));
+  const watchBtn = el('button', { type: 'button', class: 'pill' }, ['Watch it']);
+  const stepBtn = el('button', { type: 'button', class: 'pill' }, ['Step by step']);
+  const wireClose = el('button', { type: 'button', class: 'close', 'aria-label': 'Close' }, ['×']);
+  const wirePanel = el('div', { id: 'wire', role: 'dialog', 'aria-label': 'Wire it for me', hidden: '' }, [
+    el('header', {}, [el('h2', {}, ['Wire it for me']), wireClose]),
+    ...RECIPES.map((r, i) => el('label', { class: 'opt' }, [recipeBoxes[i], r.name])),
+    screenSel,
+    el('div', { class: 'go' }, [watchBtn, stepBtn]),
+  ]);
+  const runBar = el('div', { id: 'runbar', role: 'status', hidden: '' });
+  document.body.append(wirePanel, runBar);
+  const chosen = () => recipeBoxes.find((b) => b.checked);
+  const syncScreen = () => { screenSel.hidden = chosen()?.value !== 'screen'; };
+  for (const b of recipeBoxes) b.addEventListener('change', syncScreen);
+  syncScreen();
+  const showWire = (/** @type {boolean} */ on) => { wirePanel.hidden = !on; };
+  wireBtn.addEventListener('click', () => { hideHint(); showParts(false); showDiagram(false); showWire(Boolean(wirePanel.hidden)); });
+  wireClose.addEventListener('click', () => showWire(false));
+
+  /**
+   * The bar while a run is on: the step's words (step by step) and the controls.
+   * @param {'watch' | 'step'} mode
+   */
+  function go(mode) {
+    const id = chosen()?.value;
+    if (!id) return;
+    runBar.replaceChildren();
+    const words = el('span', { class: 'say' });
+    /** @type {ReturnType<typeof opts.start>} */
+    const run = opts.start(id, id === 'screen' ? /** @type {HTMLSelectElement} */ (screenSel).value : undefined, mode, {
+      onSay: (text) => { words.textContent = text; },
+      onEnd: () => { runBar.hidden = true; runBar.replaceChildren(); },
+    });
+    if (!run) return;
+    showWire(false);
+    /** @param {string} label @param {() => void} f */
+    const button = (label, f) => {
+      const b = el('button', { type: 'button', class: 'link' }, [label]);
+      b.addEventListener('click', f);
+      return b;
+    };
+    if (mode === 'step') runBar.append(words, button('Next', run.next), button('Finish', run.finish), button('Stop', run.stop));
+    else runBar.append(button('Skip', run.skip), button('Stop', run.stop));
+    runBar.hidden = false;
+  }
+  watchBtn.addEventListener('click', () => go('watch'));
+  stepBtn.addEventListener('click', () => go('step'));
+
   // ---- Wiring diagram ----
   const showDiagram = (/** @type {boolean} */ on) => { panel.hidden = !on; };
   diagramBtn.addEventListener('click', () => { hideHint(); showParts(false); showDiagram(Boolean(panel.hidden)); });
@@ -306,6 +370,7 @@ export function createPanels(opts) {
   addEventListener('keydown', (e) => {
     if (e.code !== 'Escape') return;
     showDiagram(false);
+    showWire(false);
     hideHint();
     asking(false);
   });
@@ -315,16 +380,19 @@ export function createPanels(opts) {
    * One line at the bottom; null hides it. Text only, except a pointer: a
    * link that opens in a new tab, or an action that runs in place.
    * @param {string | null} text
-   * @param {{ href: string, label: string } | { action: { label: string, run(): void } }} [link]
+   * @param {{ href: string, label: string } | { action: { label: string, run(): void } } | { actions: { label: string, run(): void }[] }} [link]
    */
   function setStatus(text, link) {
     status.hidden = !text;
     status.replaceChildren(text ?? '');
     if (!text || !link) return;
-    if ('action' in link) {
-      const a = el('a', { href: '#', role: 'button' }, [link.action.label]);
-      a.addEventListener('click', (e) => { e.preventDefault(); link.action.run(); });
-      status.append(' ', a);
+    if ('action' in link || 'actions' in link) {
+      const all = 'actions' in link ? link.actions : [link.action];
+      all.forEach((act, i) => {
+        const a = el('a', { href: '#', role: 'button' }, [act.label]);
+        a.addEventListener('click', (e) => { e.preventDefault(); act.run(); });
+        status.append(i ? ' · ' : ' ', a);
+      });
     } else {
       status.append(' ', el('a', { href: link.href, target: '_blank', rel: 'noopener' }, [link.label]));
     }
