@@ -2,7 +2,7 @@
 // apart from the 3D hand code (scene/interact.js) so the tests can reach it
 // without three.js.
 
-import { PARTS, BOARD_OUTLINE, JOIN, boardToTable } from './parts.js';
+import { PARTS, BOARD_OUTLINE, JOIN, boardToTable, holeStrip, stripHoles, holeXY } from './parts.js';
 import { pinPoints } from './bench.js';
 
 /** @typedef {import('./parts.js').PartDef} PartDef */
@@ -111,6 +111,44 @@ const overlaps = (a, b) => a.x0 < b.x1 && b.x0 < a.x1 && a.z0 < b.z1 && b.z0 < a
 export function under(b, x, z) {
   const inside = (/** @type {Box} */ t) => x >= t.x0 && x <= t.x1 && z >= t.z0 && z <= t.z1;
   return { board: b.boards.some((bd) => inside(boardBox(bd))), parts: b.placed.filter((p) => inside(partBox(p))) };
+}
+
+/**
+ * Where a wire meant for a point really ends, the way a hand would have to
+ * do it. A pin of a part lying on the table (or in no hole) takes the wire
+ * itself. A pin seated in a board is under its part, so the wire goes into a
+ * free hole of the same strip, which joins it all the same: not a hole a
+ * seated pin fills, not one under a seated part, not one in `taken` (holes
+ * other wires already use). Of those, the hole farthest from the part, so
+ * the jumper comes out clear of it; the first in board order on a tie, so
+ * the answer never wavers. Null when the strip is full.
+ * @param {Bench} b
+ * @param {string} point a part's pin, 'mic:GND'
+ * @param {Set<string>} [taken] board holes ('bb1:a3') already holding a wire
+ * @returns {string | null}
+ */
+export function wireEnd(b, point, taken = new Set()) {
+  const placed = b.placed.find((p) => point.startsWith(`${p.id}:`));
+  const home = placed?.seated ? pinPoints(b, placed).find((q) => q.pin === point)?.hole : null;
+  if (!placed || !home) return point;
+  const [boardId, local] = [home.slice(0, home.indexOf(':')), home.slice(home.indexOf(':') + 1)];
+  const bd = b.boards.find((x) => x.id === boardId);
+  if (!bd) return point;
+  const used = new Set(b.placed.filter((p) => p.seated).flatMap((p) => pinPoints(b, p).map((q) => q.hole)));
+  const box = partBox(placed);
+  const mid = { x: (box.x0 + box.x1) / 2, z: (box.z0 + box.z1) / 2 };
+  let best = null;
+  let bestD = -1;
+  for (const hole of stripHoles(holeStrip(local))) {
+    const id = `${boardId}:${hole}`;
+    if (used.has(id) || taken.has(id)) continue;
+    const h = holeXY(hole);
+    const w = boardToTable(bd, h.x, h.y);
+    if (under(b, w.x, w.z).parts.some((p) => p.seated)) continue;
+    const d = Math.hypot(w.x - mid.x, w.z - mid.z);
+    if (d > bestD) { best = id; bestD = d; }
+  }
+  return best;
 }
 
 /**

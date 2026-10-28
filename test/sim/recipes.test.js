@@ -4,8 +4,9 @@ import assert from 'node:assert/strict';
 import { emptyBench, pinPoints } from '../../sim/bench.js';
 import { targetFor } from '../../sim/target.js';
 import { powerOn } from '../../sim/power.js';
-import { PARTS, BOARD_OUTLINE, boardToTable } from '../../sim/parts.js';
-import { partFootprint } from '../../sim/snap.js';
+import { PARTS, BOARD_OUTLINE, boardToTable, holeStrip, holeXY } from '../../sim/parts.js';
+import { partFootprint, under } from '../../sim/snap.js';
+import { nets } from '../../sim/netlist.js';
 import { BIN } from '../../sim/layout.js';
 import { SCREENS } from '../../core/screens.js';
 import { RECIPES, DEFAULT_SCREEN, startBench, recipeSteps, applyStep } from '../../sim/recipes.js';
@@ -42,11 +43,53 @@ test('every recipe builds a bench that works', () => {
 
 test('each target wire appears exactly once', () => {
   for (const { name, recipe, screen } of CASES) {
+    const b = build(recipe, screen);
     const steps = recipeSteps(/** @type {any} */ (recipe), screen);
-    const wires = steps.filter((s) => s.kind === 'wire').map((s) => `${s.a} ${s.b}`);
-    const want = targetFor(build(recipe, screen)).map((l) => `${l.a} ${l.b}`);
-    assert.equal(new Set(wires).size, wires.length, name);
-    assert.deepEqual(wires, want, name);
+    const wires = steps.filter((s) => s.kind === 'wire');
+    const want = targetFor(b);
+    assert.equal(wires.length, want.length, name);
+    // Each recipe wire is one target link: the pair of pins it names.
+    const named = wires.map((w) => (w.named ?? []).join(' '));
+    assert.deepEqual(named, want.map((l) => `${l.a} ${l.b}`), name);
+    assert.equal(new Set(named).size, named.length, name);
+    // And the wire really joins them: its ends are on the pins' nets.
+    const n = nets(b);
+    for (const [i, w] of wires.entries()) {
+      assert.ok(n.same(w.a, want[i].a), `${name} ${w.a}`);
+      assert.ok(n.same(w.b, want[i].b), `${name} ${w.b}`);
+      assert.ok(n.same(want[i].a, want[i].b), `${name} ${want[i].a} is joined to ${want[i].b}`);
+    }
+  }
+});
+
+test('every wire end is a place a hand could reach', () => {
+  for (const { name, recipe, screen } of CASES) {
+    const b = build(recipe, screen);
+    const seated = b.placed.filter((p) => p.seated);
+    const filled = new Set(seated.flatMap((p) => pinPoints(b, p).map((q) => q.hole)));
+    const used = new Set();
+    for (const w of recipeSteps(/** @type {any} */ (recipe), screen).filter((s) => s.kind === 'wire')) {
+      for (const [end, pin] of /** @type {[string, string | undefined][]} */ ([[w.a, w.named?.[0]], [w.b, w.named?.[1]]])) {
+        assert.ok(pin, name);
+        const placed = b.placed.find((p) => pin.startsWith(`${p.id}:`));
+        const home = placed && pinPoints(b, placed).find((q) => q.pin === pin)?.hole;
+        if (!home) {
+          assert.equal(end, pin, `${name} ${pin} is loose, so the wire takes it directly`);
+          continue;
+        }
+        const [boardId, local] = home.split(':');
+        const [eb, el] = end.split(':');
+        assert.equal(eb, boardId, `${name} ${end}`);
+        assert.equal(holeStrip(el), holeStrip(local), `${name} ${end} shares ${pin}'s strip`);
+        assert.ok(!filled.has(end), `${name} ${end} holds a pin`);
+        const bd = /** @type {NonNullable<typeof b.boards[0]>} */ (b.boards.find((x) => x.id === eb));
+        const h = holeXY(el);
+        const t = boardToTable(bd, h.x, h.y);
+        assert.ok(!under(b, t.x, t.z).parts.some((p) => p.seated), `${name} ${end} is under a part`);
+        assert.ok(!used.has(end), `${name} ${end} takes two wires`);
+        used.add(end);
+      }
+    }
   }
 });
 

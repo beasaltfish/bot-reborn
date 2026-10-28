@@ -9,6 +9,7 @@ import { targetFor } from './target.js';
 import { JOIN } from './parts.js';
 import { name as pointName } from './diagnose.js';
 import { wireColor } from './wire-color.js';
+import { wireEnd } from './snap.js';
 
 /** @typedef {import('./bench.js').Bench} Bench */
 /** @typedef {import('./parts.js').Rot} Rot */
@@ -17,7 +18,7 @@ import { wireColor } from './wire-color.js';
  * @typedef {{ say: string } & (
  *   | { kind: 'board', id: string, at: At, rot: Rot }
  *   | { kind: 'part', id: string, part: import('./parts.js').PartDef['id'], at: At, rot: Rot, seated: boolean }
- *   | { kind: 'wire', a: string, b: string }
+ *   | { kind: 'wire', a: string, b: string, named?: [string, string] }
  *   | { kind: 'usb' }
  * )} Step
  */
@@ -88,6 +89,8 @@ export function startBench(b) {
 /**
  * The steps that build a working bench, in the order a person would: boards,
  * the ESP32 across them, the other parts, one wire per target link, USB.
+ * Wire steps carry `named`, the pins they stand for, since their ends may be
+ * holes beside a seated pin (which say nothing about power or ground).
  * @param {Recipe['id']} recipeId
  * @param {string} [screenId]
  * @returns {Step[]}
@@ -111,7 +114,20 @@ export function recipeSteps(recipeId, screenId = DEFAULT_SCREEN) {
   // The links depend on which parts stand on the table, so they are asked of
   // the bench the part steps make, not written down twice.
   const parts = steps.reduce(applyStep, startBench(emptyBench()));
-  for (const l of targetFor(parts)) steps.push({ kind: 'wire', a: l.a, b: l.b, say: `${pointName(l.a)} → ${pointName(l.b)}: ${l.why}` });
+  // A pin seated in a board is under its part, so its wire ends in a free hole
+  // of the pin's strip, as a hand's would; each hole takes one wire.
+  /** @type {Set<string>} */
+  const taken = new Set();
+  /** @param {string} point */
+  const end = (point) => {
+    const at = wireEnd(parts, point, taken);
+    if (!at) throw new Error(`no free hole on the strip of ${point}`);
+    taken.add(at);
+    return at;
+  };
+  for (const l of targetFor(parts)) {
+    steps.push({ kind: 'wire', a: end(l.a), b: end(l.b), named: [l.a, l.b], say: `${pointName(l.a)} → ${pointName(l.b)}: ${l.why}` });
+  }
   steps.push({ kind: 'usb', say: 'Plug in USB: the bench has power' });
   return steps;
 }
@@ -136,7 +152,7 @@ export function applyStep(b, s) {
       return place(bench, id, s.at, s.rot, s.seated);
     }
     case 'wire':
-      return addWire(b, s.a, s.b, wireColor(b, s.a, s.b));
+      return addWire(b, s.a, s.b, wireColor(b, ...(s.named ?? [s.a, s.b])));
     case 'usb':
       return { ...b, usb: true };
   }
