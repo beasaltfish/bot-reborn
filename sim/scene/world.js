@@ -20,13 +20,11 @@ import { boardToTable } from '../parts.js';
 import {
   BOARD_TOP, MM, MAT_THICK, BIN_COLORS, buildBreadboard, buildBin, buildMat, buildPart, buildTable, buildWire, drawScreen, dispose,
 } from './meshes.js';
+import { BIN } from '../layout.js';
 
 /** @typedef {import('../bench.js').Bench} Bench */
 /** @typedef {import('../bench.js').Placed} Placed */
 /** @typedef {'orbit' | 'tilted' | 'top'} ViewMode */
-
-/** Where the bin stands: at the end of the row of parts, beside the bench, where a hand reaches it. */
-const BIN = { x: 50, z: 20, size: 14 };
 
 /** Where things may be put. Big enough for several boards and a lot of parts. */
 const TABLE_BOUNDS = { x0: -120, x1: 120, z0: -70, z1: 70 };

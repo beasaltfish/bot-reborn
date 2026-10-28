@@ -18,6 +18,7 @@ import {
 } from '../parts.js';
 import { place, moveBoard, trash, addPart, addBoard, addWire, removeWire, pinPoints, isHole } from '../bench.js';
 import { nets } from '../netlist.js';
+import { wireColor } from '../wire-color.js';
 import { snapPart, snapBoard, freeSpot, partFootprint } from '../snap.js';
 import { BOARD_TOP, buildWire, dispose } from './meshes.js';
 import { thunk, buzz, click, tick, pop } from './sounds.js';
@@ -43,10 +44,6 @@ const DROP_MS = 300;
 const DROP_TILT = 0.2;
 const MAX_MARKERS = 512;
 
-/** Wires that are not power or ground take these in turn, like a bundle of jumpers. */
-const PALETTE = ['#f2c230', '#2e9e57', '#2f6fd0', '#e9782b', '#8b54c9', '#f2f0ea'];
-const RED = '#d23a2e';
-const BLACK = '#1d1d1f';
 
 /** @param {number} t */
 const easeOut = (t) => 1 - (1 - t) ** 3;
@@ -64,36 +61,6 @@ function turnAboutPivot(x, z, rot) {
   let rz = z;
   for (let i = 0; i < rot / 90; i++) [rx, rz] = [-rz, rx];
   return { x: rx, z: rz };
-}
-
-/**
- * What a point carries, by its name: the 3V3/5V pins and the + rails are
- * power, GND and the − rails are ground.
- * @param {string} point
- * @returns {'power' | 'ground' | null}
- */
-function role(point) {
-  const rail = /^[^:]+:(tp|tn|bp|bn)\d+$/.exec(point);
-  if (rail) return rail[1].endsWith('p') ? 'power' : 'ground';
-  const pin = point.slice(point.indexOf(':') + 1).replace(/\.\d+$/, '');
-  if (pin === '3V3' || pin === '5V' || pin === 'VDD' || pin === 'Vin') return 'power';
-  if (pin === 'GND') return 'ground';
-  return null;
-}
-
-/**
- * The colour a new wire gets: red to power, black to ground, as on the real
- * bench, otherwise the next in the bundle.
- * @param {Bench} b
- * @param {string} a
- * @param {string} z
- */
-function wireColor(b, a, z) {
-  const roles = [role(a), role(z)];
-  if (roles.includes('power')) return RED;
-  if (roles.includes('ground')) return BLACK;
-  const signals = b.wires.filter((w) => w.color !== RED && w.color !== BLACK).length;
-  return PALETTE[signals % PALETTE.length];
 }
 
 /**
