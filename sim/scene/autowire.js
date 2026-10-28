@@ -66,19 +66,26 @@ export function runRecipe(o) {
   const wake = () => { for (const w of [...waiting]) w(); };
 
   /**
-   * Seat the step on the bench, then fly its new group from off the left edge
-   * to where the bench put it. The group exists only after setBench, and the
-   * frame that draws it comes after this returns, so it never shows at rest first.
+   * Seat the step on the bench, then carry its group to where the bench put
+   * it: picked up from where it lay if it was already on the table (the ESP32
+   * is), else flown in from off the left edge. The group may be rebuilt by
+   * setBench, so it is looked up before and after. It exists after setBench,
+   * and the frame that draws it comes after this returns, so it never shows
+   * at rest first.
    * @param {Step & { kind: 'board' | 'part' }} s
    */
   function fly(s) {
+    const name = `${s.kind}:${s.id}`;
+    const lay = o.world.scene.getObjectByName(name)?.position.clone();
     o.setBench(applyStep(o.getBench(), s));
-    const group = o.world.scene.getObjectByName(`${s.kind}:${s.id}`);
+    const group = o.world.scene.getObjectByName(name);
     if (!group) return Promise.resolve();
     const to = group.position.clone();
-    const from = to.clone();
-    from.x = o.world.tableBounds.x0 - OFF_LEFT;
-    from.y = to.y + CARRY_Y;
+    const from = lay ?? to.clone();
+    if (!lay) {
+      from.x = o.world.tableBounds.x0 - OFF_LEFT;
+      from.y = to.y + CARRY_Y;
+    }
     group.position.copy(from);
     return new Promise((resolve) => {
       /** @type {number | null} */
@@ -86,7 +93,10 @@ export function runRecipe(o) {
       const off = o.world.onFrame((now) => {
         start ??= now;
         const t = skipping ? 1 : Math.min(1, (now - start) / FLY_MS);
-        group.position.lerpVectors(from, to, easeOut(t));
+        const e = easeOut(t);
+        group.position.lerpVectors(from, to, e);
+        // Lifted from where it lay: up and over by the carry arc, down into its seat.
+        if (lay) group.position.y += CARRY_Y * Math.sin(Math.PI * e);
         if (t < 1) return true;
         off();
         // The click is pins going into a board; a loose part just lands.
