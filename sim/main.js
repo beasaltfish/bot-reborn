@@ -14,8 +14,10 @@ import { spotForNew } from './snap.js';
 import { targetFor } from './target.js';
 import { screenById } from '../core/screens.js';
 import { diagnose, nextHint } from './diagnose.js';
-import { characterChoices, startBody, faultText, adminLink, keepsFault } from './body.js';
-import { keptBench, dropKept } from './keep.js';
+import { characterChoices, chooseCharacter, startBody, faultText, adminLink, keepsFault } from './body.js';
+import { keptBench, keepBench, dropKept } from './keep.js';
+import { RECIPES, startBench, recipeSteps } from './recipes.js';
+import { runRecipe } from './scene/autowire.js';
 import { createPanels } from './panels.js';
 import { createWorld } from './scene/world.js';
 import { attachInteraction, beginCarry } from './scene/interact.js';
@@ -86,7 +88,7 @@ function addFromBin(part) {
 }
 
 const hands = attachInteraction(world, () => bench, setBench, { say: (text) => panels.status(text) });
-const usb = attachUsb(world, { onPlug: (on) => (on ? plugIn() : unplug()), locked: () => starting, bench: () => bench });
+const usb = attachUsb(world, { onPlug: (on) => (on ? plugIn(recipeOn) : unplug()), locked: () => starting, bench: () => bench });
 
 // #view=top opens in that view without saving it: handy for a screenshot.
 const asked = new URLSearchParams(location.hash.slice(1)).get('view');
@@ -166,15 +168,19 @@ let apiFor = '';
 /**
  * What the status line says while plugged in, most important first: why the
  * session ended, a dropped link, what is wrong with the wiring, what the robot is doing.
- * @type {{ end: string | null, lost: boolean, api: string | null, fault: string | null, state: string | null, who: string | null }}
+ * `ending` is what to say to try a bench the simulator built, kept after the state.
+ * @type {{ end: string | null, lost: boolean, api: string | null, fault: string | null, state: string | null, who: string | null, ending: string | null }}
  */
-let line = { end: null, lost: false, api: null, fault: null, state: null, who: null };
+let line = { end: null, lost: false, api: null, fault: null, state: null, who: null, ending: null };
 function showLine() {
   if (line.end) return panels.status(line.end);
   if (line.lost) return panels.status('Reconnecting…');
   if (line.api) return panels.status(line.api, { href: adminLink(apiFor), label: 'open' });
   if (line.fault) return panels.status(line.fault);
-  if (line.state) return panels.status(line.who ? `${line.who} · ${line.state}` : line.state);
+  if (line.state) {
+    const state = line.who ? `${line.who} · ${line.state}` : line.state;
+    return panels.status(line.ending ? `${state} — ${line.ending}` : state);
+  }
   if (!offerBack()) panels.status(null);
 }
 
@@ -183,8 +189,18 @@ function store() {
   try { return localStorage; } catch { return { getItem: () => null, setItem() { throw new Error('blocked'); }, removeItem() { throw new Error('blocked'); } }; }
 }
 
-/** Whether a recipe run is on the table; Task 6 sets it. */
+/** Whether a recipe run is on the table. */
 let running = false;
+/**
+ * What the recipe now being played needs of the character and what to say to
+ * try the result. Read once by the plug-in the run itself causes, so a plug
+ * the user pushes in later chooses a character by hand again.
+ * @type {{ need: 'any' | 'pet', ending: string } | null}
+ */
+let recipeOn = null;
+/** The run's controls while one is on the table. */
+/** @type {ReturnType<typeof runRecipe> | null} */
+let runner = null;
 
 /**
  * Shows the way back to the user's own bench, when one is kept and no run is
@@ -206,10 +222,16 @@ function backToMine() {
   setBench(mine);
   dropKept(store());
   running = false;
+  recipeOn = null;
   showLine();
 }
 
-async function plugIn() {
+/**
+ * @param {{ need: 'any' | 'pet', ending: string } | null} [recipe] set when
+ *   a recipe run plugged in: the character is then chosen for it, not picked by hand
+ */
+async function plugIn(recipe = null) {
+  recipeOn = null;
   const mine = ++plugs;
   bench = { ...bench, usb: true };
   const outcome = powerOn(bench);
@@ -228,11 +250,11 @@ async function plugIn() {
   // After a brown-out the short is the news; a guess about some other wire would mislead.
   const hints = diagnose(bench, outcome);
   const first = outcome.esp === 'brownout' ? hints.find((h) => h.kind === 'fault') : hints[0];
-  line = { end: null, lost: false, api: null, fault: first?.text ?? null, state: null, who: null };
+  line = { end: null, lost: false, api: null, fault: first?.text ?? null, state: null, who: null, ending: null };
   showLine();
   if (outcome.esp !== 'ok') return;
 
-  /** @type {{ id: string, name: string, ready: boolean, online: boolean }[]} */
+  /** @type {{ id: string, name: string, ready: boolean, online: boolean, motion: string | null }[]} */
   let list;
   try {
     const res = await fetch('/api/characters');
@@ -247,10 +269,24 @@ async function plugIn() {
   if (!list.length) {
     return panels.status('No characters on this brain yet —', { href: '/', label: 'set one up on the admin page' });
   }
-  panels.pick(characterChoices(list), {
-    pick: (id, name) => connect(mine, id, name, outcome),
+  const ending = recipe?.ending ?? null;
+  const pickFrom = (/** @type {ReturnType<typeof characterChoices>} */ choices) => panels.pick(choices, {
+    pick: (id, name) => connect(mine, id, name, outcome, ending),
     cancel: () => { usb.pullOut(); unplug(); },
   });
+  if (!recipe) return pickFrom(characterChoices(list));
+  // A recipe knows what it needs, so it does not ask when only one character fits.
+  const chosen = chooseCharacter(list, recipe.need);
+  switch (chosen.kind) {
+    case 'connect': return connect(mine, chosen.id, chosen.name, outcome, ending);
+    case 'pick': return pickFrom(chosen.choices);
+    case 'wrong-body':
+      return panels.status(`${chosen.name} is a ${chosen.motion} body, not a pet — set its body to Pet`, { href: adminLink(chosen.id), label: 'on the admin page' });
+    case 'busy':
+      return panels.status(`${chosen.name} is in use by another body — disconnect it there and plug in again`);
+    case 'none':
+      return panels.status('No pet character yet —', { href: '/', label: 'set one up on the admin page' });
+  }
 }
 
 /**
@@ -258,8 +294,9 @@ async function plugIn() {
  * @param {string} id
  * @param {string} name
  * @param {import('./power.js').Outcome} outcome
+ * @param {string | null} [ending] what to say to try the bench, when a recipe built it
  */
-async function connect(mine, id, name, outcome) {
+async function connect(mine, id, name, outcome, ending = null) {
   if (mine !== plugs) return;
   starting = true;
   line.who = name;
@@ -289,7 +326,7 @@ async function connect(mine, id, name, outcome) {
       onLevel: (up, down) => { if (live()) effects.levels(up, down); },
       onEnd: (msg) => { if (!live()) return; line.end = msg; effects.setAlive(false); showLine(); },
       onLost: () => { if (!live()) return; line.lost = true; showLine(); },
-      onWelcome: () => { if (!live()) return; line.lost = false; if (line.state === 'connecting…') line.state = 'connected'; showLine(); },
+      onWelcome: () => { if (!live()) return; line.lost = false; line.ending = ending; if (line.state === 'connecting…') line.state = 'connected'; showLine(); },
       // The bench's screens connect the way the firmware does, with their own
       // size; a character that is not a pet leaves them black (spec §5.5).
       screen: outcome.screenModel
@@ -312,7 +349,7 @@ function unplug() {
   effects.setAlive(false);
   effects.playing([]);
   effects.led('off');
-  line = { end: null, lost: false, api: null, fault: null, state: null, who: null };
+  line = { end: null, lost: false, api: null, fault: null, state: null, who: null, ending: null };
   showLine();
   bench = { ...bench, usb: false };
   setBench(bench);
@@ -325,6 +362,7 @@ function unplug() {
 }
 
 function reset() {
+  runner?.stop();
   if (usb.plugged) {
     usb.pullOut();
     unplug();
@@ -333,5 +371,47 @@ function reset() {
   try { localStorage.removeItem(BENCH_KEY); } catch { /* nothing saved to clear */ }
 }
 
+/**
+ * Build a working bench on the table, by hand-off to the animated runner. The
+ * user's own bench is kept first (unless it holds no work, or one is already
+ * kept from an earlier run) so Back to my bench can bring it back. A live
+ * session is ended first: the run starts from an unpowered table.
+ * @param {string} recipeId
+ * @param {string | undefined} screenId
+ * @param {'watch' | 'step'} mode
+ * @returns {{ next(): void, finish(): void, skip(): void, stop(): void } | null}
+ */
+export function startRun(recipeId, screenId, mode) {
+  const recipe = RECIPES.find((r) => r.id === recipeId);
+  if (!recipe || running) return null;
+  if (usb.plugged) {
+    usb.pullOut();
+    unplug();
+  }
+  const hasWork = bench.boards.length > 0 || bench.wires.length > 0 || bench.placed.length > 1;
+  if (hasWork && !keptBench(store())) keepBench(store(), bench);
+  running = true;
+  recipeOn = { need: recipe.needs, ending: recipe.ending };
+  setBench(startBench(bench));
+  const controls = runRecipe({
+    steps: recipeSteps(recipe.id, screenId),
+    mode,
+    getBench: () => bench,
+    setBench,
+    world,
+    usb,
+    hands,
+    say: (text) => panels.status(text),
+    onDone: () => {
+      running = false;
+      recipeOn = null;
+      runner = null;
+      // Plugged in, the connection has its own news to show; do not talk over it.
+      if (!usb.plugged) showLine();
+    },
+  });
+  runner = controls;
+  return controls;
+}
 // A bench kept before a reload is still there to go back to.
 showLine();

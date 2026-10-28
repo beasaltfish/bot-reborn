@@ -33,6 +33,9 @@ const SNAP = 4;
 /** Points the cord is laid through, and how steeply it may climb onto or slope off what it crosses. */
 const DRAPE_N = 60;
 const DRAPE_SLOPE = 0.6;
+/** How long insert() takes to carry the plug home, and how high it arches on the way. */
+const INSERT_MS = 600;
+const INSERT_LIFT = 4;
 
 /**
  * How high the top of what stands at a table point is: a board, a part on
@@ -90,6 +93,11 @@ export function attachUsb(world, opts) {
   /** Until the user puts it down somewhere, the plug keeps to the ESP32 wherever it goes. */
   let moved = false;
   let plugged = false;
+  /**
+   * Ends a plug-in animation in progress without seating the plug; null when none runs.
+   * @type {(() => void) | null}
+   */
+  let cancelInsert = null;
 
   /** The ESP32's two port mouths in world space, with the direction into each. */
   function ports() {
@@ -278,7 +286,7 @@ export function attachUsb(world, opts) {
     get plugged() { return plugged; },
     /** The bench was redrawn: if the ESP32 moved, the plug goes with it. */
     refresh() {
-      if (drag) return;
+      if (drag || cancelInsert) return;
       if (plugged && !seat()) {
         plugged = false;
         rest();
@@ -288,8 +296,49 @@ export function attachUsb(world, opts) {
         rest();
       }
     },
+    /**
+     * The plug travels from where it lies to the nearest port, arching over
+     * the table, then seats exactly as a released drag does (sound and onPlug
+     * included). Resolves once seated, or at once if there is nowhere to go.
+     * @returns {Promise<void>}
+     */
+    insert() {
+      const port = ports().sort((a, b) => a.mouth.distanceTo(plug.position) - b.mouth.distanceTo(plug.position))[0];
+      if (!port || plugged || drag) return Promise.resolve();
+      cancelInsert?.();
+      const from = plug.position.clone();
+      const fromYaw = plug.rotation.y;
+      const toYaw = Math.atan2(-port.inward.z, port.inward.x);
+      // Turn the short way round.
+      const turn = ((toYaw - fromYaw + 3 * Math.PI) % (2 * Math.PI)) - Math.PI;
+      return new Promise((resolve) => {
+        /** @type {number | null} */
+        let start = null;
+        const off = world.onFrame((now) => {
+          start ??= now;
+          const t = Math.min(1, (now - start) / INSERT_MS);
+          const e = t * t * (3 - 2 * t);
+          const at = from.clone().lerp(port.mouth, e);
+          // Lifted off the table on the way so it clears boards and parts.
+          at.y += Math.sin(Math.PI * e) * INSERT_LIFT;
+          pose(at, fromYaw + turn * e);
+          if (t < 1) return true;
+          off();
+          cancelInsert = null;
+          plugged = true;
+          pose(port.mouth, toYaw);
+          usbIn();
+          opts.onPlug(true);
+          resolve();
+          return false;
+        });
+        cancelInsert = () => { off(); cancelInsert = null; resolve(); };
+        world.requestRender();
+      });
+    },
     /** Out of the port and back where it lay, without telling onPlug (the caller is the one asking). */
     pullOut() {
+      cancelInsert?.();
       if (plugged) usbOut();
       plugged = false;
       drag = null;
