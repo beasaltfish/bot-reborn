@@ -96,6 +96,27 @@ export function chooseCharacter(list, need) {
   return { kind: 'none' };
 }
 
+/**
+ * What the status line says when a recipe cannot connect a character (every
+ * outcome of chooseCharacter except connect and pick), with the link to go
+ * and fix it.
+ * @param {ReturnType<typeof chooseCharacter>} chosen
+ * @param {'any' | 'pet'} need
+ * @returns {{ text: string, link?: { href: string, label: string } } | null}
+ */
+export function chooseLine(chosen, need) {
+  switch (chosen.kind) {
+    case 'wrong-body':
+      return { text: `${chosen.name} is a ${chosen.motion} body, not a pet — set its body to Pet`, link: { href: adminLink(chosen.id), label: 'on the admin page' } };
+    case 'busy':
+      return { text: `${chosen.name} is in use by another body — disconnect it there and plug in again` };
+    case 'none':
+      return { text: need === 'pet' ? 'No pet character yet —' : 'No characters on this brain yet —', link: { href: '/', label: 'set one up on the admin page' } };
+    default:
+      return null;
+  }
+}
+
 /** @param {Int16Array | ArrayBuffer} samples @returns {number} 0..1 RMS */
 function level(samples) {
   const s = samples instanceof Int16Array ? samples : new Int16Array(samples, 0, samples.byteLength >> 1);

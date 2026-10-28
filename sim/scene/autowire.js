@@ -89,7 +89,8 @@ export function runRecipe(o) {
         group.position.lerpVectors(from, to, easeOut(t));
         if (t < 1) return true;
         off();
-        click();
+        // The click is pins going into a board; a loose part just lands.
+        if (s.kind === 'board' || s.seated) click();
         resolve(undefined);
         return false;
       });

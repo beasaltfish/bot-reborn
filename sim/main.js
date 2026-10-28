@@ -14,7 +14,7 @@ import { spotForNew } from './snap.js';
 import { targetFor } from './target.js';
 import { screenById } from '../core/screens.js';
 import { diagnose, nextHint } from './diagnose.js';
-import { characterChoices, chooseCharacter, startBody, faultText, adminLink, keepsFault } from './body.js';
+import { characterChoices, chooseCharacter, chooseLine, startBody, faultText, adminLink, keepsFault } from './body.js';
 import { keptBench, keepBench, dropKept } from './keep.js';
 import { RECIPES, startBench, recipeSteps } from './recipes.js';
 import { runRecipe } from './scene/autowire.js';
@@ -280,12 +280,10 @@ async function plugIn(recipe = null) {
   switch (chosen.kind) {
     case 'connect': return connect(mine, chosen.id, chosen.name, outcome, ending);
     case 'pick': return pickFrom(chosen.choices);
-    case 'wrong-body':
-      return panels.status(`${chosen.name} is a ${chosen.motion} body, not a pet — set its body to Pet`, { href: adminLink(chosen.id), label: 'on the admin page' });
-    case 'busy':
-      return panels.status(`${chosen.name} is in use by another body — disconnect it there and plug in again`);
-    case 'none':
-      return panels.status('No pet character yet —', { href: '/', label: 'set one up on the admin page' });
+    default: {
+      const l = chooseLine(chosen, recipe.need);
+      if (l) panels.status(l.text, l.link);
+    }
   }
 }
 

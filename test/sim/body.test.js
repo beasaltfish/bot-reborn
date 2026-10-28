@@ -119,3 +119,14 @@ test('chooseCharacter: nothing ready, or nothing at all, is none', () => {
   assert.deepEqual(chooseCharacter([row('a', null, false)], 'any'), { kind: 'none' });
   assert.deepEqual(chooseCharacter([], 'any'), { kind: 'none' });
 });
+
+test('chooseLine words each way a recipe cannot connect', async () => {
+  const { chooseLine } = await import('../../sim/body.js');
+  const line = (/** @type {any} */ c, /** @type {any} */ n) => /** @type {any} */ (chooseLine(c, n));
+  assert.match(line({ kind: 'wrong-body', id: 'a', name: 'Rex', motion: 'wheels' }, 'pet').text, /^Rex is a wheels body, not a pet/);
+  assert.match(line({ kind: 'busy', id: 'a', name: 'Rex' }, 'any').text, /^Rex is in use by another body/);
+  assert.equal(line({ kind: 'none' }, 'pet').text, 'No pet character yet —');
+  assert.equal(line({ kind: 'none' }, 'any').text, 'No characters on this brain yet —');
+  assert.equal(line({ kind: 'none' }, 'any').link.href, '/');
+  assert.equal(chooseLine({ kind: 'connect', id: 'a', name: 'Rex' }, 'any'), null);
+});
