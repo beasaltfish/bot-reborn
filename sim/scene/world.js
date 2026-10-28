@@ -545,6 +545,43 @@ export function createWorld(canvas) {
     requestRender();
   }
 
+  /**
+   * Something taken off the bench fades out where it was, rising a little. A
+   * copy fades, with materials of its own, since the bench is redrawn
+   * without the thing at once and the real materials are shared.
+   * @param {THREE.Object3D} thing
+   */
+  function fadeAway(thing) {
+    const ghost = thing.clone(true);
+    /** @type {THREE.Material[]} */
+    const mats = [];
+    ghost.traverse((o) => {
+      if (!(o instanceof THREE.Mesh)) return;
+      const one = (/** @type {THREE.Material} */ m) => {
+        const c = m.clone();
+        c.transparent = true;
+        c.depthWrite = false;
+        mats.push(c);
+        return c;
+      };
+      o.material = Array.isArray(o.material) ? o.material.map(one) : one(o.material);
+    });
+    const y0 = ghost.position.y;
+    scene.add(ghost);
+    const start = performance.now();
+    tickers.add(function fade(now) {
+      const t = Math.min(1, (now - start) / 220);
+      for (const m of mats) m.opacity = 1 - t;
+      ghost.position.y = y0 + t * 2;
+      if (t < 1) return true;
+      scene.remove(ghost);
+      for (const m of mats) m.dispose();
+      tickers.delete(fade);
+      return false;
+    });
+    requestRender();
+  }
+
   // A garbled panel is snow, and snow moves: keep drawing while one exists.
   tickers.add(() => {
     let any = false;
@@ -571,6 +608,7 @@ export function createWorld(canvas) {
     binHover,
     binShake,
     binSwallow,
+    fadeAway,
     tableBounds: TABLE_BOUNDS,
     view,
     requestRender,

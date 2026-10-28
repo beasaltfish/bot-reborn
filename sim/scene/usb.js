@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import { MM, BOARD_TOP } from './meshes.js';
 import { freeSpot, isClear, under } from '../snap.js';
 import { PARTS } from '../parts.js';
+import { usbIn, usbOut } from './sounds.js';
 
 /** @typedef {ReturnType<typeof import('./world.js').createWorld>} World */
 
@@ -263,7 +264,10 @@ export function attachUsb(world, opts) {
       lying.yaw = d.yaw;
       rest();
     }
-    if (plugged !== was) opts.onPlug(plugged);
+    if (plugged !== was) {
+      if (plugged) usbIn(); else usbOut();
+      opts.onPlug(plugged);
+    }
   }
   addEventListener('pointerup', release);
   addEventListener('pointercancel', release);
@@ -286,6 +290,7 @@ export function attachUsb(world, opts) {
     },
     /** Out of the port and back where it lay, without telling onPlug (the caller is the one asking). */
     pullOut() {
+      if (plugged) usbOut();
       plugged = false;
       drag = null;
       rest();

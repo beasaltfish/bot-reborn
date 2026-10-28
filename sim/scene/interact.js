@@ -20,7 +20,7 @@ import { place, moveBoard, trash, addPart, addBoard, addWire, removeWire, pinPoi
 import { nets } from '../netlist.js';
 import { snapPart, snapBoard, freeSpot, partFootprint } from '../snap.js';
 import { BOARD_TOP, buildWire, dispose } from './meshes.js';
-import { thunk, buzz } from './sounds.js';
+import { thunk, buzz, click, tick, pop } from './sounds.js';
 
 /** @typedef {import('../bench.js').Bench} Bench */
 /** @typedef {import('../bench.js').Placed} Placed */
@@ -177,6 +177,34 @@ export function attachInteraction(world, getBench, setBench, opts) {
     const esp = d.kind === 'part' && d.def.id === 'esp32';
     world.binHover(!over ? 'off' : esp ? 'refuse' : 'take');
     say(!over ? away : esp ? 'The ESP32 cannot go in the bin' : 'Let go to throw it away');
+  }
+
+  /**
+   * The wire under the cursor, shown red and glowing so it is plain which
+   * one a click pulls out. Its meshes' own materials wait in `userData.lit`.
+   * @type {string | null}
+   */
+  let litWire = null;
+  const LIT = new THREE.MeshPhongMaterial({ color: 0xe0483a, emissive: 0x6a140c, shininess: 40 });
+  /** @param {string | null} id */
+  function lightWire(id) {
+    if (id === litWire) return;
+    const old = litWire ? scene.getObjectByName(`wire:${litWire}`) : undefined;
+    old?.traverse((/** @type {THREE.Object3D} */ o) => {
+      if (o instanceof THREE.Mesh && o.userData.lit) {
+        o.material = o.userData.lit;
+        delete o.userData.lit;
+      }
+    });
+    litWire = id;
+    const now = id ? scene.getObjectByName(`wire:${id}`) : undefined;
+    now?.traverse((/** @type {THREE.Object3D} */ o) => {
+      if (!(o instanceof THREE.Mesh) || o.userData.lit) return;
+      o.userData.lit = o.material;
+      o.material = LIT;
+    });
+    say(id ? 'Click to pull this wire out' : null);
+    world.requestRender();
   }
 
   let enabled = true;
@@ -629,7 +657,10 @@ export function attachInteraction(world, getBench, setBench, opts) {
       return;
     }
     setBench(place(b, d.id, at, d.rot, seated));
-    if (seated) seat(d.id);
+    if (seated) {
+      seat(d.id);
+      click();
+    }
   }
 
   /**
@@ -823,7 +854,9 @@ export function attachInteraction(world, getBench, setBench, opts) {
     const to = d.target;
     if (!to) return;
     const dup = b.wires.some((w) => (w.a === d.from && w.b === to) || (w.a === to && w.b === d.from));
-    if (!dup) setBench(addWire(b, d.from, to, wireColor(b, d.from, to)));
+    if (dup) return;
+    setBench(addWire(b, d.from, to, wireColor(b, d.from, to)));
+    tick();
   }
 
   // ---- The hand ---------------------------------------------------------
@@ -914,6 +947,7 @@ export function attachInteraction(world, getBench, setBench, opts) {
       return;
     }
     const t = pick(e, false);
+    if (t?.kind !== 'wire') lightWire(null);
     if (!t) return;
     e.stopImmediatePropagation();
     canvas.setPointerCapture(e.pointerId);
@@ -955,6 +989,8 @@ export function attachInteraction(world, getBench, setBench, opts) {
     }
   }, { capture: true });
 
+  canvas.addEventListener('pointerleave', () => { if (!drag) lightWire(null); });
+
   /** @type {PointerEvent | null} */
   let moved = null;
   canvas.addEventListener('pointermove', (e) => {
@@ -975,6 +1011,7 @@ export function attachInteraction(world, getBench, setBench, opts) {
       if (e.buttons !== 0) return;
       const t = pick(e, false);
       light(t?.kind === 'point' ? t.point : null);
+      lightWire(t?.kind === 'wire' ? t.id : null);
       canvas.style.cursor = t?.kind === 'part' || t?.kind === 'board' ? 'grab' : t?.kind === 'wire' ? 'pointer' : t ? 'crosshair' : '';
       return;
     }
@@ -1041,6 +1078,10 @@ export function attachInteraction(world, getBench, setBench, opts) {
     }
     drag = null;
     if (wandered(e, d)) return;
+    const gone = scene.getObjectByName(`wire:${d.id}`);
+    lightWire(null);
+    if (gone) world.fadeAway(gone);
+    pop();
     setBench(removeWire(getBench(), d.id));
     // What was lit was the net with that wire in it.
     light(null);
