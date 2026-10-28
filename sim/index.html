@@ -76,13 +76,14 @@
     #wire .go { display: flex; gap: 8px; }
     #wire .go .pill { cursor: pointer; }
     #runbar {
-      position: fixed; left: 50%; top: 14px; transform: translateX(-50%);
-      max-width: calc(100vw - 32px); box-sizing: border-box;
+      position: fixed; left: 50%; top: 52px; transform: translateX(-50%);
+      max-width: min(720px, calc(100vw - 32px)); box-sizing: border-box;
       display: flex; align-items: center; gap: 14px; padding: 8px 16px; border-radius: 999px;
       font: 500 13px/1.3 var(--font); color: var(--ink);
       background: var(--glass-strong); border: 1px solid var(--edge);
     }
-    #runbar .say { flex: 1 1 auto; min-width: 0; }
+    #runbar .say { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #runbar .link { flex: none; }
 
     #status {
       position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);

@@ -7,6 +7,7 @@
 import { emptyBench, addBoard, addPart, place, addWire } from './bench.js';
 import { targetFor } from './target.js';
 import { JOIN } from './parts.js';
+import { name as pointName } from './diagnose.js';
 import { wireColor } from './wire-color.js';
 
 /** @typedef {import('./bench.js').Bench} Bench */
@@ -110,7 +111,7 @@ export function recipeSteps(recipeId, screenId = DEFAULT_SCREEN) {
   // The links depend on which parts stand on the table, so they are asked of
   // the bench the part steps make, not written down twice.
   const parts = steps.reduce(applyStep, startBench(emptyBench()));
-  for (const l of targetFor(parts)) steps.push({ kind: 'wire', a: l.a, b: l.b, say: `${l.a} → ${l.b}: ${l.why}` });
+  for (const l of targetFor(parts)) steps.push({ kind: 'wire', a: l.a, b: l.b, say: `${pointName(l.a)} → ${pointName(l.b)}: ${l.why}` });
   steps.push({ kind: 'usb', say: 'Plug in USB: the bench has power' });
   return steps;
 }

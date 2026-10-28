@@ -30,7 +30,7 @@ function split(id) {
  * A point the way the board's silk prints it: "GPIO 12", "mic SCK", "speaker 2 +".
  * @param {string} point
  */
-function name(point) {
+export function name(point) {
   const [id, pin] = point.split(':');
   const base = pin.replace(/\.\d+$/, '');
   if (id === 'esp') return base.replace(/^GPIO(\d+)$/, 'GPIO $1');

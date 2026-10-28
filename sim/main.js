@@ -396,13 +396,15 @@ function reset() {
 export function startRun(recipeId, screenId, mode, hooks = {}) {
   const recipe = RECIPES.find((r) => r.id === recipeId);
   if (!recipe || running) return null;
+  // Before anything unplugs: the unplug redraws the status line, which must not offer the way back now.
+  running = true;
+  panels.status(null);
   if (usb.plugged) {
     usb.pullOut();
     unplug();
   }
   const hasWork = bench.boards.length > 0 || bench.wires.length > 0 || bench.placed.length > 1;
   if (hasWork && !keptBench(store())) keepBench(store(), bench);
-  running = true;
   recipeOn = { need: recipe.needs, ending: recipe.ending };
   const steps = recipeSteps(recipe.id, screenId);
   setBench(startBench(bench));
