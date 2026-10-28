@@ -14,7 +14,7 @@ import { spotForNew } from './snap.js';
 import { targetFor } from './target.js';
 import { screenById } from '../core/screens.js';
 import { diagnose, nextHint } from './diagnose.js';
-import { characterChoices, startBody } from './body.js';
+import { characterChoices, startBody, faultText, adminLink } from './body.js';
 import { createPanels } from './panels.js';
 import { createWorld } from './scene/world.js';
 import { attachInteraction, beginCarry } from './scene/interact.js';
@@ -159,16 +159,19 @@ let session = null;
 let starting = false;
 /** Bumped by every plug and unplug, so an answer from an older plug-in is ignored. */
 let plugs = 0;
+/** The character whose layer failed, for the link on the api line. */
+let apiFor = '';
 
 /**
  * What the status line says while plugged in, most important first: why the
  * session ended, a dropped link, what is wrong with the wiring, what the robot is doing.
- * @type {{ end: string | null, lost: boolean, fault: string | null, state: string | null, who: string | null }}
+ * @type {{ end: string | null, lost: boolean, api: string | null, fault: string | null, state: string | null, who: string | null }}
  */
-let line = { end: null, lost: false, fault: null, state: null, who: null };
+let line = { end: null, lost: false, api: null, fault: null, state: null, who: null };
 function showLine() {
   if (line.end) return panels.status(line.end);
   if (line.lost) return panels.status('Reconnecting…');
+  if (line.api) return panels.status(line.api, { href: adminLink(apiFor), label: 'open' });
   if (line.fault) return panels.status(line.fault);
   if (line.state) return panels.status(line.who ? `${line.who} · ${line.state}` : line.state);
   panels.status(null);
@@ -193,7 +196,7 @@ async function plugIn() {
   // After a brown-out the short is the news; a guess about some other wire would mislead.
   const hints = diagnose(bench, outcome);
   const first = outcome.esp === 'brownout' ? hints.find((h) => h.kind === 'fault') : hints[0];
-  line = { end: null, lost: false, fault: first?.text ?? null, state: null, who: null };
+  line = { end: null, lost: false, api: null, fault: first?.text ?? null, state: null, who: null };
   showLine();
   if (outcome.esp !== 'ok') return;
 
@@ -244,7 +247,13 @@ async function connect(mine, id, name, outcome) {
       id,
       outcome,
       // The brain names its states in capitals (LISTENING); the line reads as a sentence.
-      onState: (s) => { if (!live()) return; line.state = s.toLowerCase(); line.lost = false; showLine(); },
+      onState: (s) => {
+        if (!live()) return;
+        // A fault stays up until the next turn begins; LISTENING / SLEEPING are just the brain settling after it.
+        if (s !== 'LISTENING' && s !== 'SLEEPING') line.api = null;
+        line.state = s.toLowerCase(); line.lost = false; showLine();
+      },
+      onFault: (msg) => { if (!live()) return; apiFor = id; line.api = faultText(msg); showLine(); },
       onLevel: (up, down) => { if (live()) effects.levels(up, down); },
       onEnd: (msg) => { if (!live()) return; line.end = msg; effects.setAlive(false); showLine(); },
       onLost: () => { if (!live()) return; line.lost = true; showLine(); },
@@ -271,7 +280,7 @@ function unplug() {
   effects.setAlive(false);
   effects.playing([]);
   effects.led('off');
-  line = { end: null, lost: false, fault: null, state: null, who: null };
+  line = { end: null, lost: false, api: null, fault: null, state: null, who: null };
   showLine();
   bench = { ...bench, usb: false };
   setBench(bench);

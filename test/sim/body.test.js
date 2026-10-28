@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { shapeUplink, shapeDownlink, characterChoices } from '../../sim/body.js';
+import { shapeUplink, shapeDownlink, characterChoices, faultText, adminLink } from '../../sim/body.js';
 
 const pcm = Int16Array.from([0, 1000, -1000, 32767, -32768]);
 const bytesOf = (/** @type {Int16Array} */ a) => /** @type {ArrayBuffer} */ (a.buffer.slice(a.byteOffset, a.byteOffset + a.byteLength));
@@ -56,4 +56,20 @@ test('choices: free ones first, then busy, then unset, each with its note', () =
 
 test('choices: nothing in, nothing out', () => {
   assert.deepEqual(characterChoices([]), []);
+});
+
+test('faultText: says what to check, in plain words', () => {
+  const tail = ' — check it on the admin page';
+  assert.equal(faultText({ part: 'llm', status: 401, kind: 'http' }), `LLM key rejected (401)${tail}`);
+  assert.equal(faultText({ part: 'llm', status: 403, kind: 'http' }), `LLM key rejected (403)${tail}`);
+  assert.equal(faultText({ part: 'stt', status: 429, kind: 'http' }), `STT is out of quota or rate-limited (429)${tail}`);
+  const gone = 'TTS could not be reached — check its address on the admin page';
+  assert.equal(faultText({ part: 'tts', status: null, kind: 'timeout' }), gone);
+  assert.equal(faultText({ part: 'tts', status: null, kind: 'network' }), gone);
+  assert.equal(faultText({ part: 'llm', status: 500, kind: 'http' }), 'LLM failed (HTTP 500)');
+  assert.equal(faultText({ part: 'llm', status: null, kind: 'other' }), 'LLM failed');
+});
+
+test('adminLink: escapes the id', () => {
+  assert.equal(adminLink('a b'), '/#character=a%20b');
 });

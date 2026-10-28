@@ -108,11 +108,42 @@ async function pipelineFor(echo) {
 }
 
 /**
+ * What the status line says when a layer of the brain failed, in the words of
+ * someone standing at the bench: what to check, not what the provider said.
+ * @param {{ part: string, status: number | null, kind: string }} msg
+ * @returns {string}
+ */
+export function faultText(msg) {
+  const part = msg.part.toUpperCase();
+  if (msg.kind === 'http' && (msg.status === 401 || msg.status === 403)) {
+    return `${part} key rejected (${msg.status}) — check it on the admin page`;
+  }
+  if (msg.kind === 'http' && msg.status === 429) {
+    return `${part} is out of quota or rate-limited (429) — check it on the admin page`;
+  }
+  if (msg.kind === 'timeout' || msg.kind === 'network') {
+    return `${part} could not be reached — check its address on the admin page`;
+  }
+  if (msg.kind === 'http') return `${part} failed (HTTP ${msg.status})`;
+  return `${part} failed`;
+}
+
+/**
+ * Where the admin page opens on this character.
+ * @param {string} id
+ * @returns {string}
+ */
+export function adminLink(id) {
+  return `/#character=${encodeURIComponent(id)}`;
+}
+
+/**
  * @param {{
  *   id: string, outcome: Outcome,
  *   onState(s: string): void, onLevel(up: number, down: number): void,
  *   onEnd(msg: string): void,
  *   onLost?(): void, onWelcome?(): void,
+ *   onFault?(msg: { part: string, status: number | null, kind: string }): void,
  *   screen?: { model: import('../core/screens.js').Screen, onFrame(img: ImageBitmap): void },
  * }} o
  * onLost: the brain dropped and the link is retrying by itself; onWelcome:
@@ -166,6 +197,7 @@ export async function startBody(o) {
     onWelcome() { if (!stopped) o.onWelcome?.(); },
     onMessage(msg) {
       if (msg.type === 'hush') player?.hush();
+      else if (msg.type === 'fault') o.onFault?.(msg);
       else if (msg.type === 'state') o.onState(msg.state);
       // move / stop: there is no car on the bench.
     },
