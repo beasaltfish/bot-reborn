@@ -30,8 +30,8 @@ import { wireColor } from './wire-color.js';
 
 /** @type {Recipe[]} */
 export const RECIPES = [
-  { id: 'audio', name: 'Hear and speak', needs: 'any', ending: 'Say hello' },
-  { id: 'screen', name: 'Hear, speak and show', needs: 'pet', ending: 'Say "Sit"' },
+  { id: 'audio', name: 'Audio only', needs: 'any', ending: 'Say hello' },
+  { id: 'screen', name: 'Audio + screen', needs: 'pet', ending: 'Say "Sit"' },
 ];
 
 /** The screen a recipe wires when the character has not named a model. */
@@ -49,20 +49,26 @@ const BB1 = { x: -31, z: -9 };
 const BB2 = { x: BB1.x, z: BB1.z + JOIN.long };
 const ESP_SEAT = { x: -25, z: 5 };
 
-// The loose parts stand in one row below the second board, clear of the bin
-// (x 43+) whatever the screen's width; `at` is a part's top-left corner.
+// The mic and amp are plugged into bb1's free half, columns well clear of the
+// ESP32's (6-27) so no pin shares a strip with another part's. The mic's two
+// pin rows are 3 apart, so it straddles the centre gap: rows e (z -2) and f
+// (z 1), columns 30-32. The amp's seven pins are one row, c (z -4), columns
+// 40-46: one column each, so none are joined.
+const MIC_SEAT = { x: -1, z: -2 };
+const AMP_SEAT = { x: 9, z: -4 };
+
+// The speaker and screen lie loose in one row below the second board, clear
+// of the bin (x 43+) whatever the screen's width; `at` is a part's top-left corner.
 const ROW_Z = 36;
 const LOOSE = {
-  spk: { part: /** @type {const} */ ('speaker'), at: { x: -50, z: ROW_Z } },
-  amp: { part: /** @type {const} */ ('max98357a'), at: { x: -30, z: ROW_Z } },
-  mic: { part: /** @type {const} */ ('inmp441'), at: { x: -20, z: ROW_Z } },
+  spk: { at: { x: -50, z: ROW_Z } },
   scr: { at: { x: -12, z: ROW_Z } },
 };
 
 /**
  * The bench a recipe starts from: only the ESP32 remains, lying where it
- * opened, nothing wired, USB out. Boards stay as the caller has them; the
- * recipe's first steps lay down its own.
+ * opened, nothing wired, USB out. No boards either: the recipe's first steps
+ * lay down its own, so they land where its coordinates expect.
  * @param {Bench} b
  * @returns {Bench}
  */
@@ -91,9 +97,9 @@ export function recipeSteps(recipeId, screenId = DEFAULT_SCREEN) {
     { kind: 'board', id: 'bb1', at: BB1, rot: 0, say: 'A breadboard to build on' },
     { kind: 'board', id: 'bb2', at: BB2, rot: 0, say: 'A second board: the ESP32 is too wide for one, so it sits across the seam' },
     { kind: 'part', id: 'esp', part: 'esp32', at: ESP_SEAT, rot: 0, seated: true, say: 'The ESP32 goes in across the seam, a row of pins on each board' },
-    { kind: 'part', id: 'mic', part: LOOSE.mic.part, at: LOOSE.mic.at, rot: 0, seated: false, say: 'The microphone, which hears you' },
-    { kind: 'part', id: 'amp', part: LOOSE.amp.part, at: LOOSE.amp.at, rot: 0, seated: false, say: 'The amplifier, which drives the speaker' },
-    { kind: 'part', id: 'spk', part: LOOSE.spk.part, at: LOOSE.spk.at, rot: 0, seated: false, say: 'The speaker, which talks back' },
+    { kind: 'part', id: 'mic', part: 'inmp441', at: MIC_SEAT, rot: 0, seated: true, say: 'The microphone, which hears you, clicks into the board' },
+    { kind: 'part', id: 'amp', part: 'max98357a', at: AMP_SEAT, rot: 0, seated: true, say: 'The amplifier, which drives the speaker, clicks into the board' },
+    { kind: 'part', id: 'spk', part: 'speaker', at: LOOSE.spk.at, rot: 0, seated: false, say: 'The speaker, which talks back' },
   ];
   if (recipeId === 'screen') {
     steps.push({

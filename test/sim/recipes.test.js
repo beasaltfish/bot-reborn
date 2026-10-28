@@ -72,6 +72,20 @@ test('the ESP32 sits across both boards', () => {
   assert.ok(holes.every((h) => h && !/:(tp|tn|bp|bn)\d+$/.test(h)), 'no pin in a rail');
 });
 
+test('the mic and amp are seated, the speaker and screen are not', () => {
+  for (const { name, recipe, screen } of CASES) {
+    const b = build(recipe, screen);
+    for (const p of b.placed) {
+      const want = p.id === 'mic' || p.id === 'amp' || p.id === 'esp';
+      assert.equal(p.seated, want, `${name} ${p.id}`);
+      if (p.id !== 'mic' && p.id !== 'amp') continue;
+      for (const q of pinPoints(b, p).filter((q) => !PARTS[p.part].pins.find((x) => `${p.id}:${x.name}` === q.pin)?.wireOnly)) {
+        assert.ok(q.hole && !/:(tp|tn|bp|bn)\d+$/.test(q.hole), `${name} ${q.pin}`);
+      }
+    }
+  }
+});
+
 test('no recipe layout touches the bin', () => {
   const bin = { x0: BIN.x - BIN.size / 2, x1: BIN.x + BIN.size / 2, z0: BIN.z - BIN.size / 2, z1: BIN.z + BIN.size / 2 };
   const miss = (/** @type {{ x0: number, x1: number, z0: number, z1: number }} */ t) =>
