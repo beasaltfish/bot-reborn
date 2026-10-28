@@ -70,6 +70,32 @@ export function characterChoices(list) {
     }));
 }
 
+/**
+ * What the bench does about characters, for a recipe that needs any body or
+ * a pet's. One suitable character connects, several are a pick; with none,
+ * the reason is told in this order: a right-kind one in use, a ready one of
+ * the wrong kind, nothing set up.
+ * @param {{ id: string, name: string, ready: boolean, online: boolean, motion: string | null }[]} list
+ * @param {'any' | 'pet'} need
+ * @returns {{ kind: 'connect', id: string, name: string }
+ *   | { kind: 'pick', choices: { id: string, name: string, note: string | null }[] }
+ *   | { kind: 'wrong-body', id: string, name: string, motion: string | null }
+ *   | { kind: 'busy', id: string, name: string }
+ *   | { kind: 'none' }}
+ */
+export function chooseCharacter(list, need) {
+  /** @param {{ motion: string | null }} c */
+  const rightKind = (c) => need === 'any' || c.motion === 'pet';
+  const suitable = list.filter((c) => c.ready && !c.online && rightKind(c));
+  if (suitable.length === 1) return { kind: 'connect', id: suitable[0].id, name: suitable[0].name };
+  if (suitable.length > 1) return { kind: 'pick', choices: characterChoices(suitable) };
+  const busy = list.find((c) => c.ready && c.online && rightKind(c));
+  if (busy) return { kind: 'busy', id: busy.id, name: busy.name };
+  const wrong = need === 'pet' ? list.find((c) => c.ready && c.motion !== 'pet') : undefined;
+  if (wrong) return { kind: 'wrong-body', id: wrong.id, name: wrong.name, motion: wrong.motion };
+  return { kind: 'none' };
+}
+
 /** @param {Int16Array | ArrayBuffer} samples @returns {number} 0..1 RMS */
 function level(samples) {
   const s = samples instanceof Int16Array ? samples : new Int16Array(samples, 0, samples.byteLength >> 1);

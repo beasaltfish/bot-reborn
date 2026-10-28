@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { App } from './App';
 import { installFakeApi } from './test/fakeApi';
@@ -69,6 +69,28 @@ describe('App', () => {
     installFakeApi([{ name: 'A' }]);
     render(<App pollMs={50} renderEditor={slot} />);
     expect(await screen.findByTestId('editor')).toHaveTextContent('A:basic');
+  });
+
+  it('opens the character a #character= link names, over the remembered one', async () => {
+    localStorage.setItem('admin.character', 'A');
+    location.hash = '#character=Petty';
+    installFakeApi([{ name: 'A' }, { name: 'Petty' }]);
+    render(<App pollMs={50} renderEditor={slot} />);
+    expect(await screen.findByTestId('editor')).toHaveTextContent('Petty:basic');
+    location.hash = '';
+  });
+
+  it('follows the link when the hash changes, and ignores an id that is not listed', async () => {
+    localStorage.clear();
+    location.hash = '';
+    installFakeApi([{ name: 'A' }, { name: 'B' }]);
+    render(<App pollMs={50} renderEditor={slot} />);
+    expect(await screen.findByTestId('editor')).toHaveTextContent('A:basic');
+    act(() => { location.hash = '#character=B'; });
+    await waitFor(() => expect(screen.getByTestId('editor')).toHaveTextContent('B:basic'));
+    act(() => { location.hash = '#character=Nope'; });
+    await waitFor(() => expect(screen.getByTestId('editor')).toHaveTextContent('A:basic'));
+    location.hash = '';
   });
 
   it('marks who is online and who is missing keys', async () => {

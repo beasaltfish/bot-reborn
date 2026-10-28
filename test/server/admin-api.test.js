@@ -45,7 +45,15 @@ test('the list has names, readiness and presence — never keys or tokens', asyn
   r.chars.add('a');
   const { status, body } = await r.call('/api/characters');
   assert.equal(status, 200);
-  assert.deepEqual(body, [{ id: 'a', name: 'a', ready: true, online: false }]);
+  assert.deepEqual(body, [{ id: 'a', name: 'a', ready: true, online: false, motion: 'car' }]);
+  await r.server.close();
+});
+
+test('the list says how each character moves, so the bench can tell a pet', async () => {
+  const r = await rig();
+  r.chars.add('petty', (cfg) => { cfg.body.motion = 'pet'; });
+  const { body } = await r.call('/api/characters');
+  assert.equal(body[0].motion, 'pet');
   await r.server.close();
 });
 

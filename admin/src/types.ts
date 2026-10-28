@@ -61,7 +61,7 @@ export interface Patch {
   savedReflexes?: SavedReflex[];
 }
 
-export interface Summary { id: string; name: string; ready: boolean; online: boolean }
+export interface Summary { id: string; name: string; ready: boolean; online: boolean; motion?: Motion | null }
 export interface Detail {
   id: string; name: string; token: string; config: Config; endpoints: Endpoint[]; savedReflexes: SavedReflex[]; online: boolean;
 }

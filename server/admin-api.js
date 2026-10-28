@@ -72,7 +72,7 @@ export function createAdminApi(opts) {
         if (req.method === 'GET') {
           // Never keys, never tokens: this is the call the page polls.
           return send(200, listCharacters(opts.dir).characters.map((c) => ({
-            id: c.id, name: c.name, ready: ready(c.config), online: online.has(c.id),
+            id: c.id, name: c.name, ready: ready(c.config), online: online.has(c.id), motion: c.config.body?.motion ?? null,
           })));
         }
         if (req.method === 'POST') {
