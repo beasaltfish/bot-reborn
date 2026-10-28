@@ -18,7 +18,7 @@ import { PARTS, BOARD_OUTLINE, holeXY } from '../parts.js';
 import { pinPoints, isHole } from '../bench.js';
 import { boardToTable } from '../parts.js';
 import {
-  BOARD_TOP, MM, buildBreadboard, buildBin, buildPart, buildTable, buildWire, drawScreen, dispose,
+  BOARD_TOP, MM, MAT_THICK, buildBreadboard, buildBin, buildMat, buildPart, buildTable, buildWire, drawScreen, dispose,
 } from './meshes.js';
 
 /** @typedef {import('../bench.js').Bench} Bench */
@@ -70,7 +70,12 @@ export function createWorld(canvas) {
   sun.position.set(-40, 90, 30);
   scene.add(sun);
 
-  scene.add(buildTable());
+  // A cutting mat on the wooden table, as big as the stretch things may be
+  // put on: its edge is where the bench ends. Its top is y = 0, where parts
+  // stand, so the wood lies a mat's thickness lower.
+  const table = buildTable();
+  table.position.y = -MAT_THICK;
+  scene.add(table, buildMat(TABLE_BOUNDS));
   /** Every board instance's mesh, grouped so a rebuild can prune them. */
   const boards = new THREE.Group();
   const bin = buildBin();

@@ -245,6 +245,99 @@ export function buildTable() {
   return m;
 }
 
+/** How thick the mat is: the wood lies this far under the top things stand on. */
+export const MAT_THICK = 2 * MM;
+
+/**
+ * A self-healing cutting mat lying on the table, as big as the stretch of
+ * table things may be put on: a green sheet with a 10 mm grid, every
+ * fifth line stronger, centimetre rulers along two edges and the 45° guides
+ * that real mats print. Measured in millimetres, so the grid matches the parts.
+ * @param {{ x0: number, x1: number, z0: number, z1: number }} bounds world units
+ */
+export function buildMat(bounds) {
+  const wmm = (bounds.x1 - bounds.x0) / MM;
+  const dmm = (bounds.z1 - bounds.z0) / MM;
+  const tex = texture('mat', () => {
+    const px = 6;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(wmm * px);
+    canvas.height = Math.round(dmm * px);
+    const ctx = /** @type {CanvasRenderingContext2D} */ (canvas.getContext('2d'));
+    const W = canvas.width;
+    const H = canvas.height;
+    ctx.fillStyle = '#2f6b55';
+    ctx.fillRect(0, 0, W, H);
+    // A little mottling, so it reads as a material and not a flat fill.
+    let seed = 11;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    for (let i = 0; i < 9000; i++) {
+      ctx.fillStyle = rnd() < 0.5 ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.035)';
+      ctx.fillRect(rnd() * W, rnd() * H, 2 + rnd() * 6, 2 + rnd() * 6);
+    }
+    const margin = 15;
+    const gx0 = margin * px;
+    const gy0 = margin * px;
+    const gx1 = W - margin * px;
+    const gy1 = H - margin * px;
+    // 45° guides, faint, clipped to the grid.
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(gx0, gy0, gx1 - gx0, gy1 - gy0);
+    ctx.clip();
+    ctx.strokeStyle = 'rgba(232,244,236,0.06)';
+    ctx.lineWidth = 2;
+    for (let k = -H; k < W; k += 100 * px) {
+      ctx.beginPath(); ctx.moveTo(gx0 + k, gy0); ctx.lineTo(gx0 + k + H, gy0 + H); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(gx1 - k, gy0); ctx.lineTo(gx1 - k - H, gy0 + H); ctx.stroke();
+    }
+    ctx.restore();
+    // The grid: every 10 mm, every 50 mm stronger.
+    for (let mm = 0; gx0 + mm * px <= gx1 + 0.5; mm += 10) {
+      const strong = mm % 50 === 0;
+      ctx.fillStyle = strong ? 'rgba(232,244,236,0.26)' : 'rgba(232,244,236,0.11)';
+      ctx.fillRect(gx0 + mm * px - (strong ? 1.5 : 1), gy0, strong ? 3 : 2, gy1 - gy0);
+    }
+    for (let mm = 0; gy0 + mm * px <= gy1 + 0.5; mm += 10) {
+      const strong = mm % 50 === 0;
+      ctx.fillStyle = strong ? 'rgba(232,244,236,0.26)' : 'rgba(232,244,236,0.11)';
+      ctx.fillRect(gx0, gy0 + mm * px - (strong ? 1.5 : 1), gx1 - gx0, strong ? 3 : 2);
+    }
+    // Rulers: millimetre ticks and centimetre numbers along the top and left.
+    ctx.fillStyle = 'rgba(240,248,242,0.75)';
+    ctx.font = `600 ${4 * px}px ui-sans-serif, system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    for (let mm = 0; gx0 + mm * px <= gx1 + 0.5; mm++) {
+      const len = mm % 10 === 0 ? 4 : mm % 5 === 0 ? 2.8 : 1.6;
+      ctx.fillRect(gx0 + mm * px - 0.75, gy0 - len * px, 1.5, len * px);
+      if (mm % 10 === 0 && mm > 0) ctx.fillText(String(mm / 10), gx0 + mm * px, gy0 - 5.5 * px);
+    }
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    for (let mm = 0; gy0 + mm * px <= gy1 + 0.5; mm++) {
+      const len = mm % 10 === 0 ? 4 : mm % 5 === 0 ? 2.8 : 1.6;
+      ctx.fillRect(gx0 - len * px, gy0 + mm * px - 0.75, len * px, 1.5);
+      if (mm % 10 === 0 && mm > 0) ctx.fillText(String(mm / 10), gx0 - 5.5 * px, gy0 + mm * px);
+    }
+    const t = new THREE.CanvasTexture(canvas);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 8;
+    return t;
+  });
+  const w = bounds.x1 - bounds.x0;
+  const d = bounds.z1 - bounds.z0;
+  // One slab whose top face carries the print: a separate printed sheet laid
+  // on a slab flickers wherever the two faces meet, seen from far off.
+  const side = new THREE.MeshLambertMaterial({ color: 0x24533f });
+  const top = new THREE.MeshLambertMaterial({ map: tex });
+  const g = new THREE.Mesh(new THREE.BoxGeometry(w, MAT_THICK, d), [side, side, top, side, side, side]);
+  // Its top is the table top things stand on (y = 0); the wood is lowered under it.
+  g.position.set((bounds.x0 + bounds.x1) / 2, -MAT_THICK / 2, (bounds.z0 + bounds.z1) / 2);
+  g.name = 'mat';
+  return g;
+}
+
 /**
  * The holes' dark tops lie a hair under the board's top face. From far off
  * the depth buffer cannot tell two faces that close apart and the holes
