@@ -14,7 +14,7 @@ import { spotForNew } from './snap.js';
 import { targetFor } from './target.js';
 import { screenById } from '../core/screens.js';
 import { diagnose, nextHint } from './diagnose.js';
-import { characterChoices, startBody, faultText, adminLink } from './body.js';
+import { characterChoices, startBody, faultText, adminLink, keepsFault } from './body.js';
 import { createPanels } from './panels.js';
 import { createWorld } from './scene/world.js';
 import { attachInteraction, beginCarry } from './scene/interact.js';
@@ -249,8 +249,8 @@ async function connect(mine, id, name, outcome) {
       // The brain names its states in capitals (LISTENING); the line reads as a sentence.
       onState: (s) => {
         if (!live()) return;
-        // A fault stays up until the next turn begins; LISTENING / SLEEPING are just the brain settling after it.
-        if (s !== 'LISTENING' && s !== 'SLEEPING') line.api = null;
+        // A fault stays up until the user speaks again: the brain voices its own apology (SPEAKING) right after one.
+        if (!keepsFault(s)) line.api = null;
         line.state = s.toLowerCase(); line.lost = false; showLine();
       },
       onFault: (msg) => { if (!live()) return; apiFor = id; line.api = faultText(msg); showLine(); },

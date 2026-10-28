@@ -129,6 +129,17 @@ export function faultText(msg) {
 }
 
 /**
+ * Whether a brain state leaves a shown fault on the status line. The brain
+ * speaks its own apology right after a fault (SPEAKING), so only the user
+ * starting to talk again (CAPTURING) means a new turn has begun.
+ * @param {string} state
+ * @returns {boolean}
+ */
+export function keepsFault(state) {
+  return state !== 'CAPTURING';
+}
+
+/**
  * Where the admin page opens on this character.
  * @param {string} id
  * @returns {string}

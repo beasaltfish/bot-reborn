@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { shapeUplink, shapeDownlink, characterChoices, faultText, adminLink } from '../../sim/body.js';
+import { shapeUplink, shapeDownlink, characterChoices, faultText, adminLink, keepsFault } from '../../sim/body.js';
 
 const pcm = Int16Array.from([0, 1000, -1000, 32767, -32768]);
 const bytesOf = (/** @type {Int16Array} */ a) => /** @type {ArrayBuffer} */ (a.buffer.slice(a.byteOffset, a.byteOffset + a.byteLength));
@@ -72,4 +72,10 @@ test('faultText: says what to check, in plain words', () => {
 
 test('adminLink: escapes the id', () => {
   assert.equal(adminLink('a b'), '/#character=a%20b');
+});
+
+test('keepsFault: only the user speaking again clears a fault', () => {
+  assert.equal(keepsFault('SPEAKING'), true);
+  assert.equal(keepsFault('LISTENING'), true);
+  assert.equal(keepsFault('CAPTURING'), false);
 });
