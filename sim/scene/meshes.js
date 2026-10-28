@@ -246,6 +246,20 @@ export function buildTable() {
 }
 
 /**
+ * The holes' dark tops lie a hair under the board's top face. From far off
+ * the depth buffer cannot tell two faces that close apart and the holes
+ * flicker in and out, so they are drawn as if a little nearer the camera.
+ */
+function holeMat() {
+  let m = materials.get('hole');
+  if (!m) {
+    m = new THREE.MeshLambertMaterial({ color: 0x3b3934, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
+    materials.set('hole', m);
+  }
+  return m;
+}
+
+/**
  * Every hole on the board, found by asking parts.js at each grid point, so the
  * board drawn is the board the netlist reasons about.
  */
@@ -311,7 +325,7 @@ export function buildBreadboard() {
   body.userData = { kind: 'board' };
   g.add(body);
 
-  const holes = boxes(0.62, 0.02, 0.62, mat('matte', 0x3b3934), holePoints().map(({ x, y }) => (
+  const holes = boxes(0.62, 0.02, 0.62, holeMat(), holePoints().map(({ x, y }) => (
     { x, y: BOARD_TOP - 0.012, z: y }
   )));
   holes.name = 'holes';
