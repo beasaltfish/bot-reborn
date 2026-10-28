@@ -108,6 +108,9 @@ export function createWorld(canvas) {
   /** The bench as it stands, for framing a view and painting screens. */
   /** @type {Bench | null} */
   let current = null;
+  /** A bench to frame the views for instead of `current`, while one is set. */
+  /** @type {Bench | null} */
+  let framing = null;
   /**
    * Each screen's look, kept outside the mesh map so a moved part does not
    * lose the picture it was showing: instance id → look and last frame.
@@ -280,7 +283,7 @@ export function createWorld(canvas) {
 
   /** @param {ViewMode} m @returns {Pose} */
   function poseFor(m) {
-    const frame = frameOf(current);
+    const frame = frameOf(framing ?? current);
     const fitW = (frame.w * 1.06) / aspect;
     const target = new THREE.Vector3(frame.cx, BOARD_TOP, frame.cz);
     if (m === 'top') return { target, polar: 0.0001, azimuth: 0, height: Math.max(frame.d * 1.1, fitW), fov: NEAR_ORTHO_FOV, ortho: true };
@@ -290,9 +293,16 @@ export function createWorld(canvas) {
     return { target, polar, azimuth: THREE.MathUtils.degToRad(-12), height: height * 1.25, fov: 38, ortho: false };
   }
 
-  /** @param {ViewMode} m */
-  function view(m) {
+  /**
+   * Swing to a view. With `frameFor`, the camera frames that bench instead of
+   * the one on the table (a build that will fill the table later), until the
+   * next view call.
+   * @param {ViewMode} m
+   * @param {Bench} [frameFor]
+   */
+  function view(m, frameFor) {
     mode = m;
+    framing = frameFor ?? null;
     touched = false;
     controls.enabled = false;
     move = { from: currentPose(), to: poseFor(m), start: performance.now() };

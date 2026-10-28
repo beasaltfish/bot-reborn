@@ -280,7 +280,7 @@ export function createPanels(opts) {
   bar.prepend(wireBtn);
   const recipeBoxes = RECIPES.map((r, i) => {
     const input = /** @type {HTMLInputElement} */ (el('input', { type: 'radio', name: 'recipe', value: r.id }));
-    if (i === 0) input.setAttribute('checked', '');
+    if (r.id === 'screen') input.setAttribute('checked', '');
     return input;
   });
   const screenSel = el('select', { 'aria-label': 'Screen' }, SCREENS.map((s) => {
@@ -330,7 +330,7 @@ export function createPanels(opts) {
       return b;
     };
     if (mode === 'step') runBar.append(words, button('Next', run.next), button('Finish', run.finish), button('Stop', run.stop));
-    else runBar.append(button('Skip', run.skip), button('Stop', run.stop));
+    else runBar.append(words, button('Skip', run.skip), button('Stop', run.stop));
     runBar.hidden = false;
   }
   watchBtn.addEventListener('click', () => go('watch'));

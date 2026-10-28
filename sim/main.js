@@ -16,7 +16,7 @@ import { screenById } from '../core/screens.js';
 import { diagnose, nextHint } from './diagnose.js';
 import { characterChoices, chooseCharacter, chooseLine, startBody, faultText, adminLink, keepsFault } from './body.js';
 import { keptBench, keepBench, dropKept } from './keep.js';
-import { RECIPES, startBench, recipeSteps } from './recipes.js';
+import { RECIPES, startBench, recipeSteps, applyStep } from './recipes.js';
 import { runRecipe } from './scene/autowire.js';
 import { createPanels } from './panels.js';
 import { createWorld } from './scene/world.js';
@@ -404,9 +404,12 @@ export function startRun(recipeId, screenId, mode, hooks = {}) {
   if (hasWork && !keptBench(store())) keepBench(store(), bench);
   running = true;
   recipeOn = { need: recipe.needs, ending: recipe.ending };
+  const steps = recipeSteps(recipe.id, screenId);
   setBench(startBench(bench));
+  // Frame the camera for the bench the run will end with, so nothing lands off screen.
+  world.view(view, steps.reduce(applyStep, bench));
   const controls = runRecipe({
-    steps: recipeSteps(recipe.id, screenId),
+    steps,
     mode,
     getBench: () => bench,
     setBench,
