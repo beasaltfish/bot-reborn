@@ -1,12 +1,15 @@
-// The page around the bench: the three buttons (Wiring diagram, Hint, Reset
-// bench), the one-line status at the bottom, the wiring diagram itself, the
-// character picker that opens when the bench powers up, and a Replace button
-// over each burnt part. Plain DOM; what any of it means is main.js's business.
+// The page around the bench: the buttons (Parts, Wiring diagram, Hint, Reset
+// bench), the one-line status at the bottom, the parts bin, the wiring diagram
+// and the character picker that opens when the bench powers up. Plain DOM;
+// what any of it means is main.js's business. A burnt part is not swapped out
+// any more: it stays on the bench until the user drops it in the bin (spec §5.4).
 //
-// Nothing here is shown by default but the buttons: explanations wait until
-// asked for (spec §5).
+// Nothing here is shown by default but the buttons: explanations and the parts
+// bin wait until asked for (spec §5, anti-goal: a busy screen).
 
 import { TARGET } from './target.js';
+import { PARTS } from './parts.js';
+import { SCREENS } from '../core/screens.js';
 
 /** @typedef {{ id: string, name: string, note: string | null }} Choice */
 
@@ -36,14 +39,30 @@ function svg(tag, attrs = {}) {
 }
 
 /**
- * A point the way the diagram labels it: "GPIO 12", "mic SCK".
+ * A point the way the diagram labels it: "GPIO 12", "mic SCK", "speaker 2 +".
  * @param {string} point
  */
 function pointName(point) {
   const [id, pin] = point.split(':');
   if (id === 'esp') return pin.replace(/^GPIO(\d+)$/, 'GPIO $1');
-  return `${id === 'spk' ? 'speaker' : id} ${pin}`;
+  const m = /^([a-z]+?)(\d*)$/.exec(id);
+  const stem = m ? m[1] : id;
+  const num = m ? m[2] : '';
+  const label = /** @type {Record<string, string>} */ ({ mic: 'mic', amp: 'amp', spk: 'speaker', scr: 'screen' })[stem] ?? stem;
+  return `${label}${num ? ` ${num}` : ''} ${pin}`;
 }
+
+/**
+ * What the parts bin offers besides boards and screens, in the order the
+ * opening bench was built in (spec §5.1). No ESP32: there is only ever one.
+ * @type {{ key: string, label: string, w: number, d: number }[]}
+ */
+const BIN = [
+  { key: 'breadboard', label: 'Breadboard', w: 65.2, d: 20.6 },
+  { key: 'inmp441', label: PARTS.inmp441.label, w: PARTS.inmp441.size.w * 0.02, d: PARTS.inmp441.size.d * 0.02 },
+  { key: 'max98357a', label: PARTS.max98357a.label, w: PARTS.max98357a.size.w * 0.02, d: PARTS.max98357a.size.d * 0.02 },
+  { key: 'speaker', label: PARTS.speaker.label, w: PARTS.speaker.size.w * 0.05, d: PARTS.speaker.size.d * 0.05 },
+];
 
 // ---- The wiring diagram ---------------------------------------------------
 
@@ -121,8 +140,9 @@ function diagram() {
  * @param {{
  *   hint(): string,
  *   reset(): void,
- *   replace(id: string): void,
  *   follow(el: HTMLElement, id: string): void,
+ *   add(part: string): void,
+ *   carry(part: string, e: PointerEvent): void,
  * }} opts
  */
 export function createPanels(opts) {
@@ -141,30 +161,121 @@ export function createPanels(opts) {
   const status = el('div', { id: 'status', role: 'status', hidden: '' });
   const picker = el('div', { id: 'picker', hidden: '' });
 
-  const rows = TARGET.map((l, i) => el('li', { 'data-link': String(i) }, [
-    el('span', { class: 'num' }, [String(i + 1)]),
-    el('span', {}, [el('b', {}, [`${pointName(l.a)} → ${pointName(l.b)}`]), el('span', { class: 'why' }, [l.why])]),
-  ]));
   const drawing = diagram();
+  const list = el('ol');
+  /**
+   * One line of the diagram's list.
+   * @param {{ a: string, b: string, why: string }} l @param {number} i
+   */
+  const row = (l, i) => {
+    const r = el('li', { 'data-link': String(i) }, [
+      el('span', { class: 'num' }, [String(i + 1)]),
+      el('span', {}, [el('b', {}, [`${pointName(l.a)} → ${pointName(l.b)}`]), el('span', { class: 'why' }, [l.why])]),
+    ]);
+    // Pointing at a line picks its wire out on the drawing, when there is one.
+    const path = drawing.querySelector(`path[data-link="${i}"]`);
+    r.addEventListener('mouseenter', () => path?.classList.add('lit'));
+    r.addEventListener('mouseleave', () => path?.classList.remove('lit'));
+    return r;
+  };
+  /**
+   * The list of wires to make: the audio ones always, then the screens that
+   * are on the bench (spec §5.5), with the one-model rule said once.
+   * @param {{ a: string, b: string, why: string }[]} all @param {string[]} screenIds
+   */
+  function links(all, screenIds) {
+    list.replaceChildren();
+    let screens = false;
+    all.forEach((l, i) => {
+      const isScreen = screenIds.includes(l.a.slice(0, l.a.indexOf(':')));
+      if (isScreen && !screens) {
+        screens = true;
+        list.append(el('li', { class: 'section' }, ['Screen']));
+      }
+      list.append(row(l, i));
+    });
+    if (screens) {
+      list.append(el('li', { class: 'section note' }, [
+        'Only one kind of screen at a time: the firmware drives the model you pick on its serial console.',
+      ]));
+    }
+  }
+  links(TARGET, []);
   const close = el('button', { type: 'button', class: 'close', 'aria-label': 'Close' }, ['×']);
   const panel = el('div', { id: 'diagram', role: 'dialog', 'aria-label': 'Wiring diagram', hidden: '' }, [
     el('header', {}, [el('h2', {}, ['Wiring diagram']), close]),
     drawing,
     el('p', { class: 'note' }, ['GAIN and SD on the amp stay unconnected. The speaker plays the same either way round.']),
-    el('ol', {}, rows),
+    list,
   ]);
-  document.body.append(bar, bubble, status, picker, panel);
+  // ---- The parts bin ----
+  /** @param {{ key: string, label: string, w: number, d: number, note?: string, round?: boolean }} item */
+  function binEntry(item) {
+    const box = 26;
+    const k = Math.min(box / item.w, 15 / item.d);
+    const w = Math.max(4, item.w * k);
+    const h = Math.max(4, item.d * k);
+    const icon = item.round
+      ? svg('circle', { cx: 13, cy: 9, r: Math.min(w, h) / 2 })
+      : svg('rect', { x: 13 - w / 2, y: 9 - h / 2, width: w, height: h, rx: 1.5 });
+    const pic = svg('svg', { viewBox: '0 0 26 18', 'aria-hidden': 'true' });
+    pic.append(icon);
+    const b = el('button', { type: 'button', class: 'part' }, [
+      pic,
+      el('span', { class: 'name' }, [item.label]),
+      ...(item.note ? [el('span', { class: 'note' }, [item.note])] : []),
+    ]);
+    b.title = `Drag ${item.label} onto the bench, or click to place it`;
+    b.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 || !e.isPrimary) return;
+      e.preventDefault();
+      const start = { x: e.clientX, y: e.clientY };
+      /** @type {(ev: PointerEvent) => void} */
+      const move = (ev) => {
+        if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) <= 5) return;
+        done();
+        opts.carry(item.key, ev);
+      };
+      const up = () => { done(); opts.add(item.key); };
+      const done = () => {
+        removeEventListener('pointermove', move);
+        removeEventListener('pointerup', up);
+        removeEventListener('pointercancel', up);
+      };
+      addEventListener('pointermove', move);
+      addEventListener('pointerup', up);
+      addEventListener('pointercancel', up);
+    });
+    return b;
+  }
+  const binList = el('div', { class: 'items' }, BIN.map(binEntry));
+  binList.append(el('div', { class: 'section' }, ['Screens']));
+  for (const model of SCREENS) {
+    binList.append(binEntry({
+      key: `screen-${model.id}`,
+      label: model.label,
+      w: model.pcb.w,
+      d: model.pcb.d,
+      round: model.round,
+      note: `${model.w}×${model.h}${model.round ? ' round' : ''}${model.verified ? '' : ' · untested'}`,
+    }));
+  }
+  const partsClose = el('button', { type: 'button', class: 'close', 'aria-label': 'Close' }, ['×']);
+  const partsPanel = el('div', { id: 'partsbin', role: 'dialog', 'aria-label': 'Parts', hidden: '' }, [
+    el('header', {}, [el('h2', {}, ['Parts']), partsClose]),
+    binList,
+  ]);
+  const partsBtn = el('button', { type: 'button', class: 'pill' }, ['Parts']);
+  bar.prepend(partsBtn);
+  const showParts = (/** @type {boolean} */ on) => { partsPanel.hidden = !on; };
+  partsBtn.addEventListener('click', () => { showDiagram(false); showParts(Boolean(partsPanel.hidden)); });
+  partsClose.addEventListener('click', () => showParts(false));
+  document.body.append(bar, bubble, status, picker, panel, partsPanel);
 
   // ---- Wiring diagram ----
   const showDiagram = (/** @type {boolean} */ on) => { panel.hidden = !on; };
-  diagramBtn.addEventListener('click', () => { hideHint(); showDiagram(Boolean(panel.hidden)); });
+  diagramBtn.addEventListener('click', () => { hideHint(); showParts(false); showDiagram(Boolean(panel.hidden)); });
   close.addEventListener('click', () => showDiagram(false));
-  // Pointing at a line of the list picks its wire out on the drawing.
-  for (const r of rows) {
-    const path = drawing.querySelector(`path[data-link="${r.dataset.link}"]`);
-    r.addEventListener('mouseenter', () => path?.classList.add('lit'));
-    r.addEventListener('mouseleave', () => path?.classList.remove('lit'));
-  }
 
   // ---- Hint ----
   /** @type {ReturnType<typeof setTimeout> | null} */
@@ -252,25 +363,5 @@ export function createPanels(opts) {
     f?.();
   });
 
-  // ---- Replace, over each burnt part ----
-  /** @type {Map<string, HTMLElement>} */
-  const replacers = new Map();
-  /** @param {string[]} ids  the burnt parts still on the bench */
-  function burnt(ids) {
-    for (const [id, b] of replacers) {
-      if (ids.includes(id)) continue;
-      b.remove();
-      replacers.delete(id);
-    }
-    for (const id of ids) {
-      if (replacers.has(id)) continue;
-      const b = el('button', { type: 'button', class: 'pill replace', title: 'Throw the burnt one away and take a fresh one from the box' }, ['Replace']);
-      b.addEventListener('click', () => opts.replace(id));
-      document.body.append(b);
-      replacers.set(id, b);
-      opts.follow(b, id);
-    }
-  }
-
-  return { status: setStatus, pick, closePicker, burnt };
+  return { status: setStatus, pick, closePicker, links };
 }

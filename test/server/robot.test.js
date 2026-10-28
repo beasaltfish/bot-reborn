@@ -113,3 +113,47 @@ test('none: nothing reaches the body, and the LLM was not offered moving', async
   assert.ok(!r.logged.some((l) => l.startsWith('dry-run')));
   r.robot.stop();
 });
+
+/** Idle 2 frames at 10 fps; one trick with a single frame. One size is enough. */
+function fakePetFrames() {
+  /** @param {string[]} frames */
+  const art = (frames) => ({ bySize: new Map([['320x240', frames.map((f) => Buffer.from(f))]]) });
+  return new Map([
+    ['idle', { fps: 10, loop: true, count: 2, ...art(['i0', 'i1']) }],
+    ['sit', { fps: 10, loop: false, count: 1, ...art(['s0']) }],
+  ]);
+}
+
+test('a pet streams idle at once, and stops when the robot stops', async () => {
+  const c = fakeConn();
+  const e = fakeEars();
+  /** @type {string[]} */ const shown = [];
+  const config = readyConfig();
+  config.body.motion = 'pet';
+  const robot = startRobot(c.conn, {
+    config, fetch: fakeFetch(), ears: e.ears, sfx: new Map(), earcons: renderEarcons(),
+    log: () => {}, slackMs: 0,
+    petFrames: fakePetFrames(),
+    screen: (pick) => shown.push(String(pick('320x240'))),
+  });
+  assert.deepEqual(shown, ['i0'], 'the first frame is shown without waiting for a tick');
+  robot.stop();
+  const stopped = shown.length;
+  await new Promise((r) => setTimeout(r, 150));
+  assert.equal(shown.length, stopped, 'nothing arrives after stop()');
+});
+
+test('a car never asks for a screen', async () => {
+  const c = fakeConn();
+  const e = fakeEars();
+  /** @type {string[]} */ const shown = [];
+  const robot = startRobot(c.conn, {
+    config: readyConfig(), fetch: fakeFetch(), ears: e.ears, sfx: new Map(), earcons: renderEarcons(),
+    log: () => {}, slackMs: 0,
+    petFrames: fakePetFrames(),
+    screen: (pick) => shown.push(String(pick('320x240'))),
+  });
+  await new Promise((r) => setTimeout(r, 150));
+  robot.stop();
+  assert.deepEqual(shown, []);
+});

@@ -73,9 +73,64 @@ inputs — if none, solder 10 kΩ from each to GND; the ESP32's own pull-downs
 only exist once the firmware runs) and ④ (the board's logic threshold — if
 3.3 V is not enough, add a level shifter such as a 74HCT245).
 
+### The screen (pet)
+
+A 2.8" 320x240 IPS panel, SKU MSP2834, controller **ILI9341V** — not the
+ST7789 the design assumed, so the firmware uses `esp_lcd_ili9341` (the IDF
+ships a ST7789 driver only). 14 pins on each side of the module, the same
+signals mirrored; read the label beside the pin you use, not the position.
+
+| Screen | GPIO | Note |
+|---|---|---|
+| SCK | 11 | |
+| MOSI / SDI | 10 | |
+| CS / LCD_CS | 9 | |
+| RS / LCD_RS | 8 | this is DC |
+| RST / LCD_RST | 18 | |
+| VCC | **5V** | the module has its own LDO; 3V3 browns the panel out |
+| GND | GND | common with the amp and the mic |
+| LED | **a rail, never a GPIO** | see below |
+| SD_CS | 3V3 | keeps the card slot off the shared SPI bus |
+| MISO / SDO | — | the panel is write-only |
+| CTP_SCL / CTP_SDA / CTP_INT / CTP_RST | — | FT6336G capacitive touch, I2C, not used yet |
+
+**The backlight.** The module's `LED` pin feeds four white LEDs at 80 mA. A
+GPIO may source 20 mA and dies at 40, so `LED` goes to a rail and stays on:
+there is no backlight pin in `board.h` and none is planned. Which rail is a
+measurement, not a guess — with the module unpowered, measure `LED` to `GND`:
+
+| Reading | Meaning | LED goes to |
+|---|---|---|
+| 0.5-5 ohm | a driver transistor sits on the module | 3V3 |
+| ~20-40 ohm | bare resistors sized for 5 V | 5V |
+| 100 ohm or more | resistors sized for 3.3 V | 3V3 |
+| open | no path — the LEDs are fed elsewhere | try 3V3 first |
+
+When it is unclear, put a 100 ohm resistor in series with the rail: every
+answer under that limit is safe to look at, and nothing burns while you
+decide.
+
+**First light.** `screen_start()` runs a red / green / blue test, one second
+each, on a task below the audio tasks. `monitor` prints
+`screen: ILI9341 320x240 up, colour test`. Then:
+
+| What you see | What it means |
+|---|---|
+| three colours, red first | wired and initialised correctly |
+| nothing at all, no glow | the backlight has no power |
+| backlit white, no image | the panel is not being initialised — check CS/RS/RST and the log line |
+| colours but wrong ones (red looks cyan) | `esp_lcd_panel_invert_color` — flip it |
+| image mirrored or rotated | `esp_lcd_panel_swap_xy` / `esp_lcd_panel_mirror` in `screen.c` |
+| torn or noisy picture | lower `LCD_PCLK_HZ` (20 MHz today; 40 is the target) |
+
+The first `idf.py build` downloads `espressif/esp_lcd_ili9341` from the
+component registry, so it needs the network once.
+
 ## Build and flash
 
-Once per machine: ESP-IDF v5.4.1 in `~/esp/esp-idf` (`./install.sh esp32s3`).
+Once per machine: ESP-IDF, `./install.sh esp32s3`. Developed on v5.4.1; v6.1
+builds the same tree (the only thing 6.x broke was cJSON, which this tree now
+takes from the component registry, so either version works).
 
 ```sh
 . ~/esp/esp-idf/export.sh

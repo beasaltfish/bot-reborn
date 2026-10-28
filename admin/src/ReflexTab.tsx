@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { SOUNDS } from '../../core/audio/sfx.js';
 import { MIN_DURATION_MS } from '../../core/motion.js';
+import { POSES } from '../../core/poses.js';
 import { normalizeReflex, reflexMissing } from '../../core/config.js';
 import {
   DRIVES, STEERS, blankQuestion, freshChoice, fromUnsloth, presetIdOf, presetPatch, toUnsloth, unsupported,
@@ -43,6 +44,7 @@ export function ReflexTab({ config, saved, update, tryIt }:
           <option value="none">{t('presetNone')}</option>
           <option value="bark">{t('presetBark')}</option>
           <option value="commands">{t('presetCommands')}</option>
+          <option value="pet">{t('presetPet')}</option>
           {saved.length > 0 && (
             <optgroup label={t('presetsSaved')}>
               {saved.map((s) => <option key={s.name} value={`saved:${s.name}`}>{s.name}</option>)}
@@ -178,10 +180,11 @@ function fresh(name: ReflexCall['name']): ReflexCall {
   if (name === 'move') return { name, args: { steps: [{ drive: 'forward', steer: 'straight', duration_ms: 600 }] } };
   if (name === 'cruise') return { name, args: { drive: 'forward', steer: 'straight' } };
   if (name === 'stop') return { name, args: {} };
+  if (name === 'pose') return { name, args: { name: POSES[0] } };
   return { name, args: { name: SOUNDS[0] } };
 }
 
-const KINDS: ReflexCall['name'][] = ['move', 'cruise', 'stop', 'play_sound'];
+const KINDS: ReflexCall['name'][] = ['move', 'cruise', 'stop', 'play_sound', 'pose'];
 
 function ActionList({ label, actions, onChange }: { label: string; actions: ReflexCall[]; onChange(a: ReflexCall[]): void }) {
   const setAt = (i: number, a: ReflexCall) => onChange(actions.map((x, j) => (j === i ? a : x)));
@@ -242,6 +245,9 @@ function ActionArgs({ at, call, onChange }: { at: string; call: ReflexCall; onCh
   }
   if (call.name === 'play_sound') {
     return <Pick at={at} field="sound" values={SOUNDS} value={a.name} onPick={(name) => onChange({ ...call, args: { name } })} />;
+  }
+  if (call.name === 'pose') {
+    return <Pick at={at} field="pose" values={POSES} value={a.name} onPick={(name) => onChange({ ...call, args: { name } })} />;
   }
   return null;
 }

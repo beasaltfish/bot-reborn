@@ -7,13 +7,17 @@
 // goes in, the circuit is judged once, what burns burns, and the bench either
 // comes alive as a body or shows why not. Pulling the plug ends it.
 
-import { emptyBench, load, serialize, swapBurnt } from './bench.js';
+import { emptyBench, load, serialize, addPart, addBoard } from './bench.js';
 import { powerOn } from './power.js';
+import { PARTS } from './parts.js';
+import { spotForNew } from './snap.js';
+import { targetFor } from './target.js';
+import { screenById } from '../core/screens.js';
 import { diagnose, nextHint } from './diagnose.js';
 import { characterChoices, startBody } from './body.js';
 import { createPanels } from './panels.js';
 import { createWorld } from './scene/world.js';
-import { attachInteraction } from './scene/interact.js';
+import { attachInteraction, beginCarry } from './scene/interact.js';
 import { attachUsb } from './scene/usb.js';
 import { createEffects } from './scene/effects.js';
 
@@ -49,12 +53,13 @@ const effects = createEffects(world);
 // A page that was closed with the cable in is not powered when it opens again.
 let bench = { ...load(read(BENCH_KEY)), usb: false };
 const panels = createPanels({
-  hint: () => (bench.placed.some((p) => p.burnt && !p.discarded)
-    ? 'A part burnt out; replace it first.'
+  hint: () => (bench.placed.some((p) => p.burnt)
+    ? 'A part burnt out; drag it to the bin and take a new one from Parts.'
     : nextHint(bench)?.text ?? 'Looks complete — plug in USB.'),
   reset,
-  replace: (id) => setBench(swapBurnt(bench, id)),
   follow: effects.follow,
+  add: (part) => addFromBin(part),
+  carry: (part, e) => beginCarry(/** @type {any} */ (part), e),
 });
 
 /** @param {import('./bench.js').Bench} b */
@@ -62,13 +67,25 @@ function setBench(b) {
   bench = b;
   write(BENCH_KEY, serialize(b));
   world.show(b);
+  panels.links(targetFor(b), b.placed.filter((p) => p.part.startsWith('screen-')).map((p) => p.id));
   usb.refresh();
   effects.refresh();
-  panels.burnt(b.placed.filter((p) => p.burnt && !p.discarded).map((p) => p.id));
 }
 
-const hands = attachInteraction(world, () => bench, setBench);
-const usb = attachUsb(world, { onPlug: (on) => (on ? plugIn() : unplug()), locked: () => starting });
+/**
+ * A click on a part in the bin: it lands in front of the bench, moved off
+ * anything already there. Touch screens get the same place a drag would.
+ * @param {string} part
+ */
+function addFromBin(part) {
+  if (part !== 'breadboard' && !PARTS[part]) return;
+  const kind = /** @type {Parameters<typeof spotForNew>[1]} */ (part);
+  const at = spotForNew(bench, kind);
+  setBench(kind === 'breadboard' ? addBoard(bench, at).bench : addPart(bench, kind, at).bench);
+}
+
+const hands = attachInteraction(world, () => bench, setBench, { say: (text) => panels.status(text) });
+const usb = attachUsb(world, { onPlug: (on) => (on ? plugIn() : unplug()), locked: () => starting, bench: () => bench });
 
 // #view=top opens in that view without saving it: handy for a screenshot.
 const asked = new URLSearchParams(location.hash.slice(1)).get('view');
@@ -162,11 +179,15 @@ async function plugIn() {
   bench = { ...bench, usb: true };
   const outcome = powerOn(bench);
   // What burns is marked now, before anything else is shown, so a reload
-  // remembers it; it stays burnt until it is replaced.
+  // remembers it; it stays burnt until the user drops it in the bin.
   if (outcome.burns.length) {
-    bench = { ...bench, placed: bench.placed.map((p) => (outcome.burns.includes(p.id) && !p.discarded ? { ...p, burnt: true } : p)) };
+    bench = { ...bench, placed: bench.placed.map((p) => (outcome.burns.includes(p.id) ? { ...p, burnt: true } : p)) };
   }
   setBench(bench);
+  world.screens(outcome.parts);
+  effects.playing(bench.placed
+    .filter((p) => /** @type {any} */ (outcome.parts[p.id])?.kind === 'speaker' && /** @type {any} */ (outcome.parts[p.id]).playing)
+    .map((p) => p.id));
   for (const id of outcome.burns) effects.smoke(id);
   effects.led(outcome.esp === 'brownout' ? 'blink' : 'on');
   // After a brown-out the short is the news; a guess about some other wire would mislead.
@@ -228,6 +249,11 @@ async function connect(mine, id, name, outcome) {
       onEnd: (msg) => { if (!live()) return; line.end = msg; effects.setAlive(false); showLine(); },
       onLost: () => { if (!live()) return; line.lost = true; showLine(); },
       onWelcome: () => { if (!live()) return; line.lost = false; if (line.state === 'connecting…') line.state = 'connected'; showLine(); },
+      // The bench's screens connect the way the firmware does, with their own
+      // size; a character that is not a pet leaves them black (spec §5.5).
+      screen: outcome.screenModel
+        ? { model: /** @type {any} */ (screenById(outcome.screenModel)), onFrame: (img) => world.paintScreens(img) }
+        : undefined,
     });
     // Reset bench can pull the plug while this was starting.
     if (live()) session = started;
@@ -243,11 +269,14 @@ function unplug() {
   session = null;
   panels.closePicker();
   effects.setAlive(false);
+  effects.playing([]);
   effects.led('off');
   line = { end: null, lost: false, fault: null, state: null, who: null };
   showLine();
   bench = { ...bench, usb: false };
   setBench(bench);
+  // Pulling the plug turns the panels off; the last look is not kept.
+  world.screens(powerOn(bench).parts);
   if (view === 'orbit' && wiringView !== 'orbit') {
     view = wiringView;
     go(view);

@@ -10,6 +10,8 @@ import { OpenAiCompatLlm } from '../core/providers/llm-openai-compat.js';
 import { RemotePipeline } from './body/pipeline.js';
 import { RemoteExecutor } from './body/executor.js';
 import { DryRunExecutor, NoMotionExecutor } from './body/still.js';
+import { PetExecutor } from './body/pet.js';
+import { Animator } from './pet/animator.js';
 import { Mouth } from './body/mouth.js';
 import { PcmTts } from './providers/tts-pcm.js';
 import { makeStt, makeTtsSource } from './providers/pick.js';
@@ -35,6 +37,8 @@ export const ECHO_SLACK_MS = 300;
  *   earcons: Record<import('../core/audio/earcon.js').EarconName, Int16Array>,
  *   log?: (line: string) => void,
  *   slackMs?: number,
+ *   petFrames?: import('./pet/frames.js').PetFrames,
+ *   screen?: (pick: import('./pet/frames.js').FramePick) => void,
  * }} deps
  */
 export function startRobot(conn, deps) {
@@ -44,7 +48,14 @@ export function startRobot(conn, deps) {
   const net = deps.fetch ? { fetch: deps.fetch } : {};
 
   const pipeline = new RemotePipeline();
-  const executor = makeExecutor(config.body.motion, conn, log);
+  const motion = config.body.motion;
+  // A pet has nothing to drive: its body is the screen, and the animator is
+  // what moves. Started here so a connected body is already showing idle.
+  const animator = motion === 'pet' && deps.petFrames
+    ? new Animator({ frames: deps.petFrames, show: (pick) => deps.screen?.(pick), log })
+    : null;
+  const executor = makeExecutor(motion, conn, log, animator);
+  animator?.start();
   const mouth = new Mouth({
     sendAudio: (bytes) => conn.sendAudio(bytes),
     send: (msg) => conn.send(msg),
@@ -97,6 +108,8 @@ export function startRobot(conn, deps) {
       stopped = true;
       executor.connected = false;
       session.onEmergencyStop();
+      // The screen keeps whatever it is showing; it just stops being fed.
+      animator?.stop();
       pipeline.clear();
     },
   };
@@ -108,9 +121,11 @@ export function startRobot(conn, deps) {
  * @param {import('../core/config.js').Motion} motion
  * @param {import('./link.js').BodyConn} conn
  * @param {(line: string) => void} log
+ * @param {import('./pet/animator.js').Animator | null} [animator]
  */
-function makeExecutor(motion, conn, log) {
+function makeExecutor(motion, conn, log, animator) {
   if (motion === 'dry-run') return new DryRunExecutor(log);
   if (motion === 'none') return new NoMotionExecutor();
+  if (motion === 'pet' && animator) return new PetExecutor(animator);
   return new RemoteExecutor((msg) => conn.send(msg));
 }

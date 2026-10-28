@@ -1,8 +1,8 @@
 // What the bench does when it has power: smoke off a part that burnt, the
 // ESP32's power LED (steady, or blinking while it browns out), and, while it
-// is a body, a waveform of the user's voice above the mic and the speaker
-// cone moving with the robot's. Also keeps page elements (the Replace
-// button) pinned above a part as the camera moves.
+// is a body, a waveform of the user's voice above the mic and every speaker
+// that is playing moving with the robot's. Also keeps page elements pinned
+// above a part as the camera moves.
 //
 // Frames are drawn only while something moves: smoke still rising, a level
 // not yet settled. Then drawing stops until the next sound.
@@ -157,7 +157,7 @@ export function createEffects(world) {
     if (!on) {
       history.fill(0);
       shown.up = shown.down = 0;
-      placeCone(0);
+      placeCones(0);
     }
     world.requestRender();
   }
@@ -177,13 +177,29 @@ export function createEffects(world) {
     if (up > QUIET || down > QUIET || shown.up > QUIET || shown.down > QUIET) world.requestRender();
   }
 
+  /** The speakers the downlink plays through (power.js says which), by id. */
+  /** @type {string[]} */
+  let playing = [];
+
+  /**
+   * Which speakers move with the sound: any number of them, each on its own.
+   * @param {string[]} ids
+   */
+  function setPlaying(ids) {
+    playing = ids;
+    placeCones(shown.down);
+    world.requestRender();
+  }
+
   /** @param {number} d  0..1 */
-  function placeCone(d) {
-    const cone = part('spk')?.getObjectByName('cone');
-    if (!cone) return;
-    if (cone.userData.baseY === undefined) cone.userData.baseY = cone.position.y;
-    cone.position.y = cone.userData.baseY + d * 0.9;
-    cone.scale.set(1, 1 + d * 0.6, 1);
+  function placeCones(d) {
+    for (const id of playing) {
+      const cone = part(id)?.getObjectByName('cone');
+      if (!cone) continue;
+      if (cone.userData.baseY === undefined) cone.userData.baseY = cone.position.y;
+      cone.position.y = cone.userData.baseY + d * 0.9;
+      cone.scale.set(1, 1 + d * 0.6, 1);
+    }
   }
 
   /** @param {number} now @returns {boolean} still moving */
@@ -203,7 +219,7 @@ export function createEffects(world) {
     const ease = (/** @type {number} */ tau) => 1 - Math.exp(-dt / tau);
     shown.up += (up - shown.up) * ease(25);
     shown.down += (target - shown.down) * ease(target > shown.down ? 18 : 60);
-    placeCone(shown.down);
+    placeCones(shown.down);
 
     history.copyWithin(0, 1);
     history[WAVE_N - 1] = shown.up;
@@ -275,6 +291,7 @@ export function createEffects(world) {
   return {
     smoke,
     led,
+    playing: setPlaying,
     setAlive,
     levels,
     follow,

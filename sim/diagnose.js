@@ -11,21 +11,33 @@
 import { PARTS } from './parts.js';
 import { pinPoints } from './bench.js';
 import { nets } from './netlist.js';
-import { TARGET } from './target.js';
+import { targetFor } from './target.js';
 
 /**
  * @typedef {{ kind: 'hanging' | 'swapped' | 'neighbour-pin' | 'off-by-one' | 'missing' | 'fault', text: string, points: string[] }} Hint
  */
 
+/** The word for each instance stem: "mic2 SCK", "speaker 2 +". */
+const STEM = /** @type {Record<string, string>} */ ({ mic: 'mic', amp: 'amp', spk: 'speaker', scr: 'screen' });
+
+/** @param {string} id @returns {{ stem: string, num: string }} */
+function split(id) {
+  const m = /^([a-z]+?)(\d*)$/.exec(id);
+  return { stem: m ? m[1] : id, num: m ? m[2] : '' };
+}
+
 /**
- * A point the way the board's silk prints it: "GPIO 12", "mic SCK".
+ * A point the way the board's silk prints it: "GPIO 12", "mic SCK", "speaker 2 +".
  * @param {string} point
  */
 function name(point) {
   const [id, pin] = point.split(':');
   const base = pin.replace(/\.\d+$/, '');
   if (id === 'esp') return base.replace(/^GPIO(\d+)$/, 'GPIO $1');
-  return `${id === 'spk' ? 'speaker' : id} ${base}`;
+  const { stem, num } = split(id);
+  const label = STEM[stem] ?? stem;
+  // "mic2" is a name, "speaker 2" reads as one; both match how the pins are printed.
+  return stem === 'spk' ? `${label}${num ? ` ${num}` : ''} ${base}` : `${label}${num} ${base}`;
 }
 
 /**
@@ -35,7 +47,7 @@ function name(point) {
  */
 function neighbours(b, point) {
   const [id, pin] = point.split(':');
-  const placed = b.placed.find((p) => p.id === id && !p.discarded);
+  const placed = b.placed.find((p) => p.id === id);
   if (!placed) return [];
   const pins = PARTS[placed.part].pins;
   const me = pins.find((p) => p.name === pin);
@@ -43,9 +55,9 @@ function neighbours(b, point) {
   return pins.filter((p) => p.y === me.y && Math.abs(p.x - me.x) === 1).map((p) => `${id}:${p.name}`);
 }
 
-/** @param {string | null} hole 'bb:e20' → { half, col } */
+/** @param {string | null} hole 'bb1:e20' → { half, col } */
 function holeColumn(hole) {
-  const m = hole && /^bb:([a-j])(\d+)$/.exec(hole);
+  const m = hole && /^[^:]+:([a-j])(\d+)$/.exec(hole);
   return m ? { half: m[1] <= 'e' ? 'top' : 'bottom', col: Number(m[2]) } : null;
 }
 
@@ -65,6 +77,19 @@ const FAULT_TEXT = {
   speaker: 'The speaker is not joined to both screw terminals of the amp, or the terminals touch each other; one wire from each speaker pin to one terminal.',
   'pins-shorted': 'Two of GPIO 12 to 15 are joined, so the chips on them hear garbage; separate those wires.',
   'bus-on-rail': 'One of GPIO 12 to 15 is joined to 3V3, 5V or GND, so it is stuck and the chip on it hears nothing; wire that pin to its own signal only.',
+  'mics-same-slot': 'Two mics are both wired for the left slot and share the data line, so what the ESP32 hears is noise; take one out, or wire one for the right slot.',
+  'screen-burnt': 'This panel already burnt and stays dead; take it to the bin and wire a fresh one the same way.',
+  'screen-5v': 'This module takes 3V3 at most and its VCC was on 5V, so it burnt; take it to the bin and wire VCC to 3V3.',
+  'screen-unpowered': 'The panel has no power, so it stays black; wire its VCC to 3V3 or 5V, and its GND to GND.',
+  'screen-needs-5v': 'This module has its own regulator and wants 5V on VCC; on 3V3 the panel stays dark.',
+  'screen-backlight': 'The backlight is off, so the glass is dark; wire the backlight pin to 3V3.',
+  'screen-spi-swapped': 'SCK and MOSI are swapped, so the panel is initialised with nonsense and stays white; swap those two wires.',
+  'screen-signal': 'SCK, MOSI, DC or RST is not where the firmware sends it, so the panel never initialises and stays white; check those wires against the diagram.',
+  'screen-cs': 'The panel is not selected: CS goes to GPIO 9, so the firmware never talks to it and the glass stays white.',
+  'screens-mixed': 'Two different screen models are both selected, and the firmware drives one kind of screen at a time; take one off, or wire only one CS to GPIO 9.',
+  'screen-pins-shorted': 'Two of GPIO 8 to 11 and 18 are joined, so the panel hears nonsense and stays white; separate those wires.',
+  'screen-bus-on-rail': 'One of the panel\'s signal pins is held at 3V3, 5V or GND, so it never sees its signal and the glass stays white; give that pin its own wire.',
+  'bl-on-gpio': 'The backlight is on a GPIO, which works but is not how the diagram wires it; the backlight pin belongs on 3V3.',
 };
 
 /**
@@ -121,7 +146,7 @@ export function diagnose(b, o) {
     /** @type {Hint | null} */
     let off = null;
     for (const [want, other] of ends) {
-      const placed = b.placed.find((p) => p.id === want.split(':')[0] && !p.discarded);
+      const placed = b.placed.find((p) => p.id === want.split(':')[0]);
       const at = placed && holeColumn(pinPoints(b, placed).find((q) => q.pin === want)?.hole ?? null);
       if (!at) continue;
       for (const w of b.wires) {
@@ -153,8 +178,12 @@ export function diagnose(b, o) {
   return [...hanging(b), ...swapped, ...slips, ...offs, ...faults, ...missing];
 }
 
-/** @type {Record<string, string>} */
-const PART_NAME = { esp: 'The ESP32', mic: 'The mic', amp: 'The amp', spk: 'The speaker' };
+/** @param {string} id @returns {string} */
+function partName(id) {
+  const { stem, num } = split(id);
+  const label = STEM[stem] ?? id;
+  return `The ${label}${num ? ` ${num}` : ''}`;
+}
 
 /**
  * Pins of a part on the board that went into no hole and have no wire on them
@@ -167,7 +196,7 @@ function hanging(b) {
   /** @type {Hint[]} */
   const out = [];
   for (const p of b.placed) {
-    if (p.discarded || !p.at) continue;
+    if (!p.seated) continue;
     const pins = PARTS[p.part].pins;
     const loose = pinPoints(b, p)
       .filter((s) => s.hole === null && !pins.find((q) => `${p.id}:${q.name}` === s.pin)?.wireOnly)
@@ -178,7 +207,7 @@ function hanging(b) {
     const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
     out.push({
       kind: 'hanging',
-      text: `${PART_NAME[p.id] ?? p.id}'s ${list} ${names.length === 1 ? 'pin is' : 'pins are'} in no hole and touch nothing: move it so every pin sits in a hole, or slip a jumper straight onto them.`,
+      text: `${partName(p.id)}'s ${list} ${names.length === 1 ? 'pin is' : 'pins are'} in no hole and touch nothing: move it so every pin sits in a hole, or slip a jumper straight onto them.`,
       points: loose,
     });
   }
@@ -186,14 +215,22 @@ function hanging(b) {
 }
 
 /**
- * TARGET links not yet made. The speaker wired crossed counts as made: the amp
- * drives it bridged, so it plays the same either way round.
+ * The links still to make, per instance. A speaker wired crossed counts as
+ * made: the amp drives it bridged, so it plays the same either way round.
  * @param {import('./bench.js').Bench} b
  */
 function unmetLinks(b) {
   const n = nets(b);
-  const crossed = n.same('spk:+', 'amp:-') && n.same('spk:-', 'amp:+');
-  return TARGET.filter((l) => !n.same(l.a, l.b) && !(crossed && l.a.startsWith('spk:')));
+  /** @param {{ a: string, b: string }} l */
+  const crossed = (l) => {
+    const [id, pin] = l.a.split(':');
+    const [ampId, ampPin] = l.b.split(':');
+    if (!'+-'.includes(pin) || !'+-'.includes(ampPin)) return false;
+    const other = pin === '+' ? '-' : '+';
+    const ampOther = ampPin === '+' ? '-' : '+';
+    return n.same(`${id}:${pin}`, `${ampId}:${ampOther}`) && n.same(`${id}:${other}`, `${ampId}:${ampPin}`);
+  };
+  return targetFor(b).filter((l) => !n.same(l.a, l.b) && !crossed(l));
 }
 
 /**

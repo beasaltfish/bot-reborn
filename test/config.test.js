@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CONFIG_KEY, STICKY, defaultConfig, loadConfig, saveConfig, resetSticky, layerReady,
+import { CONFIG_KEY, STICKY, MOTIONS, defaultConfig, loadConfig, saveConfig, resetSticky, layerReady,
   reflexReady, reflexMissing, normalizeReflex, CAN_DO, DEFAULT_STATE } from '../core/config.js';
 
 /** A localStorage stand-in. The real one is not available in node, and every
@@ -257,6 +257,20 @@ test('normalizeReflex: a question needs a name, instructions and two good option
   assert.equal(normalizeReflex({ question: 'action' }).question, null);
 });
 
+test('a reflex option may carry a pose action, which survives the read', () => {
+  const q = normalizeReflex({ question: { ...QUESTION, options: [
+    { choice: 'sit', description: 'Sit down.', actions: [
+      { name: 'pose', args: { name: 'sit' } },
+      { name: 'play_sound', args: { name: 'bark' } },
+    ] },
+    QUESTION.options[1],
+  ] } }).question;
+  assert.deepEqual(q?.options[0].actions, [
+    { name: 'pose', args: { name: 'sit' } },
+    { name: 'play_sound', args: { name: 'bark' } },
+  ]);
+});
+
 test('normalizeReflex: bad options and bad actions are dropped one by one', () => {
   const q = normalizeReflex({ question: { ...QUESTION, options: [
     ...QUESTION.options,
@@ -276,10 +290,15 @@ test('normalizeReflex: bad options and bad actions are dropped one by one', () =
   assert.deepEqual(q?.options[3].actions, []);
 });
 
-test('CAN_DO: a car and a dry run do everything, a still body only makes sounds', () => {
+test('CAN_DO: a car and a dry run do everything, a still body only makes sounds, a pet poses', () => {
   assert.deepEqual(CAN_DO.car, ['move', 'cruise', 'stop', 'sound']);
   assert.deepEqual(CAN_DO['dry-run'], CAN_DO.car);
   assert.deepEqual(CAN_DO.none, ['sound']);
+  assert.deepEqual(CAN_DO.pet, ['pose', 'sound']);
+});
+
+test('MOTIONS: a pet is a body kind the admin can pick', () => {
+  assert.deepEqual([...MOTIONS], ['car', 'dry-run', 'none', 'pet']);
 });
 
 test('body.motion defaults to car, and an old config gets it too', () => {
@@ -289,7 +308,7 @@ test('body.motion defaults to car, and an old config gets it too', () => {
 });
 
 test('a stored motion survives the read', () => {
-  for (const motion of ['car', 'dry-run', 'none']) {
+  for (const motion of ['car', 'dry-run', 'none', 'pet']) {
     const c = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ body: { motion } }) }));
     assert.equal(c.body.motion, motion);
   }

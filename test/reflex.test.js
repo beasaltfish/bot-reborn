@@ -165,8 +165,8 @@ test('judge never rejects, even where AbortSignal.any does not exist', async () 
 
 // --- Presets (spec §2.5) ---------------------------------------------------
 
-test('presets: two of them, each already in the shape loadConfig keeps', () => {
-  assert.deepEqual(REFLEX_PRESETS.map((p) => p.id), ['bark', 'commands']);
+test('presets: three of them, each already in the shape loadConfig keeps', () => {
+  assert.deepEqual(REFLEX_PRESETS.map((p) => p.id), ['bark', 'commands', 'pet']);
   for (const p of REFLEX_PRESETS) {
     const n = normalizeReflex({ threshold: p.threshold, state: p.state, question: p.question });
     assert.deepEqual(n.question, p.question, p.id);
@@ -206,4 +206,21 @@ test('commands preset: the training question, word for word, and pass hands over
   assert.match(c.question.instructions, /^A person is talking to a small wheeled robot\. /);
   assert.match(c.question.instructions, /and words meant for someone else, is pass\.$/);
   assert.deepEqual(c.question.options.find((o) => o.choice === 'pass')?.actions, []);
+});
+
+test('pet preset: three trick commands, each posing and barking, then pass', () => {
+  const pet = REFLEX_PRESETS.find((p) => p.id === 'pet');
+  assert.ok(pet, 'the pet preset exists');
+  assert.equal(pet.threshold, 0.8);
+  assert.equal(pet.state, DEFAULT_STATE);
+  assert.deepEqual(pet.question.options.map((o) => o.choice), ['sit', 'shake', 'spin', 'pass']);
+  for (const pose of ['sit', 'shake', 'spin']) {
+    /** @type {{ actions: any[] } | undefined} */
+    const trick = pet.question.options.find((x) => x.choice === pose);
+    assert.deepEqual(trick?.actions, [
+      { name: 'pose', args: { name: pose } },
+      { name: 'play_sound', args: { name: 'bark' } },
+    ], pose);
+  }
+  assert.deepEqual(pet.question.options.find((o) => o.choice === 'pass')?.actions, []);
 });

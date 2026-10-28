@@ -18,6 +18,8 @@ import {
   modelsPresent, loadSherpaNode, loadKeywords, createSpotter, createVoiceDetector,
 } from './audio/sherpa-node.js';
 import { BODY_PATH } from '../core/protocol.js';
+import { loadPetFrames } from './pet/frames.js';
+import { fileURLToPath } from 'node:url';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const DEV = process.argv.includes('--dev');
@@ -41,6 +43,8 @@ const server = createBrainServer({
   makeEars: () => ({ kws: createSpotter(sherpa, keywords), vad: createVoiceDetector(sherpa) }),
   sfx: loadSfx(),
   earcons: renderEarcons(),
+  // The dog is the same for every character, so it is loaded once (spec §7).
+  petFrames: loadPetFrames(fileURLToPath(new URL('./pet/frames', import.meta.url))),
   ...(DEV ? { pages: (/** @type {import('node:http').Server} */ http) => createDevPages(http) } : {}),
 });
 const port = await server.listen(PORT);

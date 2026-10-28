@@ -1,0 +1,29 @@
+{
+  "sizes": [
+    "320x240",
+    "240x240",
+    "160x128"
+  ],
+  "anims": {
+    "idle": {
+      "fps": 8,
+      "loop": true,
+      "frames": 24
+    },
+    "sit": {
+      "fps": 10,
+      "loop": false,
+      "frames": 16
+    },
+    "shake": {
+      "fps": 10,
+      "loop": false,
+      "frames": 16
+    },
+    "spin": {
+      "fps": 10,
+      "loop": false,
+      "frames": 18
+    }
+  }
+}

@@ -7,6 +7,7 @@
 // only exercised on the page.
 
 import { connectBody } from '../phone/body-link.js';
+import { openScreenFeed } from './screen-feed.js';
 import { AudioPipeline } from '../phone/audio/pipeline.js';
 import { PcmPlayer } from '../phone/audio/player.js';
 import { toInt16 } from '../core/audio/pcm.js';
@@ -112,6 +113,7 @@ async function pipelineFor(echo) {
  *   onState(s: string): void, onLevel(up: number, down: number): void,
  *   onEnd(msg: string): void,
  *   onLost?(): void, onWelcome?(): void,
+ *   screen?: { model: import('../core/screens.js').Screen, onFrame(img: ImageBitmap): void },
  * }} o
  * onLost: the brain dropped and the link is retrying by itself; onWelcome:
  * the brain took this body in (first time or again after a drop).
@@ -121,6 +123,7 @@ export async function startBody(o) {
   let stopped = false;
   /** @type {AudioPipeline | null} */ let pipeline = null;
   /** @type {ReturnType<typeof connectBody> | null} */ let link = null;
+  /** @type {ReturnType<typeof openScreenFeed> | null} */ let feed = null;
   /** @type {PcmPlayer | null} */ let player = null;
   const name = `sim-${o.id}`;
   let up = 0;
@@ -130,6 +133,7 @@ export async function startBody(o) {
     if (stopped) return;
     stopped = true;
     link?.close();
+    feed?.stop();
     pipeline?.unsubscribe(name);
     player?.hush();
   };
@@ -174,6 +178,10 @@ export async function startBody(o) {
     onLost() { if (!stopped) o.onLost?.(); },
     onReject: (reason) => end(rejectMessage(reason)),
   });
+
+  // One feed for the bench's screens: the firmware drives one panel, and every
+  // glass of that model shows what it shows (spec §5.5).
+  if (o.screen) feed = openScreenFeed({ token: character.token, model: o.screen.model, onFrame: o.screen.onFrame });
 
   pipeline.subscribe(name, (frame) => {
     const shaped = shapeUplink(toInt16(frame), o.outcome.mic);

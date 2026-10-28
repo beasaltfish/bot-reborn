@@ -49,3 +49,6 @@ firmware/build-host/
 firmware/sdkconfig
 firmware/sdkconfig.old
 firmware/managed_components/
+# Pet animation previews: a build product of `npm run pet:render`, for the
+# computer only. The frames themselves are committed.
+tools/pet/preview/

@@ -7,7 +7,8 @@
 // (pin names, column numbers) is drawn on canvases once and kept.
 
 import * as THREE from 'three';
-import { PARTS, holeAt } from '../parts.js';
+import { PARTS, BOARD_OUTLINE, holeAt } from '../parts.js';
+import { screenById } from '../../core/screens.js';
 
 /** @typedef {import('../parts.js').PartDef} PartDef */
 
@@ -17,29 +18,8 @@ export const MM = 1 / 2.54;
 /** Height of the breadboard's top above the table. */
 export const BOARD_TOP = 8.5 * MM;
 
-/** The board's outline in breadboard pitch coordinates (holes run 0–62 by 0–17). */
-const BOARD = { x0: -1.6, x1: 63.6, y0: -1.8, y1: 18.8 };
-
 /** Where the board's middle is, in pitch coordinates; the world's origin sits under it. */
-const BOARD_MID = { x: (BOARD.x0 + BOARD.x1) / 2, y: (BOARD.y0 + BOARD.y1) / 2 };
-
-/**
- * Breadboard pitch coordinates to world x/z, the board lying in the middle of
- * the table with its first column on the left and its top rail at the back.
- * @param {number} x
- * @param {number} y
- */
-export function boardToWorld(x, y) {
-  return { x: x - BOARD_MID.x, z: y - BOARD_MID.y };
-}
-
-/**
- * @param {number} x
- * @param {number} z
- */
-export function worldToBoard(x, z) {
-  return { x: x + BOARD_MID.x, y: z + BOARD_MID.y };
-}
+const BOARD_MID = { x: (BOARD_OUTLINE.x0 + BOARD_OUTLINE.x1) / 2, y: (BOARD_OUTLINE.y0 + BOARD_OUTLINE.y1) / 2 };
 
 /** How far a male header's pins reach below the part: they stand the part off the table. */
 const PIN_LEN = 8.5 * MM;
@@ -265,6 +245,113 @@ export function buildTable() {
   return m;
 }
 
+/** How thick the mat is: the wood lies this far under the top things stand on. */
+export const MAT_THICK = 2 * MM;
+
+/**
+ * A self-healing cutting mat lying on the table, as big as the stretch of
+ * table things may be put on: a green sheet with a 10 mm grid, every
+ * fifth line stronger, centimetre rulers along two edges and the 45° guides
+ * that real mats print. Measured in millimetres, so the grid matches the parts.
+ * @param {{ x0: number, x1: number, z0: number, z1: number }} bounds world units
+ */
+export function buildMat(bounds) {
+  const wmm = (bounds.x1 - bounds.x0) / MM;
+  const dmm = (bounds.z1 - bounds.z0) / MM;
+  const tex = texture('mat', () => {
+    const px = 6;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(wmm * px);
+    canvas.height = Math.round(dmm * px);
+    const ctx = /** @type {CanvasRenderingContext2D} */ (canvas.getContext('2d'));
+    const W = canvas.width;
+    const H = canvas.height;
+    ctx.fillStyle = '#2f6b55';
+    ctx.fillRect(0, 0, W, H);
+    // A little mottling, so it reads as a material and not a flat fill.
+    let seed = 11;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    for (let i = 0; i < 9000; i++) {
+      ctx.fillStyle = rnd() < 0.5 ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.035)';
+      ctx.fillRect(rnd() * W, rnd() * H, 2 + rnd() * 6, 2 + rnd() * 6);
+    }
+    const margin = 15;
+    const gx0 = margin * px;
+    const gy0 = margin * px;
+    const gx1 = W - margin * px;
+    const gy1 = H - margin * px;
+    // 45° guides, faint, clipped to the grid.
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(gx0, gy0, gx1 - gx0, gy1 - gy0);
+    ctx.clip();
+    ctx.strokeStyle = 'rgba(232,244,236,0.06)';
+    ctx.lineWidth = 2;
+    for (let k = -H; k < W; k += 100 * px) {
+      ctx.beginPath(); ctx.moveTo(gx0 + k, gy0); ctx.lineTo(gx0 + k + H, gy0 + H); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(gx1 - k, gy0); ctx.lineTo(gx1 - k - H, gy0 + H); ctx.stroke();
+    }
+    ctx.restore();
+    // The grid: every 10 mm, every 50 mm stronger.
+    for (let mm = 0; gx0 + mm * px <= gx1 + 0.5; mm += 10) {
+      const strong = mm % 50 === 0;
+      ctx.fillStyle = strong ? 'rgba(232,244,236,0.26)' : 'rgba(232,244,236,0.11)';
+      ctx.fillRect(gx0 + mm * px - (strong ? 1.5 : 1), gy0, strong ? 3 : 2, gy1 - gy0);
+    }
+    for (let mm = 0; gy0 + mm * px <= gy1 + 0.5; mm += 10) {
+      const strong = mm % 50 === 0;
+      ctx.fillStyle = strong ? 'rgba(232,244,236,0.26)' : 'rgba(232,244,236,0.11)';
+      ctx.fillRect(gx0, gy0 + mm * px - (strong ? 1.5 : 1), gx1 - gx0, strong ? 3 : 2);
+    }
+    // Rulers: millimetre ticks and centimetre numbers along the top and left.
+    ctx.fillStyle = 'rgba(240,248,242,0.75)';
+    ctx.font = `600 ${4 * px}px ui-sans-serif, system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    for (let mm = 0; gx0 + mm * px <= gx1 + 0.5; mm++) {
+      const len = mm % 10 === 0 ? 4 : mm % 5 === 0 ? 2.8 : 1.6;
+      ctx.fillRect(gx0 + mm * px - 0.75, gy0 - len * px, 1.5, len * px);
+      if (mm % 10 === 0 && mm > 0) ctx.fillText(String(mm / 10), gx0 + mm * px, gy0 - 5.5 * px);
+    }
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    for (let mm = 0; gy0 + mm * px <= gy1 + 0.5; mm++) {
+      const len = mm % 10 === 0 ? 4 : mm % 5 === 0 ? 2.8 : 1.6;
+      ctx.fillRect(gx0 - len * px, gy0 + mm * px - 0.75, len * px, 1.5);
+      if (mm % 10 === 0 && mm > 0) ctx.fillText(String(mm / 10), gx0 - 5.5 * px, gy0 + mm * px);
+    }
+    const t = new THREE.CanvasTexture(canvas);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 8;
+    return t;
+  });
+  const w = bounds.x1 - bounds.x0;
+  const d = bounds.z1 - bounds.z0;
+  // One slab whose top face carries the print: a separate printed sheet laid
+  // on a slab flickers wherever the two faces meet, seen from far off.
+  const side = new THREE.MeshLambertMaterial({ color: 0x24533f });
+  const top = new THREE.MeshLambertMaterial({ map: tex });
+  const g = new THREE.Mesh(new THREE.BoxGeometry(w, MAT_THICK, d), [side, side, top, side, side, side]);
+  // Its top is the table top things stand on (y = 0); the wood is lowered under it.
+  g.position.set((bounds.x0 + bounds.x1) / 2, -MAT_THICK / 2, (bounds.z0 + bounds.z1) / 2);
+  g.name = 'mat';
+  return g;
+}
+
+/**
+ * The holes' dark tops lie a hair under the board's top face. From far off
+ * the depth buffer cannot tell two faces that close apart and the holes
+ * flicker in and out, so they are drawn as if a little nearer the camera.
+ */
+function holeMat() {
+  let m = materials.get('hole');
+  if (!m) {
+    m = new THREE.MeshLambertMaterial({ color: 0x3b3934, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
+    materials.set('hole', m);
+  }
+  return m;
+}
+
 /**
  * Every hole on the board, found by asking parts.js at each grid point, so the
  * board drawn is the board the netlist reasons about.
@@ -279,24 +366,27 @@ function holePoints() {
 }
 
 /**
- * The breadboard. The board body is the pickable mesh (named 'breadboard');
- * the holes are one InstancedMesh, a few hundred squares in a single draw call.
+ * The breadboard, in its own coordinates: local (0, 0) is the board's origin,
+ * so the world can stand several of them anywhere by moving and turning this
+ * group (multi-screen spec §5.3). The body is the pickable mesh (named
+ * 'breadboard'); the holes are one InstancedMesh, a few hundred squares in a
+ * single draw call.
  */
 export function buildBreadboard() {
   const g = new THREE.Group();
-  const w = BOARD.x1 - BOARD.x0;
-  const d = BOARD.y1 - BOARD.y0;
-  const mid = boardToWorld(BOARD_MID.x, BOARD_MID.y);
+  const w = BOARD_OUTLINE.x1 - BOARD_OUTLINE.x0;
+  const d = BOARD_OUTLINE.y1 - BOARD_OUTLINE.y0;
+  const mid = { x: BOARD_MID.x, z: BOARD_MID.y };
   const print = texture('breadboard', () => canvasTexture(w, d, 24, (ctx) => {
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, w, d);
-    ctx.translate(-BOARD.x0, -BOARD.y0);
+    ctx.translate(-BOARD_OUTLINE.x0, -BOARD_OUTLINE.y0);
     // The centre channel and the grooves that set the rails apart.
     ctx.fillStyle = 'rgba(120,112,98,0.32)';
-    ctx.fillRect(BOARD.x0, 8.1, w, 0.8);
+    ctx.fillRect(BOARD_OUTLINE.x0, 8.1, w, 0.8);
     ctx.fillStyle = 'rgba(120,112,98,0.16)';
-    ctx.fillRect(BOARD.x0, 1.85, w, 0.3);
-    ctx.fillRect(BOARD.x0, 14.85, w, 0.3);
+    ctx.fillRect(BOARD_OUTLINE.x0, 1.85, w, 0.3);
+    ctx.fillRect(BOARD_OUTLINE.x0, 14.85, w, 0.3);
     // Red beside each + rail, blue beside each −, the way the real board is printed.
     for (const [y, color] of /** @type {const} */ ([[-0.75, '#d0453c'], [1.6, '#2f63c4'], [15.4, '#d0453c'], [17.75, '#2f63c4']])) {
       ctx.fillStyle = color;
@@ -328,10 +418,9 @@ export function buildBreadboard() {
   body.userData = { kind: 'board' };
   g.add(body);
 
-  const holes = boxes(0.62, 0.02, 0.62, mat('matte', 0x3b3934), holePoints().map(({ x, y }) => {
-    const p = boardToWorld(x, y);
-    return { x: p.x, y: BOARD_TOP - 0.012, z: p.z };
-  }));
+  const holes = boxes(0.62, 0.02, 0.62, holeMat(), holePoints().map(({ x, y }) => (
+    { x, y: BOARD_TOP - 0.012, z: y }
+  )));
   holes.name = 'holes';
   g.add(holes);
   g.add(contactShadow(w + 6, d + 6, mid.x, 0.02, mid.z + 0.6));
@@ -343,6 +432,176 @@ export function buildBreadboard() {
  * @param {string} name
  */
 const printed = (name) => name.replace(/^GPIO/, '').replace(/\.\d+$/, '');
+
+/**
+ * What the scene keeps for a screen's glass: the canvas the brain's frames are
+ * drawn on, the texture that puts it on the panel, and the look it is showing.
+ * @typedef {{
+ *   canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D,
+ *   texture: THREE.CanvasTexture,
+ * }} ScreenGlass
+ */
+
+/** @param {CanvasRenderingContext2D} ctx @param {number} w @param {number} h */
+function snow(ctx, w, h) {
+  // A panel initialised with the wrong orders: coloured snow, different every frame.
+  const cell = 4;
+  for (let y = 0; y < h; y += cell) {
+    for (let x = 0; x < w; x += cell) {
+      ctx.fillStyle = `rgb(${Math.random() * 256 | 0},${Math.random() * 256 | 0},${Math.random() * 256 | 0})`;
+      ctx.fillRect(x, y, cell, cell);
+    }
+  }
+}
+
+/**
+ * Paint a screen's glass for the look it is in. Unlit on purpose: a panel makes
+ * its own light, so the picture must not be shaded by the bench's sun.
+ * @param {ScreenGlass} scr
+ * @param {'off' | 'dark' | 'white' | 'garbage' | 'ready'} show
+ * @param {ImageBitmap | null} image  the last frame the brain sent, if any
+ */
+export function drawScreen(scr, show, image) {
+  const { canvas, ctx } = scr;
+  const w = canvas.width;
+  const h = canvas.height;
+  ctx.fillStyle = '#05070a';
+  ctx.fillRect(0, 0, w, h);
+  if (show === 'white') {
+    ctx.fillStyle = '#eef1f4';
+    ctx.fillRect(0, 0, w, h);
+  } else if (show === 'garbage') {
+    snow(ctx, w, h);
+  } else if ((show === 'ready' || show === 'dark') && image) {
+    // Dark: the backlight is off, and all that is left is a hint of the picture.
+    ctx.globalAlpha = show === 'dark' ? 0.06 : 1;
+    ctx.drawImage(image, 0, 0, w, h);
+    ctx.globalAlpha = 1;
+  }
+  scr.texture.needsUpdate = true;
+}
+
+/**
+ * A screen module from the table (multi-screen spec §5): its PCB (a disc for a
+ * round one), the glass as a canvas the world paints, one row of header pins
+ * and the silk names. Sizes are the model's own millimetres.
+ * @param {PartDef} def
+ * @param {import('../../core/screens.js').Screen} model
+ * @param {{ onBoard: boolean, burnt: boolean }} state
+ * @returns {{ group: THREE.Group, anchors: Map<string, THREE.Vector3>, screen: ScreenGlass }}
+ */
+export function buildScreen(def, model, state) {
+  const g = new THREE.Group();
+  const w = model.pcb.w * MM;
+  const d = model.pcb.d * MM;
+  const lift = state.onBoard ? COLLAR : PIN_LEN;
+  const cx = (def.pins.length - 1) / 2;
+  // The PCB stands away from its header, which is at the panel's near edge.
+  const cz = d / 2 - 0.5;
+  const pcbColor = state.burnt ? charred(0x1f4d33) : 0x1f4d33;
+  const pcb = mat('matte', pcbColor);
+
+  if (model.round) {
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(w / 2, w / 2, 0.07, 40), pcb);
+    disc.position.set(cx, lift + 0.035, cz);
+    g.add(disc);
+  } else {
+    g.add(box(w, 0.07, d, pcb, cx, lift, cz));
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = model.w;
+  canvas.height = model.h;
+  const ctx = /** @type {CanvasRenderingContext2D} */ (canvas.getContext('2d'));
+  const canvasTex = new THREE.CanvasTexture(canvas);
+  canvasTex.colorSpace = THREE.SRGBColorSpace;
+  canvasTex.anisotropy = 8;
+  const glassW = model.glass.w * MM;
+  const glassD = model.glass.d * MM;
+  const glass = new THREE.Mesh(
+    model.round ? new THREE.CircleGeometry(glassW / 2, 48) : new THREE.PlaneGeometry(glassW, glassD),
+    new THREE.MeshBasicMaterial({ map: canvasTex, toneMapped: false }),
+  );
+  glass.rotation.x = -Math.PI / 2;
+  glass.position.set(cx, lift + 0.08, cz);
+  g.add(glass);
+
+  // The header, and the pads it goes through, exactly where parts.js has them.
+  const legs = def.pins;
+  g.add(boxes(0.78, 0.02, 0.78, mat('metal', GOLD), legs.map((p) => ({ x: p.x, y: lift + 0.07, z: p.y }))));
+  g.add(boxes(0.26, lift, 0.26, mat('metal', GOLD), legs.map((p) => ({ x: p.x, y: 0, z: p.y }))));
+  const silk = texture(`screen:${model.id}`, () => canvasTexture(w, d, 64, (c) => {
+    c.fillStyle = 'rgba(240,240,235,0.92)';
+    label(c, model.label, w / 2, 1.4, 0.5, w - 1);
+    for (const p of legs) label(c, p.name, p.x - (cx - w / 2), d - 1.3, 0.3, 1.6);
+  }));
+  g.add(decal(silk, w, d, cx, lift + 0.075, cz, state.burnt));
+  g.add(contactShadow(w + 2, d + 2, cx, 0.03, cz + 0.4));
+
+  /** @type {Map<string, THREE.Vector3>} */
+  const anchors = new Map();
+  for (const p of legs) anchors.set(p.name, new THREE.Vector3(p.x, lift + 0.09, p.y));
+  return { group: g, anchors, screen: { canvas, ctx, texture: canvasTex } };
+}
+
+/** The trash-can glyph, white on clear, drawn once: lid, handle, a tapered body with three slats. */
+function binIcon() {
+  return texture('bin-icon', () => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const ctx = /** @type {CanvasRenderingContext2D} */ (c.getContext('2d'));
+    ctx.strokeStyle = ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.lineWidth = 8;
+    ctx.lineCap = ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(26, 34); ctx.lineTo(102, 34); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(50, 33); ctx.lineTo(54, 20); ctx.lineTo(74, 20); ctx.lineTo(78, 33); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(34, 44); ctx.lineTo(41, 110); ctx.lineTo(87, 110); ctx.lineTo(94, 44); ctx.closePath(); ctx.stroke();
+    ctx.lineWidth = 6;
+    for (const x of [52, 64, 76]) { ctx.beginPath(); ctx.moveTo(x, 56); ctx.lineTo(x, 98); ctx.stroke(); }
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  });
+}
+
+/** The bin's wall colours: at rest, and lit while what is held over it would go in. */
+export const BIN_COLORS = { rest: 0x4b525a, take: 0xc8463a };
+
+/**
+ * The bin: an open-topped box with a lip, a trash can on its front and on its
+ * floor (the floor is what the top view sees). Its walls have their own
+ * material, `userData.walls`, so the world can light them while something
+ * that would be thrown away is held over it.
+ */
+export function buildBin() {
+  const g = new THREE.Group();
+  const walls = new THREE.MeshLambertMaterial({ color: BIN_COLORS.rest });
+  const w = 14;
+  const h = 6;
+  const wall = 0.8;
+  g.add(box(w, h, wall, walls, 0, 0, -w / 2 + wall / 2));
+  g.add(box(w, h, wall, walls, 0, 0, w / 2 - wall / 2));
+  g.add(box(wall, h, w - wall * 2, walls, -w / 2 + wall / 2, 0, 0));
+  g.add(box(wall, h, w - wall * 2, walls, w / 2 - wall / 2, 0, 0));
+  // A lip round the top, a shade lighter, so it reads as a container and not a block.
+  const lip = mat('matte', 0x6a727b);
+  const lw = 1.2;
+  g.add(box(w + 0.6, 0.5, lw, lip, 0, h, -w / 2 + lw / 2 - 0.3));
+  g.add(box(w + 0.6, 0.5, lw, lip, 0, h, w / 2 - lw / 2 + 0.3));
+  g.add(box(lw, 0.5, w - lw * 2 + 0.6, lip, -w / 2 + lw / 2 - 0.3, h, 0));
+  g.add(box(lw, 0.5, w - lw * 2 + 0.6, lip, w / 2 - lw / 2 + 0.3, h, 0));
+  g.add(box(w, 0.3, w, mat('matte', 0x22262a), 0, 0, 0));
+  const icon = new THREE.MeshBasicMaterial({ map: binIcon(), transparent: true, depthWrite: false });
+  const floorIcon = new THREE.Mesh(new THREE.PlaneGeometry(8, 8), icon);
+  floorIcon.rotation.x = -Math.PI / 2;
+  floorIcon.position.y = 0.32;
+  const frontIcon = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 4.4), icon);
+  frontIcon.position.set(0, h / 2, w / 2 + 0.02);
+  g.add(floorIcon, frontIcon);
+  g.userData.walls = walls;
+  g.name = 'bin';
+  return g;
+}
 
 /**
  * What differs between the boards with male headers.
@@ -390,6 +649,7 @@ const LOOKS = {
  * @typedef {{
  *   group: THREE.Group,
  *   anchors: Map<string, THREE.Vector3>,
+ *   screen?: ScreenGlass,
  * }} PartMesh
  * `anchors`, in the group's frame: where a wire's end sits on each pin.
  */
@@ -404,7 +664,10 @@ const LOOKS = {
  */
 export function buildPart(def, state) {
   if (def.id === 'speaker') return buildSpeaker(state.burnt);
-  const look = LOOKS[def.id];
+  // A screen comes from the table's own row: PCB, glass and pins.
+  const model = def.model ? screenById(def.model) : undefined;
+  if (model) return buildScreen(def, model, state);
+  const look = LOOKS[/** @type {keyof typeof LOOKS} */ (def.id)];
   const g = new THREE.Group();
   /** @type {Map<string, THREE.Vector3>} */
   const anchors = new Map();
