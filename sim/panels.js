@@ -312,15 +312,22 @@ export function createPanels(opts) {
 
   // ---- Status line ----
   /**
-   * One line at the bottom; null hides it. Text only, except the admin-page
-   * pointer, which is a link.
+   * One line at the bottom; null hides it. Text only, except a pointer: a
+   * link that opens in a new tab, or an action that runs in place.
    * @param {string | null} text
-   * @param {{ href: string, label: string }} [link]
+   * @param {{ href: string, label: string } | { action: { label: string, run(): void } }} [link]
    */
   function setStatus(text, link) {
     status.hidden = !text;
     status.replaceChildren(text ?? '');
-    if (text && link) status.append(' ', el('a', { href: link.href, target: '_blank', rel: 'noopener' }, [link.label]));
+    if (!text || !link) return;
+    if ('action' in link) {
+      const a = el('a', { href: '#', role: 'button' }, [link.action.label]);
+      a.addEventListener('click', (e) => { e.preventDefault(); link.action.run(); });
+      status.append(' ', a);
+    } else {
+      status.append(' ', el('a', { href: link.href, target: '_blank', rel: 'noopener' }, [link.label]));
+    }
   }
 
   // ---- Character picker ----

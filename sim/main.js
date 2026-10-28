@@ -15,6 +15,7 @@ import { targetFor } from './target.js';
 import { screenById } from '../core/screens.js';
 import { diagnose, nextHint } from './diagnose.js';
 import { characterChoices, startBody, faultText, adminLink, keepsFault } from './body.js';
+import { keptBench, dropKept } from './keep.js';
 import { createPanels } from './panels.js';
 import { createWorld } from './scene/world.js';
 import { attachInteraction, beginCarry } from './scene/interact.js';
@@ -174,7 +175,38 @@ function showLine() {
   if (line.api) return panels.status(line.api, { href: adminLink(apiFor), label: 'open' });
   if (line.fault) return panels.status(line.fault);
   if (line.state) return panels.status(line.who ? `${line.who} · ${line.state}` : line.state);
-  panels.status(null);
+  if (!offerBack()) panels.status(null);
+}
+
+/** The page's storage, or one that refuses everything when the browser blocks it. */
+function store() {
+  try { return localStorage; } catch { return { getItem: () => null, setItem() { throw new Error('blocked'); }, removeItem() { throw new Error('blocked'); } }; }
+}
+
+/** Whether a recipe run is on the table; Task 6 sets it. */
+let running = false;
+
+/**
+ * Shows the way back to the user's own bench, when one is kept and no run is
+ * active. Returns whether it did.
+ */
+function offerBack() {
+  if (running || !keptBench(store())) return false;
+  panels.status('This bench was built for you.', { action: { label: 'Back to my bench', run: backToMine } });
+  return true;
+}
+
+function backToMine() {
+  const mine = keptBench(store());
+  if (!mine) return;
+  if (usb.plugged) {
+    usb.pullOut();
+    unplug();
+  }
+  setBench(mine);
+  dropKept(store());
+  running = false;
+  showLine();
 }
 
 async function plugIn() {
@@ -300,3 +332,6 @@ function reset() {
   setBench(emptyBench());
   try { localStorage.removeItem(BENCH_KEY); } catch { /* nothing saved to clear */ }
 }
+
+// A bench kept before a reload is still there to go back to.
+showLine();
