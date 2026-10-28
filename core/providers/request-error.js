@@ -59,5 +59,9 @@ export async function requestError(layer, response) {
     // A body that cannot be read costs the detail, not the error.
   }
   const head = `${layer} request failed: ${response.status}${reason ? ` ${reason}` : ''}`;
-  return new Error(detail ? `${head} — ${detail}` : head);
+  const err = new Error(detail ? `${head} — ${detail}` : head);
+  // The number travels on its own so a body can be told the class of failure
+  // without being sent the provider's sentence.
+  /** @type {any} */ (err).status = response.status;
+  return err;
 }

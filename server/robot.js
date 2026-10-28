@@ -4,6 +4,7 @@
 
 import { Session } from '../core/audio/session.js';
 import { Brain } from '../core/brain.js';
+import { faultOf } from '../core/fault.js';
 import { Reflex } from '../core/reflex.js';
 import { reflexReady } from '../core/config.js';
 import { OpenAiCompatLlm } from '../core/providers/llm-openai-compat.js';
@@ -63,7 +64,12 @@ export function startRobot(conn, deps) {
   });
   const tts = new PcmTts(makeTtsSource(config.tts, net), { mouth });
   /** @type {(part: import('../core/strings.js').FaultPart, err: Error) => void} */
-  const onFault = (part, err) => log(`[${part}] ${err.message}`);
+  const onFault = (part, err) => {
+    log(`[${part}] ${err.message}`);
+    // 'turn' is the catch-all for a throw nobody expected; there is no layer
+    // to name, so the body is told nothing.
+    if (part !== 'turn') conn.send(faultOf(part, err));
+  };
 
   const session = new Session({
     pipeline,

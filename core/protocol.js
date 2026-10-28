@@ -74,6 +74,9 @@ const FROM_BRAIN = {
   state: (m) => typeof m.state === 'string',
   ping: () => true,
   pong: () => true,
+  fault: (m) => ['stt', 'llm', 'tts'].includes(m.part)
+    && (m.status === null || Number.isInteger(m.status))
+    && ['http', 'timeout', 'network', 'other'].includes(m.kind),
 };
 
 /**

@@ -78,6 +78,14 @@ static void parses_only_len_bytes(void) {
   CHECK_EQ_INT(proto_parse(s, 15).type, MSG_STOP);
 }
 
+static void a_fault_is_not_a_message_to_ignore_wrongly(void) {
+  /* The brain tells bodies about a failing layer; this firmware has no screen
+   * for it yet and must skip it. JS and C deliberately disagree here, so the
+   * case lives outside brain-messages.json. */
+  const char *s = "{\"type\":\"fault\",\"part\":\"llm\",\"status\":401,\"kind\":\"http\"}";
+  CHECK_EQ_INT(proto_parse(s, strlen(s)).type, 0);
+}
+
 static void writes_a_hello_cjson_reads_back(void) {
   char buf[128];
   int n = proto_hello(buf, sizeof buf, "0123456789abcdef0123456789abcdef");
@@ -140,6 +148,7 @@ int main(void) {
   reads_a_moves_fields();
   reads_text_fields_and_cuts_them_short();
   parses_only_len_bytes();
+  a_fault_is_not_a_message_to_ignore_wrongly();
   writes_a_hello_cjson_reads_back();
   ping_and_pong_are_what_the_brain_parses();
   textasm_joins_a_frame_sent_in_three_parts();
