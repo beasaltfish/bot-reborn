@@ -103,6 +103,17 @@ function boardBox(bd) {
 const overlaps = (a, b) => a.x0 < b.x1 && b.x0 < a.x1 && a.z0 < b.z1 && b.z0 < a.z1;
 
 /**
+ * What stands on a table point: whether a board's outline covers it, and the
+ * parts whose footprints do, loose or seated.
+ * @param {Bench} b @param {number} x @param {number} z
+ * @returns {{ board: boolean, parts: import('./bench.js').Placed[] }}
+ */
+export function under(b, x, z) {
+  const inside = (/** @type {Box} */ t) => x >= t.x0 && x <= t.x1 && z >= t.z0 && z <= t.z1;
+  return { board: b.boards.some((bd) => inside(boardBox(bd))), parts: b.placed.filter((p) => inside(partBox(p))) };
+}
+
+/**
  * Whether a footprint centred on (x, z) is clear of the boards and of the
  * parts lying loose; ids in `ignore` do not count.
  * @param {Bench} b

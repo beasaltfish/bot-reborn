@@ -10,8 +10,9 @@
 // included, which is where the bench is when it is alive.
 
 import * as THREE from 'three';
-import { MM } from './meshes.js';
-import { freeSpot, isClear } from '../snap.js';
+import { MM, BOARD_TOP } from './meshes.js';
+import { freeSpot, isClear, under } from '../snap.js';
+import { PARTS } from '../parts.js';
 
 /** @typedef {ReturnType<typeof import('./world.js').createWorld>} World */
 
@@ -28,6 +29,21 @@ const HOME = { out: 5.2, front: 4.8 };
 const REST = { x: -19, z: 28, yaw: Math.atan2(28 - 23.2, -13.8 - -19) };
 /** How close (world units) the plug's shoulder must come to a port's mouth to go in. */
 const SNAP = 4;
+/** Points the cord is laid through, and how steeply it may climb onto or slope off what it crosses. */
+const DRAPE_N = 60;
+const DRAPE_SLOPE = 0.6;
+
+/**
+ * How high the top of what stands at a table point is: a board, a part on
+ * the table or seated on a board; 0 for bare table.
+ * @param {import('../bench.js').Bench} b @param {number} x @param {number} z
+ */
+function groundAt(b, x, z) {
+  const here = under(b, x, z);
+  let top = here.board ? BOARD_TOP : 0;
+  for (const p of here.parts) top = Math.max(top, (p.seated ? BOARD_TOP : 0) + PARTS[p.part].size.h * MM);
+  return top;
+}
 
 const SHELL = { l: 6.6 * MM, h: 2.5 * MM, w: 8.3 * MM };
 const BODY = { l: 15 * MM, h: 6 * MM, w: 11 * MM };
@@ -92,6 +108,25 @@ export function attachUsb(world, opts) {
   }
 
   /**
+   * The cord as it really lies: over whatever is in its way, never through
+   * it. Each point along it is lifted onto what stands there (a board, a
+   * part), and the lifts are eased out to either side, so it climbs onto a
+   * board and slopes off again instead of stepping.
+   * @param {THREE.CatmullRomCurve3} path where it would lie on a bare table
+   */
+  function drape(path) {
+    const b = opts.bench();
+    const pts = path.getSpacedPoints(DRAPE_N);
+    const step = path.getLength() / DRAPE_N;
+    // The first two points are where it leaves the plug: they stay where the plug holds them.
+    const lift = pts.map((p, i) => (i < 2 ? p.y : Math.max(p.y, groundAt(b, p.x, p.z) + CORD)));
+    for (let i = 1; i < lift.length; i++) lift[i] = Math.max(lift[i], lift[i - 1] - DRAPE_SLOPE * step);
+    for (let i = lift.length - 2; i >= 2; i--) lift[i] = Math.max(lift[i], lift[i + 1] - DRAPE_SLOPE * step);
+    pts.forEach((p, i) => { p.y = lift[i]; });
+    return new THREE.CatmullRomCurve3(pts);
+  }
+
+  /**
    * Put the plug at a shoulder position, pointing along yaw, and lay the
    * cord from its back to the far end: straight back out of the boot, down
    * to the table, then a lazy curve away.
@@ -106,7 +141,7 @@ export function attachUsb(world, opts) {
     const out = tail.clone().addScaledVector(back, 2.5);
     // Then it bends down to the table and away towards the edge.
     const bend = out.clone().add(FAR.clone().sub(out).setY(0).normalize().multiplyScalar(6)).setY(FAR.y + CORD);
-    const curve = new THREE.CatmullRomCurve3([tail, out, bend, FAR]);
+    const curve = drape(new THREE.CatmullRomCurve3([tail, out, bend, FAR]));
     cord.geometry.dispose();
     cord.geometry = new THREE.TubeGeometry(curve, 80, CORD, 8);
     world.requestRender();
@@ -146,10 +181,10 @@ export function attachUsb(world, opts) {
     lying.yaw = Math.atan2(at.z - port.mouth.z, port.mouth.x - at.x);
   }
 
-  /** Lying on the table, its shell's underside on the wood. */
+  /** Lying down, its underside on the table or on whatever it was put down on. */
   function rest() {
     if (!moved) home();
-    pose(new THREE.Vector3(lying.x, BODY.h / 2, lying.z), lying.yaw);
+    pose(new THREE.Vector3(lying.x, groundAt(opts.bench(), lying.x, lying.z) + BODY.h / 2, lying.z), lying.yaw);
   }
 
   /** In the nearest port; false if the ESP32 is nowhere to be found. */
@@ -244,7 +279,8 @@ export function attachUsb(world, opts) {
         plugged = false;
         rest();
         opts.onPlug(false);
-      } else if (!plugged && !moved) {
+      } else if (!plugged) {
+        // Laid again either way: what the cord crosses may have moved.
         rest();
       }
     },
