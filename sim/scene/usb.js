@@ -11,12 +11,20 @@
 
 import * as THREE from 'three';
 import { MM } from './meshes.js';
+import { freeSpot, isClear } from '../snap.js';
 
 /** @typedef {ReturnType<typeof import('./world.js').createWorld>} World */
 
 /** Where the cable comes onto the table from, off the front edge left of the ESP32. */
 const FAR = new THREE.Vector3(-24, 0.3, 60);
-/** Where the plug lies until it is first moved: in front of the ESP32's slot, pointing at its ports. */
+/**
+ * Where the plug lies until it is first moved, from the mouth of the ESP32's
+ * front port: this far back out of it and this far towards the front. On the
+ * opening bench that spot clips the speaker's corner, so it lies a little
+ * further out than it used to.
+ */
+const HOME = { out: 5.2, front: 4.8 };
+/** Where it lies if there is no ESP32 to lie in front of. */
 const REST = { x: -19, z: 28, yaw: Math.atan2(28 - 23.2, -13.8 - -19) };
 /** How close (world units) the plug's shoulder must come to a port's mouth to go in. */
 const SNAP = 4;
@@ -46,9 +54,10 @@ function buildPlug() {
 
 /**
  * @param {World} world
- * @param {{ onPlug(on: boolean): void, locked(): boolean }} opts
+ * @param {{ onPlug(on: boolean): void, locked(): boolean, bench(): import('../bench.js').Bench }} opts
  *   onPlug: the plug went into a port (true) or came out of one (false);
- *   locked: while true the plug cannot be picked up.
+ *   locked: while true the plug cannot be picked up;
+ *   bench: what is on the table, so the plug never lies under it.
  */
 export function attachUsb(world, opts) {
   const { canvas, scene } = world;
@@ -61,6 +70,8 @@ export function attachUsb(world, opts) {
 
   /** Where the plug lies when not in a port; moved by the user, not saved. */
   const lying = { x: REST.x, z: REST.z, yaw: REST.yaw };
+  /** Until the user puts it down somewhere, the plug keeps to the ESP32 wherever it goes. */
+  let moved = false;
   let plugged = false;
 
   /** The ESP32's two port mouths in world space, with the direction into each. */
@@ -101,8 +112,43 @@ export function attachUsb(world, opts) {
     world.requestRender();
   }
 
+  /**
+   * In front of the ESP32's front port and pointing at it, moved off any
+   * board or part that would cover it: a plug hidden under the amp cannot be
+   * picked up.
+   */
+  function home() {
+    const front = (/** @type {{ mouth: THREE.Vector3, inward: THREE.Vector3 }} */ p) =>
+      new THREE.Vector3(-p.inward.z, 0, p.inward.x);
+    const port = ports().sort((a, b) => b.mouth.dot(front(b)) - a.mouth.dot(front(a)))[0];
+    if (!port) return;
+    const want = port.mouth.clone().addScaledVector(port.inward, -HOME.out).addScaledVector(front(port), HOME.front);
+    const b = opts.bench();
+    const back = port.mouth.clone().sub(want).setY(0).normalize().negate();
+    // It lies at a slant, so it is looked along: tip, middle and boot end.
+    const width = { w: BODY.w, d: BODY.w };
+    const clear = [-SHELL.l, (BODY.l + BOOT.l - SHELL.l) / 2, BODY.l + BOOT.l]
+      .map((s) => want.clone().addScaledVector(back, s))
+      .every((q) => isClear(b, width, q.x, q.z));
+    let at = want;
+    if (!clear) {
+      // Something covers it: the nearest spot where the whole plug, judged as
+      // a square about its middle (no tighter at a slant), is clear.
+      const size = SHELL.l + BODY.l + BOOT.l;
+      const shift = (BODY.l + BOOT.l - SHELL.l) / 2;
+      const mid = want.clone().addScaledVector(back, shift);
+      const spot = freeSpot(b, { w: size, d: size }, mid.x, mid.z);
+      at = new THREE.Vector3(spot.x, 0, spot.z).addScaledVector(back, -shift);
+    }
+    // Moved to keep clear, it turns to point at the port again.
+    lying.x = at.x;
+    lying.z = at.z;
+    lying.yaw = Math.atan2(at.z - port.mouth.z, port.mouth.x - at.x);
+  }
+
   /** Lying on the table, its shell's underside on the wood. */
   function rest() {
+    if (!moved) home();
     pose(new THREE.Vector3(lying.x, BODY.h / 2, lying.z), lying.yaw);
   }
 
@@ -176,6 +222,7 @@ export function attachUsb(world, opts) {
       pose(d.port.mouth, Math.atan2(-d.port.inward.z, d.port.inward.x));
     } else {
       plugged = false;
+      moved = true;
       lying.x = plug.position.x;
       lying.z = plug.position.z;
       lying.yaw = d.yaw;
@@ -192,10 +239,13 @@ export function attachUsb(world, opts) {
     get plugged() { return plugged; },
     /** The bench was redrawn: if the ESP32 moved, the plug goes with it. */
     refresh() {
-      if (plugged && !drag && !seat()) {
+      if (drag) return;
+      if (plugged && !seat()) {
         plugged = false;
         rest();
         opts.onPlug(false);
+      } else if (!plugged && !moved) {
+        rest();
       }
     },
     /** Out of the port and back where it lay, without telling onPlug (the caller is the one asking). */

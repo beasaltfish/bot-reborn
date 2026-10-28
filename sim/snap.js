@@ -103,6 +103,26 @@ function boardBox(bd) {
 const overlaps = (a, b) => a.x0 < b.x1 && b.x0 < a.x1 && a.z0 < b.z1 && b.z0 < a.z1;
 
 /**
+ * Whether a footprint centred on (x, z) is clear of the boards and of the
+ * parts lying loose; ids in `ignore` do not count.
+ * @param {Bench} b
+ * @param {{ w: number, d: number }} footprint
+ * @param {number} x @param {number} z
+ * @param {string[]} [ignore]
+ */
+export function isClear(b, footprint, x, z, ignore = []) {
+  const box = { x0: x - footprint.w / 2, x1: x + footprint.w / 2, z0: z - footprint.d / 2, z1: z + footprint.d / 2 };
+  return !takenBy(b, ignore).some((t) => overlaps(t, box));
+}
+
+/** @param {Bench} b @param {string[]} ignore @returns {Box[]} */
+function takenBy(b, ignore) {
+  const taken = b.boards.filter((bd) => !ignore.includes(bd.id)).map(boardBox);
+  for (const p of b.placed) if (!p.seated && !ignore.includes(p.id)) taken.push(partBox(p));
+  return taken;
+}
+
+/**
  * A free spot on the table for a footprint centred on (x, z): the nearest one,
  * searched in rings of one pitch out to RING_LIMIT. A breadboard is 65 pitches
  * long, so the search has to reach well past one: stopping short used to hand
@@ -116,9 +136,7 @@ const overlaps = (a, b) => a.x0 < b.x1 && b.x0 < a.x1 && a.z0 < b.z1 && b.z0 < a
  * @returns {{ x: number, z: number }}
  */
 export function freeSpot(b, footprint, x, z, ignore = []) {
-  /** @type {Box[]} */
-  const taken = b.boards.filter((bd) => !ignore.includes(bd.id)).map(boardBox);
-  for (const p of b.placed) if (!p.seated && !ignore.includes(p.id)) taken.push(partBox(p));
+  const taken = takenBy(b, ignore);
 
   /** @param {number} cx @param {number} cz */
   const free = (cx, cz) => {

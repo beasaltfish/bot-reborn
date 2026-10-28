@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { PARTS } from '../../sim/parts.js';
-import { snapPart, snapBoard, freeSpot, partFootprint, spotForNew } from '../../sim/snap.js';
+import { snapPart, snapBoard, freeSpot, isClear, partFootprint, spotForNew } from '../../sim/snap.js';
 import { emptyBench, addBoard, addPart, place, pinPoints } from '../../sim/bench.js';
 
 // Where a dropped part or board lands decides which strips it joins, so the
@@ -76,6 +76,15 @@ test('freeSpot steps off a part that is in the way, and not onto a board', () =>
   const off = freeSpot(b, { w: 4, d: 4 }, -20, 0);
   const onBoard = off.x + 2 > -31 - 1.6 && off.x - 2 < -31 + 63.6 && off.z + 2 > -9 - 1.8 && off.z - 2 < -9 + 18.8;
   assert.ok(!onBoard, JSON.stringify(off));
+});
+
+test('isClear: open table yes; on a board, or on a loose part, no', () => {
+  const b = addPart(emptyBench(), 'inmp441', { x: 0, z: 30 }).bench;
+  assert.equal(isClear(b, { w: 4, d: 4 }, -12, 40), true);
+  assert.equal(isClear(b, { w: 4, d: 4 }, -20, 0), false);
+  assert.equal(isClear(b, { w: 4, d: 4 }, 2, 32), false);
+  const id = /** @type {any} */ (b.placed.at(-1)).id;
+  assert.equal(isClear(b, { w: 4, d: 4 }, 2, 32, [id]), true);
 });
 
 test('a moved id is not in its own way', () => {

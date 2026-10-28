@@ -85,7 +85,7 @@ function addFromBin(part) {
 }
 
 const hands = attachInteraction(world, () => bench, setBench, { say: (text) => panels.status(text) });
-const usb = attachUsb(world, { onPlug: (on) => (on ? plugIn() : unplug()), locked: () => starting });
+const usb = attachUsb(world, { onPlug: (on) => (on ? plugIn() : unplug()), locked: () => starting, bench: () => bench });
 
 // #view=top opens in that view without saving it: handy for a screenshot.
 const asked = new URLSearchParams(location.hash.slice(1)).get('view');
