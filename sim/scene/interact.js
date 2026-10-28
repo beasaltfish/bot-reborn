@@ -532,7 +532,7 @@ export function attachInteraction(world, getBench, setBench, opts) {
     aimAt(d.last);
     const p = onPlane();
     if (!p) return;
-    const origin = p.add(d.offset);
+    const origin = p.clone().add(d.offset);
     const x = clamp(origin.x, world.tableBounds.x0, world.tableBounds.x1);
     const z = clamp(origin.z, world.tableBounds.z0, world.tableBounds.z1);
     // `raw` is where the hand is (the bin is judged there); `origin` is where
@@ -681,7 +681,7 @@ export function attachInteraction(world, getBench, setBench, opts) {
     aimAt(d.last);
     const p = onPlane();
     if (!p) return;
-    const origin = p.add(d.offset);
+    const origin = p.clone().add(d.offset);
     const x = clamp(origin.x, world.tableBounds.x0, world.tableBounds.x1);
     const z = clamp(origin.z, world.tableBounds.z0, world.tableBounds.z1);
     d.raw = { x: p.x, z: p.z };
