@@ -23,6 +23,10 @@ computer as its brain.**
 
 *Asked to prove it's alive in three words: "Two copper wires."* — [watch the Short, with sound](https://youtube.com/shorts/Y80lk1O1Z-0)
 
+[![A pet dog on a $2 screen sitting, shaking hands and lying down on spoken commands](docs/media/pet.gif)](https://youtube.com/shorts/zxbSJz2M2tY)
+
+*Now it has a face, and it listens: a dog on a $2 screen, no buttons, just a voice.* — [watch the Short, with sound](https://youtube.com/shorts/zxbSJz2M2tY)
+
 **📖 The whole build story: [I turned a $4 toy robot into an AI robot that talks back](https://agentlenshq.com/maker/four-dollar-robot)**
 
 <table>
@@ -48,6 +52,9 @@ computer as its brain.**
   once). Both are just data you can edit on the admin page.
 - **It listens while its screen is on.** No wake word needed, though you can
   turn one on. Hit the stop button and the car stops, whatever it was doing.
+- **A dog on a screen.** An ESP32-S3 body with a 2.4" SPI screen shows a pet
+  dog that lies, sits, stands, shakes a paw and spins when you ask, in any
+  language, and lies back down when nobody talks for ten seconds.
 - **Several characters, one brain.** Each robot is a character with its own
   name, voice, providers and keys, all set up from an admin page in your
   browser, in English or Chinese.
@@ -87,8 +94,8 @@ small Node server on a computer on the same Wi-Fi, the robot's brain.
 The brain started out inside the phone's browser and moved to the computer for
 two reasons: everything that hears you can, in time, run locally on your own
 machine — the reflex model already does — and the body can shrink to something
-much smaller than a phone. An ESP32-S3 body already hears and talks on a
-breadboard, with no wheels yet ([`firmware/`](firmware/README.md)); you flash and set it up from the admin page
+much smaller than a phone. An ESP32-S3 body already hears, talks and shows a
+pet dog on a small screen, on a breadboard with no wheels yet ([`firmware/`](firmware/README.md)); you flash and set it up from the admin page
 in Chrome, over one USB cable, and it finds the brain on its own. A phone, it
 turns out, is heavy enough to tip the car over when it backs up.
 
