@@ -6,6 +6,7 @@
 #include "esp_timer.h"
 #include "esp_websocket_client.h"
 #include "link_policy.h"
+#include "discover.h"
 #include "led.h"
 #include "net.h"
 #include "link.h"
@@ -25,6 +26,8 @@ static EventGroupHandle_t bits;
 static esp_websocket_client_handle_t client;
 static const settings_t *settings;
 static const link_handlers_t *handlers;
+/* The address in use: the typed url, or the one discovery found. */
+static char dialed[128];
 
 /* Touched by the client's event task and the link task. */
 static portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
@@ -126,6 +129,18 @@ static void link_task(void *arg) {
   for (;;) {
     net_wait_up(portMAX_DELAY);
     led_set(LED_CONNECTING);
+    if (!settings->url[0]) {
+      printf("looking for the brain on the network\n");
+      char found[sizeof dialed];
+      if (!discover_brain(found, sizeof found, 3000)) {
+        uint32_t wait = retry_next_ms(&retry);
+        printf("no brain found on this network; trying again in %u ms\n", (unsigned)wait);
+        vTaskDelay(pdMS_TO_TICKS(wait));
+        continue;
+      }
+      strlcpy(dialed, found, sizeof dialed);
+      esp_websocket_client_set_uri(client, dialed);
+    }
     xEventGroupClearBits(bits, CONNECTED | LOST);
     text.len = 0;
     reject_reason[0] = '\0';
@@ -150,7 +165,7 @@ static void link_task(void *arg) {
     if (reject_reason[0]) {
       printf("busy: another body has this character, or the brain has not let go of the last connection; trying again in %u ms\n", (unsigned)wait);
     } else {
-      printf("%s %s; trying again in %u ms\n", had ? "lost" : "could not reach", settings->url, (unsigned)wait);
+      printf("%s %s; trying again in %u ms\n", had ? "lost" : "could not reach", dialed, (unsigned)wait);
     }
     vTaskDelay(pdMS_TO_TICKS(wait));
   }
@@ -159,9 +174,10 @@ static void link_task(void *arg) {
 void link_start(const settings_t *s, const link_handlers_t *h) {
   settings = s;
   handlers = h;
+  strlcpy(dialed, s->url, sizeof dialed);
   bits = xEventGroupCreate();
   esp_websocket_client_config_t cfg = {
-    .uri = s->url,
+    .uri = s->url[0] ? s->url : "ws://brain.invalid/body",   /* replaced by discovery before the first start */
     .buffer_size = 4096,
     .disable_auto_reconnect = true,   /* retry_t decides when, as the phone does */
     .network_timeout_ms = 3000,
