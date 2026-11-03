@@ -210,6 +210,13 @@ Type `move forward left 600`, `stop`, `hush`, `state THINKING`, `tone 1000`,
 second shows bytes and level: speech should read −35…−15 dBFS; quieter, lower
 `MIC_SHIFT` in `board.h` (14 = ×4) and flash again.
 
+## When something is wrong
+
+[`docs/esp32-lessons.md`](../docs/esp32-lessons.md) lists the faults this board has
+actually had (speaker crackle with the screen wired, stripes on the panel,
+"Invalid head of packet" while flashing, the board dialling an old address)
+as symptom, cause and fix.
+
 ## Tests
 
 `npm run firmware:test` builds `components/body_logic` (everything that does
