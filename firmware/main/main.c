@@ -11,6 +11,7 @@
 #include "motor.h"
 #include "net.h"
 #include "screen.h"
+#include "screen_draw.h"
 #include "screen_link.h"
 #include "screen_profile.h"
 #include "settings.h"
@@ -72,5 +73,8 @@ void app_main(void) {
   audio_start();
   net_start(&settings);
   link_start(&settings, &HANDLERS);
-  if (screen) screen_link_start(&settings);
+  if (screen) {
+    screen_link_start(&settings);
+    screen_draw_start();
+  }
 }

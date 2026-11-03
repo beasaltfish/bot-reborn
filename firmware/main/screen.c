@@ -29,8 +29,12 @@ static esp_lcd_panel_handle_t panel;
 static const screen_profile_t *profile;
 static volatile bool ready;
 
+/* RGB565 as the panel reads it off the wire: high byte first, so the bytes of
+   the little-endian value are swapped. (The JPEG decoder is asked for the same
+   order, swap_color_bytes.) */
 static uint16_t rgb565(uint8_t r, uint8_t g, uint8_t b) {
-  return (uint16_t)(((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3));
+  uint16_t v = (uint16_t)(((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3));
+  return (uint16_t)((v >> 8) | (v << 8));
 }
 
 /* Every step's result goes to the log: the first failure is the answer. */
