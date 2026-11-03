@@ -15,7 +15,7 @@ export type ConsoleReason = 'bad-ssid' | 'bad-pass' | 'bad-token' | 'no-reply' |
 
 export class ConsoleError extends Error {
   reason: ConsoleReason;
-  constructor(reason: ConsoleReason, message = reason) {
+  constructor(reason: ConsoleReason, message: string = reason) {
     super(message);
     this.reason = reason;
   }
