@@ -18,7 +18,7 @@ import {
   modelsPresent, loadSherpaNode, loadKeywords, createSpotter, createVoiceDetector,
 } from './audio/sherpa-node.js';
 import { BODY_PATH } from '../core/protocol.js';
-import { publishBrain, BRAIN_HOST, SERVICE_TYPE } from './discovery.js';
+import { keepPublished, BRAIN_HOST, SERVICE_TYPE } from './discovery.js';
 import { hostname } from 'node:os';
 import { loadPetFrames } from './pet/frames.js';
 import { fileURLToPath } from 'node:url';
@@ -54,7 +54,7 @@ const port = await server.listen(PORT);
 // A body with no url typed finds the brain by this. Failing to advertise
 // costs only that convenience, so the brain starts anyway.
 try {
-  const ad = publishBrain({ port, name: hostname() });
+  const ad = keepPublished({ port, name: hostname(), addresses: lanAddresses });
   console.log(`advertising as ${BRAIN_HOST} (_${SERVICE_TYPE}._tcp)`);
   for (const sig of ['SIGINT', 'SIGTERM']) process.once(sig, () => { ad.stop(); process.exit(0); });
 } catch (err) {

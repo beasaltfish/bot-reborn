@@ -24,3 +24,26 @@ export function publishBrain({ port, name, bonjour = new Bonjour() }) {
     },
   };
 }
+
+/**
+ * publishBrain, kept true: a computer that changes network while the brain
+ * runs (Wi-Fi band, a new router, a VPN) has new addresses, and the old
+ * announcement would send bodies to one that no longer exists. Every
+ * intervalMs the addresses are compared; a change withdraws the old
+ * announcement and makes a new one.
+ * @param {{ port: number, name: string, addresses: () => string[], intervalMs?: number, makeBonjour?: () => { publish(s: object): unknown, unpublishAll(cb?: () => void): void, destroy(): void } }} opts
+ * @returns {{ stop(): void }}
+ */
+export function keepPublished({ port, name, addresses, intervalMs = 10000, makeBonjour = () => new Bonjour() }) {
+  let seen = addresses().join(',');
+  let current = publishBrain({ port, name, bonjour: makeBonjour() });
+  const timer = setInterval(() => {
+    const now = addresses().join(',');
+    if (now === seen) return;
+    seen = now;
+    current.stop();
+    current = publishBrain({ port, name, bonjour: makeBonjour() });
+  }, intervalMs);
+  timer.unref?.();
+  return { stop() { clearInterval(timer); current.stop(); } };
+}
