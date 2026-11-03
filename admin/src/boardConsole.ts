@@ -11,6 +11,8 @@ export interface LinePort {
   close(): Promise<void>;
 }
 
+export interface BoardSettings { ssid: string; pass: string; token: string; url: string }
+
 export type ConsoleReason = 'bad-ssid' | 'bad-pass' | 'bad-token' | 'no-reply' | 'rejected' | 'not-welcomed';
 
 export class ConsoleError extends Error {
@@ -69,6 +71,26 @@ export class BoardConsole {
     const bad = checkWifi(ssid, pass);
     if (bad) throw new ConsoleError(bad);
     await this.command(`wifi "${ssid}"${pass ? ` "${pass}"` : ''}\n`);
+  }
+
+  /** What the board has stored, read back with its `show` command. */
+  async readSettings(): Promise<BoardSettings> {
+    return new Promise((resolve, reject) => {
+      const got: Record<string, string> = {};
+      const done = (fn: () => void) => { clearTimeout(timer); this.listeners.delete(listen); fn(); };
+      const listen = (line: string) => {
+        if (line === 'board.end') {
+          return done(() => resolve({
+            ssid: got.ssid ?? '', pass: got.pass ?? '', token: got.token ?? '', url: got.url ?? '',
+          }));
+        }
+        const m = /^board\.(ssid|pass|token|url)=(.*)$/.exec(line);
+        if (m) got[m[1]] = m[2];
+      };
+      const timer = setTimeout(() => done(() => reject(new ConsoleError('no-reply'))), this.opts.replyTimeoutMs ?? REPLY_TIMEOUT_MS);
+      this.listeners.add(listen);
+      this.port.write('show\n').catch((e) => done(() => reject(e)));
+    });
   }
 
   /** Forget any url typed by hand, so the board finds the brain by itself. */

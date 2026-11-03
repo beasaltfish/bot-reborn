@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BoardSetup } from './BoardSetup';
@@ -73,5 +73,31 @@ describe('BoardSetup', () => {
     await fill('My Home', 'secret12');
     await userEvent.click(screen.getByRole('button', { name: /start/i }));
     expect(await screen.findByRole('alert')).toHaveTextContent(/other USB port/i);
+  });
+
+  it('reads the board back: fills the name, the password in plain text, and picks the character by its token', async () => {
+    installFakeApi([{ name: 'Rex' }, { name: 'Asten' }]);
+    const f = fakeSerial();
+    render(<BoardSetup serial={f.serial} />);
+    await userEvent.click(await screen.findByLabelText(/change settings/i));
+    await userEvent.click(screen.getByRole('button', { name: /read from the board/i }));
+    await vi.waitFor(() => expect(screen.getByLabelText(/wi-?fi name/i)).toHaveValue('HomeNet'));
+    const pass = screen.getByLabelText(/wi-?fi password/i);
+    expect(pass).toHaveValue('secret12');
+    expect(pass).toHaveAttribute('type', 'text');
+    // The fake brain hands out tokens in creation order: Rex …01, Asten …02. The board holds …01.
+    expect(screen.getByLabelText(/character/i)).toHaveValue('Rex');
+    expect(f.events).toContain('close');
+    expect(f.written).toEqual(['show\n']);
+  });
+
+  it('says so when the board holds a token that is none of this brain\'s characters', async () => {
+    installFakeApi([{ name: 'Rex' }]);
+    const f = fakeSerial({ token: 'f'.repeat(32) });
+    render(<BoardSetup serial={f.serial} />);
+    await userEvent.click(await screen.findByLabelText(/change settings/i));
+    await userEvent.click(screen.getByRole('button', { name: /read from the board/i }));
+    expect(await screen.findByText(/none of this brain/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/wi-?fi name/i)).toHaveValue('HomeNet');
   });
 });

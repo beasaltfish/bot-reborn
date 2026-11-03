@@ -14,7 +14,7 @@ export interface Serial {
   flashBoard(manifestUrl: string, onProgress: (percent: number) => void): Promise<SerialPort>;
 }
 
-type Step = 'idle' | 'flashing' | 'saving' | 'waiting';
+type Step = 'idle' | 'flashing' | 'saving' | 'waiting' | 'reading';
 
 export function BoardSetup({ serial = realSerial, replyTimeoutMs }: { serial?: Serial; replyTimeoutMs?: number }) {
   const [list, setList] = useState<Summary[] | null>(null);
@@ -26,6 +26,7 @@ export function BoardSetup({ serial = realSerial, replyTimeoutMs }: { serial?: S
   const [percent, setPercent] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -36,6 +37,31 @@ export function BoardSetup({ serial = realSerial, replyTimeoutMs }: { serial?: S
   if (!serial.supportsSerial()) return <p role="alert" className="board-error">{t('boardNeedsChrome')}</p>;
 
   const busy = step !== 'idle';
+
+  /** Fill the form with what the board holds: name, password, and the character whose token it carries. */
+  async function readBoard() {
+    setError(null);
+    setDone(null);
+    setNote(null);
+    let port: LinePort | null = null;
+    try {
+      setStep('reading');
+      port = await serial.openBoard();
+      const stored = await new BoardConsole(port, { replyTimeoutMs }).readSettings();
+      setSsid(stored.ssid);
+      setPass(stored.pass);
+      // The list holds no tokens: ask for each character's own (never regenerate).
+      const details = await Promise.all((list ?? []).map((c) => api.get(c.id)));
+      const match = details.find((d) => d.token === stored.token);
+      if (match) setCharacter(match.id);
+      setNote(match ? t('boardReadDone') : t('boardTokenUnknown'));
+    } catch (e) {
+      setError(explain(e));
+    } finally {
+      setStep('idle');
+      await port?.close().catch(() => {});
+    }
+  }
 
   async function start() {
     setError(null);
@@ -79,7 +105,7 @@ export function BoardSetup({ serial = realSerial, replyTimeoutMs }: { serial?: S
         <label><input type="radio" name="board-mode" checked={mode === 'flash'} onChange={() => setMode('flash')} /> {t('boardModeFlash')}</label>
         <label><input type="radio" name="board-mode" checked={mode === 'settings'} onChange={() => setMode('settings')} /> {t('boardModeSettings')}</label>
         <label>{t('boardWifiName')}<input value={ssid} onChange={(e) => setSsid(e.target.value)} autoComplete="off" /></label>
-        <label>{t('boardWifiPass')}<input type="password" value={pass} onChange={(e) => setPass(e.target.value)} autoComplete="off" /></label>
+        <label>{t('boardWifiPass')}<input type="text" value={pass} onChange={(e) => setPass(e.target.value)} autoComplete="off" /></label>
         {list && (
           <label>{t('boardCharacter')}
             <select value={character} onChange={(e) => setCharacter(e.target.value)}>
@@ -88,12 +114,15 @@ export function BoardSetup({ serial = realSerial, replyTimeoutMs }: { serial?: S
             </select>
           </label>
         )}
+        {mode === 'settings' && <button type="button" onClick={() => void readBoard()}>{t('boardRead')}</button>}
         <button type="button" onClick={() => void start()}>{t('boardStart')}</button>
       </fieldset>
       <p role="status">
         {step === 'flashing' && `${t('boardFlashing')} ${percent}%`}
         {step === 'saving' && t('boardSaving')}
         {step === 'waiting' && t('boardWaiting')}
+        {step === 'reading' && t('boardReading')}
+        {step === 'idle' && note}
         {done && `${t('boardConnected')}${done}`}
       </p>
       {error && <p role="alert" className="board-error">{error}</p>}

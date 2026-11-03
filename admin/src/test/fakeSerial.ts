@@ -3,7 +3,7 @@
 import { vi } from 'vitest';
 import type { LinePort } from '../boardConsole';
 
-export function fakeSerial({ supported = true, answer = true }: { supported?: boolean; answer?: boolean } = {}) {
+export function fakeSerial({ supported = true, answer = true, token = `${'0'.repeat(31)}1` }: { supported?: boolean; answer?: boolean; token?: string } = {}) {
   const queue: string[] = [];
   let wake: (() => void) | null = null;
   const emit = (line: string) => { queue.push(line); wake?.(); wake = null; };
@@ -16,6 +16,9 @@ export function fakeSerial({ supported = true, answer = true }: { supported?: bo
       if (line.startsWith('wifi')) emit('wifi saved');
       else if (line.startsWith('token')) emit('token 0000…  saved');
       else if (line.startsWith('url')) emit('url saved');
+      else if (line.startsWith('show')) {
+        for (const l of ['board.ssid=HomeNet', 'board.pass=secret12', `board.token=${token}`, 'board.url=', 'board.end']) emit(l);
+      }
       else if (line.startsWith('reboot')) emit('welcomed as Asten');
     },
     lines: (async function* () {

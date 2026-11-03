@@ -102,6 +102,31 @@ describe('BoardConsole', () => {
     await expect(done).resolves.toBeUndefined();
   });
 
+  it('readSettings sends show and collects the board.* lines, values verbatim, up to board.end', async () => {
+    const f = fakePort();
+    const c = new BoardConsole(f.port);
+    const got = c.readSettings();
+    await settle();
+    expect(f.written).toEqual(['show\n']);
+    f.emit('I (900) wifi: noise before');
+    f.emit('board.ssid=My Home  2.4G');
+    f.emit('board.pass=pa=ss word');
+    f.emit('board.token=0123456789abcdef0123456789abcdef');
+    f.emit('board.url=');
+    f.emit('board.end');
+    await expect(got).resolves.toEqual({
+      ssid: 'My Home  2.4G', pass: 'pa=ss word', token: '0123456789abcdef0123456789abcdef', url: '',
+    });
+  });
+
+  it('readSettings rejects no-reply when the board never prints board.end', async () => {
+    const f = fakePort();
+    const c = new BoardConsole(f.port);
+    const got = reason(c.readSettings());
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(await got).toBe('no-reply');
+  });
+
   it('reboot writes the line and does not wait for a reply', async () => {
     const f = fakePort();
     const c = new BoardConsole(f.port);
