@@ -151,6 +151,11 @@ finds the brain on the network by itself (mDNS: the brain advertises
 type and a new IP for the computer changes nothing. Some routers and phone
 hotspots block mDNS; then type the URL below.
 
+The chip has 16 MB of flash. `partitions.csv` gives it two 4 MB app slots
+(`ota_0`, `ota_1`, room for over-the-air updates later) and keeps `nvs` where
+it always was, so reflashing keeps the Wi-Fi and token. If you build by hand
+after pulling this, `rm firmware/sdkconfig` once so the new defaults apply.
+
 After a firmware change that should ship, `idf.py build` and
 `npm run firmware:pack` refresh `firmware/release/` (about 1 MB of binaries
 per release).

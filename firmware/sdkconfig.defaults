@@ -5,3 +5,7 @@ CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
 # send that times out as a dead connection: a 150 ms Wi-Fi stall would
 # disconnect the body. The watchdogs on both sides decide "gone", not this.
 CONFIG_LWIP_TCP_SND_BUF_DEFAULT=32768
+# The chip is an N16R8: 16 MB of flash. The default 2 MB table left the app 1 MB.
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"

@@ -1,0 +1,10 @@
+# Name,    Type, SubType, Offset,   Size
+# nvs and phy_init stay where the first layout put them, so a board that is
+# reflashed keeps its Wi-Fi and token. The app moved to 0x20000 and there are
+# two of them (ota_0, ota_1): over-the-air updates need a slot to write the
+# new firmware into while the old one runs. otadata says which slot boots.
+nvs,       data, nvs,     0x9000,   24K
+phy_init,  data, phy,     0xf000,   4K
+otadata,   data, ota,     0x10000,  8K
+ota_0,     app,  ota_0,   0x20000,  4M
+ota_1,     app,  ota_1,   0x420000, 4M

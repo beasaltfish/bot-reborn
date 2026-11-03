@@ -2,7 +2,7 @@
   "chip": "esp32s3",
   "flashMode": "dio",
   "flashFreq": "80m",
-  "flashSize": "2MB",
+  "flashSize": "16MB",
   "files": [
     {
       "offset": 0,
@@ -14,6 +14,10 @@
     },
     {
       "offset": 65536,
+      "path": "ota_data_initial.bin"
+    },
+    {
+      "offset": 131072,
       "path": "body.bin"
     }
   ]
