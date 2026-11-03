@@ -13,7 +13,7 @@ static settings_t *settings;
 static const char HELP[] =
   "  wifi <ssid> [pass]   quote either to hold spaces; empty pass = open network\n"
   "  token <32 hex>       from the admin page\n"
-  "  url ws://<ip>:8787/body\n"
+  "  url ws://<ip>:8787/body | url auto   (auto: find the brain on the network)\n"
   "  cal                  show calibration\n"
   "  cal drive            swap forward/backward (decide this first)\n"
   "  cal steer            swap left/right\n"

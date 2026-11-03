@@ -72,6 +72,13 @@ static void a_url_is_ws(void) {
   CHECK_EQ_STR(c.error, "url must start with ws://");
 }
 
+static void url_auto_clears_the_url(void) {
+  cmd_t c = cmd_parse("url auto");
+  CHECK_EQ_INT(c.kind, CMD_URL);
+  CHECK_EQ_INT(c.a[0], 0);
+  CHECK_EQ_INT(cmd_parse("url automatic").kind, CMD_INVALID);
+}
+
 static void unknown_commands_and_arguments(void) {
   cmd_t c = cmd_parse("dance");
   CHECK_EQ_INT(c.kind, CMD_INVALID);
@@ -90,6 +97,7 @@ int main(void) {
   wifi_refuses_what_wpa_would();
   a_token_is_32_hex_and_stored_lowercase();
   a_url_is_ws();
+  url_auto_clears_the_url();
   unknown_commands_and_arguments();
   CHECK_DONE();
 }

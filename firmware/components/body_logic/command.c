@@ -65,6 +65,11 @@ static cmd_t token(int n, char w[][WORD_CAP]) {
 }
 
 static cmd_t url(int n, char w[][WORD_CAP]) {
+  if (n == 2 && strcmp(w[1], "auto") == 0) {   /* empty url: find the brain on the network */
+    cmd_t c = {0};
+    c.kind = CMD_URL;
+    return c;
+  }
   if (n != 2 || strncmp(w[1], "ws://", 5) != 0) return invalid("url must start with ws://");
   cmd_t c = {0};
   c.kind = CMD_URL;

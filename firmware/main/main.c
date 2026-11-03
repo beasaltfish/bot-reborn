@@ -52,7 +52,7 @@ void app_main(void) {
      rest of the boot log. */
   screen_start();
   console_start(&settings);
-  printf("body: protocol %d, brain at %s\n", PROTO_VERSION, settings.url);
+  printf("body: protocol %d, brain at %s\n", PROTO_VERSION, settings.url[0] ? settings.url : "auto (found on the network)");
 
   /* Nothing to connect with yet: say what is missing until it is typed. */
   while (!settings.ssid[0] || !settings.token[0]) {

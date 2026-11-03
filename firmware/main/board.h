@@ -25,8 +25,9 @@
    brain's uplink dBFS on the bench. */
 #define MIC_SHIFT 14
 
-/* Until `url` is typed on the serial console. */
-#define DEFAULT_BODY_URL "ws://192.168.3.79:8787/body"
+/* Empty: the body looks for the brain on the network (mDNS). A `url` typed on
+   the serial console wins over that; `url auto` clears it again. */
+#define DEFAULT_BODY_URL ""
 
 /* The pet screen: a 2.8" 320x240 IPS panel on SPI (SKU MSP2834, ILI9341V).
    Landscape, write-only: there is no MISO wire.
