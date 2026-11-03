@@ -11,6 +11,7 @@ export function CharacterList(props: {
   selected: string | null;
   onSelect(id: string): void;
   onNew(): void;
+  onBoard(): void;
 }) {
   return (
     <nav className="list">
@@ -29,6 +30,7 @@ export function CharacterList(props: {
         </button>
       ))}
       <button type="button" className="new" onClick={props.onNew}>{t('newCharacter')}</button>
+      <button type="button" className="new" onClick={props.onBoard}>{t('boardOpen')}</button>
       <label className="lang">
         <span className="sr-only">{t('language')}</span>
         <select value={lang} onChange={(e) => setLang(e.target.value as 'zh' | 'en')}>

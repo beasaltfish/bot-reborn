@@ -26,6 +26,17 @@ describe('App', () => {
     expect(fake.chars.has('Rex')).toBe(true);
   });
 
+  it('opens the board setup from the list and leaves it when a character is picked', async () => {
+    installFakeApi([{ name: 'Rex' }]);
+    render(<App pollMs={50} renderEditor={slot} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Set up a board' }));
+    // jsdom has no Web Serial, so the screen opens on its Chrome-or-Edge notice.
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Chrome or Edge/);
+    await userEvent.click(screen.getByRole('button', { name: /Rex/ }));
+    expect(await screen.findByTestId('editor')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('shows a create error instead of swallowing it', async () => {
     installFakeApi([{ name: 'Rex' }]);
     render(<App pollMs={50} renderEditor={slot} />);

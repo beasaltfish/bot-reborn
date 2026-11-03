@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { Brand } from './Brand';
 import { CharacterList } from './CharacterList';
+import { BoardSetup } from './BoardSetup';
 import { NewCharacter } from './NewCharacter';
 import { useCharacters } from './useCharacters';
 import { t } from './i18n';
@@ -24,6 +25,7 @@ export function App({ pollMs = 2000, renderEditor }: {
   const { list, down, refresh } = useCharacters(pollMs);
   const [selected, setSelected] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [board, setBoard] = useState(false);
   const [initialTab, setInitialTab] = useState<TabName>('basic');
 
   const banner = down ? <div className="banner" role="status">{t('serverDown')}</div> : null;
@@ -64,12 +66,15 @@ export function App({ pollMs = 2000, renderEditor }: {
       <div className="layout">
         <CharacterList
           list={list}
-          selected={creating ? null : current?.id ?? null}
-          onSelect={(id) => { setCreating(false); setSelected(id); remember(id); setInitialTab('basic'); }}
-          onNew={() => setCreating(true)}
+          selected={creating || board ? null : current?.id ?? null}
+          onSelect={(id) => { setBoard(false); setCreating(false); setSelected(id); remember(id); setInitialTab('basic'); }}
+          onNew={() => { setBoard(false); setCreating(true); }}
+          onBoard={() => { setCreating(false); setBoard(true); }}
         />
         <main className="pane">
-          {creating ? (
+          {board ? (
+            <BoardSetup />
+          ) : creating ? (
             <NewCharacter
               onCreated={(d) => created(d.id)}
               onCancel={list.length > 0 ? () => setCreating(false) : undefined}

@@ -102,3 +102,9 @@ table.criteria td:nth-child(2) input { width: 100%; box-sizing: border-box; }
   table.criteria thead { display: none; }
   table.criteria tr { border-top: 2px dashed var(--rule); padding: 6px 0; }
 }
+
+.board { display: flex; flex-direction: column; gap: 10px; max-width: 520px; }
+.board fieldset { border: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.board label { display: flex; flex-direction: column; gap: 4px; }
+.board label:has(input[type="radio"]) { flex-direction: row; align-items: center; gap: 8px; }
+.board-error { color: var(--bad, #b3261e); }

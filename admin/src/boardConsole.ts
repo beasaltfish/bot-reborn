@@ -24,11 +24,19 @@ export class ConsoleError extends Error {
 const REPLY_TIMEOUT_MS = 5000;
 const bytes = (s: string) => new TextEncoder().encode(s).length;
 
+/** What the console would refuse about a Wi-Fi name and password, found without a board. */
+export function checkWifi(ssid: string, pass: string): 'bad-ssid' | 'bad-pass' | null {
+  // The console has no escape for a quote inside a quoted word.
+  if (ssid.includes('"') || bytes(ssid) < 1 || bytes(ssid) > 32) return 'bad-ssid';
+  if (pass.includes('"') || (pass !== '' && (pass.length < 8 || pass.length > 63))) return 'bad-pass';
+  return null;
+}
+
 export class BoardConsole {
   private listeners = new Set<(line: string) => void>();
   private welcomed: string | null = null;
 
-  constructor(private port: LinePort) {
+  constructor(private port: LinePort, private opts: { replyTimeoutMs?: number } = {}) {
     void this.pump();
   }
 
@@ -51,16 +59,15 @@ export class BoardConsole {
         if (reply.startsWith('error:')) done(() => reject(new ConsoleError('rejected', reply)));
         else if (/saved$/.test(reply)) done(resolve);
       };
-      const timer = setTimeout(() => done(() => reject(new ConsoleError('no-reply'))), REPLY_TIMEOUT_MS);
+      const timer = setTimeout(() => done(() => reject(new ConsoleError('no-reply'))), this.opts.replyTimeoutMs ?? REPLY_TIMEOUT_MS);
       this.listeners.add(listen);   // before the write: the answer can be instant
       this.port.write(line).catch((e) => done(() => reject(e)));
     });
   }
 
   async setWifi(ssid: string, pass: string): Promise<void> {
-    // The console has no escape for a quote inside a quoted word.
-    if (ssid.includes('"') || bytes(ssid) < 1 || bytes(ssid) > 32) throw new ConsoleError('bad-ssid');
-    if (pass.includes('"') || (pass !== '' && (pass.length < 8 || pass.length > 63))) throw new ConsoleError('bad-pass');
+    const bad = checkWifi(ssid, pass);
+    if (bad) throw new ConsoleError(bad);
     await this.command(`wifi "${ssid}"${pass ? ` "${pass}"` : ''}\n`);
   }
 
