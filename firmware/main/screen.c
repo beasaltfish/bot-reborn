@@ -9,6 +9,7 @@
 
 #include <stdio.h>
 #include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "driver/gpio.h"
 #include "driver/spi_master.h"
@@ -28,6 +29,26 @@
 static esp_lcd_panel_handle_t panel;
 static const screen_profile_t *profile;
 static volatile bool ready;
+/* Given by the SPI driver when a band's pixels have left the buffer. */
+static SemaphoreHandle_t band_done;
+
+static bool on_band_done(esp_lcd_panel_io_handle_t io, esp_lcd_panel_io_event_data_t *event, void *ctx) {
+  (void)io; (void)event; (void)ctx;
+  BaseType_t woken = pdFALSE;
+  xSemaphoreGiveFromISR(band_done, &woken);
+  return woken == pdTRUE;
+}
+
+/* esp_lcd_panel_draw_bitmap only QUEUES the transfer: the driver reads the
+   pixels from our buffer later, by DMA. Overwriting the buffer for the next
+   band before then mixes two bands into one — fine horizontal stripes, at
+   random places, even on a picture that never changes. So every draw waits
+   for the driver to say the buffer is free. */
+static bool draw(int y, int rows, const uint16_t *pixels) {
+  xSemaphoreTake(band_done, 0);   /* a stale give from a draw that timed out */
+  if (esp_lcd_panel_draw_bitmap(panel, 0, y, profile->w, y + rows, pixels) != ESP_OK) return false;
+  return xSemaphoreTake(band_done, pdMS_TO_TICKS(500)) == pdTRUE;
+}
 
 /* RGB565 as the panel reads it off the wire: high byte first, so the bytes of
    the little-endian value are swapped. (The JPEG decoder is asked for the same
@@ -50,7 +71,7 @@ uint16_t screen_height(void) { return profile ? profile->h : 0; }
 
 bool screen_draw_band(int y, int rows, const uint16_t *rgb565_rows) {
   if (!ready) return false;
-  return esp_lcd_panel_draw_bitmap(panel, 0, y, profile->w, y + rows, rgb565_rows) == ESP_OK;
+  return draw(y, rows, rgb565_rows);
 }
 
 static void fill(uint16_t colour) {
@@ -58,7 +79,7 @@ static void fill(uint16_t colour) {
   for (int i = 0; i < profile->w * BAND_ROWS; i++) band[i] = colour;
   for (int y = 0; y < profile->h; y += BAND_ROWS) {
     int rows = profile->h - y < BAND_ROWS ? profile->h - y : BAND_ROWS;
-    if (esp_lcd_panel_draw_bitmap(panel, 0, y, profile->w, y + rows, band) != ESP_OK) {
+    if (!draw(y, rows, band)) {
       printf("screen: draw at y=%d FAILED\n", y);
       return;
     }
@@ -126,6 +147,9 @@ void screen_start(const screen_profile_t *p) {
   };
   esp_lcd_panel_io_handle_t io = NULL;
   if (!step("panel io", esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)LCD_HOST, &cfg, &io))) return;
+  band_done = xSemaphoreCreateBinary();
+  const esp_lcd_panel_io_callbacks_t callbacks = { .on_color_trans_done = on_band_done };
+  step("band callback", esp_lcd_panel_io_register_event_callbacks(io, &callbacks, NULL));
 
   esp_lcd_panel_dev_config_t dev = {
     .rgb_ele_order = p->bgr ? LCD_RGB_ELEMENT_ORDER_BGR : LCD_RGB_ELEMENT_ORDER_RGB,
