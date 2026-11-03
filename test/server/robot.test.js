@@ -119,12 +119,13 @@ function fakePetFrames() {
   /** @param {string[]} frames */
   const art = (frames) => ({ bySize: new Map([['320x240', frames.map((f) => Buffer.from(f))]]) });
   return new Map([
-    ['idle', { fps: 10, loop: true, count: 2, ...art(['i0', 'i1']) }],
-    ['sit', { fps: 10, loop: false, count: 1, ...art(['s0']) }],
+    ['rest-lie', { fps: 10, loop: true, count: 2, ...art(['i0', 'i1']) }],
+    ['lie-sit', { fps: 10, loop: false, count: 1, ...art(['t0']) }],
+    ['rest-sit', { fps: 10, loop: true, count: 1, ...art(['s0']) }],
   ]);
 }
 
-test('a pet streams idle at once, and stops when the robot stops', async () => {
+test('a pet streams its lying rest at once, and stops when the robot stops', async () => {
   const c = fakeConn();
   const e = fakeEars();
   /** @type {string[]} */ const shown = [];

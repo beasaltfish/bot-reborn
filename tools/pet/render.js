@@ -91,10 +91,10 @@ function preview(size, name, file) {
 
 for (const size of SIZES) {
   const key = sizeKey(size);
-  // 320×240 keeps its old preview names, so anything linking to idle.gif still
-  // works, and every size gets an idle preview of its own to compare against.
+  // 320×240 gets a preview of every animation; every size gets one of the
+  // lying rest (the dog's default look) to compare against.
   if (key === DEFAULT_SIZE) for (const name of Object.keys(ANIMS)) preview(size, name, `${name}.gif`);
-  preview(size, 'idle', `${key}-idle.gif`);
+  preview(size, 'rest-lie', `${key}-rest-lie.gif`);
 }
 
 writeFileSync(join(FRAMES, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');

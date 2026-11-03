@@ -1,0 +1,64 @@
+{
+  "sizes": [
+    "320x240",
+    "240x240",
+    "160x128"
+  ],
+  "anims": {
+    "rest-lie": {
+      "fps": 8,
+      "loop": true,
+      "frames": 24
+    },
+    "rest-sit": {
+      "fps": 8,
+      "loop": true,
+      "frames": 16
+    },
+    "rest-stand": {
+      "fps": 8,
+      "loop": true,
+      "frames": 16
+    },
+    "lie-sit": {
+      "fps": 10,
+      "loop": false,
+      "frames": 8
+    },
+    "sit-lie": {
+      "fps": 10,
+      "loop": false,
+      "frames": 8
+    },
+    "lie-stand": {
+      "fps": 10,
+      "loop": false,
+      "frames": 8
+    },
+    "stand-lie": {
+      "fps": 10,
+      "loop": false,
+      "frames": 8
+    },
+    "sit-stand": {
+      "fps": 10,
+      "loop": false,
+      "frames": 8
+    },
+    "stand-sit": {
+      "fps": 10,
+      "loop": false,
+      "frames": 8
+    },
+    "shake": {
+      "fps": 10,
+      "loop": false,
+      "frames": 16
+    },
+    "spin": {
+      "fps": 10,
+      "loop": false,
+      "frames": 18
+    }
+  }
+}

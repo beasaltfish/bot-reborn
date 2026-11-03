@@ -141,7 +141,7 @@ test('/screen is taken by the screen link, welcomes a token, and streams the pet
   const server = createBrainServer({
     dir: chars.dir, fetch: fakeFetch(), sfx: new Map(), earcons: renderEarcons(),
     makeEars: () => onceEars(), log: () => {},
-    petFrames: new Map([['idle', {
+    petFrames: new Map([['rest-lie', {
       fps: 10, loop: true, count: 2,
       bySize: new Map([
         ['320x240', [Buffer.from('i0'), Buffer.from('i1')]],
@@ -170,7 +170,7 @@ test('two screens of one character each get their own size', async () => {
   const server = createBrainServer({
     dir: chars.dir, fetch: fakeFetch(), sfx: new Map(), earcons: renderEarcons(),
     makeEars: () => onceEars(), log: () => {},
-    petFrames: new Map([['idle', {
+    petFrames: new Map([['rest-lie', {
       fps: 10, loop: true, count: 2,
       bySize: new Map([
         ['320x240', [Buffer.from('i0'), Buffer.from('i1')]],
