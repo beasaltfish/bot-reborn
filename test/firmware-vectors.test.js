@@ -15,3 +15,8 @@ test('every firmware vector is judged by core/protocol.js as the file says', () 
     assert.equal(parse(v.text, 'brain')?.type ?? null, v.type, v.text);
   }
 });
+
+test('the screen\'s hello, as the firmware writes it, is a hello core/protocol.js accepts from a body', () => {
+  const text = '{"type":"hello","protocol":2,"token":"0123456789abcdef0123456789abcdef","screen":{"w":320,"h":240}}';
+  assert.equal(parse(text, 'body')?.type, 'hello');
+});

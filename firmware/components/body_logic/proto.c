@@ -76,6 +76,12 @@ int proto_hello(char *buf, size_t cap, const char *token) {
   return n < 0 || (size_t)n >= cap ? -1 : n;
 }
 
+int proto_hello_screen(char *buf, size_t cap, const char *token, int w, int h) {
+  int n = snprintf(buf, cap, "{\"type\":\"hello\",\"protocol\":%d,\"token\":\"%s\",\"screen\":{\"w\":%d,\"h\":%d}}",
+                   PROTO_VERSION, token, w, h);
+  return n < 0 || (size_t)n >= cap ? -1 : n;
+}
+
 bool textasm_feed(textasm_t *t, const char *data, size_t len, size_t offset, size_t total) {
   if (offset == 0) { t->len = 0; t->overflow = false; }
   if (t->overflow || offset != t->len || t->len + len >= sizeof t->buf) {

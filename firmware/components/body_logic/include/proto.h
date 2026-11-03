@@ -26,6 +26,10 @@ brain_msg_t proto_parse(const char *json, size_t len);
 /* {"type":"hello","protocol":2,"token":"…"}; its length, or -1 if it does not fit. */
 int proto_hello(char *buf, size_t cap, const char *token);
 
+/* The screen socket's hello (server/screen-link.js): the body's, plus the
+   panel's size in landscape. Same return rule. */
+int proto_hello_screen(char *buf, size_t cap, const char *token, int w, int h);
+
 extern const char PROTO_PING[];
 extern const char PROTO_PONG[];
 

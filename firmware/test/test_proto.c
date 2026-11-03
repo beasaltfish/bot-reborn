@@ -124,7 +124,18 @@ static void textasm_drops_an_overlong_frame(void) {
   CHECK_EQ_STR(t.buf, "{\"type\":\"stop\"}");
 }
 
+/* The screen's hello is the body's, plus the size of the panel (server/screen-link.js). */
+static void the_screen_hello_carries_the_panel_size(void) {
+  char buf[256];
+  int n = proto_hello_screen(buf, sizeof buf, "0123456789abcdef0123456789abcdef", 320, 240);
+  const char *want = "{\"type\":\"hello\",\"protocol\":2,\"token\":\"0123456789abcdef0123456789abcdef\",\"screen\":{\"w\":320,\"h\":240}}";
+  CHECK_EQ_INT(n, (int)strlen(want));
+  CHECK_EQ_STR(buf, want);
+  CHECK_EQ_INT(proto_hello_screen(buf, 20, "0123456789abcdef0123456789abcdef", 320, 240), -1);
+}
+
 int main(void) {
+  the_screen_hello_carries_the_panel_size();
   agrees_with_the_shared_vectors();
   reads_a_moves_fields();
   reads_text_fields_and_cuts_them_short();
