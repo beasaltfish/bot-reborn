@@ -7,8 +7,8 @@
 //   breathe 0..1  chest rise and fall
 //   blink   0..1  eyelids, 1 closed
 //   tail    deg   wag, about the tail's base
-//   sit     0..1  lying → sitting up
-//   stand   0..1  lying → standing on long front legs, body level
+//   sit     0..1  how much sitting up   } the rest of the dog is lying: head low
+//   stand   0..1  how much standing     } on its paws. sit + stand stays <= 1.
 //   paw     0..1  hold the right front paw out in front of the chest (shake)
 //   bob    -1..1  the held paw's up-and-down: the handshake itself
 //   turn    0..1  one full turn for the spin; 0.25 is edge-on, 0.5 is the back
@@ -71,7 +71,7 @@ export function drawDog(p = {}, size) {
   const canvas = size ?? { w: W, h: H, round: false };
   const { scale, dx, dy } = fitDog(canvas.w, canvas.h, canvas.round);
   const breathe = p.breathe ?? 0;
-  const blink = p.blink ?? 0;
+  const blinkIn = p.blink ?? 0;
   const tail = p.tail ?? 0;
   const sit = p.sit ?? 0;
   const stand = p.stand ?? 0;
@@ -92,16 +92,30 @@ export function drawDog(p = {}, size) {
   // level oval, lifted on long straight legs, with the head up and the tail
   // high. The head stops where sitting puts it (the round screens' fit is
   // measured on the highest frame).
-  const bodyY = lerp(lerp(174, 156, sit), 146, stand) - 2 * breathe;
-  const bodyRy = lerp(lerp(34, 50, sit), 36, stand) + 2 * breathe;
-  const bodyRx = lerp(lerp(78, 64, sit), 80, stand);
-  const headY = lerp(lerp(122, 92, sit), 96, stand) - 3 * breathe;
-  const headR = lerp(44, 46, sit);
+  // Three postures, blended: lying, sitting, standing. `sit` and `stand` are
+  // how much of each; what is left over is lying. Sitting→standing therefore
+  // goes straight across, not down through lying on the way.
+  const k = sit + stand > 1 ? 1 / (sit + stand) : 1;
+  const sitW = sit * k;
+  const standW = stand * k;
+  const lieW = 1 - sitW - standW;
+  const mix = (/** @type {number} */ lying, /** @type {number} */ sitting, /** @type {number} */ standing) =>
+    lieW * lying + sitW * sitting + standW * standing;
+  // A lying dog is drowsy: the lids come down a little.
+  const blink = Math.min(1, blinkIn + 0.3 * lieW);
+
+  // Lying: the body is a flat oval on the cushion and the head rests low on
+  // the front paws (drawn over the chin below), nothing like the sitting head.
+  const bodyY = mix(178, 156, 146) - 2 * breathe;
+  const bodyRy = mix(30, 50, 36) + 2 * breathe;
+  const bodyRx = mix(82, 64, 80);
+  const headY = mix(156, 92, 96) - 3 * breathe;
+  const headR = mix(44, 46, 46);
   const pawY = 202;
-  const legH = lerp(lerp(18, 46, sit), 58, stand);
+  const legH = mix(10, 46, 58);
   const legY = pawY - legH;
   const tailBaseX = 160 + bodyRx - 6;
-  const tailBaseY = bodyY - 16 - 10 * stand;
+  const tailBaseY = bodyY - 16 - 10 * standW;
 
   /** A front leg, straight down, with a paw. */
   const leg = (/** @type {number} */ x) => `
@@ -130,6 +144,15 @@ export function drawDog(p = {}, size) {
     <ellipse cx="${160 - 34}" cy="${num(headY + 8)}" rx="9" ry="5" fill="#ef9b7f" opacity="0.45"/>
     <ellipse cx="${160 + 34}" cy="${num(headY + 8)}" rx="9" ry="5" fill="#ef9b7f" opacity="0.45"/>`;
 
+  // Lying, the front paws are out in front and the chin rests on them: drawn
+  // after the head, fading in as the dog goes down.
+  const lyingPaws = `
+    <g opacity="${num(Math.min(1, lieW * 1.4))}">
+      <ellipse cx="${160 - 34}" cy="206" rx="15" ry="9" fill="${CREAM}"/>
+      <ellipse cx="${160 + 34}" cy="206" rx="15" ry="9" fill="${CREAM}"/>
+      <path d="M ${160 - 40} 208 q 4 4 8 0 M ${160 + 28} 208 q 4 4 8 0" stroke="${FUR_DARK}" stroke-width="2" fill="none" stroke-linecap="round"/>
+    </g>`;
+
   // The ears hang from the sides of the head; floppy, so they swing a little
   // with the breath instead of being glued on.
   const earY = headY - 14 - 2 * breathe;
@@ -148,7 +171,7 @@ export function drawDog(p = {}, size) {
   // behind it is the one thing this animation exists to show. It hangs off a
   // shoulder inside the body, so the arm is attached at every wiggle.
   const shoulderX = 122;
-  const shoulderY = lerp(168, 156, sit);
+  const shoulderY = mix(168, 156, 150);
   // A handshake offers the paw forward, level with the chest, and shakes it up
   // and down. (Held beside the face and swung from the shoulder it reads as a
   // wave, which is what this used to look like.) The paw grows a little as it
@@ -185,6 +208,7 @@ export function drawDog(p = {}, size) {
     <circle cx="160" cy="${num(headY)}" r="${num(headR)}" fill="${FUR}"/>
     ${ear(-1)}${ear(1)}
     ${face}
+    ${lieW > 0.05 ? lyingPaws : ''}
     ${raisedPaw}
   </g>`;
 

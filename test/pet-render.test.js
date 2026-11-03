@@ -1,11 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import sharp from 'sharp';
-import { ANIMS } from '../tools/pet/anims.js';
+import { ANIMS, POSTURE } from '../tools/pet/anims.js';
 import { BG, FLOOR, drawDog, fitDog } from '../tools/pet/dog.js';
 import { frameSizes, sizeKey } from '../core/screens.js';
 
-const TRICKS = ['sit', 'shake', 'spin', 'stand'];
+const POSTURES = ['lie', 'sit', 'stand'];
+const RESTS = POSTURES.map((p) => `rest-${p}`);
+const TRANSITIONS = ['lie-sit', 'sit-lie', 'lie-stand', 'stand-lie', 'sit-stand', 'stand-sit'];
+const TRICKS = ['shake', 'spin'];
 
 /** @param {string} hex @returns {number[]} */
 const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
@@ -26,14 +29,12 @@ function offSegment(p, a, b) {
 /** The animations, as the shapes this file asserts on. */
 const ALL = /** @type {Record<string, { fps: number, loop: boolean, frames: object[] }>} */ (ANIMS);
 
-test('five animations: idle loops, the four tricks play once', () => {
-  assert.deepEqual(Object.keys(ANIMS).sort(), ['idle', 'shake', 'sit', 'spin', 'stand']);
-  assert.equal(ANIMS.idle.loop, true);
-  for (const name of TRICKS) {
-    assert.equal(ALL[name].loop, false, name);
-    assert.ok(ALL[name].fps > 0, name);
-    assert.ok(ALL[name].frames.length > 1, `${name} has frames`);
-  }
+test('eleven animations: three rest loops, six transitions, two tricks', () => {
+  assert.deepEqual(Object.keys(ANIMS).sort(), [...RESTS, ...TRANSITIONS, ...TRICKS].sort());
+  assert.deepEqual(RESTS.map((n) => [ALL[n].loop, ALL[n].frames.length, ALL[n].fps]), [[true, 24, 8], [true, 16, 8], [true, 16, 8]]);
+  for (const n of TRANSITIONS) assert.deepEqual([ALL[n].loop, ALL[n].frames.length, ALL[n].fps], [false, 8, 10], n);
+  assert.deepEqual([ALL.shake.loop, ALL.shake.frames.length, ALL.shake.fps], [false, 16, 10]);
+  assert.deepEqual([ALL.spin.loop, ALL.spin.frames.length, ALL.spin.fps], [false, 18, 10]);
 });
 
 test('every frame is an SVG of the screen', () => {
@@ -47,26 +48,50 @@ test('every frame is an SVG of the screen', () => {
   }
 });
 
-test('a trick ends on the idle first frame, so the hand-back does not jump', () => {
-  for (const name of TRICKS) {
-    assert.deepEqual(ALL[name].frames.at(-1), ALL.idle.frames[0], name);
+test('every posture has a rest, and POSTURE is its first frame', () => {
+  for (const p of POSTURES) assert.deepEqual(POSTURE[p], ALL[`rest-${p}`].frames[0], p);
+});
+
+test('a transition starts on the source rest and ends on the target rest, so it never jumps', () => {
+  for (const name of TRANSITIONS) {
+    const [from, to] = name.split('-');
+    assert.deepEqual(ALL[name].frames[0], POSTURE[from], `${name} start`);
+    assert.deepEqual(ALL[name].frames.at(-1), POSTURE[to], `${name} end`);
   }
 });
 
-test('stand rises from lying to standing on long legs and goes back down', () => {
-  const frames = (/** @type {any[]} */ (ALL.stand.frames));
-  assert.equal(Math.max(...frames.map((f) => f.stand ?? 0)), 1, 'it reaches full height');
-  assert.ok((frames[0].stand ?? 0) < 0.5, 'it starts down');
-  // Standing is drawn taller than lying: the legs are longer, so the dog's
-  // lowest paw stays on the cushion while its head is higher.
-  const lying = drawDog({ stand: 0 });
-  const up = drawDog({ stand: 1 });
-  const legHeight = (/** @type {string} */ svg) => Number(/<rect x="[\d.]+" y="[\d.]+" width="18" height="([\d.]+)"/.exec(svg)?.[1]);
-  assert.ok(legHeight(up) > legHeight(lying) + 30, 'longer legs when standing');
+test('a trick starts and ends on the rest of the posture it is done in', () => {
+  assert.deepEqual(ALL.shake.frames[0], POSTURE.sit);
+  assert.deepEqual(ALL.shake.frames.at(-1), POSTURE.sit);
+  assert.deepEqual(ALL.spin.frames[0], POSTURE.stand);
+  assert.deepEqual(ALL.spin.frames.at(-1), POSTURE.stand);
 });
 
-test('idle is a loop of breaths and one blink, not a still image', () => {
-  const frames = (/** @type {any[]} */ (ALL.idle.frames));
+/** The head circle's centre height (the one filled with the dog's fur). */
+const headY = (/** @type {string} */ svg) => Number(/<circle cx="160" cy="([\d.]+)" r="4[\d.]+" fill="#f3c877"/.exec(svg)?.[1]);
+const legHeight = (/** @type {string} */ svg) => Number(/<rect x="[\d.]+" y="[\d.]+" width="18" height="([\d.]+)"/.exec(svg)?.[1]);
+
+test('lying is unmistakable: the head rests low, well under the sitting head, with the paws in front of the chin', () => {
+  const lie = drawDog(POSTURE.lie);
+  assert.ok(headY(lie) > headY(drawDog(POSTURE.sit)) + 40, 'head far lower than sitting');
+  assert.ok(lie.lastIndexOf('rx="15"') > lie.indexOf('fill="#f3c877"'), 'a paw is drawn after (over) the head');
+});
+
+test('standing is taller than lying: longer legs, head up', () => {
+  const lie = drawDog(POSTURE.lie);
+  const up = drawDog(POSTURE.stand);
+  assert.ok(legHeight(up) > legHeight(lie) + 30, 'longer legs when standing');
+  assert.ok(headY(up) < headY(lie) - 40, 'head higher when standing');
+});
+
+test('a transition never blends through lying on the way from sitting to standing', () => {
+  // Half way sit→stand the dog is half sitting and half standing, not half lying.
+  const mid = ALL['sit-stand'].frames[4];
+  assert.ok(mid.sit + mid.stand > 0.95, `sit ${mid.sit} + stand ${mid.stand} stays ~1`);
+});
+
+test('the lying rest is a loop of breaths and one blink, not a still image', () => {
+  const frames = (/** @type {any[]} */ (ALL['rest-lie'].frames));
   assert.ok(new Set(frames.map((f) => f.breathe)).size > 2, 'breathing moves');
   assert.ok(new Set(frames.map((f) => f.blink)).size > 1, 'it blinks');
   assert.ok(new Set(frames.map((f) => f.tail)).size > 2, 'the tail wags');
@@ -74,7 +99,7 @@ test('idle is a loop of breaths and one blink, not a still image', () => {
 
 test('320×240 is drawn exactly as before', () => {
   assert.deepEqual(fitDog(320, 240, false), { scale: 1, dx: 0, dy: 0 });
-  assert.equal(drawDog(ANIMS.idle.frames[0]), drawDog(ANIMS.idle.frames[0], { w: 320, h: 240, round: false }));
+  assert.equal(drawDog(ANIMS['rest-lie'].frames[0]), drawDog(ANIMS['rest-lie'].frames[0], { w: 320, h: 240, round: false }));
 });
 
 test('every size gets its own canvas', () => {
