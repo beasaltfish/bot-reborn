@@ -249,5 +249,12 @@ void screen_start(void) {
          LCD_W, LCD_H, chosen);
   /* Priority 3: the audio tasks run at 6, and the display must never starve
      the I2S rings (spec §6.4). */
+  /* SCK is the header pin next to the I2S BCLK. At full drive its 20 MHz
+     edges couple into that jumper wire: a clock glitch leaves silence alone
+     (zeros shift to zeros) and breaks every real sample, which is the crackle
+     heard only while it speaks. The weakest drive slows the edges. */
+  const int outputs[] = { PIN_LCD_SCK, PIN_LCD_MOSI, PIN_LCD_CS, PIN_LCD_DC };
+  for (size_t i = 0; i < sizeof outputs / sizeof outputs[0]; i++) gpio_set_drive_capability(outputs[i], GPIO_DRIVE_CAP_0);
+
   xTaskCreate(screen_task, "screen", 4096, NULL, 3, NULL);
 }
