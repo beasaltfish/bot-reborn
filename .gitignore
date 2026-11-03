@@ -52,3 +52,6 @@ firmware/managed_components/
 # Pet animation previews: a build product of `npm run pet:render`, for the
 # computer only. The frames themselves are committed.
 tools/pet/preview/
+
+# Notes on how the promo video was made (personal, not part of the project)
+docs/promo-video.md
