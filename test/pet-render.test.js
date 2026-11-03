@@ -5,6 +5,7 @@ import { ANIMS, POSTURE } from '../tools/pet/anims.js';
 import { BG, FLOOR, drawDog, fitDog } from '../tools/pet/dog.js';
 import { frameSizes, sizeKey } from '../core/screens.js';
 
+/** @type {('lie'|'sit'|'stand')[]} */
 const POSTURES = ['lie', 'sit', 'stand'];
 const RESTS = POSTURES.map((p) => `rest-${p}`);
 const TRANSITIONS = ['lie-sit', 'sit-lie', 'lie-stand', 'stand-lie', 'sit-stand', 'stand-sit'];
