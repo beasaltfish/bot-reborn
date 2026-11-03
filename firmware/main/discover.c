@@ -1,21 +1,27 @@
 #include <stdio.h>
-#include "esp_netif_ip_addr.h"
+#include "esp_netif.h"
 #include "mdns.h"
 #include "body_url.h"
 #include "discover.h"
 
-/* Without the A record in the answer's extras, ask for the host's address. */
+/* The brain's address to dial. A computer answers with every address it has,
+   virtual machines and VPNs included; prefer the one on this board's subnet. */
 static bool ipv4_of(const mdns_result_t *r, char *out, size_t cap, uint32_t timeout_ms) {
-  for (const mdns_ip_addr_t *a = r->addr; a; a = a->next) {
-    if (a->addr.type == ESP_IPADDR_TYPE_V4) {
-      esp_ip4addr_ntoa(&a->addr.u_addr.ip4, out, cap);
-      return true;
-    }
+  uint32_t addrs[8];
+  size_t n = 0;
+  for (const mdns_ip_addr_t *a = r->addr; a && n < 8; a = a->next) {
+    if (a->addr.type == ESP_IPADDR_TYPE_V4) addrs[n++] = a->addr.u_addr.ip4.addr;
   }
-  if (!r->hostname) return false;
-  esp_ip4_addr_t ip;
-  if (mdns_query_a(r->hostname, timeout_ms, &ip) != ESP_OK) return false;
-  esp_ip4addr_ntoa(&ip, out, cap);
+  if (n == 0) {   /* without the A records in the answer, ask for the host's address */
+    esp_ip4_addr_t ip;
+    if (!r->hostname || mdns_query_a(r->hostname, timeout_ms, &ip) != ESP_OK) return false;
+    addrs[n++] = ip.addr;
+  }
+  esp_netif_ip_info_t mine = {0};
+  esp_netif_t *sta = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+  if (sta) esp_netif_get_ip_info(sta, &mine);
+  esp_ip4_addr_t pick = { .addr = addrs[ipv4_pick(addrs, n, mine.ip.addr, mine.netmask.addr)] };
+  esp_ip4addr_ntoa(&pick, out, cap);
   return true;
 }
 
