@@ -7,6 +7,7 @@
 
 typedef struct {
   char ssid[33], pass[65], token[33], url[128];
+  char screen[24];      /* a screen_profile id; empty = no screen */
   calib_t calib;
 } settings_t;
 

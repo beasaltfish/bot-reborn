@@ -11,6 +11,7 @@
 #include "motor.h"
 #include "net.h"
 #include "screen.h"
+#include "screen_profile.h"
 #include "settings.h"
 
 static settings_t settings;
@@ -49,8 +50,16 @@ void app_main(void) {
   motor_start(&settings.calib);
   led_start();
   /* Before the console, so the colour test's lines are on the wire with the
-     rest of the boot log. */
-  screen_start();
+     rest of the boot log. A screen is opt-in: with none chosen nothing here
+     touches SPI. */
+  const screen_profile_t *screen = screen_profile_find(settings.screen);
+  if (screen) {
+    screen_start();
+  } else if (settings.screen[0]) {
+    printf("screen \"%s\" is not a model this firmware knows: type screen for the list\n", settings.screen);
+  } else {
+    printf("no screen selected: type screen to list models, screen <id> to pick one\n");
+  }
   console_start(&settings);
   printf("body: protocol %d, brain at %s\n", PROTO_VERSION, settings.url[0] ? settings.url : "auto (found on the network)");
 

@@ -6,6 +6,7 @@
 #include "driver/usb_serial_jtag_vfs.h"
 #include "esp_system.h"
 #include "command.h"
+#include "screen_profile.h"
 #include "console.h"
 
 static settings_t *settings;
@@ -17,6 +18,7 @@ static const char HELP[] =
   "  cal                  show calibration\n"
   "  cal drive            swap forward/backward (decide this first)\n"
   "  cal steer            swap left/right\n"
+  "  screen               list the screen models; screen <id> picks one, screen off removes it\n"
   "  show                 print what is stored (Wi-Fi password and token included)\n"
   "  reboot\n";
 
@@ -55,11 +57,29 @@ static void act(const char *line) {
       save("url");
       printf("type reboot to use it\n");
       break;
+    case CMD_SCREEN_LIST:
+      for (size_t i = 0; i < screen_profile_count(); i++) {
+        const screen_profile_t *p = screen_profile_at(i);
+        printf("  %-14s %-22s %s%s\n", p->id, p->label, p->verified ? "verified" : "unverified",
+               strcmp(settings->screen, p->id) == 0 ? "   <- selected" : "");
+      }
+      if (!settings->screen[0]) printf("no screen selected\n");
+      break;
+    case CMD_SCREEN_SET:
+      strlcpy(settings->screen, c.a, sizeof settings->screen);
+      save("screen");
+      printf("type reboot to use it\n");
+      break;
+    case CMD_SCREEN_OFF:
+      settings->screen[0] = '\0';
+      save("screen");
+      printf("type reboot to use it\n");
+      break;
     case CMD_SHOW:
       /* One `board.<key>=<value>` line each, for the admin page to read back;
          the value is the rest of the line, spaces and all. */
-      printf("board.ssid=%s\nboard.pass=%s\nboard.token=%s\nboard.url=%s\nboard.end\n",
-             settings->ssid, settings->pass, settings->token, settings->url);
+      printf("board.ssid=%s\nboard.pass=%s\nboard.token=%s\nboard.url=%s\nboard.screen=%s\nboard.end\n",
+             settings->ssid, settings->pass, settings->token, settings->url, settings->screen);
       break;
     case CMD_REBOOT: fflush(stdout); esp_restart(); break;
   }

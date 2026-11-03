@@ -35,6 +35,7 @@ void settings_load(settings_t *s) {
   read_str("pass", s->pass, sizeof s->pass);
   read_str("token", s->token, sizeof s->token);
   read_str("url", s->url, sizeof s->url);
+  read_str("screen", s->screen, sizeof s->screen);
   read_bool("drv_swap", &s->calib.drive_swapped);
   read_bool("str_swap", &s->calib.steer_swapped);
 }
@@ -46,6 +47,7 @@ esp_err_t settings_save(const settings_t *s) {
   if (err == ESP_OK) err = nvs_set_str(nvs, "pass", s->pass);
   if (err == ESP_OK) err = nvs_set_str(nvs, "token", s->token);
   if (err == ESP_OK) err = nvs_set_str(nvs, "url", s->url);
+  if (err == ESP_OK) err = nvs_set_str(nvs, "screen", s->screen);
   if (err == ESP_OK) err = nvs_set_u8(nvs, "drv_swap", s->calib.drive_swapped);
   if (err == ESP_OK) err = nvs_set_u8(nvs, "str_swap", s->calib.steer_swapped);
   if (err == ESP_OK) err = nvs_commit(nvs);

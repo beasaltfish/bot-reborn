@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include "command.h"
+#include "screen_profile.h"
 
 #define MAX_WORDS 4
 #define WORD_CAP 128
@@ -77,6 +78,17 @@ static cmd_t url(int n, char w[][WORD_CAP]) {
   return c;
 }
 
+static cmd_t screen(int n, char w[][WORD_CAP]) {
+  cmd_t c = {0};
+  if (n == 1) { c.kind = CMD_SCREEN_LIST; return c; }
+  if (n != 2) return invalid("usage: screen | screen <id> | screen off");
+  if (strcmp(w[1], "off") == 0) { c.kind = CMD_SCREEN_OFF; return c; }
+  if (screen_profile_find(w[1]) == NULL) return invalid("unknown screen; type screen for the list");
+  c.kind = CMD_SCREEN_SET;
+  strcpy(c.a, w[1]);
+  return c;
+}
+
 cmd_t cmd_parse(const char *line) {
   char w[MAX_WORDS + 1][WORD_CAP];
   int n = split(line, w);
@@ -96,6 +108,7 @@ cmd_t cmd_parse(const char *line) {
   if (strcmp(w[0], "wifi") == 0) return wifi(n, w);
   if (strcmp(w[0], "token") == 0) return token(n, w);
   if (strcmp(w[0], "url") == 0) return url(n, w);
+  if (strcmp(w[0], "screen") == 0) return screen(n, w);
   if (strcmp(w[0], "help") == 0 || strcmp(w[0], "reboot") == 0 || strcmp(w[0], "show") == 0) return invalid("this command takes no arguments");
   return invalid("unknown command; type help");
 }

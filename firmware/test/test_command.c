@@ -82,6 +82,18 @@ static void url_auto_clears_the_url(void) {
   CHECK_EQ_INT(cmd_parse("url automatic").kind, CMD_INVALID);
 }
 
+static void screen_lists_picks_and_switches_off(void) {
+  CHECK_EQ_INT(cmd_parse("screen").kind, CMD_SCREEN_LIST);
+  cmd_t c = cmd_parse("screen ili9341-tn");
+  CHECK_EQ_INT(c.kind, CMD_SCREEN_SET);
+  CHECK_EQ_STR(c.a, "ili9341-tn");
+  CHECK_EQ_INT(cmd_parse("screen off").kind, CMD_SCREEN_OFF);
+  c = cmd_parse("screen nope");
+  CHECK_EQ_INT(c.kind, CMD_INVALID);
+  CHECK_EQ_STR(c.error, "unknown screen; type screen for the list");
+  CHECK_EQ_INT(cmd_parse("screen ili9341-tn extra").kind, CMD_INVALID);
+}
+
 static void unknown_commands_and_arguments(void) {
   cmd_t c = cmd_parse("dance");
   CHECK_EQ_INT(c.kind, CMD_INVALID);
@@ -101,6 +113,7 @@ int main(void) {
   a_token_is_32_hex_and_stored_lowercase();
   a_url_is_ws();
   url_auto_clears_the_url();
+  screen_lists_picks_and_switches_off();
   unknown_commands_and_arguments();
   CHECK_DONE();
 }
