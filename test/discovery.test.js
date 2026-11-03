@@ -4,7 +4,8 @@ import { publishBrain, SERVICE_TYPE, BRAIN_HOST } from '../server/discovery.js';
 
 /** A bonjour stand-in that records what it was asked, and touches no network. */
 function fakeBonjour() {
-  const calls = { /** @type {object[]} */ publish: [], unpublishAll: 0, destroy: 0 };
+  /** @type {{ publish: object[], unpublishAll: number, destroy: number }} */
+  const calls = { publish: [], unpublishAll: 0, destroy: 0 };
   return {
     calls,
     /** @param {object} service */
