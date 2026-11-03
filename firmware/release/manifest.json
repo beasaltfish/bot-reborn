@@ -1,0 +1,20 @@
+{
+  "chip": "esp32s3",
+  "flashMode": "dio",
+  "flashFreq": "80m",
+  "flashSize": "2MB",
+  "files": [
+    {
+      "offset": 0,
+      "path": "bootloader.bin"
+    },
+    {
+      "offset": 32768,
+      "path": "partition-table.bin"
+    },
+    {
+      "offset": 65536,
+      "path": "body.bin"
+    }
+  ]
+}

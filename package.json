@@ -12,6 +12,7 @@
     "build": "vite build",
     "dev": "node --watch-path=server --watch-path=core server/main.js --dev",
     "test": "node --test \"test/**/*.test.js\" && vitest run --config admin/vite.config.ts",
+    "firmware:pack": "node tools/pack-firmware.js",
     "firmware:test": "cmake -S firmware/test -B firmware/build-host && cmake --build firmware/build-host && ctest --test-dir firmware/build-host --output-on-failure",
     "typecheck": "tsc --noEmit && tsc --noEmit -p admin",
     "pet:render": "node tools/pet/render.js"
@@ -32,6 +33,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@types/three": "^0.186.0",
+    "@types/w3c-web-serial": "^1.0.9",
     "@types/w3c-web-usb": "^1.0.14",
     "@types/ws": "^8.18.2",
     "@vitejs/plugin-react": "^6.1.2",
@@ -44,6 +46,7 @@
   "dependencies": {
     "@fontsource/fredoka": "^5.3.0",
     "bonjour-service": "^1.4.4",
+    "esptool-js": "^0.7.1",
     "qrcode": "^1.5.4",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

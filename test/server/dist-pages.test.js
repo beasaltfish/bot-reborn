@@ -16,6 +16,11 @@ function tree({ built = true } = {}) {
   const fixtures = join(root, 'fixtures');
   for (const d of ['admin', 'sim', 'phone', 'assets']) mkdirSync(join(dist, d), { recursive: true });
   mkdirSync(fixtures);
+  const firmware = join(root, 'firmware');
+  mkdirSync(firmware);
+  writeFileSync(join(firmware, 'manifest.json'), '{"files":[]}');
+  writeFileSync(join(firmware, 'body.bin'), 'BIN');
+  writeFileSync(join(firmware, 'notes.txt'), 'not an image');
   if (built) writeFileSync(join(dist, 'admin', 'index.html'), '<p>admin</p>');
   writeFileSync(join(dist, 'sim', 'index.html'), '<p>sim</p>');
   writeFileSync(join(dist, 'phone', 'index.html'), '<p>phone</p>');
@@ -24,7 +29,7 @@ function tree({ built = true } = {}) {
   writeFileSync(join(root, 'secret.txt'), 'nope');
   writeFileSync(join(fixtures, 'check-en.wav'), 'RIFF');
   writeFileSync(join(fixtures, 'me.wav'), 'RIFF');
-  return { dist, fixtures };
+  return { dist, fixtures, firmware };
 }
 
 /** @param {import('../../server/pages.js').PageServer} pages */
@@ -84,6 +89,16 @@ test('only the synthesised check clips, and nothing outside dist/', async () => 
   s.close();
 });
 
+test('the bundled firmware is served at /firmware/: the manifest and the images, nothing else', async () => {
+  const s = await serve(createDistPages(tree()));
+  assert.equal((await s.get('/firmware/manifest.json')).status, 200);
+  assert.equal(await (await s.get('/firmware/body.bin')).text(), 'BIN');
+  assert.equal((await s.get('/firmware/notes.txt')).status, 418);
+  assert.equal((await s.get('/firmware/..%2Fsecret.txt')).status, 418);
+  assert.equal((await s.get('/firmware/missing.bin')).status, 418);
+  s.close();
+});
+
 test('an unbuilt dist/ says how to build it', async () => {
   const s = await serve(createDistPages(tree({ built: false })));
   for (const p of ['/', '/phone/']) {
@@ -109,7 +124,7 @@ test('the network gets the phone page and assets, nothing else', async () => {
   });
   const lan = `192.168.1.20:${port}`;
   for (const p of ['/phone/', '/assets/app-1a2b3c.js']) assert.equal(await status(p, lan), 200, p);
-  for (const p of ['/', '/sim/', '/api/characters', '/fixtures/check-en.wav']) assert.equal(await status(p, lan), 403, p);
+  for (const p of ['/', '/sim/', '/api/characters', '/fixtures/check-en.wav', '/firmware/manifest.json']) assert.equal(await status(p, lan), 403, p);
   assert.equal(await status('/', `localhost:${port}`), 200);
   await server.close();
 });

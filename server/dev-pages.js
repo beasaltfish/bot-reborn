@@ -17,7 +17,7 @@ const ROOT = fileURLToPath(new URL('../', import.meta.url));
 
 /**
  * @param {import('node:http').Server} http
- * @param {{ fixtures?: string }} [opts]
+ * @param {{ fixtures?: string, firmware?: string }} [opts]
  * @returns {import('./pages.js').PageServer}
  */
 export function createDevPages(http, opts = {}) {
@@ -31,7 +31,7 @@ export function createDevPages(http, opts = {}) {
     async serve(req, res) {
       const path = pathOf(req);
       if (path === null) return false;
-      if (serveCommon(req, res, path, opts.fixtures ?? FIXTURES_DIR)) return true;
+      if (serveCommon(req, res, path, opts.fixtures ?? FIXTURES_DIR, opts.firmware)) return true;
       const vite = await ready;
       const page = htmlFor(path);
       if (page) {

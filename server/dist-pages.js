@@ -11,6 +11,8 @@ import { htmlFor, pathOf } from './pages.js';
 
 export const DIST_DIR = fileURLToPath(new URL('../dist/', import.meta.url));
 export const FIXTURES_DIR = fileURLToPath(new URL('../core/fixtures/', import.meta.url));
+/** The packed firmware (tools/pack-firmware.js), for the admin page's board setup. */
+export const FIRMWARE_DIR = fileURLToPath(new URL('../firmware/release/', import.meta.url));
 
 /** @type {Record<string, string>} */
 const TYPES = {
@@ -43,12 +45,21 @@ function send(req, res, file, cache) {
  * @param {import('node:http').ServerResponse} res
  * @param {string} path
  * @param {string} fixtures
+ * @param {string} [firmware]
  * @returns {boolean} whether it answered
  */
-export function serveCommon(req, res, path, fixtures) {
+export function serveCommon(req, res, path, fixtures, firmware = FIRMWARE_DIR) {
   if (path === '/phone' || path === '/sim') {
     res.writeHead(301, { Location: `${path}/` });
     res.end();
+    return true;
+  }
+  // Only the manifest and the images: whatever else lives in that folder stays there.
+  const image = /^\/firmware\/(manifest\.json|[a-z0-9_-]+\.bin)$/.exec(path);
+  if (image) {
+    const file = join(firmware, image[1]);
+    if (!existsSync(file)) return false;
+    send(req, res, file, 'no-cache');
     return true;
   }
   const clip = /^\/fixtures\/(check-[a-z]+\.wav)$/.exec(path);
@@ -60,7 +71,7 @@ export function serveCommon(req, res, path, fixtures) {
 }
 
 /**
- * @param {{ dist: string, fixtures: string }} opts
+ * @param {{ dist: string, fixtures: string, firmware?: string }} opts
  * @returns {import('./pages.js').PageServer}
  */
 export function createDistPages(opts) {
@@ -70,7 +81,7 @@ export function createDistPages(opts) {
       if (req.method !== 'GET' && req.method !== 'HEAD') return false;
       const path = pathOf(req);
       if (path === null) return false;
-      if (serveCommon(req, res, path, opts.fixtures)) return true;
+      if (serveCommon(req, res, path, opts.fixtures, opts.firmware)) return true;
       const page = htmlFor(path);
       // Every page is one build: no admin page means nothing was built.
       if (page && !existsSync(join(root, 'admin', 'index.html'))) {
