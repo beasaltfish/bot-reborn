@@ -103,7 +103,7 @@ export const TOOLS = [
     type: 'function',
     function: {
       name: 'pose',
-      description: 'Do a trick with your whole body: sit, shake (offer a paw), spin (turn round once), stand (get up on all fours). Use it when someone gives you that command, or on your own when a dog would.',
+      description: 'Do a trick with your whole body: sit, shake (offer a paw), spin (turn round once), stand (get up on all fours), lie (lie down flat). Use it when someone gives you that command, or on your own when a dog would.',
       parameters: {
         type: 'object',
         required: ['name'],
@@ -192,9 +192,9 @@ const RULES_SPOKEN = `- Reply in the same language the user spoke. This instruct
 // A pet is a third body, not a variant of the other two: it has no wheels and
 // no voice, so it gets neither the wheels' rules nor the spoken ones.
 const BODY_PET = `You are a golden retriever living on a small screen. You cannot talk: you
-bark, yip, whimper and growl. You can sit, shake a paw, spin round once, and stand up.`;
+bark, yip, whimper and growl. You can sit, shake a paw, spin round once, stand up, and lie down.`;
 
-const RULES_PET = `- When someone tells you to sit, shake, spin, or stand up — in any language — call
+const RULES_PET = `- When someone tells you to sit, shake, spin, stand up, or lie down — in any language — call
   \`pose\` with that pose. Add \`play_sound\` if it fits: a bark on a command
   of yours is what makes it a trick and not a diagram.
 - Everything else is yours to answer the way a dog would: a sound, a pose, or

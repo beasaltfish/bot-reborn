@@ -208,12 +208,12 @@ test('commands preset: the training question, word for word, and pass hands over
   assert.deepEqual(c.question.options.find((o) => o.choice === 'pass')?.actions, []);
 });
 
-test('pet preset: four trick commands, each posing and barking, then pass', () => {
+test('pet preset: five commands — four posing and barking, lie down posing and yipping — then pass', () => {
   const pet = REFLEX_PRESETS.find((p) => p.id === 'pet');
   assert.ok(pet, 'the pet preset exists');
   assert.equal(pet.threshold, 0.8);
   assert.equal(pet.state, DEFAULT_STATE);
-  assert.deepEqual(pet.question.options.map((o) => o.choice), ['sit', 'shake', 'spin', 'stand', 'pass']);
+  assert.deepEqual(pet.question.options.map((o) => o.choice), ['sit', 'shake', 'spin', 'stand', 'lie', 'pass']);
   for (const pose of ['sit', 'shake', 'spin', 'stand']) {
     /** @type {{ actions: any[] } | undefined} */
     const trick = pet.question.options.find((x) => x.choice === pose);
@@ -222,5 +222,10 @@ test('pet preset: four trick commands, each posing and barking, then pass', () =
       { name: 'play_sound', args: { name: 'bark' } },
     ], pose);
   }
+  // Lying down is quiet: a yip, not a bark.
+  assert.deepEqual(pet.question.options.find((o) => o.choice === 'lie')?.actions, [
+    { name: 'pose', args: { name: 'lie' } },
+    { name: 'play_sound', args: { name: 'yip' } },
+  ]);
   assert.deepEqual(pet.question.options.find((o) => o.choice === 'pass')?.actions, []);
 });

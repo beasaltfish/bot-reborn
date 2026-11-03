@@ -99,6 +99,10 @@ export const REFLEX_PRESETS = [
           { name: 'pose', args: { name: 'stand' } },
           { name: 'play_sound', args: { name: 'bark' } },
         ] },
+        { choice: 'lie', description: 'Lie down, get down (趴下, 趴着).', actions: [
+          { name: 'pose', args: { name: 'lie' } },
+          { name: 'play_sound', args: { name: 'yip' } },
+        ] },
         { choice: 'pass', description: 'Not one of these commands; let the dog think and answer.', actions: [] },
       ],
     },
