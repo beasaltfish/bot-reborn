@@ -5,7 +5,7 @@
    reads that file and fails if any field differs. A new panel is a row there
    and a row here. */
 static const screen_profile_t PROFILES[] = {
-  { "ili9341-tn", "ILI9341 2.4\" TFT", CTRL_ILI9341, 320, 240, false, true, true, true, false, 0, 0, 0, 20000000, false },
+  { "ili9341-tn", "ILI9341 2.4\" TFT", CTRL_ILI9341, 320, 240, false, true, true, true, false, 0, 0, 0, 10000000, false },
   { "ili9341-ips", "ILI9341V 2.8\" IPS", CTRL_ILI9341, 320, 240, true, true, true, true, false, 0, 0, 0, 20000000, false },
   { "st7789-320", "ST7789 2.0\" IPS", CTRL_ST7789, 320, 240, true, false, true, true, false, 0, 0, 0, 20000000, false },
   { "st7789-240", "ST7789 1.3\" IPS", CTRL_ST7789, 240, 240, true, false, false, false, false, 0, 0, 3, 20000000, false },
