@@ -192,3 +192,5 @@ bool link_send_audio(const int16_t *pcm, size_t n) {
   if (!welcomed || !esp_websocket_client_is_connected(client)) return false;
   return esp_websocket_client_send_bin(client, (const char *)pcm, (int)(n * sizeof *pcm), pdMS_TO_TICKS(SEND_TIMEOUT_MS)) >= 0;
 }
+
+const char *link_dialed_url(void) { return dialed; }

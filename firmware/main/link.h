@@ -21,3 +21,8 @@ void link_start(const settings_t *s, const link_handlers_t *h);
    esp_websocket_client's rule, so the TCP send buffer is sized to make it
    rare (sdkconfig.defaults). */
 bool link_send_audio(const int16_t *pcm, size_t n);
+
+/* The brain's address in use (the typed url, or the one found over mDNS);
+   empty until the link has one. For the screen socket, which dials the same
+   host. */
+const char *link_dialed_url(void);
