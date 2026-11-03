@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Animator } from '../../server/pet/animator.js';
+import { Animator, RELAX_MS } from '../../server/pet/animator.js';
 import { loadPetFrames } from '../../server/pet/frames.js';
 import { FakeClock } from './fake-clock.js';
 
@@ -19,16 +19,26 @@ const sized = (fps, loop, wide, square) => ({
   bySize: new Map([['320x240', wide.map(buf)], ['240x240', square.map(buf)]]),
 });
 
-/** Idle: 3 frames at 10 fps, looping. Sit: 2 frames, once. */
-function rig() {
+const REST_LOOPS = ['rest-lie', 'rest-sit', 'rest-stand'];
+const ONCE = ['lie-sit', 'sit-lie', 'lie-stand', 'stand-lie', 'sit-stand', 'stand-sit', 'shake', 'spin'];
+
+/** Every animation of the postures spec, two frames at 10 fps, each frame labelled `name:index`. */
+function allAnims(/** @type {string[]} */ without = []) {
+  const frames = new Map();
+  for (const name of [...REST_LOOPS, ...ONCE]) {
+    if (without.includes(name)) continue;
+    const loop = REST_LOOPS.includes(name);
+    frames.set(name, sized(10, loop, [`${name}:0`, `${name}:1`], [`${name}~0`, `${name}~1`]));
+  }
+  return frames;
+}
+
+function rig(/** @type {string[]} */ without = []) {
   const clock = new FakeClock();
   /** @type {Buffer[]} */ const shown = [];
   /** @type {string[][]} */ const pairs = [];
   /** @type {string[]} */ const logged = [];
-  const frames = new Map([
-    ['idle', sized(10, true, ['i0', 'i1', 'i2'], ['j0', 'j1', 'j2'])],
-    ['sit', sized(10, false, ['s0', 's1'], ['t0', 't1'])],
-  ]);
+  const frames = allAnims(without);
   const animator = new Animator({
     frames,
     show: (pick) => {
@@ -44,86 +54,184 @@ function rig() {
 }
 
 const names = (/** @type {Buffer[]} */ shown) => shown.map((b) => b.toString());
+/** Which animations have been shown, in order, each once however many frames it had. */
+const played = (/** @type {Buffer[]} */ shown) => names(shown).map((n) => n.split(':')[0]).filter((n, i, all) => n !== all[i - 1]);
 
-test('start shows idle frame 0 at once and loops', async () => {
+/** A dog that has been told to sit and has settled into it. */
+async function sitting(/** @type {ReturnType<typeof rig>} */ r) {
+  r.animator.start();
+  r.animator.pose('sit');
+  await r.clock.advance(200);   // lie-sit takes 200 ms; at 200 the sitting rest has just begun
+  assert.equal(played(r.shown).at(-1), 'rest-sit');
+}
+
+test('start shows the lying rest at once and loops it', async () => {
   const r = rig();
   r.animator.start();
-  assert.deepEqual(names(r.shown), ['i0']);
+  assert.deepEqual(names(r.shown), ['rest-lie:0']);
   await r.clock.advance(300);
-  assert.deepEqual(names(r.shown), ['i0', 'i1', 'i2', 'i0']);
+  assert.deepEqual(names(r.shown), ['rest-lie:0', 'rest-lie:1', 'rest-lie:0', 'rest-lie:1']);
 });
 
-test('pose switches at once, plays once, and returns to idle from frame 0', async () => {
+test('sit from lying plays the transition at once, then holds the sitting rest', async () => {
   const r = rig();
   r.animator.start();
   r.animator.pose('sit');
-  assert.deepEqual(names(r.shown), ['i0', 's0'], 'the switch does not wait for a tick');
+  assert.deepEqual(names(r.shown).slice(-1), ['lie-sit:0'], 'the switch does not wait for a tick');
+  await r.clock.advance(1000);
+  assert.deepEqual(played(r.shown), ['rest-lie', 'lie-sit', 'rest-sit'], 'and it stays sitting');
+});
+
+test('the same pose again changes nothing on screen', async () => {
+  const r = rig();
+  await sitting(r);
+  const before = r.shown.length;
+  r.animator.pose('sit');
+  assert.equal(r.shown.length, before, 'no new frame and no transition');
+});
+
+test('stand from sitting goes straight across, and stand from standing is nothing', async () => {
+  const r = rig();
+  await sitting(r);
+  r.animator.pose('stand');
+  await r.clock.advance(1000);
+  assert.deepEqual(played(r.shown).slice(-2), ['sit-stand', 'rest-stand']);
+});
+
+test('shake from lying sits first, shakes, and stays sitting', async () => {
+  const r = rig();
+  r.animator.start();
+  r.animator.pose('shake');
+  await r.clock.advance(1000);
+  assert.deepEqual(played(r.shown), ['rest-lie', 'lie-sit', 'shake', 'rest-sit']);
+});
+
+test('shake from sitting needs no transition', async () => {
+  const r = rig();
+  await sitting(r);
+  r.animator.pose('shake');
+  await r.clock.advance(1000);
+  assert.deepEqual(played(r.shown).slice(-2), ['shake', 'rest-sit']);
+});
+
+test('spin from lying stands first, spins, and stays standing', async () => {
+  const r = rig();
+  r.animator.start();
+  r.animator.pose('spin');
+  await r.clock.advance(1000);
+  assert.deepEqual(played(r.shown), ['rest-lie', 'lie-stand', 'spin', 'rest-stand']);
+});
+
+test('lie from standing goes down and stays down', async () => {
+  const r = rig();
+  r.animator.start();
+  r.animator.pose('stand');
+  await r.clock.advance(1000);
+  r.animator.pose('lie');
+  await r.clock.advance(RELAX_MS * 3);
+  assert.deepEqual(played(r.shown), ['rest-lie', 'lie-stand', 'rest-stand', 'stand-lie', 'rest-lie']);
+});
+
+test('nobody talking for RELAX_MS: it relaxes to lying with a transition', async () => {
+  const r = rig();
+  await sitting(r);
+  await r.clock.advance(RELAX_MS - 100);
+  assert.equal(played(r.shown).at(-1), 'rest-sit', 'not yet');
   await r.clock.advance(200);
-  assert.deepEqual(names(r.shown), ['i0', 's0', 's1', 'i0'], 's1, then straight back to idle');
+  await r.clock.advance(1000);
+  assert.deepEqual(played(r.shown).slice(-3), ['rest-sit', 'sit-lie', 'rest-lie']);
+});
+
+test('a pose restarts the relax timer, even the same pose', async () => {
+  const r = rig();
+  await sitting(r);
+  await r.clock.advance(RELAX_MS - 100);
+  r.animator.pose('sit');
+  await r.clock.advance(RELAX_MS - 100);
+  assert.equal(played(r.shown).at(-1), 'rest-sit', 'a full RELAX_MS has not passed since the last pose');
+  await r.clock.advance(150);   // it fires 100 ms in; sit-lie is 200 ms long
+  assert.equal(played(r.shown).at(-1), 'sit-lie');
+});
+
+test('the relax timer never cuts a trick short: it starts when the trick ends', async () => {
+  const r = rig();
+  await sitting(r);
+  await r.clock.advance(RELAX_MS - 150);
+  r.animator.pose('shake');                 // 200 ms long: it would have been mid-trick when the old timer fired
+  await r.clock.advance(150);
+  assert.equal(played(r.shown).at(-1), 'shake', 'the trick is still playing');
+  await r.clock.advance(100);               // shake over, rest-sit again
+  await r.clock.advance(RELAX_MS - 100);
+  assert.equal(played(r.shown).at(-1), 'rest-sit', 'a fresh RELAX_MS from the end of the trick');
+  await r.clock.advance(200);
+  assert.equal(played(r.shown).at(-1), 'sit-lie');
+});
+
+test('a pose during a transition starts the new sequence at once from where it was heading', async () => {
+  const r = rig();
+  r.animator.start();
+  r.animator.pose('sit');                   // lie-sit, heading for sitting
+  await r.clock.advance(100);               // in its second frame
+  r.animator.pose('stand');
+  assert.equal(names(r.shown).at(-1), 'sit-stand:0', 'from sitting, the posture it was heading to');
+  await r.clock.advance(1000);
+  assert.equal(played(r.shown).at(-1), 'rest-stand');
+});
+
+test('a missing transition cuts to the rest, with one line', async () => {
+  const r = rig(['lie-sit']);
+  r.animator.start();
+  r.animator.pose('sit');
+  assert.equal(names(r.shown).at(-1), 'rest-sit:0');
+  assert.equal(r.logged.length, 1);
+  assert.match(r.logged[0], /lie-sit/);
+});
+
+test('a pose with no animation at all is ignored, and the dog keeps going', async () => {
+  const r = rig();
+  r.animator.start();
+  r.animator.pose('dance');
+  assert.equal(r.logged.length, 1);
+  await r.clock.advance(200);
+  assert.deepEqual(played(r.shown), ['rest-lie']);
 });
 
 test('every size is handed the same frame of the same animation', async () => {
   const r = rig();
   r.animator.start();
-  await r.clock.advance(200);
   r.animator.pose('sit');
-  await r.clock.advance(100);
-  assert.deepEqual(r.pairs, [
-    ['i0', 'j0'], ['i1', 'j1'], ['i2', 'j2'], ['s0', 't0'], ['s1', 't1'],
-  ]);
+  await r.clock.advance(150);
+  for (const [wide, square] of r.pairs) {
+    assert.equal(wide.replace(':', '~'), square, 'one player, two crops of the same frame');
+  }
 });
 
-test('a pick for a size with no frames is undefined, not a crash', () => {
-  /** @type {(Buffer | undefined)[]} */ const picked = [];
-  const animator = new Animator({
-    frames: new Map([['idle', sized(10, true, ['i0'], ['j0'])]]),
-    show: (pick) => picked.push(pick('999x1')),
-    after: () => () => {},
-  });
-  animator.start();
-  assert.deepEqual(picked, [undefined]);
-});
-
-test('a pose during a pose restarts with the new one', async () => {
+test('stop stops the frames and the timers; start after stop begins again lying', async () => {
   const r = rig();
-  const frames = r.frames;
-  frames.set('shake', sized(10, false, ['h0', 'h1'], ['k0', 'k1']));
-  r.animator.start();
-  r.animator.pose('sit');
-  await r.clock.advance(100);
-  r.animator.pose('shake');
-  assert.deepEqual(names(r.shown), ['i0', 's0', 's1', 'h0']);
-  await r.clock.advance(100);
-  assert.deepEqual(names(r.shown).slice(-1), ['h1']);
-});
-
-test('pose without an animation is ignored, and the idle keeps going', async () => {
-  const r = rig();
-  r.animator.start();
-  r.animator.pose('roll-over');
-  assert.deepEqual(r.logged.length, 1);
-  assert.match(r.logged[0], /roll-over/);
-  await r.clock.advance(100);
-  assert.deepEqual(names(r.shown), ['i0', 'i1']);
-});
-
-test('stop stops the frames; start after stop restarts idle', async () => {
-  const r = rig();
-  r.animator.start();
-  await r.clock.advance(100);
+  await sitting(r);
   r.animator.stop();
-  await r.clock.advance(1000);
-  assert.deepEqual(names(r.shown), ['i0', 'i1']);
+  const seen = r.shown.length;
+  await r.clock.advance(RELAX_MS * 2);
+  assert.equal(r.shown.length, seen, 'nothing more after stop, not even a relax');
   r.animator.start();
-  await r.clock.advance(100);
-  assert.deepEqual(names(r.shown), ['i0', 'i1', 'i0', 'i1']);
+  assert.equal(names(r.shown).at(-1), 'rest-lie:0');
 });
 
 test('a pose while stopped is not played', async () => {
   const r = rig();
   r.animator.pose('sit');
   await r.clock.advance(500);
-  assert.deepEqual(names(r.shown), []);
+  assert.deepEqual(r.shown, []);
+});
+
+test('a pick for a size with no frames is undefined, not a crash', () => {
+  const r = rig();
+  const frames = new Map([['rest-lie', sized(10, true, ['i0'], ['j0'])]]);
+  frames.get('rest-lie')?.bySize.delete('240x240');
+  /** @type {(Buffer | undefined)[]} */ const got = [];
+  const animator = new Animator({ frames, show: (pick) => { got.push(pick('240x240')); }, after: r.clock.after });
+  animator.start();
+  assert.deepEqual(got, [undefined]);
 });
 
 test('loads nothing from a missing directory, and says so once', () => {

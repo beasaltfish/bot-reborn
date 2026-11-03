@@ -1,13 +1,23 @@
-// What the screen is showing, one frame at a time (pet screen spec §4.4).
+// What the screen is showing, one frame at a time (pet screen spec §4.4,
+// postures spec).
+//
+// The dog is always in one of three postures — lying, sitting, standing — and
+// is shown as a sequence of animations ending in a loop: a rest in its posture.
+// A command moves it to a posture and it stays; nobody talking for RELAX_MS
+// lets it lie down again. Tricks are done from the posture they belong to
+// (shake sitting, spin standing); asked from another, the dog first moves to
+// the right one, and stays in it afterwards.
 //
 // Pure logic, no sockets and no timers of its own: `show` is whatever puts a
 // JPEG on the wire and `after` is whatever schedules the next frame, so the
-// whole thing runs under a fake clock in tests. The brain streams idle at a
-// low frame rate; a pose interrupts it at once, plays once, and hands back to
-// idle from idle's first frame.
+// whole thing runs under a fake clock in tests.
 
 /** @typedef {import('./frames.js').PetAnim} PetAnim */
 /** @typedef {import('./frames.js').FramePick} FramePick */
+/** @typedef {'lie' | 'sit' | 'stand'} Posture */
+
+/** Nobody talking for this long: a sitting or standing dog lies down. */
+export const RELAX_MS = 10000;
 
 export class Animator {
   /** @type {import('./frames.js').PetFrames} */ #frames;
@@ -15,8 +25,12 @@ export class Animator {
   /** @type {(ms: number, fn: () => void) => () => void} */ #after;
   /** @type {(line: string) => void} */ #log;
   /** @type {(() => void) | null} */ #cancel = null;
+  /** @type {(() => void) | null} */ #cancelRelax = null;
   /** @type {PetAnim | null} */ #anim = null;
-  /** @type {string} */ #name = '';
+  /** Animations still to play after the current one; the last is a rest loop. @type {string[]} */
+  #queue = [];
+  /** The posture the running sequence ends in. @type {Posture} */
+  #posture = 'lie';
   #index = 0;
   #running = false;
 
@@ -38,29 +52,37 @@ export class Animator {
     this.#log = log;
   }
 
-  /** Begin streaming idle. Called when a body connects. */
+  /** Begin: lying down, breathing. Called when a body connects. */
   start() {
     this.stop();
     this.#running = true;
-    if (!this.#frames.has('idle')) {
-      this.#log('pet: no idle animation — nothing to show');
+    this.#posture = 'lie';
+    if (!this.#frames.has('rest-lie')) {
+      this.#log('pet: no rest-lie animation — nothing to show');
       return;
     }
-    this.#begin('idle', 0);
+    this.#play(['rest-lie']);
   }
 
   /**
-   * Play a trick once, now, whatever was playing. A name with no frames is
-   * ignored with one line: the animation died without the robot dying with it.
+   * Do what a pose asks, now, whatever was playing: move to a posture, or do a
+   * trick from the posture it belongs to. A name nobody knows is ignored with
+   * one line: the animation died without the robot dying with it.
    * @param {string} name
    */
   pose(name) {
     if (!this.#running) return;
-    if (!this.#frames.has(name)) {
-      this.#log(`pet: no animation called "${name}" — the pose is ignored`);
+    const plan = this.#plan(name);
+    if (plan === null) {
+      this.#log(`pet: no animation for "${name}" — the pose is ignored`);
       return;
     }
-    this.#begin(name, 0);
+    if (plan.length === 0) {
+      // Already there. Only the relax timer starts over, if the dog is resting.
+      if (this.#anim?.loop) this.#armRelax();
+      return;
+    }
+    this.#play(plan);
   }
 
   /** The body is gone. The screen keeps its last frame; we just stop feeding it. */
@@ -68,21 +90,88 @@ export class Animator {
     this.#running = false;
     this.#cancel?.();
     this.#cancel = null;
+    this.#cancelRelax?.();
+    this.#cancelRelax = null;
     this.#anim = null;
-    this.#name = '';
+    this.#queue = [];
     this.#index = 0;
+    this.#posture = 'lie';
   }
 
-  /** @param {string} name @param {number} index */
-  #begin(name, index) {
+  /**
+   * The animations a pose needs, in order, from the dog's end posture; moves
+   * #posture to where the plan ends. [] when nothing needs to happen, null for
+   * a pose with no meaning.
+   * @param {string} name @returns {string[] | null}
+   */
+  #plan(name) {
+    /** @type {Posture} */ let target;
+    /** @type {string[]} */ let middle = [];
+    if (name === 'sit' || name === 'stand' || name === 'lie') {
+      target = name;
+      if (target === this.#posture) return [];
+    } else if (name === 'shake') {
+      target = 'sit';
+      middle = ['shake'];
+    } else if (name === 'spin') {
+      target = 'stand';
+      middle = ['spin'];
+    } else {
+      return null;
+    }
+    const from = this.#posture;
+    const steps = [...(from === target ? [] : [`${from}-${target}`]), ...middle, `rest-${target}`];
+    this.#posture = target;
+    return this.#playable(steps);
+  }
+
+  /**
+   * Drop what has no frames, saying so once each; the dog carries on with
+   * what is left (a missing transition is a cut to the next animation).
+   * @param {string[]} steps
+   */
+  #playable(steps) {
+    return steps.filter((s) => {
+      if (this.#frames.has(s)) return true;
+      this.#log(`pet: no animation called "${s}" — skipped`);
+      return false;
+    });
+  }
+
+  /** Start a sequence at once, interrupting what is playing. @param {string[]} steps */
+  #play(steps) {
     this.#cancel?.();
     this.#cancel = null;
-    this.#name = name;
+    this.#cancelRelax?.();
+    this.#cancelRelax = null;
+    this.#queue = steps.slice(1);
+    this.#begin(steps[0]);
+  }
+
+  /** @param {string} name */
+  #begin(name) {
     this.#anim = this.#frames.get(name) ?? null;
-    this.#index = index;
+    this.#index = 0;
     if (!this.#anim) return;
-    this.#emit(index);
+    this.#emit(0);
     this.#schedule();
+    // A sequence has reached its rest: from here, nobody talking for RELAX_MS
+    // lets the dog lie down. (Looping back to frame 0 is not arriving.)
+    if (this.#anim.loop) this.#armRelax();
+  }
+
+  #armRelax() {
+    this.#cancelRelax?.();
+    this.#cancelRelax = null;
+    if (this.#posture === 'lie') return;
+    this.#cancelRelax = this.#after(RELAX_MS, () => {
+      this.#cancelRelax = null;
+      if (!this.#running) return;
+      const from = this.#posture;
+      this.#posture = 'lie';
+      const plan = this.#playable([`${from}-lie`, 'rest-lie']);
+      if (plan.length > 0) this.#play(plan);
+    });
   }
 
   /**
@@ -116,15 +205,15 @@ export class Animator {
       this.#schedule();
       return;
     }
-    // A trick is over: back to idle from its first frame, so the hand-back is
-    // the idle's own animation rather than a cut (the art ends on that frame).
     if (anim.loop) {
       this.#index = 0;
       this.#emit(0);
       this.#schedule();
       return;
     }
-    if (this.#name !== 'idle' && this.#frames.has('idle')) this.#begin('idle', 0);
-    else this.#begin(this.#name, 0);
+    // One play is over: on to the next, which for a transition or a trick is
+    // the rest of the posture it ended in (the art ends on that rest's first frame).
+    const following = this.#queue.shift();
+    if (following) this.#begin(following);
   }
 }
