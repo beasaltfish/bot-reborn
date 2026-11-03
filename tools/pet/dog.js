@@ -8,7 +8,9 @@
 //   blink   0..1  eyelids, 1 closed
 //   tail    deg   wag, about the tail's base
 //   sit     0..1  lying → sitting up
-//   paw     0..1  raise the right front paw (shake)
+//   stand   0..1  lying → standing on long front legs, body level
+//   paw     0..1  hold the right front paw out in front of the chest (shake)
+//   bob    -1..1  the held paw's up-and-down: the handshake itself
 //   turn    0..1  one full turn for the spin; 0.25 is edge-on, 0.5 is the back
 
 export const W = 320;
@@ -61,7 +63,7 @@ export function fitDog(w, h, round) {
 
 /**
  * @param {{ breathe?: number, blink?: number, tail?: number, sit?: number,
- *           paw?: number, turn?: number }} [p]
+ *           stand?: number, paw?: number, bob?: number, turn?: number }} [p]
  * @param {{ w: number, h: number, round: boolean }} [size]
  * @returns {string} an SVG document on that canvas; default 320×240
  */
@@ -72,7 +74,9 @@ export function drawDog(p = {}, size) {
   const blink = p.blink ?? 0;
   const tail = p.tail ?? 0;
   const sit = p.sit ?? 0;
+  const stand = p.stand ?? 0;
   const paw = p.paw ?? 0;
+  const bob = p.bob ?? 0;
   const turn = p.turn ?? 0;
 
   // One full turn about the vertical axis, drawn as a horizontal squash with
@@ -84,16 +88,20 @@ export function drawDog(p = {}, size) {
   const squash = Math.max(0.52, Math.abs(Math.cos(wave)));
   const lean = Math.sin(wave) * 12;
 
-  const bodyY = lerp(174, 156, sit) - 2 * breathe;
-  const bodyRy = lerp(34, 50, sit) + 2 * breathe;
-  const bodyRx = lerp(78, 64, sit);
-  const headY = lerp(122, 92, sit) - 3 * breathe;
+  // Standing is its own pose, not more of sitting: the body stays a wide
+  // level oval, lifted on long straight legs, with the head up and the tail
+  // high. The head stops where sitting puts it (the round screens' fit is
+  // measured on the highest frame).
+  const bodyY = lerp(lerp(174, 156, sit), 146, stand) - 2 * breathe;
+  const bodyRy = lerp(lerp(34, 50, sit), 36, stand) + 2 * breathe;
+  const bodyRx = lerp(lerp(78, 64, sit), 80, stand);
+  const headY = lerp(lerp(122, 92, sit), 96, stand) - 3 * breathe;
   const headR = lerp(44, 46, sit);
   const pawY = 202;
-  const legH = lerp(18, 46, sit);
+  const legH = lerp(lerp(18, 46, sit), 58, stand);
   const legY = pawY - legH;
   const tailBaseX = 160 + bodyRx - 6;
-  const tailBaseY = bodyY - 16;
+  const tailBaseY = bodyY - 16 - 10 * stand;
 
   /** A front leg, straight down, with a paw. */
   const leg = (/** @type {number} */ x) => `
@@ -141,16 +149,19 @@ export function drawDog(p = {}, size) {
   // shoulder inside the body, so the arm is attached at every wiggle.
   const shoulderX = 122;
   const shoulderY = lerp(168, 156, sit);
-  const pawX = 92;
-  const pawY2 = lerp(shoulderY - 6, 96, paw);
-  const wiggle = Math.sin(paw * Math.PI * 3) * 9;
+  // A handshake offers the paw forward, level with the chest, and shakes it up
+  // and down. (Held beside the face and swung from the shoulder it reads as a
+  // wave, which is what this used to look like.) The paw grows a little as it
+  // comes toward whoever is looking.
+  const pawX = lerp(shoulderX - 22, 100, paw);
+  const pawY2 = lerp(shoulderY + 2, 150, paw) + bob * 9;
+  const pawScale = lerp(1, 1.18, paw);
   const raisedPaw = paw > 0.02 ? `
-    <g transform="rotate(${num(wiggle)} ${shoulderX} ${num(shoulderY)})">
-      <path d="M ${shoulderX} ${num(shoulderY)} Q ${num(shoulderX - 22)} ${num((shoulderY + pawY2) / 2)} ${pawX - 4} ${num(pawY2)}"
+    <g>
+      <path d="M ${shoulderX} ${num(shoulderY)} Q ${num((shoulderX + pawX) / 2 - 6)} ${num((shoulderY + pawY2) / 2 + 10)} ${num(pawX)} ${num(pawY2)}"
             stroke="${FUR_MID}" stroke-width="19" fill="none" stroke-linecap="round"/>
-      <ellipse cx="${pawX - 6}" cy="${num(pawY2 - 4)}" rx="13" ry="10" fill="${CREAM}"
-               transform="rotate(-28 ${pawX - 6} ${num(pawY2 - 4)})"/>
-      <path d="M ${pawX - 14} ${num(pawY2 - 10)} q 5 5 10 0" stroke="${FUR_DARK}" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <ellipse cx="${num(pawX - 3)}" cy="${num(pawY2 + 2)}" rx="${num(14 * pawScale)}" ry="${num(11 * pawScale)}" fill="${CREAM}"/>
+      <path d="M ${num(pawX - 12)} ${num(pawY2 + 4)} q 4 4 8 0 M ${num(pawX - 5)} ${num(pawY2 + 4)} q 4 4 8 0" stroke="${FUR_DARK}" stroke-width="2" fill="none" stroke-linecap="round"/>
     </g>` : '';
 
   // Everything that is the same at every size: the cushion and the dog. The

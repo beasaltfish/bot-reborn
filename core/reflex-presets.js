@@ -95,6 +95,10 @@ export const REFLEX_PRESETS = [
           { name: 'pose', args: { name: 'spin' } },
           { name: 'play_sound', args: { name: 'bark' } },
         ] },
+        { choice: 'stand', description: 'Stand up, get up (站起来, 起来).', actions: [
+          { name: 'pose', args: { name: 'stand' } },
+          { name: 'play_sound', args: { name: 'bark' } },
+        ] },
         { choice: 'pass', description: 'Not one of these commands; let the dog think and answer.', actions: [] },
       ],
     },

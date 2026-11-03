@@ -208,13 +208,13 @@ test('commands preset: the training question, word for word, and pass hands over
   assert.deepEqual(c.question.options.find((o) => o.choice === 'pass')?.actions, []);
 });
 
-test('pet preset: three trick commands, each posing and barking, then pass', () => {
+test('pet preset: four trick commands, each posing and barking, then pass', () => {
   const pet = REFLEX_PRESETS.find((p) => p.id === 'pet');
   assert.ok(pet, 'the pet preset exists');
   assert.equal(pet.threshold, 0.8);
   assert.equal(pet.state, DEFAULT_STATE);
-  assert.deepEqual(pet.question.options.map((o) => o.choice), ['sit', 'shake', 'spin', 'pass']);
-  for (const pose of ['sit', 'shake', 'spin']) {
+  assert.deepEqual(pet.question.options.map((o) => o.choice), ['sit', 'shake', 'spin', 'stand', 'pass']);
+  for (const pose of ['sit', 'shake', 'spin', 'stand']) {
     /** @type {{ actions: any[] } | undefined} */
     const trick = pet.question.options.find((x) => x.choice === pose);
     assert.deepEqual(trick?.actions, [

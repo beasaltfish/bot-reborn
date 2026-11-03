@@ -393,7 +393,7 @@ it('pet: the reflex preset writes a question the editor can show', async () => {
   await userEvent.selectOptions(await screen.findByLabelText('Reflex preset'), 'pet');
   await waitFor(() => expect(fake.patches()).toHaveLength(1), { timeout: 2000 });
   expect(fake.patches()[0].body.config.reflex.question?.options.map((o: any) => o.choice))
-    .toEqual(['sit', 'shake', 'spin', 'pass']);
+    .toEqual(['sit', 'shake', 'spin', 'stand', 'pass']);
   expect(screen.getByLabelText('Reflex preset')).toHaveValue('pet');
 });
 
@@ -409,7 +409,7 @@ it('pet: an action can be a pose, and the pose is picked from the three', async 
   expect(pick.tagName).toBe('SELECT');
   const select = pick as HTMLSelectElement;
   const values = [...select.options].map((o) => o.value);
-  expect(values).toEqual(['sit', 'shake', 'spin']);
+  expect(values).toEqual(['sit', 'shake', 'spin', 'stand']);
   await userEvent.selectOptions(pick, 'spin');
   await waitFor(() => expect(fake.chars.get('A')?.config.reflex.question?.options[0].actions)
     .toEqual([{ name: 'pose', args: { name: 'spin' } }]), { timeout: 2000 });

@@ -5,7 +5,7 @@ import { ANIMS } from '../tools/pet/anims.js';
 import { BG, FLOOR, drawDog, fitDog } from '../tools/pet/dog.js';
 import { frameSizes, sizeKey } from '../core/screens.js';
 
-const TRICKS = ['sit', 'shake', 'spin'];
+const TRICKS = ['sit', 'shake', 'spin', 'stand'];
 
 /** @param {string} hex @returns {number[]} */
 const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
@@ -23,11 +23,11 @@ function offSegment(p, a, b) {
   const c = [a[0] + d[0] * t, a[1] + d[1] * t, a[2] + d[2] * t];
   return Math.hypot(v[0] - (c[0] - a[0]), v[1] - (c[1] - a[1]), v[2] - (c[2] - a[2]));
 }
-/** The four animations, as the shapes this file asserts on. */
+/** The animations, as the shapes this file asserts on. */
 const ALL = /** @type {Record<string, { fps: number, loop: boolean, frames: object[] }>} */ (ANIMS);
 
-test('four animations: idle loops, the three tricks play once', () => {
-  assert.deepEqual(Object.keys(ANIMS).sort(), ['idle', 'shake', 'sit', 'spin']);
+test('five animations: idle loops, the four tricks play once', () => {
+  assert.deepEqual(Object.keys(ANIMS).sort(), ['idle', 'shake', 'sit', 'spin', 'stand']);
   assert.equal(ANIMS.idle.loop, true);
   for (const name of TRICKS) {
     assert.equal(ALL[name].loop, false, name);
@@ -51,6 +51,18 @@ test('a trick ends on the idle first frame, so the hand-back does not jump', () 
   for (const name of TRICKS) {
     assert.deepEqual(ALL[name].frames.at(-1), ALL.idle.frames[0], name);
   }
+});
+
+test('stand rises from lying to standing on long legs and goes back down', () => {
+  const frames = (/** @type {any[]} */ (ALL.stand.frames));
+  assert.equal(Math.max(...frames.map((f) => f.stand ?? 0)), 1, 'it reaches full height');
+  assert.ok((frames[0].stand ?? 0) < 0.5, 'it starts down');
+  // Standing is drawn taller than lying: the legs are longer, so the dog's
+  // lowest paw stays on the cushion while its head is higher.
+  const lying = drawDog({ stand: 0 });
+  const up = drawDog({ stand: 1 });
+  const legHeight = (/** @type {string} */ svg) => Number(/<rect x="[\d.]+" y="[\d.]+" width="18" height="([\d.]+)"/.exec(svg)?.[1]);
+  assert.ok(legHeight(up) > legHeight(lying) + 30, 'longer legs when standing');
 });
 
 test('idle is a loop of breaths and one blink, not a still image', () => {

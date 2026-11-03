@@ -1,9 +1,9 @@
-// The four animations, as keyframes over drawDog's parameters (pet screen
+// The five animations, as keyframes over drawDog's parameters (pet screen
 // spec §7). Every trick ends on the idle's first frame: the animator hands the
 // screen back to idle after one play, and a dog that teleported from sitting
 // to lying would read as a glitch rather than as an animation.
 
-const REST = { breathe: 0, blink: 0, tail: 0, sit: 0, paw: 0, turn: 0 };
+const REST = { breathe: 0, blink: 0, tail: 0, sit: 0, stand: 0, paw: 0, bob: 0, turn: 0 };
 
 /** Ease in and out, so a pose change starts and stops like a body, not a slider. */
 const ease = (/** @type {number} */ t) => (1 - Math.cos(Math.PI * t)) / 2;
@@ -60,19 +60,35 @@ export const ANIMS = {
     })),
   },
 
-  // Sitting, the right paw comes up, shakes twice, goes down.
+  // Sitting, the right paw is held out in front, shaken up and down three
+  // times, and goes back down.
   shake: {
     fps: 10,
     loop: false,
     frames: trickFrames(16, (t) => {
-      const up = Math.min(1, t / 0.2) * (t > 0.78 ? 1 - ease((t - 0.78) / 0.22) : 1);
+      const out = Math.min(1, t / 0.2) * (t > 0.78 ? 1 - ease((t - 0.78) / 0.22) : 1);
+      // The shake itself is only while the paw is out.
+      const shaking = t > 0.22 && t < 0.76 ? Math.sin(((t - 0.22) / 0.54) * Math.PI * 6) : 0;
       return {
         ...REST,
         sit: Math.round(ease(Math.min(1, t / 0.15)) * 100) / 100,
-        paw: Math.round(Math.max(0, Math.min(1, up)) * 100) / 100,
+        paw: Math.round(Math.max(0, Math.min(1, out)) * 100) / 100,
+        bob: Math.round(shaking * 100) / 100,
         tail: Math.round(Math.sin(t * Math.PI * 6) * 14),
       };
     }),
+  },
+
+  // Up from lying onto all fours, a proud wag, then back down.
+  stand: {
+    fps: 10,
+    loop: false,
+    frames: trickFrames(16, (t) => ({
+      ...REST,
+      stand: Math.round(ease(Math.min(1, t / 0.3)) * (t < 0.8 ? 1 : 1 - ease((t - 0.8) / 0.2)) * 100) / 100,
+      tail: Math.round(Math.sin(t * Math.PI * 6) * 18),
+      breathe: Math.round((0.5 - 0.5 * Math.cos(t * Math.PI * 2)) * 100) / 100,
+    })),
   },
 
   // One full turn, standing, tail out.

@@ -1064,7 +1064,7 @@ test('handle: none — a move the model makes up anyway is dropped, says why, an
 // --- The pet body: it poses and barks, and it never speaks ------------------
 
 test('pose offers exactly the three poses', () => {
-  assert.deepEqual(byName('pose').function.parameters.properties.name.enum, ['sit', 'shake', 'spin']);
+  assert.deepEqual(byName('pose').function.parameters.properties.name.enum, ['sit', 'shake', 'spin', 'stand']);
 });
 
 test('toolsFor: pet gets pose and play_sound only; others never get pose', () => {
@@ -1083,7 +1083,7 @@ test('pose: rejected unless one of the three', () => {
   assert.deepEqual(r.actions, [{ kind: 'pose', name: 'sit' }]);
   assert.equal(r.dropped, 1);
   assert.equal(r.hadMoveIntent, false, 'a pose is not a request to move');
-  assert.match(r.reasons[0], /pose: rejected.*sit\/shake\/spin/);
+  assert.match(r.reasons[0], /pose: rejected.*sit\/shake\/spin\/stand/);
 });
 
 test('pet prompt: a dog that poses and barks, no driving, no spoken rules', () => {

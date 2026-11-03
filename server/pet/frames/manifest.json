@@ -20,6 +20,11 @@
       "loop": false,
       "frames": 16
     },
+    "stand": {
+      "fps": 10,
+      "loop": false,
+      "frames": 16
+    },
     "spin": {
       "fps": 10,
       "loop": false,

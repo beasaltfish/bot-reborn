@@ -3,6 +3,6 @@
 // what the model made up, and the admin page's reflex editor. A pose the
 // animator has no frames for is a fourth, and the animator owns that answer.
 
-export const POSES = /** @type {const} */ (['sit', 'shake', 'spin']);
+export const POSES = /** @type {const} */ (['sit', 'shake', 'spin', 'stand']);
 
 /** @typedef {typeof POSES[number]} Pose */

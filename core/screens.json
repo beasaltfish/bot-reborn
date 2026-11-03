@@ -14,7 +14,7 @@
       "gapX": 0,
       "gapY": 0,
       "spiMode": 0,
-      "pclkHz": 20000000,
+      "pclkHz": 10000000,
       "vcc": "5v",
       "round": false,
       "verified": false,
