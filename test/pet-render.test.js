@@ -54,7 +54,7 @@ test('every posture has a rest, and POSTURE is its first frame', () => {
 
 test('a transition starts on the source rest and ends on the target rest, so it never jumps', () => {
   for (const name of TRANSITIONS) {
-    const [from, to] = name.split('-');
+    const [from, to] = /** @type {('lie'|'sit'|'stand')[]} */ (name.split('-'));
     assert.deepEqual(ALL[name].frames[0], POSTURE[from], `${name} start`);
     assert.deepEqual(ALL[name].frames.at(-1), POSTURE[to], `${name} end`);
   }
