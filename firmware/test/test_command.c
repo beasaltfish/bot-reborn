@@ -7,6 +7,9 @@ static void kinds(void) {
   CHECK_EQ_INT(cmd_parse("cal drive").kind, CMD_CAL_DRIVE);
   CHECK_EQ_INT(cmd_parse("cal steer").kind, CMD_CAL_STEER);
   CHECK_EQ_INT(cmd_parse("reboot").kind, CMD_REBOOT);
+  CHECK_EQ_INT(cmd_parse("show").kind, CMD_SHOW);
+  CHECK_EQ_INT(cmd_parse("show\r\n").kind, CMD_SHOW);
+  CHECK_EQ_INT(cmd_parse("show all").kind, CMD_INVALID);
 }
 
 static void whitespace_and_line_ends_are_ignored(void) {

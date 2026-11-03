@@ -6,7 +6,7 @@
 #pragma once
 
 typedef enum { CMD_INVALID, CMD_HELP, CMD_CAL_SHOW, CMD_CAL_DRIVE, CMD_CAL_STEER,
-               CMD_WIFI, CMD_TOKEN, CMD_URL, CMD_REBOOT } cmd_kind_t;
+               CMD_WIFI, CMD_TOKEN, CMD_URL, CMD_REBOOT, CMD_SHOW } cmd_kind_t;
 
 typedef struct {
   cmd_kind_t kind;

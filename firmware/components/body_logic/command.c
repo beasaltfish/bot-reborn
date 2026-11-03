@@ -86,6 +86,7 @@ cmd_t cmd_parse(const char *line) {
   cmd_t c = {0};
   if (strcmp(w[0], "help") == 0 && n == 1) { c.kind = CMD_HELP; return c; }
   if (strcmp(w[0], "reboot") == 0 && n == 1) { c.kind = CMD_REBOOT; return c; }
+  if (strcmp(w[0], "show") == 0 && n == 1) { c.kind = CMD_SHOW; return c; }
   if (strcmp(w[0], "cal") == 0) {
     if (n == 1) { c.kind = CMD_CAL_SHOW; return c; }
     if (n == 2 && strcmp(w[1], "drive") == 0) { c.kind = CMD_CAL_DRIVE; return c; }
@@ -95,6 +96,6 @@ cmd_t cmd_parse(const char *line) {
   if (strcmp(w[0], "wifi") == 0) return wifi(n, w);
   if (strcmp(w[0], "token") == 0) return token(n, w);
   if (strcmp(w[0], "url") == 0) return url(n, w);
-  if (strcmp(w[0], "help") == 0 || strcmp(w[0], "reboot") == 0) return invalid("this command takes no arguments");
+  if (strcmp(w[0], "help") == 0 || strcmp(w[0], "reboot") == 0 || strcmp(w[0], "show") == 0) return invalid("this command takes no arguments");
   return invalid("unknown command; type help");
 }

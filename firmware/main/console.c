@@ -17,6 +17,7 @@ static const char HELP[] =
   "  cal                  show calibration\n"
   "  cal drive            swap forward/backward (decide this first)\n"
   "  cal steer            swap left/right\n"
+  "  show                 print what is stored (Wi-Fi password and token included)\n"
   "  reboot\n";
 
 static const char *yes(bool b) { return b ? "yes" : "no"; }
@@ -53,6 +54,12 @@ static void act(const char *line) {
       strlcpy(settings->url, c.a, sizeof settings->url);
       save("url");
       printf("type reboot to use it\n");
+      break;
+    case CMD_SHOW:
+      /* One `board.<key>=<value>` line each, for the admin page to read back;
+         the value is the rest of the line, spaces and all. */
+      printf("board.ssid=%s\nboard.pass=%s\nboard.token=%s\nboard.url=%s\nboard.end\n",
+             settings->ssid, settings->pass, settings->token, settings->url);
       break;
     case CMD_REBOOT: fflush(stdout); esp_restart(); break;
   }
