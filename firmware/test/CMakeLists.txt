@@ -36,6 +36,7 @@ foreach(src ${TESTS})
   add_executable(${name} ${src})
   target_link_libraries(${name} body_logic)
   target_compile_options(${name} PRIVATE -Wall -Wextra -Werror)
-  target_compile_definitions(${name} PRIVATE VECTORS="${CMAKE_CURRENT_SOURCE_DIR}/brain-messages.json")
+  target_compile_definitions(${name} PRIVATE VECTORS="${CMAKE_CURRENT_SOURCE_DIR}/brain-messages.json"
+                                          SCREENS_JSON="${CMAKE_CURRENT_SOURCE_DIR}/../../core/screens.json")
   add_test(NAME ${name} COMMAND ${name})
 endforeach()
