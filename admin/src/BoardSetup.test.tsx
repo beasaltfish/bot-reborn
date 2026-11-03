@@ -29,6 +29,7 @@ describe('BoardSetup', () => {
     expect(await screen.findByText(/Connected to the brain as Asten/)).toBeInTheDocument();
     expect(f.written).toEqual([
       'wifi "My Home" "secret12"\n',
+      'url auto\n',   // a url typed by hand earlier would stop the board looking for the brain
       `token ${'0'.repeat(31)}1\n`,
       'reboot\n',
     ]);

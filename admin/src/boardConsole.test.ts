@@ -92,6 +92,16 @@ describe('BoardConsole', () => {
     expect(await got).toBe('no-reply');
   });
 
+  it('useDiscovery writes "url auto" and resolves on "url saved"', async () => {
+    const f = fakePort();
+    const c = new BoardConsole(f.port);
+    const done = c.useDiscovery();
+    await settle();
+    expect(f.written).toEqual(['url auto\n']);
+    f.emit('url saved');
+    await expect(done).resolves.toBeUndefined();
+  });
+
   it('reboot writes the line and does not wait for a reply', async () => {
     const f = fakePort();
     const c = new BoardConsole(f.port);

@@ -58,6 +58,7 @@ export function BoardSetup({ serial = realSerial, replyTimeoutMs }: { serial?: S
       port = await serial.openBoard(flashed);
       const board = new BoardConsole(port, { replyTimeoutMs });
       await board.setWifi(ssid, pass);
+      await board.useDiscovery();
       await board.setToken(token);
       await board.reboot();
       setStep('waiting');

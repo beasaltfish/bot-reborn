@@ -15,6 +15,7 @@ export function fakeSerial({ supported = true, answer = true }: { supported?: bo
       if (!answer) return;
       if (line.startsWith('wifi')) emit('wifi saved');
       else if (line.startsWith('token')) emit('token 0000…  saved');
+      else if (line.startsWith('url')) emit('url saved');
       else if (line.startsWith('reboot')) emit('welcomed as Asten');
     },
     lines: (async function* () {

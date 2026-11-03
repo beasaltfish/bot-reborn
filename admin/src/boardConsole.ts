@@ -71,6 +71,11 @@ export class BoardConsole {
     await this.command(`wifi "${ssid}"${pass ? ` "${pass}"` : ''}\n`);
   }
 
+  /** Forget any url typed by hand, so the board finds the brain by itself. */
+  async useDiscovery(): Promise<void> {
+    await this.command('url auto\n');
+  }
+
   async setToken(token: string): Promise<void> {
     if (!/^[0-9a-fA-F]{32}$/.test(token)) throw new ConsoleError('bad-token');
     await this.command(`token ${token.toLowerCase()}\n`);
