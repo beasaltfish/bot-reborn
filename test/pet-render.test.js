@@ -86,7 +86,7 @@ test('standing is taller than lying: longer legs, head up', () => {
 
 test('a transition never blends through lying on the way from sitting to standing', () => {
   // Half way sit→stand the dog is half sitting and half standing, not half lying.
-  const mid = ALL['sit-stand'].frames[4];
+  const mid = /** @type {any} */ (ALL['sit-stand'].frames[4]);
   assert.ok(mid.sit + mid.stand > 0.95, `sit ${mid.sit} + stand ${mid.stand} stays ~1`);
 });
 
