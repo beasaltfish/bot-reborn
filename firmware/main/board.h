@@ -29,8 +29,9 @@
    the serial console wins over that; `url auto` clears it again. */
 #define DEFAULT_BODY_URL ""
 
-/* The pet screen: a 2.8" 320x240 IPS panel on SPI (SKU MSP2834, ILI9341V).
-   Landscape, write-only: there is no MISO wire.
+/* The pet screen on SPI. Which panel it is comes from `screen <id>` on the
+   serial console (a screen_profile); only the pins live here. Write-only for
+   the picture; MISO is optional (below).
 
    No backlight pin on purpose. The module's LED pin feeds four white LEDs at
    80 mA — four times what a GPIO may source — so it is wired to a rail and
@@ -40,9 +41,7 @@
 #define PIN_LCD_CS   9
 #define PIN_LCD_DC   8   /* RS on the module's silk */
 #define PIN_LCD_RST  18
-/* Only used to ask the panel which controller it has during bring-up. The
-   picture itself is write-only; the wire can come out afterwards. */
+/* Only used to ask the panel who it is at start-up, to warn when it is not
+   the model chosen. The picture is write-only; the wire can stay unplugged. */
 #define PIN_LCD_MISO 17
-#define LCD_W 320        /* landscape */
-#define LCD_H 240
 

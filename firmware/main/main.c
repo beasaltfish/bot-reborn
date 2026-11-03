@@ -54,7 +54,7 @@ void app_main(void) {
      touches SPI. */
   const screen_profile_t *screen = screen_profile_find(settings.screen);
   if (screen) {
-    screen_start();
+    screen_start(screen);
   } else if (settings.screen[0]) {
     printf("screen \"%s\" is not a model this firmware knows: type screen for the list\n", settings.screen);
   } else {

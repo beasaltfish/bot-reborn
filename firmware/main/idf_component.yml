@@ -4,6 +4,9 @@ dependencies:
   espressif/mdns: "^1.4.0"
   # IDF ships a ST7789 driver but not an ILI9341 one; this panel is an ILI9341V.
   espressif/esp_lcd_ili9341: "2.1.0"
+  # The round 1.28" panel. There is no Espressif ST7735 driver in the registry,
+  # so that profile says so in the log instead of guessing at a third party.
+  espressif/esp_lcd_gc9a01: "^2.0.0"
   # IDF 5.x had cJSON built in as `json`; 6.x removed it, and this component
   # works under both.
   espressif/cjson: "1.7.19~2"
