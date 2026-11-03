@@ -88,8 +88,9 @@ The brain started out inside the phone's browser and moved to the computer for
 two reasons: everything that hears you can, in time, run locally on your own
 machine — the reflex model already does — and the body can shrink to something
 much smaller than a phone. An ESP32-S3 body already hears and talks on a
-breadboard, with no wheels yet ([`firmware/`](firmware/README.md)); a phone, it turns out, is heavy enough to
-tip the car over when it backs up.
+breadboard, with no wheels yet ([`firmware/`](firmware/README.md)); you flash and set it up from the admin page
+in Chrome, over one USB cable, and it finds the brain on its own. A phone, it
+turns out, is heavy enough to tip the car over when it backs up.
 
 ## The reflex model
 

@@ -139,9 +139,25 @@ idf.py set-target esp32s3     # once
 idf.py build flash monitor    # Ctrl-] leaves the monitor
 ```
 
+## Set up from the admin page
+
+No ESP-IDF needed. Run `npm start`, open the admin page in **Chrome or Edge**,
+connect the board by USB (the port marked **USB**, not UART) and click
+**Set up a board**. "First time" writes the firmware (bundled in
+`firmware/release/`) and then the Wi-Fi and the character's token; "Change
+settings" does only the second, in seconds, without reflashing. The board
+finds the brain on the network by itself (mDNS: the brain advertises
+`_beasaltfish._tcp`, host `beasaltfish-brain.local`), so there is no URL to
+type and a new IP for the computer changes nothing. Some routers and phone
+hotspots block mDNS; then type the URL below.
+
+After a firmware change that should ship, `idf.py build` and
+`npm run firmware:pack` refresh `firmware/release/` (about 1 MB of binaries
+per release).
+
 ## Set up over serial
 
-In `idf.py monitor`, type:
+The same thing by hand, for development. In `idf.py monitor`, type:
 
 ```
 wifi "My Home" mypassword
@@ -149,6 +165,9 @@ token 0123456789abcdef0123456789abcdef
 url ws://192.168.3.79:8787/body
 reboot
 ```
+
+`url` is optional: with none set the board looks for the brain on the network,
+and `url auto` clears one again. A typed `url` always wins.
 
 The token is the character's, from the admin page. `npm start` prints the
 body URL. Then calibrate, drive first (a car wired backwards turns the wrong
