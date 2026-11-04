@@ -43,6 +43,7 @@ button, input, select { font: inherit; }
 .badge { grid-column: 1 / -1; font-size: 12px; color: var(--bad); }
 .badge.ok { color: var(--muted); }
 .new { margin-top: 8px; padding: 9px; border: 2px dashed var(--muted); border-radius: 14px; background: none; color: var(--muted); font-weight: 600; cursor: pointer; }
+a.new { text-align: center; text-decoration: none; }
 .new:hover { color: var(--fg); border-color: var(--line); }
 .lang { margin-top: auto; padding-top: 16px; }
 .lang select { width: 100%; padding: 6px 8px; border: 2px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--fg); }

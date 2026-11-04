@@ -31,6 +31,8 @@ export function CharacterList(props: {
       ))}
       <button type="button" className="new" onClick={props.onNew}>{t('newCharacter')}</button>
       <button type="button" className="new" onClick={props.onBoard}>{t('boardOpen')}</button>
+      {/* A page of its own, served on this machine only; a new tab keeps the admin where it is. */}
+      <a className="new" href="/sim/" target="_blank" rel="noreferrer">{t('simOpen')}</a>
       <label className="lang">
         <span className="sr-only">{t('language')}</span>
         <select value={lang} onChange={(e) => setLang(e.target.value as 'zh' | 'en')}>
