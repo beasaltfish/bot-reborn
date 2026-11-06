@@ -9,6 +9,7 @@ import { MIN_DURATION_MS } from './motion.js';
 import { SOUNDS } from './audio/sfx.js';
 import { t } from './strings.js';
 import { CAN_DO } from './config.js';
+import { drawRandom, describeDraw } from './tarot.js';
 import { POSES } from './poses.js';
 
 const DRIVE_VALUES = ['forward', 'backward'];
@@ -22,6 +23,13 @@ const HISTORY_ROUNDS = 6;
  * keeps asking is not going to be answered by one more result.
  */
 export const MAX_TOOL_ROUNDS = 2;
+
+/**
+ * How long a drawn card waits for its reading before the screen gives up and
+ * turns it over anyway (tarot mode spec §8): a shuffle that spins forever
+ * looks like a hang, and a card with an apology is at least an answer.
+ */
+export const READING_TIMEOUT_MS = 20000;
 
 const LANG_NAME = { zh: 'Chinese', en: 'English' };
 
@@ -418,6 +426,13 @@ export class Brain {
   /** Returning tools this brain can run: name → handler (tarot mode spec §4). @type {Record<string, (args: any, signal?: AbortSignal) => Promise<string> | string>} */
   #returning;
   /** @type {ReadonlySet<string>} */ #returningTools;
+  /** @type {() => number} */ #rng;
+  /** @type {(ms: number, fn: () => void) => () => void} */ #after;
+  /** The card this turn already drew: a second draw_card in a turn gets this one back. @type {import('./tarot.js').Draw | null} */
+  #turnCard = null;
+  /** Whether the screen is shuffling a card that has not been turned over yet. */
+  #shuffling = false;
+  /** @type {(() => void) | null} */ #cancelGiveUp = null;
   /** Whether this turn has already sounded its failure. See #fail. */
   #beeped = false;
   /** @type {AbortController | null} */
@@ -428,7 +443,9 @@ export class Brain {
    * @param {{
    *   llm: { chat(messages: object[], tools: object[], opts?: { signal?: AbortSignal }): Promise<{ text: string, toolCalls: any[], rawMessage: object }> },
    *   executor: { move(steps: Step[]): Promise<void>, cruise(d: string, s: string): Promise<void>, stop(): Promise<void>,
-   *               pose?(name: import('./poses.js').Pose): Promise<void> },
+   *               pose?(name: import('./poses.js').Pose): Promise<void>,
+   *               draw?(card: import('./tarot.js').Draw): Promise<void>,
+   *               reveal?(): Promise<void> },
    *   tts: { speak(text: string, opts?: { signal?: AbortSignal }): Promise<void> },
    *   earcon: (name: import('./audio/earcon.js').EarconName) => void,
    *   sound?: (name: import('./audio/sfx.js').SoundName) => Promise<void>,
@@ -436,6 +453,8 @@ export class Brain {
    *              Promise<import('./reflex.js').Verdict> } | null,
    *   returning?: Record<string, (args: any, signal?: AbortSignal) => Promise<string> | string>,
    *   returningTools?: ReadonlySet<string>,
+   *   rng?: () => number,
+   *   after?: (ms: number, fn: () => void) => () => void,
    *   config: { lang: 'en' | 'zh', replyLang: 'zh' | 'en' | null, bargeIn: boolean, body?: { motion: import('./config.js').Motion } },
    *   onReplyLangChange?: (lang: 'en' | 'zh' | null) => void,
    *   onFault?: (part: import('./strings.js').FaultPart, err: Error) => void,
@@ -455,7 +474,12 @@ export class Brain {
     // What a returning tool does is the caller's: the Brain only knows to run
     // it, write its result back and ask again. `returningTools` is injectable
     // so a test can prove the mechanism is not specific to one tool.
-    this.#returning = { ...deps.returning };
+    this.#returning = { draw_card: () => this.#drawForTurn(), ...deps.returning };
+    this.#rng = deps.rng ?? Math.random;
+    this.#after = deps.after ?? ((ms, fn) => {
+      const id = setTimeout(fn, ms);
+      return () => clearTimeout(id);
+    });
     this.#returningTools = deps.returningTools ?? RETURNING_TOOLS;
     this.#config = deps.config;
     this.#onReplyLangChange = deps.onReplyLangChange ?? (() => {});
@@ -491,6 +515,7 @@ export class Brain {
     // worse than one that never works.
     const turn = new AbortController();
     this.#turn = turn;
+    this.#turnCard = null;
 
     // Configurable reflex spec §3: asked before the LLM, never beside it.
     // Anything but a fire falls through to the LLM below, untouched.
@@ -498,7 +523,7 @@ export class Brain {
       const v = await this.#reflex.judge(text, this.#lastRobotLine(), turn.signal);
       this.#trace(`[reflex] ${text} → ${v.verdict} ${v.detail} (${v.ms}ms)`);
       if (turn.signal.aborted) return;
-      if (v.verdict === 'fired') return this.#reflexTurn(text, v.calls ?? []);
+      if (v.verdict === 'fired') return await this.#reflexTurn(text, v.calls ?? []);
     }
 
     this.#pushUser(text);
@@ -513,17 +538,23 @@ export class Brain {
    * reply is spoken: words that came with a returning call are the model
    * thinking aloud, and the reading it is about to give would repeat them.
    * @param {AbortController} turn
+   * @param {{ tools?: object[] }} [opts] `tools` replaces what the body is
+   *   offered: a reading of a card already drawn is asked for with none, so
+   *   the model cannot go and draw another.
    */
-  async #converse(turn) {
+  async #converse(turn, { tools } = {}) {
     for (let round = 0; ; round++) {
       let reply;
       try {
         reply = await this.#llm.chat(
           [{ role: 'system', content: buildSystemPrompt(this.#config) }, ...this.#history],
-          toolsFor(this.#config.body?.motion),
+          tools ?? toolsFor(this.#config.body?.motion),
           { signal: turn.signal },
         );
       } catch (err) {
+        // A card is never left face down: cancelled, failed or timed out, the
+        // screen turns it over.
+        await this.#reveal();
         // Cancelling is not failing. Without this line the `error` earcon and
         // the apiFailed line would be the answer to the user changing their mind.
         if (turn.signal.aborted) return;
@@ -635,6 +666,9 @@ export class Brain {
     // make the list non-empty and the refusal silent.
     else if (hadMoveIntent) this.#beep();
 
+    // The reading is ready: turn the card over as the words begin.
+    if (speak) await this.#reveal();
+
     // The user's call (pet screen spec §4.3): a dog barks, it does not talk.
     // The reply is not shown or spoken anywhere; the trace is the only place
     // that can answer "the model wrote a sentence, why is it silent".
@@ -699,7 +733,7 @@ export class Brain {
    * @param {string} text
    * @param {import('./reflex.js').ToolCall[]} calls
    */
-  #reflexTurn(text, calls) {
+  async #reflexTurn(text, calls) {
     const { actions: valid, reasons } = validate(calls);
     for (const why of reasons) this.#trace(`[reflex] dropped — ${why}`);
     const motion = this.#config.body?.motion ?? 'car';
@@ -709,13 +743,27 @@ export class Brain {
       this.#trace(`[reflex] ${a.kind} dropped: body "${motion}" does not do ${a.kind}`);
       return false;
     });
-    const did = actions.map((a) => a.kind === 'sound'
+    // A draw is the one reflex that does not end the turn: the card is the
+    // reflex's answer, and the reading of it is still the model's (tarot mode
+    // spec §3). Everything else a reflex fires is as it always was.
+    const drawing = actions.some((a) => a.kind === 'draw');
+    const others = actions.filter((a) => a.kind !== 'draw');
+    const did = others.map((a) => a.kind === 'sound'
       ? `play_sound ${a.name}`
       : a.kind === 'pose'
         ? `pose ${a.name}`
         : a.kind === 'move'
           ? `move ${a.steps.map((s) => `${s.drive}/${s.steer} ${s.duration_ms}ms`).join(', ')}`
           : a.kind === 'cruise' ? `cruise ${a.drive}/${a.steer}` : a.kind);
+    if (drawing) {
+      if (others.length > 0) this.#dispatch(others, this.#turn?.signal);
+      const card = await this.#startDraw();
+      const also = did.length ? ` and did: ${did.join('; ')}` : '';
+      this.#pushUser(`${text}\n[Before you could think, your reflexes drew a card${also}]\n${describeDraw(card)}`);
+      this.#trimHistory();
+      await this.#converse(/** @type {AbortController} */ (this.#turn), { tools: [] });
+      return;
+    }
     this.#pushUser(`${text}\n[Before you could think, your reflexes answered: ${did.length ? did.join('; ') : 'nothing'}]`);
     this.#trimHistory();
     if (actions.length === 0) return;
@@ -723,6 +771,82 @@ export class Brain {
     // The same rule as an LLM turn: done says an instruction for the car ran.
     // A bark has already answered out loud, and a pose is the pet's answer.
     if (actions.some((a) => a.kind !== 'sound' && a.kind !== 'pose')) this.#earcon('done');
+  }
+
+  // --- Tarot (tarot mode spec §4, §8) ---------------------------------------
+
+  /**
+   * Draw a card for this turn and start the screen shuffling it. The reading
+   * has until READING_TIMEOUT_MS: after that the card is turned over anyway.
+   * @returns {Promise<import('./tarot.js').Draw>}
+   */
+  async #startDraw() {
+    const card = drawRandom(this.#rng);
+    this.#turnCard = card;
+    this.#shuffling = true;
+    this.#trace(`[tarot] drew ${card.id}${card.reversed ? ' (reversed)' : ''}`);
+    const turn = this.#turn;
+    this.#cancelGiveUp?.();
+    this.#cancelGiveUp = this.#after(READING_TIMEOUT_MS, () => { void this.#giveUp(turn); });
+    await this.#executor.draw?.(card);
+    return card;
+  }
+
+  /**
+   * The model's draw_card, as a returning tool. A second one in the same turn
+   * gets the same card back: "never look for a better card" is the prompt's
+   * rule, and this is the code that keeps it when the model forgets.
+   * @returns {Promise<string>}
+   */
+  async #drawForTurn() {
+    if (this.#motion() !== 'tarot') return 'error: this body does not draw cards';
+    return describeDraw(this.#turnCard ?? await this.#startDraw());
+  }
+
+  /** Turn the card over, once, and stop waiting for a reading. */
+  async #reveal() {
+    this.#cancelGiveUp?.();
+    this.#cancelGiveUp = null;
+    if (!this.#shuffling) return;
+    this.#shuffling = false;
+    await this.#executor.reveal?.();
+  }
+
+  /**
+   * No reading in time: drop the model's request, turn the card over, and say
+   * what any failed turn says. Spoken on a fresh controller, because the turn's
+   * own is the one just aborted and a stop button should still work on the
+   * apology.
+   * @param {AbortController | null} turn
+   */
+  async #giveUp(turn) {
+    if (turn !== this.#turn || !this.#shuffling) return;
+    const apology = new AbortController();
+    this.#turn = apology;
+    turn?.abort();
+    await this.#reveal();
+    this.#fail('llm', new Error(`no reading within ${READING_TIMEOUT_MS / 1000} s`));
+    await this.#say(t(this.#config.lang, 'apiFailed'), apology);
+  }
+
+  /**
+   * A card with no one speaking: the wand was shaken. Draw, shuffle, ask the
+   * model for the reading once, with no tools, and say it. Only a tarot body
+   * does this; for any other it is a line in the trace.
+   */
+  async drawCard() {
+    if (this.#motion() !== 'tarot') {
+      this.#trace('[tarot] drawCard ignored: this body is not a tarot reader');
+      return;
+    }
+    this.#beeped = false;
+    const turn = new AbortController();
+    this.#turn = turn;
+    this.#turnCard = null;
+    const card = await this.#startDraw();
+    this.#pushUser(`[The person shook the wand and drew a card.]\n${describeDraw(card)}`);
+    this.#trimHistory();
+    await this.#converse(turn, { tools: [] });
   }
 
   /**
@@ -840,6 +964,9 @@ export class Brain {
   #run(action) {
     if (action.kind === 'sound') return this.#sound(action.name);
     if (action.kind === 'pose') return this.#executor.pose?.(action.name) ?? Promise.resolve();
+    // A draw is carried out by #startDraw before anything is dispatched; one
+    // that reaches here must not fall through to `stop`.
+    if (action.kind === 'draw') return Promise.resolve();
     if (action.kind === 'move') return this.#executor.move(action.steps);
     if (action.kind === 'cruise') return this.#executor.cruise(action.drive, action.steer);
     return this.#executor.stop();
