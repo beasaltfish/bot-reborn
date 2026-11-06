@@ -50,6 +50,7 @@ const server = createBrainServer({
   petFrames: loadPetFrames(fileURLToPath(new URL('./pet/frames', import.meta.url))),
   // Likewise the cards: the same deck for every tarot character.
   tarotFrames: loadTarotFrames(fileURLToPath(new URL('./tarot/cards', import.meta.url))),
+  dev: DEV,
   ...(DEV ? { pages: (/** @type {import('node:http').Server} */ http) => createDevPages(http) } : {}),
 });
 const port = await server.listen(PORT);

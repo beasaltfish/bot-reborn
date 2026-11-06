@@ -98,7 +98,7 @@ export function startRobot(conn, deps) {
     onState: (state) => conn.send({ type: 'state', state }),
     onFault,
   });
-  session.attach(new Brain({
+  const brain = new Brain({
     llm: new OpenAiCompatLlm(config.llm, net),
     executor,
     tts: session.speakingTts,
@@ -109,7 +109,8 @@ export function startRobot(conn, deps) {
     onReplyLangChange: () => save(config),
     onFault,
     trace: log,
-  }));
+  });
+  session.attach(brain);
 
   conn.onAudio((bytes) => pipeline.feed(bytes));
 
@@ -120,6 +121,14 @@ export function startRobot(conn, deps) {
   let stopped = false;
   return {
     session,
+    /**
+     * Draw a card without anyone speaking: the wand was shaken (tarot mode spec
+     * §5). Only a tarot reader does; false when it cannot, or is busy.
+     * @returns {boolean}
+     */
+    drawCard() {
+      return motion === 'tarot' && session.startTurn(() => brain.drawCard());
+    },
     stop() {
       if (stopped) return;
       stopped = true;

@@ -171,6 +171,46 @@ export class Session {
     if (!this.#wakeWord) this.wake();
   }
 
+  /**
+   * Start a turn that did not begin with the user's voice: a wand shaken, say
+   * (tarot mode spec §5). Everything a voice turn gets, it gets: THINKING for
+   * as long as `run` takes, SPEAKING bracketing the playback through
+   * speakingTts, an interrupt or the stop button aborting it, and the usual
+   * way back to LISTENING. Returns false, and runs nothing, when the robot is
+   * busy: someone mid-sentence (CAPTURING), or a turn already in flight.
+   * A robot that is asleep is woken: shaking the wand is calling it, and it
+   * does not need the wake word for that.
+   * @param {(signal: AbortSignal) => Promise<void>} run
+   * @returns {boolean}
+   */
+  startTurn(run) {
+    if (this.#state === 'CAPTURING' || this.#state === 'THINKING' || this.#state === 'SPEAKING') return false;
+    if (this.#state === 'SLEEPING') this.#setState('LISTENING');
+    const gen = ++this.#gen;
+    const ctrl = new AbortController();
+    this.#ctrl = ctrl;
+    this.#setState('THINKING');
+    void this.#runTurn(gen, ctrl, run);
+    return true;
+  }
+
+  /**
+   * @param {number} gen @param {AbortController} ctrl
+   * @param {(signal: AbortSignal) => Promise<void>} run
+   */
+  async #runTurn(gen, ctrl, run) {
+    try {
+      await run(ctrl.signal);
+    } catch (err) {
+      // The same two rules as #turn: a dead turn reports nothing and sets
+      // nothing, and a live one that threw is reported where the user can hear it.
+      if (gen !== this.#gen) return;
+      this.#onFault('turn', /** @type {Error} */ (err));
+      this.#playEarcon('error');
+    }
+    this.#endTurn(gen);
+  }
+
   /** Enter a session. Public because the UI's start button and §7.3's
    *  calibration both need to do it without a microphone. */
   wake() {

@@ -27,6 +27,7 @@ import { createAdminApi } from './admin-api.js';
  *   log?: (line: string) => void, slackMs?: number, allowedOrigins?: string[],
  *   addresses?: () => string[], petFrames?: import('./pet/frames.js').PetFrames,
  *   tarotFrames?: import('./tarot/frames.js').TarotFrames,
+ *   dev?: boolean,
  * }} opts
  */
 export function createBrainServer(opts) {
@@ -104,6 +105,9 @@ export function createBrainServer(opts) {
     server: http, log, allowedOrigins: opts.allowedOrigins, admit: tokenLookup,
   });
 
+  /** The robot each connected character is running, by character id. @type {Map<string, { drawCard(): boolean, stop(): void }>} */
+  const robots = new Map();
+
   const link = createLink({
     server: http,
     log,
@@ -134,11 +138,19 @@ export function createBrainServer(opts) {
         screen: (pick) => screen.show(c.id, pick),
         log: (line) => log(`[${c.name}] ${line}`),
       });
-      conn.onClose(() => robot.stop());
+      robots.set(c.id, robot);
+      conn.onClose(() => {
+        robot.stop();
+        if (robots.get(c.id) === robot) robots.delete(c.id);
+      });
     },
   });
 
-  api = createAdminApi({ dir: opts.dir, link, addresses: opts.addresses, fetch: opts.fetch });
+  api = createAdminApi({
+    dir: opts.dir, link, addresses: opts.addresses, fetch: opts.fetch,
+    // Only in dev mode: a way to draw a card before the wand has a message of its own.
+    dev: opts.dev ? { draw: (id) => robots.get(id)?.drawCard() ?? false } : undefined,
+  });
 
   return {
     /** @param {number} port @returns {Promise<number>} the port actually bound */

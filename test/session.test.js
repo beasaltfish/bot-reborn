@@ -949,3 +949,90 @@ test('a gate timer that fires a hair early still reopens the ears', () => {
   h.tick(1);
   assert.deepEqual(h.names(), ['kws', 'vad']);
 });
+
+// --- a turn that did not begin with a voice (tarot mode spec §5) ------------
+
+test('startTurn is ignored while the user is speaking, or a turn is thinking or speaking', async () => {
+  // CAPTURING: someone is mid-sentence, and a shaken wand must not talk over them.
+  const capturing = harness();
+  capturing.session.attach(fakeBrain(capturing.session, capturing.calls));
+  capturing.session.start();
+  capturing.wake();
+  capturing.vad.detected = true;
+  capturing.feed('vad');
+  assert.equal(capturing.session.state, 'CAPTURING');
+  let ran = 0;
+  assert.equal(capturing.session.startTurn(async () => { ran++; }), false);
+
+  // THINKING: a voice turn is in flight.
+  const thinking = harness();
+  const brain = fakeBrain(thinking.session, thinking.calls);
+  thinking.session.attach(brain);
+  thinking.session.start();
+  thinking.wake();
+  thinking.vad.segments.push(loud(16));
+  thinking.feed('vad');
+  await settle();
+  assert.equal(thinking.session.state, 'THINKING');
+  assert.equal(thinking.session.startTurn(async () => { ran++; }), false);
+  brain.finish();
+  await settle();
+
+  // SPEAKING: a reply is playing.
+  const speaking = await speakingSession();
+  assert.equal(speaking.session.startTurn(async () => { ran++; }), false);
+  assert.equal(ran, 0, 'none of them ran');
+});
+
+test('startTurn from SLEEPING wakes without a wake word, runs, and settles back to LISTENING', async () => {
+  /** @type {string[]} */ const states = [];
+  const h = harness({ onState: (/** @type {string} */ s) => states.push(s) });
+  h.session.attach(fakeBrain(h.session, h.calls));
+  h.session.start();
+  assert.equal(h.session.state, 'SLEEPING');
+  /** @type {AbortSignal | null} */ let given = null;
+  const started = h.session.startTurn(async (signal) => {
+    given = signal;
+    assert.equal(h.session.state, 'THINKING');
+    await h.session.speakingTts.speak('a reading');
+  });
+  assert.equal(started, true);
+  await settle();
+  assert.deepEqual(states, ['LISTENING', 'THINKING', 'SPEAKING', 'LISTENING']);
+  assert.equal(h.session.state, 'LISTENING');
+  assert.ok(given, 'run was given a signal');
+});
+
+test('startTurn from LISTENING runs and settles, and a tap during it aborts the signal and the brain', async () => {
+  const h = harness();
+  h.session.attach(fakeBrain(h.session, h.calls));
+  h.session.start();
+  h.wake();
+  /** @type {AbortSignal | null} */ let given = null;
+  /** @type {() => void} */ let finish = () => {};
+  assert.equal(h.session.startTurn((signal) => {
+    given = signal;
+    return new Promise((resolve) => { finish = () => resolve(undefined); });
+  }), true);
+  await settle();
+  assert.equal(h.session.state, 'THINKING');
+  h.session.interrupt();
+  assert.equal(/** @type {AbortSignal | null} */ (given)?.aborted, true);
+  assert.equal(h.took('brain.cancel'), 1);
+  assert.equal(h.session.state, 'LISTENING');
+  finish();
+  await settle();
+  assert.equal(h.session.state, 'LISTENING', 'the dead turn must not set a state');
+});
+
+test('a startTurn that throws is reported like any turn, and the session recovers', async () => {
+  const h = harness();
+  h.session.attach(fakeBrain(h.session, h.calls));
+  h.session.start();
+  h.wake();
+  h.session.startTurn(async () => { throw new Error('boom'); });
+  await settle();
+  assert.deepEqual(h.faults, [['turn', 'boom']]);
+  assert.ok(h.calls.some((c) => c[0] === 'earcon' && c[1] === 'error'));
+  assert.equal(h.session.state, 'LISTENING');
+});

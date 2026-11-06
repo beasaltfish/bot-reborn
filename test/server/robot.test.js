@@ -231,3 +231,23 @@ test('the card name is written in the reply language, else the interface languag
   assert.equal(tarotLang({ replyLang: null, lang: 'en' }), 'en');
   assert.equal(tarotLang({ replyLang: null }), 'en');
 });
+
+test('drawCard on a tarot reader starts a turn that asks the model once, with no tools; while busy it is refused', async () => {
+  const r = rig({}, 'tarot');
+  assert.equal(r.robot.drawCard(), true);
+  assert.equal(r.robot.drawCard(), false, 'the first draw is still THINKING');
+  await until(() => r.fetch.calls.some((c) => c.url.endsWith('/audio/speech')));
+  const chats = r.fetch.calls.filter((c) => c.url.endsWith('/chat/completions'));
+  assert.equal(chats.length, 1);
+  assert.ok(!chats[0].body.tools?.length, 'a card already drawn is read with no tools');
+  assert.match(JSON.stringify(chats[0].body.messages), /shook the wand/);
+  r.robot.stop();
+});
+
+test('drawCard on any other body does nothing', async () => {
+  const r = rig({}, 'car');
+  assert.equal(r.robot.drawCard(), false);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.equal(r.fetch.calls.filter((c) => c.url.endsWith('/chat/completions')).length, 0);
+  r.robot.stop();
+});
