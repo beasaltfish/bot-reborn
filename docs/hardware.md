@@ -48,6 +48,26 @@ FT232H D7 ──► U5 input B     (steer)   ← input pin, never the coil
 FT232H GND ─► board GND
 ```
 
+## Tarot wand (not yet built)
+
+A hand-held stick with an MPU-6050 inside, wired to the ESP32 body; shaking it will shuffle a tarot draw.
+So far only the wiring simulator knows about it (`/sim/`, part "MPU-6050 (GY-521)"): the firmware does not read it yet.
+
+**Buy**
+- One **GY-521** (MPU-6050 six-axis module), the domestic one with the header pins soldered on, pointing down. About ¥7.47. Not the GY-273 (compass only) and not the GY-50 (gyro only).
+- Male-to-female dupont wires, 30 cm or longer, ten of them (four are used). The female end goes on the module, the male end into the breadboard.
+
+**Wire** (the same links the simulator checks)
+
+| Wand pin | ESP32-S3 |
+|---|---|
+| VCC | 3V3 |
+| GND | GND |
+| SDA | GPIO1 |
+| SCL | GPIO2 |
+
+Why GPIO1 and 2: the others are taken (4–7 motors, 8–11 and 18 the screen, 12–15 audio, 17 reserved for the screen's MISO, 21 the LED), and these two sit side by side on the board's bottom row. The firmware, when it learns to read the wand, must use the same pair.
+
 ## Action bytes (spec §3.2)
 
 ```
