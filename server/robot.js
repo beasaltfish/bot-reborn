@@ -13,6 +13,8 @@ import { RemoteExecutor } from './body/executor.js';
 import { DryRunExecutor, NoMotionExecutor } from './body/still.js';
 import { PetExecutor } from './body/pet.js';
 import { Animator } from './pet/animator.js';
+import { TarotAnimator } from './tarot/animator.js';
+import { TarotExecutor } from './body/tarot.js';
 import { Mouth } from './body/mouth.js';
 import { PcmTts } from './providers/tts-pcm.js';
 import { makeStt, makeTtsSource } from './providers/pick.js';
@@ -39,6 +41,7 @@ export const ECHO_SLACK_MS = 300;
  *   log?: (line: string) => void,
  *   slackMs?: number,
  *   petFrames?: import('./pet/frames.js').PetFrames,
+ *   tarotFrames?: import('./tarot/frames.js').TarotFrames,
  *   screen?: (pick: import('./pet/frames.js').FramePick) => void,
  * }} deps
  */
@@ -55,8 +58,16 @@ export function startRobot(conn, deps) {
   const animator = motion === 'pet' && deps.petFrames
     ? new Animator({ frames: deps.petFrames, show: (pick) => deps.screen?.(pick), log })
     : null;
-  const executor = makeExecutor(motion, conn, log, animator);
+  // A tarot reader's body is the screen too: the card back at rest, a shuffle
+  // while it thinks. With no frames it has no animator and a blank screen.
+  const tarotAnimator = motion === 'tarot' && deps.tarotFrames
+    ? new TarotAnimator({
+      frames: deps.tarotFrames, show: (pick) => deps.screen?.(pick), log, lang: () => tarotLang(config),
+    })
+    : null;
+  const executor = makeExecutor(motion, conn, log, animator, tarotAnimator);
   animator?.start();
+  tarotAnimator?.start();
   const mouth = new Mouth({
     sendAudio: (bytes) => conn.sendAudio(bytes),
     send: (msg) => conn.send(msg),
@@ -116,6 +127,7 @@ export function startRobot(conn, deps) {
       session.onEmergencyStop();
       // The screen keeps whatever it is showing; it just stops being fed.
       animator?.stop();
+      tarotAnimator?.stop();
       pipeline.clear();
     },
   };
@@ -128,10 +140,23 @@ export function startRobot(conn, deps) {
  * @param {import('./link.js').BodyConn} conn
  * @param {(line: string) => void} log
  * @param {import('./pet/animator.js').Animator | null} [animator]
+ * @param {import('./tarot/animator.js').TarotAnimator | null} [tarotAnimator]
  */
-function makeExecutor(motion, conn, log, animator) {
+function makeExecutor(motion, conn, log, animator, tarotAnimator = null) {
   if (motion === 'dry-run') return new DryRunExecutor(log);
   if (motion === 'none') return new NoMotionExecutor();
   if (motion === 'pet' && animator) return new PetExecutor(animator);
+  // A tarot reader never gets car commands: with no animator its draws do nothing.
+  if (motion === 'tarot') return new TarotExecutor(tarotAnimator);
   return new RemoteExecutor((msg) => conn.send(msg));
+}
+
+/**
+ * What language the card's name is written in: the one the character replies
+ * in, else its interface language, else English (tarot mode spec §8).
+ * @param {{ replyLang?: 'zh' | 'en' | null, lang?: 'zh' | 'en' }} config
+ * @returns {'zh' | 'en'}
+ */
+export function tarotLang(config) {
+  return config.replyLang ?? config.lang ?? 'en';
 }

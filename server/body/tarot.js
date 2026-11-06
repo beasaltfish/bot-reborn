@@ -4,11 +4,11 @@
 // reason the pet's pose does not).
 
 export class TarotExecutor {
-  /** @type {import('../tarot/animator.js').TarotAnimator} */ #animator;
+  /** @type {import('../tarot/animator.js').TarotAnimator | null} */ #animator;
   /** The Brain's `stop()` on a body that has gone away sets this; nothing here reads it. */
   connected = true;
 
-  /** @param {import('../tarot/animator.js').TarotAnimator} animator */
+  /** @param {import('../tarot/animator.js').TarotAnimator | null} animator null: no frames, so nothing to move */
   constructor(animator) {
     this.#animator = animator;
   }
@@ -20,12 +20,12 @@ export class TarotExecutor {
 
   /** @param {import('../../core/tarot.js').Draw} card */
   draw(card) {
-    this.#animator.draw(card);
+    this.#animator?.draw(card);
     return Promise.resolve();
   }
 
   reveal() {
-    this.#animator.reveal();
+    this.#animator?.reveal();
     return Promise.resolve();
   }
 }

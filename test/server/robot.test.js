@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { startRobot } from '../../server/robot.js';
+import { startRobot, tarotLang } from '../../server/robot.js';
 import { renderEarcons } from '../../server/audio/render.js';
 import { readyConfig, fakeFetch, until } from './helpers.js';
 
@@ -157,4 +157,77 @@ test('a car never asks for a screen', async () => {
   await new Promise((r) => setTimeout(r, 150));
   robot.stop();
   assert.deepEqual(shown, []);
+});
+
+/** Tarot frames whose bytes say what they are; one size is enough. */
+function fakeTarotFrames() {
+  /** @type {any} */
+  const frames = {
+    sizes: ['320x240'], fps: 10, shuffleCount: 2,
+    back: (/** @type {string} */ size) => (size === '320x240' ? Buffer.from('back') : undefined),
+    backNarrow: () => Buffer.from('narrow'),
+    shuffle: () => [Buffer.from('s0'), Buffer.from('s1')],
+    card: () => Buffer.from('card'),
+  };
+  return frames;
+}
+
+test('a tarot reader shows the card back at once, and stops when the robot stops', async () => {
+  const c = fakeConn();
+  const e = fakeEars();
+  /** @type {string[]} */ const shown = [];
+  const config = readyConfig();
+  config.body.motion = 'tarot';
+  const robot = startRobot(c.conn, {
+    config, fetch: fakeFetch(), ears: e.ears, sfx: new Map(), earcons: renderEarcons(),
+    log: () => {}, slackMs: 0,
+    tarotFrames: fakeTarotFrames(),
+    screen: (pick) => shown.push(String(pick('320x240'))),
+  });
+  assert.deepEqual(shown, ['back']);
+  robot.stop();
+  const stopped = shown.length;
+  await new Promise((r) => setTimeout(r, 150));
+  assert.equal(shown.length, stopped, 'nothing arrives after stop()');
+});
+
+test('a pet never builds the tarot screen, and a tarot reader never builds the pet one', async () => {
+  for (const [motion, expected] of /** @type {const} */ ([['pet', ['i0']], ['tarot', ['back']]])) {
+    const c = fakeConn();
+    const e = fakeEars();
+    /** @type {string[]} */ const shown = [];
+    const config = readyConfig();
+    config.body.motion = motion;
+    const robot = startRobot(c.conn, {
+      config, fetch: fakeFetch(), ears: e.ears, sfx: new Map(), earcons: renderEarcons(),
+      log: () => {}, slackMs: 0,
+      petFrames: fakePetFrames(), tarotFrames: fakeTarotFrames(),
+      screen: (pick) => shown.push(String(pick('320x240'))),
+    });
+    robot.stop();
+    assert.deepEqual(shown, expected, motion);
+  }
+});
+
+test('a tarot reader with no frames still connects: a blank screen, and it can be stopped', () => {
+  const c = fakeConn();
+  const e = fakeEars();
+  /** @type {string[]} */ const shown = [];
+  const config = readyConfig();
+  config.body.motion = 'tarot';
+  const robot = startRobot(c.conn, {
+    config, fetch: fakeFetch(), ears: e.ears, sfx: new Map(), earcons: renderEarcons(),
+    log: () => {}, slackMs: 0,
+    screen: (pick) => shown.push(String(pick('320x240'))),
+  });
+  assert.deepEqual(shown, []);
+  assert.doesNotThrow(() => robot.stop());
+});
+
+test('the card name is written in the reply language, else the interface language, else English', () => {
+  assert.equal(tarotLang({ replyLang: 'zh', lang: 'en' }), 'zh');
+  assert.equal(tarotLang({ replyLang: 'en', lang: 'zh' }), 'en');
+  assert.equal(tarotLang({ replyLang: null, lang: 'zh' }), 'zh');
+  assert.equal(tarotLang({ replyLang: null, lang: 'en' }), 'en');
+  assert.equal(tarotLang({ replyLang: null }), 'en');
 });

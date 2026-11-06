@@ -26,6 +26,7 @@ import { createAdminApi } from './admin-api.js';
  *   sfx: Map<any, Int16Array>, earcons: Record<string, Int16Array>,
  *   log?: (line: string) => void, slackMs?: number, allowedOrigins?: string[],
  *   addresses?: () => string[], petFrames?: import('./pet/frames.js').PetFrames,
+ *   tarotFrames?: import('./tarot/frames.js').TarotFrames,
  * }} opts
  */
 export function createBrainServer(opts) {
@@ -127,6 +128,7 @@ export function createBrainServer(opts) {
         earcons: opts.earcons,
         slackMs: opts.slackMs,
         petFrames: opts.petFrames,
+        tarotFrames: opts.tarotFrames,
         // Frames go to whichever screens this character has right now; with
         // none, the animator still runs and show() is a no-op.
         screen: (pick) => screen.show(c.id, pick),
