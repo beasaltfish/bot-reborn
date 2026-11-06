@@ -18,7 +18,7 @@ import { targetFor } from './target.js';
  */
 
 /** The word for each instance stem: "mic2 SCK", "speaker 2 +". */
-const STEM = /** @type {Record<string, string>} */ ({ mic: 'mic', amp: 'amp', spk: 'speaker', scr: 'screen' });
+const STEM = /** @type {Record<string, string>} */ ({ mic: 'mic', amp: 'amp', spk: 'speaker', scr: 'screen', imu: 'imu' });
 
 /** @param {string} id @returns {{ stem: string, num: string }} */
 function split(id) {
@@ -89,6 +89,12 @@ const FAULT_TEXT = {
   'screens-mixed': 'Two different screen models are both selected, and the firmware drives one kind of screen at a time; take one off, or wire only one CS to GPIO 9.',
   'screen-pins-shorted': 'Two of GPIO 8 to 11 and 18 are joined, so the panel hears nonsense and stays white; separate those wires.',
   'screen-bus-on-rail': 'One of the panel\'s signal pins is held at 3V3, 5V or GND, so it never sees its signal and the glass stays white; give that pin its own wire.',
+  'imu-burnt': 'This wand already burnt and stays dead; take it to the bin and wire a fresh one the same way.',
+  'imu-5v': 'The wand\'s VCC was on 5V and it burnt, as the mic does; take it to the bin and wire VCC to 3V3.',
+  'imu-unpowered': 'The wand has no power, so it feels nothing; wire its VCC to 3V3 and its GND to GND.',
+  'imu-bus-swapped': 'SDA and SCL are swapped, so the ESP32 never hears the wand; SDA goes to GPIO 1 and SCL to GPIO 2.',
+  'imu-bus': 'The wand\'s SDA or SCL is not where the firmware listens, so it never hears the wand; SDA goes to GPIO 1 and SCL to GPIO 2.',
+  'imu-bus-short': 'The wand\'s SDA and SCL are joined to each other or held at 3V3, 5V or GND, so the bus is stuck; give each its own wire to its own GPIO.',
   'bl-on-gpio': 'The backlight is on a GPIO, which works but is not how the diagram wires it; the backlight pin belongs on 3V3.',
 };
 

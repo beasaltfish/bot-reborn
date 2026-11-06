@@ -77,6 +77,16 @@ function screenLinks(id, modelId) {
   return links;
 }
 
+/** @param {string} id @returns {Link[]} */
+function wandLinks(id) {
+  return [
+    { a: `${id}:VCC`, b: 'esp:3V3', why: 'The wand runs on 3V3 here, the same supply as the ESP32\'s own pins.' },
+    { a: `${id}:GND`, b: 'esp:GND', why: 'The wand needs a ground shared with the ESP32.' },
+    { a: `${id}:SDA`, b: 'esp:GPIO1', why: 'I2C data goes on GPIO 1, so the ESP32 can ask the wand how hard it is being shaken.' },
+    { a: `${id}:SCL`, b: 'esp:GPIO2', why: 'The I2C clock goes on GPIO 2.' },
+  ];
+}
+
 /** The opening bench: the four instance names the diagram and the tests use. */
 /** @type {Link[]} */
 export const TARGET = [...micLinks('mic'), ...ampLinks('amp'), ...speakerLinks('spk', 'amp')];
@@ -104,6 +114,7 @@ export function targetFor(b) {
     const amp = amps[i];
     if (amp) links.push(...speakerLinks(spk.id, amp.id));
   });
+  for (const p of instances('mpu6050')) links.push(...wandLinks(p.id));
   for (const p of b.placed.filter((q) => q.part.startsWith('screen-')).sort((a, c) => number(a.id) - number(c.id))) {
     const model = PARTS[p.part].model;
     if (model) links.push(...screenLinks(p.id, model));

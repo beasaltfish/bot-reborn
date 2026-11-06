@@ -21,6 +21,7 @@ import { screenById } from '../core/screens.js';
  *   | { kind: 'amp', path: Path | 'quiet' }
  *   | { kind: 'speaker', playing: boolean }
  *   | { kind: 'screen', show: ScreenShow }
+ *   | { kind: 'imu', awake: boolean }
  * } PartState
  * @typedef {{
  *   esp: 'ok' | 'brownout' | 'off',
@@ -36,6 +37,8 @@ const RAILS = ['esp:3V3', 'esp:5V', 'esp:GND'];
 const BUS = ['esp:GPIO12', 'esp:GPIO13', 'esp:GPIO14', 'esp:GPIO15'];
 /** The panel's own signals, on the pins board.h gives them (multi-screen spec §5.5). */
 const SCREEN_BUS = ['esp:GPIO8', 'esp:GPIO9', 'esp:GPIO10', 'esp:GPIO11', 'esp:GPIO18'];
+/** The tarot wand's I2C pair (wand spec §5): the firmware will read it on these. */
+const I2C = { sda: 'esp:GPIO1', scl: 'esp:GPIO2' };
 
 /** @type {Outcome['mic' | 'amp'][]} */
 const SEVERITY = ['ok', 'quiet', 'noise', 'silent'];
@@ -54,6 +57,7 @@ export function powerOn(b) {
   const amps = b.placed.filter((p) => p.part === 'max98357a');
   const speakers = b.placed.filter((p) => p.part === 'speaker');
   const screens = b.placed.filter((p) => p.part.startsWith('screen-'));
+  const wands = b.placed.filter((p) => p.part === 'mpu6050');
 
   /** @type {Record<string, PartState>} */
   const parts = {};
@@ -61,6 +65,7 @@ export function powerOn(b) {
   for (const p of amps) parts[p.id] = { kind: 'amp', path: 'silent' };
   for (const p of speakers) parts[p.id] = { kind: 'speaker', playing: false };
   for (const p of screens) parts[p.id] = { kind: 'screen', show: 'off' };
+  for (const p of wands) parts[p.id] = { kind: 'imu', awake: false };
 
   /** No power at all: every instance is its resting state. */
   if (!b.usb) return { esp: 'off', mic: 'silent', amp: 'silent', burns: [], faults: [], parts, screenModel: null };
@@ -133,6 +138,26 @@ export function powerOn(b) {
     busFaults([`${id}:SCK`, `${id}:WS`, `${id}:SD`], add);
 
     parts[id] = { kind: 'mic', path: /** @type {Path} */ (worst(states)) };
+  }
+
+  // The wand is judged like a mic: a burnt one stays dead, 5V burns it, no
+  // supply silences it; then its two bus wires, which must be on GPIO 1 and 2.
+  for (const p of wands) {
+    const id = p.id;
+    const [vcc, gnd, sda, scl] = ['VCC', 'GND', 'SDA', 'SCL'].map((pin) => `${id}:${pin}`);
+    let ok = true;
+    /** @param {string} code @param {string[]} points */
+    const add = (code, points) => { ok = false; faults.push({ code, points }); };
+
+    if (p.burnt) add('imu-burnt', [vcc]);
+    else if (n.same(vcc, 'esp:5V')) { burns.push(id); add('imu-5v', [vcc, 'esp:5V']); }
+    else if (!n.same(vcc, 'esp:3V3') || !n.same(gnd, 'esp:GND')) add('imu-unpowered', [vcc, gnd]);
+
+    if (n.same(sda, scl) || [sda, scl].some((q) => RAILS.some((r) => n.same(q, r)))) add('imu-bus-short', [sda, scl]);
+    else if (n.same(sda, I2C.scl) && n.same(scl, I2C.sda)) add('imu-bus-swapped', [sda, scl]);
+    else if (!n.same(sda, I2C.sda) || !n.same(scl, I2C.scl)) add('imu-bus', [sda, scl]);
+
+    parts[id] = { kind: 'imu', awake: ok };
   }
 
   /** @param {string} id @returns {string[]} */
