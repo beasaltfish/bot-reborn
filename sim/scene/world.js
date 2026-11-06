@@ -416,6 +416,7 @@ export function createWorld(canvas) {
         g.name = `part:${p.id}`;
         g.userData = { kind: 'part', id: p.id, anchors: made.anchors, screen: made.screen ?? null };
         if (p.seated) markHanging(g, made.anchors, pinPoints(b, p), def);
+        if (p.part === 'mpu6050') drawMeter(g, wandAwake.get(p.id) ?? false, 0);
         g.rotation.y = -THREE.MathUtils.degToRad(p.rot);
         if (made.screen) {
           const look = screenLook.get(p.id);
@@ -435,6 +436,17 @@ export function createWorld(canvas) {
     for (const g of next.values()) if (g.parent !== parts) parts.add(g);
     built = next;
 
+    refreshWires();
+  }
+
+  /**
+   * Draw every wire again from where the pins are now. `show` does it for a
+   * bench; the hands call it while a part with wired pins is held, so its
+   * wires go with it, and when it is put back.
+   */
+  function refreshWires() {
+    const b = current;
+    if (!b) return;
     for (const w of [...wires.children]) {
       wires.remove(w);
       dispose(w);
@@ -452,6 +464,51 @@ export function createWorld(canvas) {
     pickables.length = 0;
     pickables.push(...boards.children, ...parts.children, ...wires.children);
     requestRender();
+  }
+
+  /**
+   * Which wands power-on found awake (instance id → awake), kept outside the
+   * meshes like `screenLook`: a moved wand is a new mesh and must not forget.
+   * @type {Map<string, boolean>}
+   */
+  const wandAwake = new Map();
+
+  /**
+   * @param {THREE.Object3D | undefined} g a wand's group
+   * @param {boolean} awake @param {number} level 0 to 1
+   */
+  function drawMeter(g, awake, level) {
+    const meter = g?.getObjectByName('meter');
+    if (!meter) return;
+    meter.visible = awake;
+    const bar = meter.getObjectByName('bar');
+    if (bar) bar.scale.x = Math.max(0.001, Math.min(1, level));
+    requestRender();
+  }
+
+  /**
+   * What power-on found of each wand: awake ones show their meter, the rest
+   * hide it. Unplugging calls this with the asleep outcome.
+   * @param {Record<string, import('../power.js').PartState>} states
+   */
+  function imu(states) {
+    wandAwake.clear();
+    for (const p of current?.placed ?? []) {
+      const state = states[p.id];
+      if (!state || state.kind !== 'imu') continue;
+      wandAwake.set(p.id, state.awake);
+      drawMeter(built.get(p), state.awake, 0);
+    }
+  }
+
+  /**
+   * How hard the wand is being shaken, 0 to 1. Only an awake wand shows it.
+   * @param {string} id @param {number} level
+   */
+  function shake(id, level) {
+    const p = current?.placed.find((q) => q.id === id);
+    if (!p || !wandAwake.get(id)) return;
+    drawMeter(built.get(p), true, level);
   }
 
   /**
@@ -611,6 +668,9 @@ export function createWorld(canvas) {
   return {
     show,
     screens,
+    imu,
+    shake,
+    refreshWires,
     paintScreens,
     trashAt,
     binHover,

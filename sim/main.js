@@ -254,6 +254,7 @@ async function plugIn(recipe = null) {
   }
   setBench(bench);
   world.screens(outcome.parts);
+  world.imu(outcome.parts);
   effects.playing(bench.placed
     .filter((p) => /** @type {any} */ (outcome.parts[p.id])?.kind === 'speaker' && /** @type {any} */ (outcome.parts[p.id]).playing)
     .map((p) => p.id));
@@ -365,6 +366,7 @@ function unplug() {
   setBench(bench);
   // Pulling the plug turns the panels off; the last look is not kept.
   world.screens(powerOn(bench).parts);
+  world.imu(powerOn(bench).parts);
   if (view === 'orbit' && wiringView !== 'orbit') {
     view = wiringView;
     go(view);

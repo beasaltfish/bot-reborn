@@ -63,6 +63,7 @@ const BIN = [
   { key: 'inmp441', label: PARTS.inmp441.label, w: PARTS.inmp441.size.w * 0.02, d: PARTS.inmp441.size.d * 0.02 },
   { key: 'max98357a', label: PARTS.max98357a.label, w: PARTS.max98357a.size.w * 0.02, d: PARTS.max98357a.size.d * 0.02 },
   { key: 'speaker', label: PARTS.speaker.label, w: PARTS.speaker.size.w * 0.05, d: PARTS.speaker.size.d * 0.05 },
+  { key: 'mpu6050', label: PARTS.mpu6050.label, w: PARTS.mpu6050.size.w * 0.02, d: PARTS.mpu6050.size.d * 0.02 },
 ];
 
 // ---- The wiring diagram ---------------------------------------------------

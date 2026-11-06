@@ -664,6 +664,7 @@ const LOOKS = {
  */
 export function buildPart(def, state) {
   if (def.id === 'speaker') return buildSpeaker(state.burnt);
+  if (def.id === 'mpu6050') return buildImu(state.burnt);
   // A screen comes from the table's own row: PCB, glass and pins.
   const model = def.model ? screenById(def.model) : undefined;
   if (model) return buildScreen(def, model, state);
@@ -809,6 +810,62 @@ function buildSpeaker(burnt) {
     anchors.set(p.name, new THREE.Vector3(p.x, H + 0.3, p.y));
   }
   g.add(contactShadow(W + 4, D + 4, cx, 0.03, cz + 0.5));
+  return { group: g, anchors };
+}
+
+/** The meter's full length, in pitch units, and the name its parts go by. */
+export const METER_LEN = 6;
+
+/**
+ * The tarot wand's GY-521: a small blue board on the table, standing on its
+ * header pins (they point down, as the module is sold). Every pin is wired,
+ * none goes into a board, so the anchors come from the pin list, not from a
+ * row of legs. A flat bar on the board, group 'meter' with its fill 'bar',
+ * shows how hard it is shaken; the world lights and sizes it.
+ * @param {boolean} burnt
+ * @returns {PartMesh}
+ */
+function buildImu(burnt) {
+  const g = new THREE.Group();
+  /** @type {Map<string, THREE.Vector3>} */
+  const anchors = new Map();
+  const def = PARTS.mpu6050;
+  const W = def.size.w * MM;
+  const D = def.size.d * MM;
+  const T = 1.2 * MM;
+  const lift = PIN_LEN;
+  const top = lift + T;
+  // The pin row runs along the board's near edge; the board is centred on it.
+  const cx = 1.5;
+  const cz = D / 2 - 0.9;
+  const blue = 0x1b4fa8;
+  g.add(box(W, T, D, mat('matte', burnt ? charred(blue) : blue), cx, lift, cz));
+  g.add(box(2.6, 0.5, 2.6, mat('matte', burnt ? 0x15110e : 0x1a1a1c), cx, top, cz + 0.4));
+  g.add(boxes(0.78, 0.03, 0.78, mat('metal', GOLD), def.pins.map((p) => ({ x: p.x, y: top, z: p.y }))));
+  g.add(boxes(0.26, lift, 0.26, mat('metal', GOLD), def.pins.map((p) => ({ x: p.x, y: 0, z: p.y }))));
+  for (const p of def.pins) anchors.set(p.name, new THREE.Vector3(p.x, top + 0.03, p.y));
+
+  const tex = texture('silk:mpu6050', () => canvasTexture(W, D, 64, (ctx) => {
+    ctx.translate(W / 2 - cx, D / 2 - cz);
+    ctx.fillStyle = 'rgba(245,245,240,0.92)';
+    label(ctx, 'GY-521', cx, cz + 1.9, 0.45);
+    for (const p of def.pins) label(ctx, p.name, p.x, p.y + 0.8, 0.32, 0.96);
+  }));
+  g.add(decal(tex, W, D, cx, top, cz, burnt));
+
+  const meter = new THREE.Group();
+  meter.name = 'meter';
+  meter.position.set(cx - METER_LEN / 2, top + 0.05, cz + 1.9);
+  meter.visible = false;
+  meter.add(box(METER_LEN, 0.1, 0.7, mat('matte', 0x101418), METER_LEN / 2, 0, 0));
+  const fill = new THREE.Mesh(
+    new THREE.BoxGeometry(METER_LEN, 0.2, 0.5).translate(METER_LEN / 2, 0.15, 0),
+    new THREE.MeshBasicMaterial({ color: 0x4be37a }),
+  );
+  fill.name = 'bar';
+  meter.add(fill);
+  g.add(meter);
+  g.add(contactShadow(W + 3, D + 3, cx, 0.03, cz + 0.4));
   return { group: g, anchors };
 }
 

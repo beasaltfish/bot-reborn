@@ -21,6 +21,7 @@ import { nets } from '../netlist.js';
 import { wireColor } from '../wire-color.js';
 import { snapPart, snapBoard, freeSpot, partFootprint } from '../snap.js';
 import { BOARD_TOP, buildWire, dispose } from './meshes.js';
+import { createShake } from '../shake.js';
 import { thunk, buzz, click, tick, pop } from './sounds.js';
 
 /** @typedef {import('../bench.js').Bench} Bench */
@@ -183,6 +184,7 @@ export function attachInteraction(world, getBench, setBench, opts) {
    *   offset: THREE.Vector3, x: number, y: number, lifted: boolean,
    *   at: { x: number, z: number } | null, raw: { x: number, z: number },
    *   origin: { x: number, z: number }, last: PointerEvent, overBin?: boolean,
+   *   shakeFrom?: { x: number, y: number },
    * }} PartDrag
    * @typedef {{
    *   kind: 'board', id: string, group: THREE.Object3D, rot: Placed['rot'], baseRot: Placed['rot'],
@@ -563,7 +565,46 @@ export function attachInteraction(world, getBench, setBench, opts) {
       aim.set([]);
     }
     d.group.rotation.y = deg(d.rot);
+    if (wiredOnly(d.def)) world.refreshWires();
     world.requestRender();
+  }
+
+  /**
+   * A part whose every pin is wired and none goes into a board (the speaker,
+   * the wand): nothing else says where its wires end, so they follow the hand.
+   * @param {import('../parts.js').PartDef} def
+   */
+  const wiredOnly = (def) => def.pins.every((p) => p.wireOnly);
+
+  /** One tracker per held wand, so each reads its own hand. @type {Map<string, ReturnType<typeof createShake>>} */
+  const shakes = new Map();
+
+  /**
+   * The wand in the hand: how fast the pointer moves is how hard it is shaken.
+   * The meter keeps drawing until the level has fallen back to nothing.
+   * @param {PartDrag} d @param {PointerEvent} e
+   */
+  function feedShake(d, e) {
+    if (d.def.id !== 'mpu6050') return;
+    const from = d.shakeFrom;
+    d.shakeFrom = { x: e.clientX, y: e.clientY };
+    if (!from) return;
+    let tracker = shakes.get(d.id);
+    if (!tracker) {
+      const t = createShake();
+      tracker = t;
+      shakes.set(d.id, t);
+      const id = d.id;
+      world.onFrame((now) => {
+        const level = t.level(now);
+        world.shake(id, level);
+        if (level > 0.01 || heldId() === id) return true;
+        world.shake(id, 0);
+        shakes.delete(id);
+        return false;
+      });
+    }
+    tracker.move(Math.hypot(e.clientX - from.x, e.clientY - from.y), e.timeStamp);
   }
 
   /** @param {PartDrag} d */
@@ -578,6 +619,7 @@ export function attachInteraction(world, getBench, setBench, opts) {
   function putBack(d) {
     d.group.position.copy(d.home.pos);
     d.group.rotation.y = d.home.rotY;
+    if (wiredOnly(d.def)) world.refreshWires();
   }
 
   /**
@@ -985,7 +1027,10 @@ export function attachInteraction(world, getBench, setBench, opts) {
     if (drag.kind === 'part') {
       drag.last = e;
       if (!drag.lifted && wandered(e, drag)) lift(drag);
-      if (drag.lifted) carry(drag);
+      if (drag.lifted) {
+        carry(drag);
+        feedShake(drag, e);
+      }
     } else if (drag.kind === 'board') {
       drag.last = e;
       if (!drag.lifted && wandered(e, drag)) liftBoard(drag);
