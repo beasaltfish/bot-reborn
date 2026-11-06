@@ -15,7 +15,8 @@
     "firmware:pack": "node tools/pack-firmware.js",
     "firmware:test": "cmake -S firmware/test -B firmware/build-host && cmake --build firmware/build-host && ctest --test-dir firmware/build-host --output-on-failure",
     "typecheck": "tsc --noEmit && tsc --noEmit -p admin",
-    "pet:render": "node tools/pet/render.js"
+    "pet:render": "node tools/pet/render.js",
+    "tarot:render": "node tools/tarot/render.js"
   },
   "keywords": [],
   "author": "",
