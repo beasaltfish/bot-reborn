@@ -129,3 +129,14 @@ test('every model in the table is a part, with its pins in silk order', () => {
     assert.deepEqual(def.pins.map((p) => p.role), model.pins.map((p) => p.role));
   }
 });
+
+test('the wand has four wire-only pins in GY-521 silk order', () => {
+  const wand = PARTS.mpu6050;
+  assert.deepEqual(wand.pins.map((p) => p.name), ['VCC', 'GND', 'SCL', 'SDA']);
+  assert.deepEqual(wand.pins.map((p) => [p.x, p.y]), [[0, 0], [1, 0], [2, 0], [3, 0]]);
+  assert.ok(wand.pins.every((p) => p.wireOnly === true));
+  assert.equal(wand.onBoard, false);
+  assert.equal(wand.prefix, 'imu');
+  assert.equal(wand.label, 'MPU-6050 (GY-521)');
+  assert.deepEqual(wand.size, { w: 20, d: 15, h: 3 });
+});

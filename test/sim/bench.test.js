@@ -208,3 +208,10 @@ test('a saved bench that is not a whole bench loads as an empty one', () => {
   const ok = addWire(place(emptyBench(), 'mic', { x: -12, z: -4 }, 0, true), 'mic:VDD', 'bb1:a1', 'red');
   assert.deepEqual(load(serialize(ok)), ok);
 });
+
+test('wands get imu, imu2 and survive save and load', () => {
+  const one = addPart(emptyBench(), 'mpu6050', { x: 0, z: 30 });
+  const two = addPart(one.bench, 'mpu6050', { x: 8, z: 30 });
+  assert.deepEqual([one.id, two.id], ['imu', 'imu2']);
+  assert.deepEqual(load(serialize(two.bench)), two.bench);
+});

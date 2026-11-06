@@ -27,7 +27,7 @@ import { SCREENS } from '../core/screens.js';
  * `prefix` is the stem of its instance ids: mic, mic2, mic3…
  * `model` is the screen table row a screen part is built from.
  * @typedef {{
- *   id: 'esp32' | 'inmp441' | 'max98357a' | 'speaker' | `screen-${string}`,
+ *   id: 'esp32' | 'inmp441' | 'max98357a' | 'speaker' | 'mpu6050' | `screen-${string}`,
  *   label: string,
  *   prefix: string,
  *   model?: string,
@@ -115,6 +115,18 @@ const FIXED = {
     prefix: 'spk',
     size: { w: 40, d: 40, h: 15 },
     pins: [{ name: '+', x: 0, y: 0, wireOnly: true }, { name: '-', x: 2, y: 0, wireOnly: true }],
+    internal: [],
+    onBoard: false,
+  },
+  // The tarot wand: a GY-521 breakout in a hand-held stick, so it is wired to
+  // the board and never pushed into it. Pins in the silk order of the real
+  // module (it has four more, XDA XCL AD0 INT, that this build never uses).
+  mpu6050: {
+    id: 'mpu6050',
+    label: 'MPU-6050 (GY-521)',
+    prefix: 'imu',
+    size: { w: 20, d: 15, h: 3 },
+    pins: ['VCC', 'GND', 'SCL', 'SDA'].map((name, x) => ({ name, x, y: 0, wireOnly: true })),
     internal: [],
     onBoard: false,
   },
