@@ -10,6 +10,13 @@
 // layout, file names and budget stay. The JPEGs are committed: the brain loads
 // them at startup, and a machine with no sharp can still run the robot.
 //
+// FONT: the placeholders draw names in whatever CJK font the machine has (on a
+// Mac, PingFang), so the committed JPEGs carry glyphs of a system font that is
+// not ours to redistribute, and a render on another machine will differ.
+// Spec §8 asks for an open font (Noto Sans SC, OFL) with its licence recorded
+// in the repo; fetching it needs the user's approval, so it comes with the real
+// art. Until then, do not publish the placeholder JPEGs.
+//
 // Per size: back.jpg, back-narrow.jpg, shuffle-000.jpg…, and for every card
 // <id>.<lang>.jpg and <id>.r.<lang>.jpg. The reversed ones are the face turned
 // half a turn with the name kept upright: the brain cannot rotate at run time.

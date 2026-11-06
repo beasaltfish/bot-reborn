@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { TarotAnimator, SHUFFLE_MIN_MS } from '../../server/tarot/animator.js';
+import { TarotAnimator, SHUFFLE_MIN_MS, REFRESH_MS } from '../../server/tarot/animator.js';
 import { TarotExecutor } from '../../server/body/tarot.js';
 import { FakeClock } from './fake-clock.js';
 
@@ -39,12 +39,50 @@ function rig({ lang = 'en' } = {}) {
 
 const CARD = { id: 'major-00', reversed: false };
 
-test('start shows the card back, and nothing moves until a draw', async () => {
+/** What the screen showed, with a frame sent again (the refresh) counted once. @param {string[]} frames */
+const distinct = (frames) => frames.filter((f, i) => i === 0 || f !== frames[i - 1]);
+
+test('start shows the card back, and it is only ever the card back until a draw', async () => {
   const { animator, clock, shown } = rig();
   animator.start();
   assert.deepEqual(shown, ['back']);
   await clock.advance(10000);
-  assert.deepEqual(shown, ['back']);
+  assert.ok(shown.every((f) => f === 'back'), `shown: ${shown.join(',')}`);
+});
+
+test('at rest the card back is sent again about once a second, so a screen that connects late sees it', async () => {
+  const { animator, clock, shown } = rig();
+  animator.start();
+  await clock.advance(REFRESH_MS * 3 + 50);
+  assert.equal(shown.length, 1 + 3);
+  animator.stop();
+  const count = shown.length;
+  await clock.advance(REFRESH_MS * 5);
+  assert.equal(shown.length, count, 'and not after stop');
+});
+
+test('a held card is sent again too, so a dropped frame or a screen that reconnects gets it back', async () => {
+  const { animator, clock, shown } = rig({ lang: 'zh' });
+  animator.start();
+  animator.draw({ id: 'cups-03', reversed: true });
+  await clock.advance(SHUFFLE_MIN_MS + 50);
+  animator.reveal();
+  await clock.advance(500);
+  assert.equal(shown.at(-1), 'card:cups-03:r:zh');
+  const count = shown.length;
+  await clock.advance(REFRESH_MS * 2 + 50);
+  assert.deepEqual(shown.slice(count), ['card:cups-03:r:zh', 'card:cups-03:r:zh']);
+});
+
+test('while shuffling there is no extra refresh on top of the shuffle frames', async () => {
+  const { animator, clock, shown } = rig();
+  animator.start();
+  animator.draw(CARD);
+  const before = shown.length;
+  await clock.advance(1000);
+  // 10 fps for a second is ten shuffle frames; a refresh would have put the back among them.
+  assert.equal(shown.length - before, 10);
+  assert.ok(shown.slice(before).every((f) => f.startsWith('s')), shown.slice(before).join(','));
 });
 
 test('a draw shuffles, cycling the frames, and keeps cycling past the minimum', async () => {
@@ -71,7 +109,7 @@ test('reveal before the minimum waits for it, then flips through the narrow card
   await clock.advance(500);
   assert.ok(shown.at(-1)?.startsWith('s'), 'not before the minimum');
   await clock.advance(SHUFFLE_MIN_MS);
-  assert.deepEqual(shown.slice(-2), ['narrow', 'card:cups-03:r:zh']);
+  assert.deepEqual(distinct(shown).slice(-2), ['narrow', 'card:cups-03:r:zh']);
 });
 
 test('reveal after the minimum flips at once, and the card then stays until the next draw', async () => {
@@ -81,10 +119,10 @@ test('reveal after the minimum flips at once, and the card then stays until the 
   await clock.advance(SHUFFLE_MIN_MS + 50);
   animator.reveal();
   await clock.advance(1000);
-  assert.deepEqual(shown.slice(-2), ['narrow', 'card:major-00:u:en']);
+  assert.deepEqual(distinct(shown).slice(-2), ['narrow', 'card:major-00:u:en']);
   const count = shown.length;
   await clock.advance(60000);
-  assert.equal(shown.length, count, 'nothing changes while the card is held');
+  assert.ok(shown.slice(count).every((f) => f === 'card:major-00:u:en'), 'only the held card, again and again');
 });
 
 test('a draw while holding or shuffling starts the shuffle again', async () => {
@@ -106,7 +144,7 @@ test('a reveal with nothing drawn does nothing', async () => {
   animator.start();
   animator.reveal();
   await clock.advance(5000);
-  assert.deepEqual(shown, ['back']);
+  assert.deepEqual(distinct(shown), ['back']);
 });
 
 test('stop cancels everything, and a later start shows the card back again', async () => {

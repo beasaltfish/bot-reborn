@@ -36,6 +36,16 @@ test('chat(): posts messages and tools to /chat/completions', async () => {
   assert.deepEqual(result.toolCalls, []);
 });
 
+test('chat(): with no tools to offer, the request has no tools field at all', async () => {
+  // A reading of a card already drawn is asked for with none, and some
+  // providers answer an empty `tools` array with a 400.
+  const { seen, fetchImpl } = respond({ role: 'assistant', content: 'ok' });
+  const llm = new OpenAiCompatLlm(CFG, { fetch: fetchImpl });
+  await llm.chat([{ role: 'user', content: 'hi' }], []);
+  assert.equal('tools' in seen.body, false);
+  assert.equal(seen.body.model, 'deepseek-v4-flash');
+});
+
 test('chat(): never asks for strict mode (spec §6.1)', async () => {
   const { seen, fetchImpl } = respond({ role: 'assistant', content: 'ok' });
   await new OpenAiCompatLlm(CFG, { fetch: fetchImpl }).chat([], []);

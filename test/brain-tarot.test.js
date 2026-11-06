@@ -63,9 +63,9 @@ import { t } from '../core/strings.js';
 /**
  * A tarot brain whose every side effect lands, in order, in `events`: the
  * model's calls, the executor's draw and reveal, and what is spoken.
- * @param {{ replies?: any[], llmFails?: Error, hang?: boolean, motion?: any, reflex?: any }} [opts]
+ * @param {{ replies?: any[], llmFails?: Error, hang?: boolean, motion?: any, reflex?: any, onDraw?: () => void }} [opts]
  */
-function tarotHarness({ replies = [], llmFails, hang = false, motion = 'tarot', reflex = null } = {}) {
+function tarotHarness({ replies = [], llmFails, hang = false, motion = 'tarot', reflex = null, onDraw = () => {} } = {}) {
   /** @type {any[]} */ const events = [];
   /** @type {any[]} */ const calls = [];
   /** @type {Array<{ ms: number, fn: () => void, live: boolean }>} */ const timers = [];
@@ -85,7 +85,7 @@ function tarotHarness({ replies = [], llmFails, hang = false, motion = 'tarot', 
   const executor = {
     async move() {}, async cruise() {}, async stop() {},
     async pose() { events.push({ op: 'pose' }); },
-    async draw(/** @type {any} */ card) { events.push({ op: 'draw', card }); },
+    async draw(/** @type {any} */ card) { events.push({ op: 'draw', card }); onDraw(); },
     async reveal() { events.push({ op: 'reveal' }); },
   };
   const tts = {
@@ -211,4 +211,15 @@ test('a draw fired for a body that cannot draw is dropped with a trace line, and
   assert.equal(h.calls.length, 0);
   assert.deepEqual(ops(h.events), []);
   assert.match(h.traced.join('\n'), /draw dropped: body "car" does not do draw/);
+});
+
+test('a turn cancelled while the card is being drawn still turns it over, and nothing fires later', async () => {
+  /** @type {any} */ let h;
+  h = tarotHarness({ replies: [drawCall(), reading('never said')], onDraw: () => h.brain.cancel() });
+  await h.brain.handle('give me a card');
+  assert.deepEqual(ops(h.events), ['chat', 'draw', 'reveal']);
+  assert.ok(h.timers.every((/** @type {{ live: boolean }} */ x) => !x.live), 'the give-up timer is not left armed');
+  h.fire();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(ops(h.events), ['chat', 'draw', 'reveal'], 'no late apology');
 });

@@ -570,12 +570,23 @@ export class Brain {
       // including calls we are about to drop. A returning tool's is its result.
       const handled = reply.toolCalls.filter((/** @type {{ name: string }} */ c) => this.#returningTools.has(c.name) && this.#returning[c.name]);
       const goOn = handled.length > 0 && round < MAX_TOOL_ROUNDS;
+      // An abort in the middle of the calls must not leave the rest without a
+      // result: the next request would be rejected until the history is
+      // cleared. So every call gets one, the ones not run getting the
+      // placeholder, and only then does the turn stop.
+      let stopped = false;
       for (const call of reply.toolCalls) {
-        const content = goOn && handled.includes(call) ? await this.#runReturning(call, turn) : 'ok';
+        const content = !stopped && goOn && handled.includes(call) ? await this.#runReturning(call, turn) : 'ok';
         this.#history.push({ role: 'tool', tool_call_id: call.id, content });
-        if (turn.signal.aborted) return;
+        if (turn.signal.aborted) stopped = true;
       }
       this.#trimHistory();
+      if (stopped) {
+        // A card is never left face down, and a give-up timer must not fire
+        // later and apologise for a turn the user cancelled.
+        await this.#reveal();
+        return;
+      }
 
       await this.#carryOut(reply, handled, turn, !goOn);
       if (!goOn) return;

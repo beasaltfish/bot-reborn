@@ -144,3 +144,28 @@ test('an aborted turn does not start the next round', async () => {
   assert.equal(h.calls.length, 1);
   assert.deepEqual(h.events, []);
 });
+
+test('an abort during a returning call still leaves a result for every call in the reply', async () => {
+  /** @type {any} */ let brain;
+  /** @param {string} id @param {string} name @param {any} args */
+  const raw = (id, name, args) => ({ id, type: 'function', function: { name, arguments: JSON.stringify(args) } });
+  const two = {
+    text: '',
+    toolCalls: [
+      { id: 'a', name: 'lookup', args: {}, rawArguments: '{}' },
+      { id: 'b', name: 'stop', args: {}, rawArguments: '{}' },
+    ],
+    rawMessage: { role: 'assistant', content: '', tool_calls: [raw('a', 'lookup', {}), raw('b', 'stop', {})] },
+  };
+  const h = harness({
+    replies: [two, text('never said')],
+    returningTools: LOOKUP,
+    returning: { lookup: () => { brain.cancel(); return 'late'; } },
+  });
+  brain = h.brain;
+  await h.brain.handle('stop me');
+  const history = /** @type {any[]} */ (h.brain.history);
+  const results = history.filter((m) => m.role === 'tool').map((m) => m.tool_call_id).sort();
+  assert.deepEqual(results, ['a', 'b'], 'both calls are answered, or the next request is rejected');
+  assert.equal(h.calls.length, 1);
+});

@@ -51,9 +51,12 @@ export class OpenAiCompatLlm {
           Authorization: `Bearer ${this.#cfg.apiKey}`,
         },
         // The provider's own fields first, so they can never overwrite the
-        // three this module exists to send.
+        // three this module exists to send. `tools` only when there are some:
+        // a reading of a card already drawn is asked for with none, and some
+        // providers answer an empty array with a 400.
         body: JSON.stringify({
-          ...presetBody('llm', this.#cfg), model: this.#cfg.model, messages, tools,
+          ...presetBody('llm', this.#cfg), model: this.#cfg.model, messages,
+          ...(tools?.length ? { tools } : {}),
         }),
         signal,
       });
