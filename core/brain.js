@@ -16,6 +16,13 @@ const STEER_VALUES = ['left', 'right', 'straight'];
 const MAX_STEPS = 5;
 const HISTORY_ROUNDS = 6;
 
+/**
+ * How many times a turn may go back to the model with a returning tool's
+ * result (tarot mode spec §4). Past it the turn simply ends: a model that
+ * keeps asking is not going to be answered by one more result.
+ */
+export const MAX_TOOL_ROUNDS = 2;
+
 const LANG_NAME = { zh: 'Chinese', en: 'English' };
 
 // --- Tool definitions (spec §6.2) ------------------------------------------
@@ -408,6 +415,9 @@ function isValidStep(step) {
 export class Brain {
   #llm; #executor; #tts; #earcon; #sound; #config; #onReplyLangChange; #onFault; #trace;
   #reflex;
+  /** Returning tools this brain can run: name → handler (tarot mode spec §4). @type {Record<string, (args: any, signal?: AbortSignal) => Promise<string> | string>} */
+  #returning;
+  /** @type {ReadonlySet<string>} */ #returningTools;
   /** Whether this turn has already sounded its failure. See #fail. */
   #beeped = false;
   /** @type {AbortController | null} */
@@ -424,6 +434,8 @@ export class Brain {
    *   sound?: (name: import('./audio/sfx.js').SoundName) => Promise<void>,
    *   reflex?: { judge(heard: string, robotSaid: string, signal?: AbortSignal):
    *              Promise<import('./reflex.js').Verdict> } | null,
+   *   returning?: Record<string, (args: any, signal?: AbortSignal) => Promise<string> | string>,
+   *   returningTools?: ReadonlySet<string>,
    *   config: { lang: 'en' | 'zh', replyLang: 'zh' | 'en' | null, bargeIn: boolean, body?: { motion: import('./config.js').Motion } },
    *   onReplyLangChange?: (lang: 'en' | 'zh' | null) => void,
    *   onFault?: (part: import('./strings.js').FaultPart, err: Error) => void,
@@ -440,6 +452,11 @@ export class Brain {
     // Optional: without a configured reflex the server passes null and every
     // turn goes to the LLM exactly as before.
     this.#reflex = deps.reflex ?? null;
+    // What a returning tool does is the caller's: the Brain only knows to run
+    // it, write its result back and ask again. `returningTools` is injectable
+    // so a test can prove the mechanism is not specific to one tool.
+    this.#returning = { ...deps.returning };
+    this.#returningTools = deps.returningTools ?? RETURNING_TOOLS;
     this.#config = deps.config;
     this.#onReplyLangChange = deps.onReplyLangChange ?? (() => {});
     this.#onFault = deps.onFault ?? (() => {});
@@ -485,34 +502,84 @@ export class Brain {
     }
 
     this.#pushUser(text);
+    await this.#converse(turn);
+  }
 
-    let reply;
+  /**
+   * Ask the model, and keep asking while it calls a returning tool: run the
+   * tool, write its real result into the history, go again — up to
+   * MAX_TOOL_ROUNDS times. Every other tool is an action: done and forgotten,
+   * with the placeholder result the request format needs. Only the last
+   * reply is spoken: words that came with a returning call are the model
+   * thinking aloud, and the reading it is about to give would repeat them.
+   * @param {AbortController} turn
+   */
+  async #converse(turn) {
+    for (let round = 0; ; round++) {
+      let reply;
+      try {
+        reply = await this.#llm.chat(
+          [{ role: 'system', content: buildSystemPrompt(this.#config) }, ...this.#history],
+          toolsFor(this.#config.body?.motion),
+          { signal: turn.signal },
+        );
+      } catch (err) {
+        // Cancelling is not failing. Without this line the `error` earcon and
+        // the apiFailed line would be the answer to the user changing their mind.
+        if (turn.signal.aborted) return;
+        this.#fail('llm', /** @type {Error} */ (err));
+        // A pet has no voice to say it with: the earcon is its whole apology.
+        if (this.#motion() !== 'pet') await this.#say(t(this.#config.lang, 'apiFailed'), turn);
+        return;
+      }
+
+      // Spec §6.4: keep the native assistant message, tool_calls and all.
+      this.#history.push(reply.rawMessage);
+      // Every call needs a paired `tool` message or the NEXT request is rejected —
+      // including calls we are about to drop. A returning tool's is its result.
+      const handled = reply.toolCalls.filter((/** @type {{ name: string }} */ c) => this.#returningTools.has(c.name) && this.#returning[c.name]);
+      const goOn = handled.length > 0 && round < MAX_TOOL_ROUNDS;
+      for (const call of reply.toolCalls) {
+        const content = goOn && handled.includes(call) ? await this.#runReturning(call, turn) : 'ok';
+        this.#history.push({ role: 'tool', tool_call_id: call.id, content });
+        if (turn.signal.aborted) return;
+      }
+      this.#trimHistory();
+
+      await this.#carryOut(reply, handled, turn, !goOn);
+      if (!goOn) return;
+    }
+  }
+
+  /**
+   * One returning tool's result as the text the model reads. A tool that throws
+   * is not a failed turn: its message is the result, and the model says what
+   * it likes about that.
+   * @param {{ name: string, args: any, rawArguments: string }} call
+   * @param {AbortController} turn
+   * @returns {Promise<string>}
+   */
+  async #runReturning(call, turn) {
+    if (call.args === null) return `error: the arguments were not valid JSON — ${call.rawArguments}`;
     try {
-      reply = await this.#llm.chat(
-        [{ role: 'system', content: buildSystemPrompt(this.#config) }, ...this.#history],
-        toolsFor(this.#config.body?.motion),
-        { signal: turn.signal },
-      );
+      return String(await this.#returning[call.name](call.args, turn.signal));
     } catch (err) {
-      // Cancelling is not failing. Without this line the `error` earcon and
-      // the apiFailed line would be the answer to the user changing their mind.
-      if (turn.signal.aborted) return;
-      this.#fail('llm', /** @type {Error} */ (err));
-      // A pet has no voice to say it with: the earcon is its whole apology.
-      if (this.#motion() !== 'pet') await this.#say(t(this.#config.lang, 'apiFailed'), turn);
-      return;
+      return `error: ${/** @type {Error} */ (err).message}`;
     }
+  }
 
-    // Spec §6.4: keep the native assistant message, tool_calls and all.
-    this.#history.push(reply.rawMessage);
-    // Every call needs a paired `tool` message or the NEXT request is rejected —
-    // including calls we are about to drop.
-    for (const call of reply.toolCalls) {
-      this.#history.push({ role: 'tool', tool_call_id: call.id, content: 'ok' });
-    }
-    this.#trimHistory();
-
-    const checked = validate(reply.toolCalls);
+  /**
+   * What one reply does: its actions, its language change, its sentence.
+   * `handled` are the returning calls this brain ran itself, which are not
+   * actions and must not be validated again. `speak` is false for a reply the
+   * model is about to follow up.
+   * @param {any} reply
+   * @param {any[]} handled
+   * @param {AbortController} turn
+   * @param {boolean} speak
+   */
+  async #carryOut(reply, handled, turn, speak) {
+    const checked = validate(reply.toolCalls.filter((/** @type {any} */ c) => !handled.includes(c)));
     const { replyLang, reasons } = checked;
     let { actions, hadMoveIntent } = checked;
     // Every body carries out what CAN_DO says it can and nothing else (body
@@ -540,7 +607,7 @@ export class Brain {
     // out loud and did not move": the model narrated the call instead of
     // making it, and no amount of looking at the car can tell you that.
     this.#trace(`[turn] said ${JSON.stringify(reply.text)} calls `
-      + JSON.stringify(reply.toolCalls.map((c) => `${c.name}(${c.rawArguments})`)));
+      + JSON.stringify(reply.toolCalls.map((/** @type {any} */ c) => `${c.name}(${c.rawArguments})`)));
     for (const why of reasons) this.#trace(`[turn] dropped — ${why}`);
 
     if (replyLang !== null) {
@@ -575,7 +642,7 @@ export class Brain {
       if (reply.text) this.#trace(`[turn] pet does not speak: ${JSON.stringify(reply.text)}`);
       return;
     }
-    if (reply.text) await this.#say(reply.text, turn);
+    if (speak && reply.text) await this.#say(reply.text, turn);
   }
 
   /** @returns {import('./config.js').Motion} */
