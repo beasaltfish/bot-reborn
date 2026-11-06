@@ -165,8 +165,8 @@ test('judge never rejects, even where AbortSignal.any does not exist', async () 
 
 // --- Presets (spec §2.5) ---------------------------------------------------
 
-test('presets: three of them, each already in the shape loadConfig keeps', () => {
-  assert.deepEqual(REFLEX_PRESETS.map((p) => p.id), ['bark', 'commands', 'pet']);
+test('presets: four of them, each already in the shape loadConfig keeps', () => {
+  assert.deepEqual(REFLEX_PRESETS.map((p) => p.id), ['bark', 'commands', 'pet', 'tarot']);
   for (const p of REFLEX_PRESETS) {
     const n = normalizeReflex({ threshold: p.threshold, state: p.state, question: p.question });
     assert.deepEqual(n.question, p.question, p.id);
@@ -228,4 +228,16 @@ test('pet preset: five commands — four posing and barking, lie down posing and
     { name: 'play_sound', args: { name: 'yip' } },
   ]);
   assert.deepEqual(pet.question.options.find((o) => o.choice === 'pass')?.actions, []);
+});
+
+test('tarot preset: one question with draw and pass, and a draw is the draw_card tool with no arguments', () => {
+  const tarot = REFLEX_PRESETS.find((p) => p.id === 'tarot');
+  assert.ok(tarot, 'the tarot preset exists');
+  assert.equal(tarot.threshold, 0.8);
+  assert.equal(tarot.state, DEFAULT_STATE);
+  assert.deepEqual(tarot.question.options.map((o) => o.choice), ['draw', 'pass']);
+  assert.deepEqual(tarot.question.options.find((o) => o.choice === 'draw')?.actions, [{ name: 'draw_card', args: {} }]);
+  assert.deepEqual(tarot.question.options.find((o) => o.choice === 'pass')?.actions, []);
+  assert.match(tarot.question.instructions, /tarot/i);
+  assert.match(tarot.question.instructions, /pass/);
 });

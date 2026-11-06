@@ -119,3 +119,18 @@ describe('the pet preset', () => {
     expect(p.question).not.toBe(pet.question);
   });
 });
+
+describe('the tarot preset', () => {
+  const tarot = { ...presetPatch('tarot'), enabled: true } as any;
+
+  it('is found again by its question', () => {
+    expect(presetIdOf(tarot)).toBe('tarot');
+  });
+
+  it('draws only on a tarot body: a car would ignore draw_card', () => {
+    expect(unsupported(tarot, 'tarot')).toEqual([]);
+    expect(unsupported(tarot, 'car')).toEqual(['draw_card']);
+    expect(unsupported(tarot, 'pet')).toEqual(['draw_card']);
+  });
+});
+

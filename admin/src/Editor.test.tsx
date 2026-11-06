@@ -414,3 +414,31 @@ it('pet: an action can be a pose, and the pose is picked from the three', async 
   await waitFor(() => expect(fake.chars.get('A')?.config.reflex.question?.options[0].actions)
     .toEqual([{ name: 'pose', args: { name: 'spin' } }]), { timeout: 2000 });
 });
+
+it('tarot: the body can be picked, in English', async () => {
+  const fake = installFakeApi([{ name: 'A' }]);
+  render(<Editor {...props()} />);
+  const body = await screen.findByLabelText('Body');
+  expect(screen.getByRole('option', { name: 'Tarot — draws a card and reads it aloud' })).toBeInTheDocument();
+  await userEvent.selectOptions(body, 'tarot');
+  await waitFor(() => expect(fake.patches()).toHaveLength(1), { timeout: 2000 });
+  expect(fake.patches()[0].body).toEqual({ config: { body: { motion: 'tarot' } } });
+});
+
+it('tarot: the reflex preset writes a question the editor can show', async () => {
+  const fake = installFakeApi([{ name: 'A' }]);
+  render(<Editor {...props({ initialTab: 'reflex' })} />);
+  await userEvent.selectOptions(await screen.findByLabelText('Reflex preset'), 'tarot');
+  await waitFor(() => expect(fake.patches()).toHaveLength(1), { timeout: 2000 });
+  expect(fake.patches()[0].body.config.reflex.question?.options.map((o: any) => o.choice)).toEqual(['draw', 'pass']);
+  expect(screen.getByLabelText('Reflex preset')).toHaveValue('tarot');
+});
+
+it('tarot: an action can be draw_card, with nothing else to fill in', async () => {
+  installFakeApi([{ name: 'A' }]);
+  render(<Editor {...props({ initialTab: 'reflex' })} />);
+  await userEvent.selectOptions(await screen.findByLabelText('Reflex preset'), 'tarot');
+  const kind = await screen.findByLabelText('draw action 1');
+  expect(kind).toHaveValue('draw_card');
+  expect(screen.getAllByRole('option', { name: 'draw_card' }).length).toBeGreaterThan(0);
+});

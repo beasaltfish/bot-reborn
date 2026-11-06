@@ -45,6 +45,7 @@ export function ReflexTab({ config, saved, update, tryIt }:
           <option value="bark">{t('presetBark')}</option>
           <option value="commands">{t('presetCommands')}</option>
           <option value="pet">{t('presetPet')}</option>
+          <option value="tarot">{t('presetTarot')}</option>
           {saved.length > 0 && (
             <optgroup label={t('presetsSaved')}>
               {saved.map((s) => <option key={s.name} value={`saved:${s.name}`}>{s.name}</option>)}
@@ -179,12 +180,12 @@ function QuestionForm({ question: q, onChange }: { question: ReflexQuestion; onC
 function fresh(name: ReflexCall['name']): ReflexCall {
   if (name === 'move') return { name, args: { steps: [{ drive: 'forward', steer: 'straight', duration_ms: 600 }] } };
   if (name === 'cruise') return { name, args: { drive: 'forward', steer: 'straight' } };
-  if (name === 'stop') return { name, args: {} };
+  if (name === 'stop' || name === 'draw_card') return { name, args: {} };
   if (name === 'pose') return { name, args: { name: POSES[0] } };
   return { name, args: { name: SOUNDS[0] } };
 }
 
-const KINDS: ReflexCall['name'][] = ['move', 'cruise', 'stop', 'play_sound', 'pose'];
+const KINDS: ReflexCall['name'][] = ['move', 'cruise', 'stop', 'play_sound', 'pose', 'draw_card'];
 
 function ActionList({ label, actions, onChange }: { label: string; actions: ReflexCall[]; onChange(a: ReflexCall[]): void }) {
   const setAt = (i: number, a: ReflexCall) => onChange(actions.map((x, j) => (j === i ? a : x)));

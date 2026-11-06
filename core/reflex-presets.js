@@ -9,7 +9,7 @@ const move = (drive, steer) =>
   [{ name: /** @type {const} */ ('move'), args: { steps: [{ drive, steer, duration_ms: 600 }] } }];
 
 /**
- * @type {Array<{ id: 'bark' | 'commands' | 'pet', threshold: number, state: string,
+ * @type {Array<{ id: 'bark' | 'commands' | 'pet' | 'tarot', threshold: number, state: string,
  *                 question: import('./config.js').ReflexQuestion }>}
  */
 export const REFLEX_PRESETS = [
@@ -104,6 +104,30 @@ export const REFLEX_PRESETS = [
           { name: 'play_sound', args: { name: 'yip' } },
         ] },
         { choice: 'pass', description: 'Not one of these commands; let the dog think and answer.', actions: [] },
+      ],
+    },
+  },
+  {
+    // The tarot reader's question (tarot mode spec §3): is the person asking for
+    // a card? A yes draws one, and the reading of it is still the model's, so
+    // this is the one preset whose hit does not end the turn. Everything else
+    // falls through to the LLM, which is where a reader's personality lives.
+    id: 'tarot',
+    threshold: 0.8,
+    state: DEFAULT_STATE,
+    question: {
+      name: 'draw',
+      instructions:
+        'A person is talking to a tarot reader that lives on a small screen. "Robot said" is the reader\'s '
+        + 'last line, if any; "Person said" is a speech-recognition transcript of what the person said. '
+        + 'Is the person asking to draw a tarot card, or for a card or a reading for their day? '
+        + 'Anything else, including questions about tarot, chat, thanks, other requests and words '
+        + 'meant for someone else, is pass.',
+      options: [
+        { choice: 'draw', description: 'Asking to draw a card, or for today\'s card or card reading (抽一张牌, 抽牌, 今天的牌运).', actions: [
+          { name: 'draw_card', args: {} },
+        ] },
+        { choice: 'pass', description: 'Not a request to draw a card; let the reader think and answer.', actions: [] },
       ],
     },
   },

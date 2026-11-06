@@ -35,6 +35,7 @@ export function BasicTab({ detail, update, onToken }: { detail: Detail; update(p
             <option value="dry-run">{t('motionDryRun')}</option>
             <option value="none">{t('motionNone')}</option>
             <option value="pet">{t('motionPet')}</option>
+            <option value="tarot">{t('motionTarot')}</option>
           </select>
           <small>{t('motionHint')}</small>
         </label>
