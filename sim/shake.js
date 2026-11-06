@@ -22,10 +22,17 @@ export function createShake({ full = 2, fall = 500 } = {}) {
   return {
     /**
      * The pointer moved `distPx` since the previous call, at time `now` (ms).
+     * The first call only starts the clock: its distance covers time the
+     * tracker never saw, and counting it would spike the meter on pick-up.
      * @param {number} distPx @param {number} now
      */
     move(distPx, now) {
-      const dt = Math.max(1, last === null ? 1 : now - last);
+      if (last === null) {
+        last = now;
+        at = now;
+        return;
+      }
+      const dt = Math.max(1, now - last);
       last = now;
       held = Math.max(fallen(now), Math.min(1, distPx / dt / full));
       at = now;
@@ -35,4 +42,29 @@ export function createShake({ full = 2, fall = 500 } = {}) {
       return fallen(now);
     },
   };
+}
+
+/**
+ * Draw the meter every frame until the wand is let go and the level has
+ * fallen to nothing, then leave the frame loop for good. The loop never drops
+ * a ticker on its own: one that only returns false stays registered, so
+ * leaving is this function's job, through the `off` that `onFrame` hands back.
+ * @param {ReturnType<typeof createShake>} tracker
+ * @param {{
+ *   onFrame: (fn: (now: number) => boolean) => () => void,
+ *   show: (level: number) => void,
+ *   held: () => boolean,
+ *   done: () => void,
+ * }} hooks `show` draws a level; `held` says whether the hand still has the wand; `done` runs once on the way out
+ */
+export function runMeter(tracker, { onFrame, show, held, done }) {
+  const off = onFrame((now) => {
+    const level = tracker.level(now);
+    show(level);
+    if (level > 0.01 || held()) return true;
+    show(0);
+    off();
+    done();
+    return false;
+  });
 }

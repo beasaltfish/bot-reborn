@@ -21,7 +21,7 @@ import { nets } from '../netlist.js';
 import { wireColor } from '../wire-color.js';
 import { snapPart, snapBoard, freeSpot, partFootprint } from '../snap.js';
 import { BOARD_TOP, buildWire, dispose } from './meshes.js';
-import { createShake } from '../shake.js';
+import { createShake, runMeter } from '../shake.js';
 import { thunk, buzz, click, tick, pop } from './sounds.js';
 
 /** @typedef {import('../bench.js').Bench} Bench */
@@ -595,13 +595,12 @@ export function attachInteraction(world, getBench, setBench, opts) {
       tracker = t;
       shakes.set(d.id, t);
       const id = d.id;
-      world.onFrame((now) => {
-        const level = t.level(now);
-        world.shake(id, level);
-        if (level > 0.01 || heldId() === id) return true;
-        world.shake(id, 0);
-        shakes.delete(id);
-        return false;
+      runMeter(t, {
+        onFrame: world.onFrame,
+        show: (level) => world.shake(id, level),
+        held: () => heldId() === id,
+        // Only this tracker's own entry: a newer pick-up of the same id has its own.
+        done: () => { if (shakes.get(id) === t) shakes.delete(id); },
       });
     }
     tracker.move(Math.hypot(e.clientX - from.x, e.clientY - from.y), e.timeStamp);

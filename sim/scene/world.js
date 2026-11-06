@@ -21,6 +21,7 @@ import {
   BOARD_TOP, MM, MAT_THICK, BIN_COLORS, buildBreadboard, buildBin, buildMat, buildPart, buildTable, buildWire, drawScreen, dispose,
 } from './meshes.js';
 import { BIN } from '../layout.js';
+import { createWandState } from '../wand-state.js';
 
 /** @typedef {import('../bench.js').Bench} Bench */
 /** @typedef {import('../bench.js').Placed} Placed */
@@ -379,6 +380,8 @@ export function createWorld(canvas) {
   /** @param {Bench} b */
   function show(b) {
     current = b;
+    // A wand thrown away is forgotten now: the bin's next wand takes its id.
+    wands.prune(b.placed);
 
     // Boards: one mesh each, standing at its place and turned with its instance.
     /** @type {Map<string, THREE.Group>} */
@@ -416,7 +419,7 @@ export function createWorld(canvas) {
         g.name = `part:${p.id}`;
         g.userData = { kind: 'part', id: p.id, anchors: made.anchors, screen: made.screen ?? null };
         if (p.seated) markHanging(g, made.anchors, pinPoints(b, p), def);
-        if (p.part === 'mpu6050') drawMeter(g, wandAwake.get(p.id) ?? false, 0);
+        if (p.part === 'mpu6050') drawMeter(g, wands.awake(p.id), 0);
         g.rotation.y = -THREE.MathUtils.degToRad(p.rot);
         if (made.screen) {
           const look = screenLook.get(p.id);
@@ -466,12 +469,8 @@ export function createWorld(canvas) {
     requestRender();
   }
 
-  /**
-   * Which wands power-on found awake (instance id → awake), kept outside the
-   * meshes like `screenLook`: a moved wand is a new mesh and must not forget.
-   * @type {Map<string, boolean>}
-   */
-  const wandAwake = new Map();
+  /** Which wands power-on found awake, kept outside the meshes like `screenLook`. */
+  const wands = createWandState();
 
   /**
    * @param {THREE.Object3D | undefined} g a wand's group
@@ -492,13 +491,9 @@ export function createWorld(canvas) {
    * @param {Record<string, import('../power.js').PartState>} states
    */
   function imu(states) {
-    wandAwake.clear();
-    for (const p of current?.placed ?? []) {
-      const state = states[p.id];
-      if (!state || state.kind !== 'imu') continue;
-      wandAwake.set(p.id, state.awake);
-      drawMeter(built.get(p), state.awake, 0);
-    }
+    const placed = current?.placed ?? [];
+    wands.set(placed, states);
+    for (const p of placed) if (p.part === 'mpu6050') drawMeter(built.get(p), wands.awake(p.id), 0);
   }
 
   /**
@@ -507,7 +502,7 @@ export function createWorld(canvas) {
    */
   function shake(id, level) {
     const p = current?.placed.find((q) => q.id === id);
-    if (!p || !wandAwake.get(id)) return;
+    if (!p || !wands.awake(id)) return;
     drawMeter(built.get(p), true, level);
   }
 
