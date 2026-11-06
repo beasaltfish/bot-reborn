@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CONFIG_KEY, STICKY, MOTIONS, defaultConfig, loadConfig, saveConfig, resetSticky, layerReady,
+import { CONFIG_KEY, STICKY, MOTIONS, REFLEX_TOOLS, defaultConfig, loadConfig, saveConfig, resetSticky, layerReady,
   reflexReady, reflexMissing, normalizeReflex, CAN_DO, DEFAULT_STATE } from '../core/config.js';
 
 /** A localStorage stand-in. The real one is not available in node, and every
@@ -297,8 +297,13 @@ test('CAN_DO: a car and a dry run do everything, a still body only makes sounds,
   assert.deepEqual(CAN_DO.pet, ['pose', 'sound']);
 });
 
-test('MOTIONS: a pet is a body kind the admin can pick', () => {
-  assert.deepEqual([...MOTIONS], ['car', 'dry-run', 'none', 'pet']);
+test('MOTIONS: a pet and a tarot reader are body kinds the admin can pick', () => {
+  assert.deepEqual([...MOTIONS], ['car', 'dry-run', 'none', 'pet', 'tarot']);
+});
+
+test('CAN_DO: a tarot body draws and does nothing else; its reflex may call draw_card', () => {
+  assert.deepEqual(CAN_DO.tarot, ['draw']);
+  assert.ok(REFLEX_TOOLS.includes('draw_card'));
 });
 
 test('body.motion defaults to car, and an old config gets it too', () => {
@@ -308,7 +313,7 @@ test('body.motion defaults to car, and an old config gets it too', () => {
 });
 
 test('a stored motion survives the read', () => {
-  for (const motion of ['car', 'dry-run', 'none', 'pet']) {
+  for (const motion of ['car', 'dry-run', 'none', 'pet', 'tarot']) {
     const c = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ body: { motion } }) }));
     assert.equal(c.body.motion, motion);
   }

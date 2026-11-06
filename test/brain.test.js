@@ -9,9 +9,9 @@ import { KEYWORDS } from '../core/strings.js';
 /** @param {string} name @returns {any} */
 const byName = (name) => TOOLS.find((t) => t.function.name === name);
 
-test('there are exactly the six tools: spec §6.2 plus play_sound and pose', () => {
+test('there are exactly the seven tools: spec §6.2 plus play_sound, pose and draw_card', () => {
   assert.deepEqual(TOOLS.map((t) => t.function.name).sort(),
-    ['cruise', 'move', 'play_sound', 'pose', 'set_reply_language', 'stop']);
+    ['cruise', 'draw_card', 'move', 'play_sound', 'pose', 'set_reply_language', 'stop']);
 });
 
 test('play_sound offers exactly the four sounds', () => {
@@ -980,7 +980,7 @@ test('a refused move beside a sound still beeps the error (rule 4)', async () =>
 });
 
 test('car and dry-run are offered every tool but pose, none is offered no moving', () => {
-  const everyToolButPose = TOOLS.filter((t) => t.function.name !== 'pose').map((t) => t.function.name).sort();
+  const everyToolButPose = TOOLS.filter((t) => t.function.name !== 'pose' && t.function.name !== 'draw_card').map((t) => t.function.name).sort();
   const names = (/** @type {any} */ m = 'car') => toolsFor(m).map((t) => t.function.name).sort();
   assert.deepEqual(names('car'), everyToolButPose);
   assert.deepEqual(names('dry-run'), everyToolButPose);

@@ -14,14 +14,14 @@ export const CONFIG_KEY = 'voicebot.config';
  * `dry-run` drives nothing and logs what a car would have done; `none` is a
  * body with no wheels at all, and the LLM is not offered moving.
  */
-export const MOTIONS = /** @type {const} */ (['car', 'dry-run', 'none', 'pet']);
+export const MOTIONS = /** @type {const} */ (['car', 'dry-run', 'none', 'pet', 'tarot']);
 
 /**
  * What a configured reflex may do: the LLM's own tools, minus
  * set_reply_language, which writes config and is not an action
  * (configurable reflex spec §2.2).
  */
-export const REFLEX_TOOLS = /** @type {const} */ (['move', 'cruise', 'stop', 'play_sound', 'pose']);
+export const REFLEX_TOOLS = /** @type {const} */ (['move', 'cruise', 'stop', 'play_sound', 'pose', 'draw_card']);
 
 /**
  * Which Action kinds each body carries out (configurable reflex spec §3.3).
@@ -36,6 +36,9 @@ export const CAN_DO = {
   // A pet has no wheels. It poses and it barks; sound is in the list because
   // every body plays the robot's audio anyway.
   pet: ['pose', 'sound'],
+  // A tarot reader has no wheels and does not pose: it draws a card, and what
+  // it says is the robot's audio like any other body's.
+  tarot: ['draw'],
 };
 
 /** The format beasaltfish/robot-simple-commands was trained on (spec §2.4). */

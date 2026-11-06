@@ -111,7 +111,23 @@ export const TOOLS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'draw_card',
+      description: 'Draw one tarot card for the person. Use it when they ask for a card, or for a reading of their day. The card, which way up it is and its meaning come back to you, and then you give the reading.',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
 ];
+
+/**
+ * Tools whose result goes back to the model, which is asked again with it
+ * (tarot mode spec §4). Every other tool is an action: done, and forgotten.
+ * A set beside TOOLS, not a field on each tool, because providers reject
+ * tool schemas with fields they do not know.
+ */
+export const RETURNING_TOOLS = /** @type {ReadonlySet<string>} */ (new Set(['draw_card']));
 
 const MOTION_TOOLS = new Set(['move', 'cruise', 'stop']);
 
@@ -128,9 +144,15 @@ export function toolsFor(motion = 'car') {
   if (motion === 'pet') {
     return TOOLS.filter((t) => t.function.name === 'pose' || t.function.name === 'play_sound');
   }
+  // A tarot reader is offered the one tool and no other: it has no wheels, no
+  // pose, no bark, and what language it answers in is the persona's business.
+  if (motion === 'tarot') return TOOLS.filter((t) => t.function.name === 'draw_card');
+  // Neither pose nor draw_card is any other body's: offering a car a tool the
+  // validator then drops on every use would only teach the model to try it.
+  const others = TOOLS.filter((t) => t.function.name !== 'pose' && t.function.name !== 'draw_card');
   return motion === 'none'
-    ? TOOLS.filter((t) => t.function.name !== 'pose' && !MOTION_TOOLS.has(t.function.name))
-    : TOOLS.filter((t) => t.function.name !== 'pose');
+    ? others.filter((t) => !MOTION_TOOLS.has(t.function.name))
+    : others;
 }
 
 // --- System prompt (spec §6.8) ---------------------------------------------
@@ -202,6 +224,21 @@ const RULES_PET = `- When someone tells you to sit, shake, spin, stand up, or li
   whimper and a sit.
 - Never write words. Nobody will hear them.`;
 
+// A tarot reader is a fourth body: no wheels, and unlike the pet it speaks, so
+// it keeps the spoken rules and the reply-language line (tarot mode spec §7).
+const BODY_TAROT = `You are a tarot reader who lives on a small screen. When a card is drawn it
+appears on the screen in front of the person, and what you say is read aloud to them.`;
+
+const RULES_TAROT = `- To draw a card, call \`draw_card\`. It gives you the card, which way up it is, and its
+  meaning. After that, give the reading. Never call \`draw_card\` again to look for a better card.
+- Keep the reading to 80 Chinese characters or 50 English words at most.
+- Tie the card's meaning to the person's day, and offer one gentle way of looking at it or one small
+  reminder. A reading is a way to think, not a prediction: never say what will happen, never speak of
+  death, illness, law or investment, and never tell anyone what big decision to make. If pressed, say
+  it is only a point of view to think with.
+- Use only the meaning you were given. Do not describe what is drawn on the card: you cannot see the picture.
+- Your reply is read aloud. Use plain spoken language — no markdown, no lists, no code blocks.`;
+
 /**
  * @param {{ replyLang: 'zh' | 'en' | null, persona?: string, body?: { motion: import('./config.js').Motion } }} cfg
  * @returns {string}
@@ -212,6 +249,12 @@ export function buildSystemPrompt(cfg) {
   // A pet gets no reply-language line either: there is no reply to put in a
   // language, and the model reading one would only learn to write one.
   if (motion === 'pet') return [persona, BODY_PET, RULES_PET].join('\n\n');
+  if (motion === 'tarot') {
+    const reader = [persona, BODY_TAROT, RULES_TAROT].join('\n\n');
+    return cfg.replyLang
+      ? `${reader}\nAlways reply in ${LANG_NAME[cfg.replyLang]}, regardless of which language the user speaks.`
+      : reader;
+  }
 
   const still = motion === 'none';
   const rules = still
@@ -233,6 +276,8 @@ export function buildSystemPrompt(cfg) {
 export const SYSTEM_PROMPT = buildSystemPrompt({ replyLang: null });
 /** The default creature with no body that moves (body motion spec §3, §4.1 ②). */
 export const SYSTEM_PROMPT_STILL = buildSystemPrompt({ replyLang: null, body: { motion: 'none' } });
+/** The tarot reader on a screen (tarot mode spec §7). */
+export const SYSTEM_PROMPT_TAROT = buildSystemPrompt({ replyLang: null, body: { motion: 'tarot' } });
 /** The cartoon dog on a screen (pet screen spec §4.3). */
 export const SYSTEM_PROMPT_PET = buildSystemPrompt({ replyLang: null, body: { motion: 'pet' } });
 
@@ -246,7 +291,8 @@ export const SYSTEM_PROMPT_PET = buildSystemPrompt({ replyLang: null, body: { mo
  * @typedef {{ drive: string, steer: string, duration_ms: number }} Step
  * @typedef {{ kind: 'move', steps: Step[] } | { kind: 'cruise', drive: string, steer: string }
  *   | { kind: 'stop' } | { kind: 'sound', name: import('./audio/sfx.js').SoundName }
- *   | { kind: 'pose', name: import('./poses.js').Pose }} Action
+ *   | { kind: 'pose', name: import('./poses.js').Pose }
+ *   | { kind: 'draw', card?: import('./tarot.js').Draw }} Action
  */
 
 /**
@@ -325,6 +371,9 @@ export function validate(toolCalls) {
         else drop(`set_reply_language: rejected — ${JSON.stringify(args)}`);
         break;
       }
+      case 'draw_card':
+        actions.push({ kind: 'draw' });
+        break;
       case 'play_sound': {
         if (SOUNDS.includes(args.name)) actions.push({ kind: 'sound', name: args.name });
         else drop(`play_sound: rejected — ${JSON.stringify(args)}; name must be one of ${SOUNDS.join('/')}`);

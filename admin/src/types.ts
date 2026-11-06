@@ -20,7 +20,7 @@ export interface LayerConfig {
   prompt?: string;
 }
 
-export interface ReflexCall { name: 'move' | 'cruise' | 'stop' | 'play_sound' | 'pose'; args: Record<string, any> }
+export interface ReflexCall { name: 'move' | 'cruise' | 'stop' | 'play_sound' | 'pose' | 'draw_card'; args: Record<string, any> }
 export interface ReflexOption { choice: string; description: string; actions: ReflexCall[] }
 export interface ReflexQuestion { name: string; instructions: string; options: ReflexOption[] }
 export interface ReflexConfig extends LayerConfig {
@@ -34,7 +34,7 @@ export interface ReflexConfig extends LayerConfig {
 /** One the admin saved on this character; see server/saved-reflexes.js. */
 export interface SavedReflex { name: string; threshold: number; state: string; question: ReflexQuestion }
 
-export type Motion = 'car' | 'dry-run' | 'none' | 'pet';
+export type Motion = 'car' | 'dry-run' | 'none' | 'pet' | 'tarot';
 
 export interface Config {
   stt: LayerConfig;
