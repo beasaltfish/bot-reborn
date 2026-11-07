@@ -4,10 +4,10 @@
 //
 //   npm run tarot:render
 //
-// THE ART HERE IS A PLACEHOLDER: a flat colour block, a number and the name,
-// drawn in SVG. The real Rider-Waite-Smith scans (public domain, Wikimedia
-// Commons) replace `drawFace` after the user has approved the download; the
-// layout, file names and budget stay. The JPEGs are committed: the brain loads
+// THE ART: the Rider-Waite-Smith scans in tools/tarot/source/<card id>.jpg
+// (public domain; `node tools/tarot/fetch.js` downloads them). A card with no
+// scan there is drawn as a placeholder instead: a flat colour block and a
+// number. The JPEGs are committed: the brain loads
 // them at startup, and a machine with no sharp can still run the robot.
 //
 // FONT: the placeholders draw names in whatever CJK font the machine has (on a
@@ -21,7 +21,7 @@
 // <id>.<lang>.jpg and <id>.r.<lang>.jpg. The reversed ones are the face turned
 // half a turn with the name kept upright: the brain cannot rotate at run time.
 
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
@@ -113,12 +113,32 @@ function nameSvg(area, card, lang, reversed) {
   ].join('');
 }
 
+const SOURCE = join(HERE, 'source');
+
 /**
- * PLACEHOLDER face: a coloured card with its number. The real scan goes here.
- * @param {{ x: number, y: number, w: number, h: number }} c @param {import('../../core/tarot.js').Card} card
- * @param {boolean} reversed
+ * The scan of a card, squeezed to the card's box, as an SVG data URI; null
+ * when there is no scan on this machine.
+ * @param {string} id @param {{ w: number, h: number }} c
+ * @returns {Promise<string | null>}
  */
-function drawFace(c, card, reversed) {
+async function scanUri(id, c) {
+  const file = join(SOURCE, `${id}.jpg`);
+  if (!existsSync(file)) return null;
+  const jpg = await sharp(file).resize(c.w, c.h, { fit: 'fill' }).jpeg({ quality: 90 }).toBuffer();
+  return `data:image/jpeg;base64,${jpg.toString('base64')}`;
+}
+
+/**
+ * A card's face: its scan when it has one, else a coloured card with its number.
+ * @param {{ x: number, y: number, w: number, h: number }} c @param {import('../../core/tarot.js').Card} card
+ * @param {boolean} reversed @param {string | null} uri
+ */
+function drawFace(c, card, reversed, uri) {
+  if (uri) {
+    const cx = c.x + c.w / 2;
+    const cy = c.y + c.h / 2;
+    return `<g transform="rotate(${reversed ? 180 : 0} ${cx} ${cy})"><image x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" href="${uri}"/></g>`;
+  }
   const colour = card.arcana === 'major' ? COLOUR.major : COLOUR[/** @type {keyof typeof COLOUR} */ (card.suit ?? 'major')];
   // Majors show their number, minors their rank (1 = ace … 14 = king).
   const number = String(Number(card.id.split('-')[1]));
@@ -179,9 +199,10 @@ for (const size of sizes) {
     put(`shuffle-${String(i).padStart(3, '0')}.jpg`, await jpeg(page(size, body)));
   }
   for (const card of TAROT_CARDS) {
+    const uri = await scanUri(card.id, L.card);
     for (const lang of /** @type {const} */ (['zh', 'en'])) {
       for (const reversed of [false, true]) {
-        const body = drawFace(L.card, card, reversed) + nameSvg(L.name, card, lang, reversed);
+        const body = drawFace(L.card, card, reversed, uri) + nameSvg(L.name, card, lang, reversed);
         put(`${card.id}${reversed ? '.r' : ''}.${lang}.jpg`, await jpeg(page(size, body)));
       }
     }
