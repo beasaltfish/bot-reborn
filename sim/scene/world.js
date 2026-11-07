@@ -504,7 +504,16 @@ export function createWorld(canvas) {
     const p = current?.placed.find((q) => q.id === id);
     if (!p || !wands.awake(id)) return;
     drawMeter(built.get(p), true, level);
+    wandListener?.(id, level);
   }
+
+  /** @type {((id: string, level: number) => void) | null} */
+  let wandListener = null;
+  /**
+   * Hear every level an awake wand shows (a burnt or miswired one shows none).
+   * @param {((id: string, level: number) => void) | null} fn
+   */
+  function onWandLevel(fn) { wandListener = fn; }
 
   /**
    * What each screen's glass looks like after power-on: off, dark, white,
@@ -665,6 +674,7 @@ export function createWorld(canvas) {
     screens,
     imu,
     shake,
+    onWandLevel,
     refreshWires,
     paintScreens,
     trashAt,

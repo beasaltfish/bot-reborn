@@ -206,7 +206,7 @@ export function adminLink(id) {
  * }} o
  * onLost: the brain dropped and the link is retrying by itself; onWelcome:
  * the brain took this body in (first time or again after a drop).
- * @returns {Promise<{ stop(): void }>}
+ * @returns {Promise<{ stop(): void, sendShake(): void }>}
  */
 export async function startBody(o) {
   let stopped = false;
@@ -217,6 +217,9 @@ export async function startBody(o) {
   const name = `sim-${o.id}`;
   let up = 0;
   let down = 0;
+
+  /** The wand was shaken and is still: tell the brain, which draws a card if it is a tarot reader. */
+  const sendShake = () => { if (!stopped) link?.send({ type: 'shake' }); };
 
   const stop = () => {
     if (stopped) return;
@@ -237,16 +240,16 @@ export async function startBody(o) {
     character = await res.json();
   } catch {
     end('Could not reach the brain — is it running?');
-    return { stop };
+    return { stop, sendShake };
   }
 
   try {
     pipeline = await pipelineFor(Boolean(character.config.bargeIn));
   } catch {
     end('Microphone blocked — allow it in the address bar and plug in again.');
-    return { stop };
+    return { stop, sendShake };
   }
-  if (stopped) return { stop };
+  if (stopped) return { stop, sendShake };
 
   player = new PcmPlayer(pipeline.audioContext);
   link = connectBody({
@@ -280,5 +283,5 @@ export async function startBody(o) {
     link?.sendAudio(shaped);
   });
 
-  return { stop };
+  return { stop, sendShake };
 }

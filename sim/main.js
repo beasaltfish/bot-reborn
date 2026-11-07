@@ -9,6 +9,8 @@
 
 import { emptyBench, load, serialize, addPart, addBoard } from './bench.js';
 import { powerOn } from './power.js';
+import { createWandFeed } from './wand-feed.js';
+import { createShakeDetector } from '../core/shake-detector.js';
 import { PARTS } from './parts.js';
 import { spotForNew } from './snap.js';
 import { targetFor } from './target.js';
@@ -159,6 +161,10 @@ addEventListener('blur', unpeek);
 /** The running body, if the bench is one. */
 /** @type {{ stop(): void } | null} */
 let session = null;
+/** Reads the wand into the shake detector while a body is plugged in. @type {ReturnType<typeof createWandFeed> | null} */
+let wandFeed = null;
+/** @type {ReturnType<typeof setInterval> | undefined} */
+let wandTimer;
 /** startBody has been called and not yet returned: the plug stays where it is. */
 let starting = false;
 /** Bumped by every plug and unplug, so an answer from an older plug-in is ignored. */
@@ -345,8 +351,12 @@ async function connect(mine, id, name, outcome, ending = null) {
         : undefined,
     });
     // Reset bench can pull the plug while this was starting.
-    if (live()) session = started;
-    else started.stop();
+    if (live()) {
+      session = started;
+      wandFeed = createWandFeed({ detector: createShakeDetector(), send: () => started.sendShake(), now: () => performance.now() });
+      world.onWandLevel((_id, level) => wandFeed?.level(level));
+      wandTimer = setInterval(() => wandFeed?.tick(), 50);
+    } else started.stop();
   } finally {
     starting = false;
   }
@@ -356,6 +366,9 @@ function unplug() {
   plugs++;
   session?.stop();
   session = null;
+  clearInterval(wandTimer);
+  wandFeed = null;
+  world.onWandLevel(null);
   panels.closePicker();
   effects.setAlive(false);
   effects.playing([]);
