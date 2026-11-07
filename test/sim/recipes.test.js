@@ -165,3 +165,18 @@ test('the recipes are listed', () => {
   assert.equal(RECIPES[1].ending, 'Say "Sit"');
   assert.ok(SCREENS.some((/** @type {{ id: string }} */ s) => s.id === DEFAULT_SCREEN));
 });
+
+test('with the wand option, every recipe also wires a wand that wakes', () => {
+  for (const { name, recipe, screen } of CASES) {
+    const steps = recipeSteps(/** @type {any} */ (recipe), screen, true);
+    const b = steps.reduce(applyStep, startBench(emptyBench()));
+    const wand = b.placed.find((p) => p.part === 'mpu6050');
+    assert.ok(wand, name);
+    assert.deepEqual(powerOn(b).parts[wand.id], { kind: 'imu', awake: true }, name);
+    assert.deepEqual(powerOn(b).burns, [], name);
+    const named = steps.filter((s) => s.kind === 'wire').map((w) => (w.named ?? []).join(' '));
+    assert.deepEqual(named, targetFor(b).map((l) => `${l.a} ${l.b}`), name);
+    // Without the option there is no wand.
+    assert.equal(build(recipe, screen).placed.some((p) => p.part === 'mpu6050'), false, name);
+  }
+});

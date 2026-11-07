@@ -129,26 +129,32 @@ export function under(b, x, z) {
  */
 export function wireEnd(b, point, taken = new Set()) {
   const placed = b.placed.find((p) => point.startsWith(`${p.id}:`));
-  const home = placed?.seated ? pinPoints(b, placed).find((q) => q.pin === point)?.hole : null;
-  if (!placed || !home) return point;
-  const [boardId, local] = [home.slice(0, home.indexOf(':')), home.slice(home.indexOf(':') + 1)];
-  const bd = b.boards.find((x) => x.id === boardId);
-  if (!bd) return point;
+  if (!placed?.seated) return point;
+  // A name that appears more than once (the ESP32's GND, 'esp:GND.2'...) is the
+  // same net on several strips: try each in turn, so a full strip does not stop a wire.
+  const homes = pinPoints(b, placed).filter((q) => (q.pin === point || q.pin.startsWith(`${point}.`)) && q.hole).map((q) => /** @type {string} */ (q.hole));
+  if (!homes.length) return point;
   const used = new Set(b.placed.filter((p) => p.seated).flatMap((p) => pinPoints(b, p).map((q) => q.hole)));
   const box = partBox(placed);
   const mid = { x: (box.x0 + box.x1) / 2, z: (box.z0 + box.z1) / 2 };
-  let best = null;
-  let bestD = -1;
-  for (const hole of stripHoles(holeStrip(local))) {
-    const id = `${boardId}:${hole}`;
-    if (used.has(id) || taken.has(id)) continue;
-    const h = holeXY(hole);
-    const w = boardToTable(bd, h.x, h.y);
-    if (under(b, w.x, w.z).parts.some((p) => p.seated)) continue;
-    const d = Math.hypot(w.x - mid.x, w.z - mid.z);
-    if (d > bestD) { best = id; bestD = d; }
+  for (const home of homes) {
+    const [boardId, local] = [home.slice(0, home.indexOf(':')), home.slice(home.indexOf(':') + 1)];
+    const bd = b.boards.find((x) => x.id === boardId);
+    if (!bd) continue;
+    let best = null;
+    let bestD = -1;
+    for (const hole of stripHoles(holeStrip(local))) {
+      const id = `${boardId}:${hole}`;
+      if (used.has(id) || taken.has(id)) continue;
+      const h = holeXY(hole);
+      const w = boardToTable(bd, h.x, h.y);
+      if (under(b, w.x, w.z).parts.some((p) => p.seated)) continue;
+      const d = Math.hypot(w.x - mid.x, w.z - mid.z);
+      if (d > bestD) { best = id; bestD = d; }
+    }
+    if (best) return best;
   }
-  return best;
+  return null;
 }
 
 /**

@@ -65,7 +65,7 @@ const panels = createPanels({
   follow: effects.follow,
   add: (part) => addFromBin(part),
   carry: (part, e) => beginCarry(/** @type {any} */ (part), e),
-  start: (recipeId, screenId, mode, hooks) => startRun(recipeId, screenId, mode, hooks),
+  start: (recipeId, screenId, mode, hooks, wand) => startRun(recipeId, screenId, mode, hooks, wand),
 });
 
 /** @param {import('./bench.js').Bench} b */
@@ -407,9 +407,10 @@ function reset() {
  * @param {'watch' | 'step'} mode
  * @param {{ onSay?(text: string): void, onEnd?(): void }} [hooks] where the
  *   steps' words go instead of the status line, and when the run is over
+ * @param {boolean} [wand] also wire the tarot wand
  * @returns {{ next(): void, finish(): void, skip(): void, stop(): void } | null}
  */
-export function startRun(recipeId, screenId, mode, hooks = {}) {
+export function startRun(recipeId, screenId, mode, hooks = {}, wand = false) {
   const recipe = RECIPES.find((r) => r.id === recipeId);
   if (!recipe || running) return null;
   // Before anything unplugs: the unplug redraws the status line, which must not offer the way back now.
@@ -422,7 +423,7 @@ export function startRun(recipeId, screenId, mode, hooks = {}) {
   const hasWork = bench.boards.length > 0 || bench.wires.length > 0 || bench.placed.length > 1;
   if (hasWork && !keptBench(store())) keepBench(store(), bench);
   recipeOn = { need: recipe.needs, ending: recipe.ending };
-  const steps = recipeSteps(recipe.id, screenId);
+  const steps = recipeSteps(recipe.id, screenId, wand);
   setBench(startBench(bench));
   // Frame the camera for the bench the run will end with, so nothing lands off screen.
   world.view(view, steps.reduce(applyStep, bench));

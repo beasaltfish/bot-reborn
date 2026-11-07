@@ -146,7 +146,7 @@ function diagram() {
  *   add(part: string): void,
  *   carry(part: string, e: PointerEvent): void,
  *   start(recipeId: string, screenId: string | undefined, mode: 'watch' | 'step',
- *     hooks: { onSay(text: string): void, onEnd(): void }): { next(): void, finish(): void, skip(): void, stop(): void } | null,
+ *     hooks: { onSay(text: string): void, onEnd(): void }, wand: boolean): { next(): void, finish(): void, skip(): void, stop(): void } | null,
  * }} opts
  */
 export function createPanels(opts) {
@@ -289,6 +289,7 @@ export function createPanels(opts) {
     if (s.id === DEFAULT_SCREEN) o.setAttribute('selected', '');
     return o;
   }));
+  const wandBox = /** @type {HTMLInputElement} */ (el('input', { type: 'checkbox', name: 'wand' }));
   const watchBtn = el('button', { type: 'button', class: 'pill' }, ['Watch it']);
   const stepBtn = el('button', { type: 'button', class: 'pill' }, ['Step by step']);
   const wireClose = el('button', { type: 'button', class: 'close', 'aria-label': 'Close' }, ['×']);
@@ -296,6 +297,7 @@ export function createPanels(opts) {
     el('header', {}, [el('h2', {}, ['Wire it for me']), wireClose]),
     ...RECIPES.map((r, i) => el('label', { class: 'opt' }, [recipeBoxes[i], r.name])),
     screenSel,
+    el('label', { class: 'opt' }, [wandBox, 'Add the tarot wand (MPU6050)']),
     el('div', { class: 'go' }, [watchBtn, stepBtn]),
   ]);
   const runBar = el('div', { id: 'runbar', role: 'status', hidden: '' });
@@ -321,7 +323,7 @@ export function createPanels(opts) {
     const run = opts.start(id, id === 'screen' ? /** @type {HTMLSelectElement} */ (screenSel).value : undefined, mode, {
       onSay: (text) => { words.textContent = text; },
       onEnd: () => { runBar.hidden = true; runBar.replaceChildren(); },
-    });
+    }, wandBox.checked);
     if (!run) return;
     showWire(false);
     /** @param {string} label @param {() => void} f */

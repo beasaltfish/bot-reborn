@@ -65,6 +65,8 @@ const ROW_Z = 36;
 const LOOSE = {
   spk: { at: { x: -50, z: ROW_Z } },
   scr: { at: { x: -12, z: ROW_Z } },
+  // The wand lies loose one row further down, clear of the screen whatever its width.
+  imu: { at: { x: -50, z: ROW_Z + 30 } },
 };
 
 /**
@@ -93,9 +95,10 @@ export function startBench(b) {
  * holes beside a seated pin (which say nothing about power or ground).
  * @param {Recipe['id']} recipeId
  * @param {string} [screenId]
+ * @param {boolean} [wand] also lay and wire the tarot wand (MPU6050)
  * @returns {Step[]}
  */
-export function recipeSteps(recipeId, screenId = DEFAULT_SCREEN) {
+export function recipeSteps(recipeId, screenId = DEFAULT_SCREEN, wand = false) {
   /** @type {Step[]} */
   const steps = [
     { kind: 'board', id: 'bb1', at: BB1, rot: 0, say: 'A breadboard to build on' },
@@ -109,6 +112,12 @@ export function recipeSteps(recipeId, screenId = DEFAULT_SCREEN) {
     steps.push({
       kind: 'part', id: 'scr', part: `screen-${screenId}`, at: LOOSE.scr.at, rot: 0, seated: false,
       say: 'The screen, which shows the face',
+    });
+  }
+  if (wand) {
+    steps.push({
+      kind: 'part', id: 'imu', part: 'mpu6050', at: LOOSE.imu.at, rot: 0, seated: false,
+      say: 'The wand, which feels how you shake it',
     });
   }
   // The links depend on which parts stand on the table, so they are asked of
