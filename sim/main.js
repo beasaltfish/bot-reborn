@@ -355,6 +355,7 @@ async function connect(mine, id, name, outcome, ending = null) {
       session = started;
       wandFeed = createWandFeed({ detector: createShakeDetector(), send: () => started.sendShake(), now: () => performance.now() });
       world.onWandLevel((_id, level) => wandFeed?.level(level));
+      clearInterval(wandTimer);
       wandTimer = setInterval(() => wandFeed?.tick(), 50);
     } else started.stop();
   } finally {

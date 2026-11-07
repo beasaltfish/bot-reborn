@@ -45,3 +45,9 @@
    the model chosen. The picture is write-only; the wire can stay unplugged. */
 #define PIN_LCD_MISO 17
 
+
+/* The tarot wand: a GY-521 (MPU-6050) on I2C. The simulator's wiring page
+   teaches these pins (sim/power.js); AD0 low makes the address 0x68. */
+#define PIN_I2C_SDA 1
+#define PIN_I2C_SCL 2
+#define IMU_ADDR    0x68

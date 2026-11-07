@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "imu.h"
 #include "audio.h"
 #include "console.h"
 #include "led.h"
@@ -73,6 +74,7 @@ void app_main(void) {
   audio_start();
   net_start(&settings);
   link_start(&settings, &HANDLERS);
+  imu_start();
   if (screen) {
     screen_link_start(&settings);
     screen_draw_start();

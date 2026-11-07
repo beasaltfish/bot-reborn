@@ -22,6 +22,10 @@ void link_start(const settings_t *s, const link_handlers_t *h);
    rare (sdkconfig.defaults). */
 bool link_send_audio(const int16_t *pcm, size_t n);
 
+/* The wand was shaken and is still again: {"type":"shake"}. False, and
+   nothing sent, before welcome. */
+bool link_send_shake(void);
+
 /* The brain's address in use (the typed url, or the one found over mDNS);
    empty until the link has one. For the screen socket, which dials the same
    host. */
