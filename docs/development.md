@@ -117,6 +117,17 @@ Pick "Volcengine 火山引擎" for STT and TTS on a character, then:
 `stt.prompt` is not sent to Volcengine. Sending the robot's last reply as the
 recogniser's `context` is planned separately.
 
+## Tarot card pictures
+
+The pictures the tarot screen shows are committed in `server/tarot/cards/`, so running the brain needs nothing below. You only need it to change how they look:
+
+```
+node tools/tarot/fetch.js   # once: 78 public-domain Rider-Waite-Smith scans from Wikimedia Commons into tools/tarot/source/, and Noto Sans SC into tools/tarot/fonts/
+npm run tarot:render        # redraws every picture for each screen size
+```
+
+The scans and the 17 MB font file are git-ignored; the font's licence (SIL OFL) is `tools/tarot/fonts/OFL.txt`. Card names are drawn in Noto Sans SC, never a system font. Commons throttles fast clients, so `fetch.js` may stop part way: run it again, it keeps what it has.
+
 ## Security
 
 **Your API keys live on the computer that runs the brain**, in one JSON file

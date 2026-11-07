@@ -48,10 +48,11 @@ FT232H D7 ──► U5 input B     (steer)   ← input pin, never the coil
 FT232H GND ─► board GND
 ```
 
-## Tarot wand (not yet built)
+## Tarot wand
 
-A hand-held stick with an MPU-6050 inside, wired to the ESP32 body; shaking it will shuffle a tarot draw.
-So far only the wiring simulator knows about it (`/sim/`, part "MPU-6050 (GY-521)"): the firmware does not read it yet.
+A hand-held stick with an MPU-6050 on it, wired to the ESP32 body; shake it, hold it still, and the tarot reader draws a card.
+The wiring simulator (`/sim/`, part "MPU-6050 (GY-521)", or tick "Add the tarot wand" in Wire it for me) behaves the same: mouse-shake the part, then let go.
+The firmware (`firmware/main/imu.c`) reads the sensor at 50 Hz; if it is not there it logs one line and the body works without it. A shake ends after the wand has moved for at least 0.5 s and then been still for 0.8 s (a shake that never stops ends at 6 s); the rule is in `core/shake-detector.js` and `firmware/components/body_logic/shake.c`, which share `firmware/test/shake-cases.json`. Not yet tried on a real board.
 
 **Buy**
 - One **GY-521** (MPU-6050 six-axis module), the domestic one with the header pins soldered on, pointing down. About ¥7.47. Not the GY-273 (compass only) and not the GY-50 (gyro only).
@@ -66,7 +67,7 @@ So far only the wiring simulator knows about it (`/sim/`, part "MPU-6050 (GY-521
 | SDA | GPIO1 |
 | SCL | GPIO2 |
 
-Why GPIO1 and 2: the others are taken (4–7 motors, 8–11 and 18 the screen, 12–15 audio, 17 reserved for the screen's MISO, 21 the LED), and these two sit side by side on the board's bottom row. The firmware, when it learns to read the wand, must use the same pair.
+Why GPIO1 and 2: the others are taken (4–7 motors, 8–11 and 18 the screen, 12–15 audio, 17 reserved for the screen's MISO, 21 the LED), and these two sit side by side on the board's bottom row. The firmware reads the wand on this same pair (`firmware/main/board.h`).
 
 ## Action bytes (spec §3.2)
 
