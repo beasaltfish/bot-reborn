@@ -61,6 +61,9 @@ Each GIF links to its Short, with sound.
 - **A dog on a screen.** An ESP32-S3 body with a small SPI screen shows a pet
   dog that lies, sits, stands, shakes a paw and spins when you ask, in any
   language, and lies back down when nobody talks for ten seconds.
+- **A tarot reader.** Give a character the tarot body and shake an MPU-6050
+  wand (or mouse-shake it in the simulator): it shuffles on the screen, turns
+  over a Rider-Waite-Smith card, and reads it aloud. Each draw is random.
 - **Wire it before you buy it.** A wiring simulator in your browser lets you
   practise the ESP32 build on a virtual bench, where a mistake burns a virtual
   part.
@@ -217,7 +220,9 @@ its first guess. The phone is top-heavy and has tipped the car over backing up.
 
 **ESP32 body:** hears, talks and shows a pet dog on a breadboard, set up from
 the admin page. It does not drive a car yet, which is the next step, along
-with choosing the screen from the admin page.
+with choosing the screen from the admin page. The tarot wand works in the
+simulator; the firmware reads it too, but that has not been tried on a real
+board yet.
 
 Some hardware numbers are still unmeasured.
 
