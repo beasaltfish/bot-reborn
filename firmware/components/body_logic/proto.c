@@ -4,6 +4,7 @@
 #include "proto.h"
 
 const char PROTO_PING[] = "{\"type\":\"ping\"}";
+const char PROTO_SHAKE[] = "{\"type\":\"shake\"}";
 const char PROTO_PONG[] = "{\"type\":\"pong\"}";
 
 static const char *string_of(const cJSON *obj, const char *key) {

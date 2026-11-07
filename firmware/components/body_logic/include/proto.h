@@ -33,6 +33,9 @@ int proto_hello_screen(char *buf, size_t cap, const char *token, int w, int h);
 extern const char PROTO_PING[];
 extern const char PROTO_PONG[];
 
+/* The wand was shaken and is still again (core/shake-detector.js). */
+extern const char PROTO_SHAKE[];
+
 /* A text frame can arrive in parts (esp_websocket_client's payload_offset /
    payload_len). Feed each part; true once the whole frame is in buf. A part at
    offset 0 starts over; a frame over 511 bytes is dropped (false). */
