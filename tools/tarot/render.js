@@ -10,25 +10,31 @@
 // number. The JPEGs are committed: the brain loads
 // them at startup, and a machine with no sharp can still run the robot.
 //
-// FONT: the placeholders draw names in whatever CJK font the machine has (on a
-// Mac, PingFang), so the committed JPEGs carry glyphs of a system font that is
-// not ours to redistribute, and a render on another machine will differ.
-// Spec §8 asks for an open font (Noto Sans SC, OFL) with its licence recorded
-// in the repo; fetching it needs the user's approval, so it comes with the real
-// art. Until then, do not publish the placeholder JPEGs.
+// FONT: Noto Sans SC (SIL OFL), see below; nothing here depends on a system font.
 //
 // Per size: back.jpg, back-narrow.jpg, shuffle-000.jpg…, and for every card
 // <id>.<lang>.jpg and <id>.r.<lang>.jpg. The reversed ones are the face turned
 // half a turn with the name kept upright: the brain cannot rotate at run time.
 
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import sharp from 'sharp';
 import { TAROT_CARDS } from '../../core/tarot.js';
 import { frameSizes, sizeKey } from '../../core/screens.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+
+// The names are drawn in Noto Sans SC (tools/tarot/fonts/, OFL: licence beside
+// it), never a system font. The font file is git-ignored (17 MB); fetch.js
+// downloads it. librsvg finds fonts through fontconfig, so a one-off config
+// that points at that folder is made before sharp loads.
+const FONTS = join(HERE, 'fonts');
+if (!existsSync(join(FONTS, 'NotoSansSC.ttf'))) throw new Error('tools/tarot/fonts/NotoSansSC.ttf is missing: run node tools/tarot/fetch.js');
+const FC_DIR = mkdtempSync(join(tmpdir(), 'tarot-fc-'));
+writeFileSync(join(FC_DIR, 'fonts.conf'), `<?xml version="1.0"?><fontconfig><dir>${FONTS}</dir><cachedir>${FC_DIR}</cachedir></fontconfig>`);
+process.env.FONTCONFIG_FILE = join(FC_DIR, 'fonts.conf');
+const { default: sharp } = await import('sharp');
 const OUT = join(HERE, '..', '..', 'server', 'tarot', 'cards');
 
 const QUALITY = 78;
@@ -37,7 +43,7 @@ const MAX_BYTES_AT_320x240 = 25 * 1024;
 const SHUFFLE = { frames: 8, fps: 10 };
 
 const BG = '#14102a';
-const FONT = '"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Microsoft YaHei",Helvetica,Arial,sans-serif';
+const FONT = '"Noto Sans SC",sans-serif';
 /** Placeholder colours by arcana and suit. */
 const COLOUR = { major: '#6b3fa0', wands: '#b5472f', cups: '#2f6db5', swords: '#6d7783', pentacles: '#b8902f' };
 

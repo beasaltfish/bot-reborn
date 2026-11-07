@@ -56,3 +56,4 @@ tools/pet/preview/
 # Notes on how the promo video was made (personal, not part of the project)
 docs/promo-video.md
 tools/tarot/source/
+tools/tarot/fonts/*.ttf

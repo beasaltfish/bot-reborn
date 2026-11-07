@@ -41,6 +41,17 @@ async function get(name) {
   throw new Error(`could not download ${name}`);
 }
 
+// The names on the cards are drawn in Noto Sans SC (SIL OFL; its licence is
+// committed beside it). The 17 MB font file itself is git-ignored.
+const FONT_FILE = join(dirname(OUT), 'fonts', 'NotoSansSC.ttf');
+if (!existsSync(FONT_FILE)) {
+  const url = 'https://github.com/google/fonts/raw/main/ofl/notosanssc/NotoSansSC%5Bwght%5D.ttf';
+  for (let tries = 0; tries < 5 && !existsSync(FONT_FILE); tries++) {
+    try { writeFileSync(FONT_FILE, execFileSync('curl', ['-sSfL', url], { maxBuffer: 64 * 1024 * 1024 })); } catch { await sleep(5000); }
+  }
+  console.log(existsSync(FONT_FILE) ? 'font: NotoSansSC.ttf' : 'font: could not download NotoSansSC.ttf');
+}
+
 mkdirSync(OUT, { recursive: true });
 /** @type {string[]} */ const missing = [];
 for (const card of TAROT_CARDS) {
