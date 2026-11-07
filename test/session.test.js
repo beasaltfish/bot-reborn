@@ -952,17 +952,8 @@ test('a gate timer that fires a hair early still reopens the ears', () => {
 
 // --- a turn that did not begin with a voice (tarot mode spec §5) ------------
 
-test('startTurn is ignored while the user is speaking, or a turn is thinking or speaking', async () => {
-  // CAPTURING: someone is mid-sentence, and a shaken wand must not talk over them.
-  const capturing = harness();
-  capturing.session.attach(fakeBrain(capturing.session, capturing.calls));
-  capturing.session.start();
-  capturing.wake();
-  capturing.vad.detected = true;
-  capturing.feed('vad');
-  assert.equal(capturing.session.state, 'CAPTURING');
+test('startTurn is ignored while a turn is thinking or speaking', async () => {
   let ran = 0;
-  assert.equal(capturing.session.startTurn(async () => { ran++; }), false);
 
   // THINKING: a voice turn is in flight.
   const thinking = harness();
@@ -982,6 +973,24 @@ test('startTurn is ignored while the user is speaking, or a turn is thinking or 
   const speaking = await speakingSession();
   assert.equal(speaking.session.startTurn(async () => { ran++; }), false);
   assert.equal(ran, 0, 'none of them ran');
+});
+
+test('startTurn while the user is mid-sentence runs, and drops what was heard so far', async () => {
+  // A shaken wand is a deliberate call: it wins over a burst the VAD only
+  // thinks is speech, and that burst must not become a second turn after it.
+  const h = harness();
+  h.session.attach(fakeBrain(h.session, h.calls));
+  h.session.start();
+  h.wake();
+  h.vad.detected = true;
+  h.feed('vad');
+  assert.equal(h.session.state, 'CAPTURING');
+  const before = h.vad.cleared;
+  let ran = 0;
+  assert.equal(h.session.startTurn(async () => { ran++; }), true);
+  assert.equal(h.vad.cleared, before + 1, 'the half-heard speech is dropped');
+  await settle();
+  assert.equal(ran, 1);
 });
 
 test('startTurn from SLEEPING wakes without a wake word, runs, and settles back to LISTENING', async () => {

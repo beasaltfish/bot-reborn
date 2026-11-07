@@ -176,16 +176,19 @@ export class Session {
    * (tarot mode spec §5). Everything a voice turn gets, it gets: THINKING for
    * as long as `run` takes, SPEAKING bracketing the playback through
    * speakingTts, an interrupt or the stop button aborting it, and the usual
-   * way back to LISTENING. Returns false, and runs nothing, when the robot is
-   * busy: someone mid-sentence (CAPTURING), or a turn already in flight.
+   * way back to LISTENING. Returns false, and runs nothing, when a turn is
+   * already in flight. Someone mid-sentence (CAPTURING) does not count: a
+   * shaken wand is a deliberate call and wins, and the half-heard speech is
+   * dropped so it cannot become a second turn after this one.
    * A robot that is asleep is woken: shaking the wand is calling it, and it
    * does not need the wake word for that.
    * @param {(signal: AbortSignal) => Promise<void>} run
    * @returns {boolean}
    */
   startTurn(run) {
-    if (this.#state === 'CAPTURING' || this.#state === 'THINKING' || this.#state === 'SPEAKING') return false;
+    if (this.#state === 'THINKING' || this.#state === 'SPEAKING') return false;
     if (this.#state === 'SLEEPING') this.#setState('LISTENING');
+    if (this.#state === 'CAPTURING') this.#vad.clear();
     const gen = ++this.#gen;
     const ctrl = new AbortController();
     this.#ctrl = ctrl;
