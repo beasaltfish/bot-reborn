@@ -61,6 +61,8 @@ const FROM_BODY = {
   hello: (m) => Number.isInteger(m.protocol),
   ping: () => true,
   pong: () => true,
+  // The tarot wand was shaken and is still again (wand shake spec §Where each part lives).
+  shake: () => true,
 };
 
 /** @type {Record<string, (m: any) => boolean>} */

@@ -251,3 +251,20 @@ test('drawCard on any other body does nothing', async () => {
   assert.equal(r.fetch.calls.filter((c) => c.url.endsWith('/chat/completions')).length, 0);
   r.robot.stop();
 });
+
+test('a shake message from a tarot body draws a card; a second one while busy adds none', async () => {
+  const r = rig({}, 'tarot');
+  r.message({ type: 'shake' });
+  r.message({ type: 'shake' });
+  await until(() => r.fetch.calls.some((c) => c.url.endsWith('/audio/speech')));
+  assert.equal(r.fetch.calls.filter((c) => c.url.endsWith('/chat/completions')).length, 1);
+  r.robot.stop();
+});
+
+test('a shake message to a car does nothing', async () => {
+  const r = rig({}, 'car');
+  r.message({ type: 'shake' });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.equal(r.fetch.calls.filter((c) => c.url.endsWith('/chat/completions')).length, 0);
+  r.robot.stop();
+});

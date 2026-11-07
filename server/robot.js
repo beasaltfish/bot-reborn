@@ -113,13 +113,15 @@ export function startRobot(conn, deps) {
   session.attach(brain);
 
   conn.onAudio((bytes) => pipeline.feed(bytes));
+  // The wand was shaken: only a tarot reader draws, and drawCard refuses while busy.
+  conn.onMessage((msg) => { if (msg.type === 'shake') robot.drawCard(); });
 
   // Session only reports changes, and SLEEPING is where it starts.
   conn.send({ type: 'state', state: session.state });
   session.start();
 
   let stopped = false;
-  return {
+  const robot = {
     session,
     /**
      * Draw a card without anyone speaking: the wand was shaken (tarot mode spec
@@ -140,6 +142,7 @@ export function startRobot(conn, deps) {
       pipeline.clear();
     },
   };
+  return robot;
 }
 
 /**
