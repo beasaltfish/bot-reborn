@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>bot-reborn · 帮你把 AI 小玩意从想法做到实物的工作台</title>
+<meta name="description" content="模拟、接线、烧录、配置，AI 大脑跑在你自己的电脑上。开源，本地优先。">
+<meta property="og:title" content="bot-reborn">
+<meta property="og:description" content="一个帮你把 AI 小玩意从想法做到实物的工作台。">
+<meta property="og:image" content="/media/poster.jpg">
+<link rel="alternate" hreflang="en" href="/">
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<link rel="preload" href="/fonts/im-fell-english-latin-400-normal-BhowGHCQ.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<nav>
+  <a class="brand" href="/zh/"><img src="/logo.svg" alt="">bot-reborn</a>
+  <a href="https://github.com/beasaltfish/bot-reborn/blob/main/README.zh-CN.md">文档</a>
+  <a href="/" hreflang="en">English</a>
+  <a class="star" href="https://github.com/beasaltfish/bot-reborn">★ 点星</a>
+</nav>
+
+<header class="hero">
+  <div>
+    <div class="tag">开源 · 本地优先</div>
+    <h1>一个帮你把 AI 小玩意<em>从想法做到实物</em>的工作台。</h1>
+    <p>模拟、接线、烧录、配置，AI 大脑跑在你自己的电脑上。你的声音不会离开你家。</p>
+    <a class="star" href="https://github.com/beasaltfish/bot-reborn">★ 在 GitHub 点星</a>
+  </div>
+  <video id="hero-video" muted loop playsinline preload="metadata" poster="/media/poster.jpg" style="aspect-ratio:16/9" src="/media/hero.mp4"></video>
+</header>
+
+<section id="workbench">
+  <div class="tag">工作台</div>
+  <h2>四站，一张工作台。</h2>
+  <p>每一站都能单独用，想法停在哪一步，就从哪一步开始。</p>
+  <div class="stations">
+    <div class="stn"><div class="n">01</div><h3>模拟</h3><p>从你的想法开始。选配件，在浏览器里给 ESP32 接线，不需要任何硬件。</p></div>
+    <div class="stn"><div class="n">02</div><h3>搭建</h3><p>在网页里烧录固件、设置 Wi-Fi。</p></div>
+    <div class="stn"><div class="n">03</div><h3>配置</h3><p>在 Studio 里选身体、玩法和人设。</p></div>
+    <div class="stn"><div class="n">04</div><h3>运行</h3><p>你电脑上的大脑听、想，并驱动各个外设。</p></div>
+  </div>
+  <div class="term"><span>$</span> git clone https://github.com/beasaltfish/bot-reborn<br><span>$</span> npm install<br><span>$</span> server/models/fetch.sh<br><span>$</span> npm start</div>
+</section>
+
+<section id="story">
+  <div class="tag">第一个小玩意</div>
+  <h2>一切从一个 30 块钱的玩具机器人开始。</h2>
+  <p>没有头，没有脑子，只会巡线。一台旧手机成了它的脸，一台电脑成了它的大脑，它开始顶嘴了。让这件事成真的一切，现在是一张你可以拿来做自己想法的工作台。</p>
+  <div class="story">
+    <figure><img src="/media/before.jpg" alt="买来时的样子：盒装的巡线玩具机器人" loading="lazy">改造前：一个巡线玩具</figure>
+    <figure><img src="/media/phone-mount.jpg" alt="去掉头的机器人上，用纸板马鞍固定着一台手机，屏幕上是机器人的脸" loading="lazy">改造后：手机就是脸</figure>
+    <div><a class="ghost" href="https://agentlenshq.com/zh-CN/maker/four-dollar-robot">阅读完整的改造故事 →</a></div>
+  </div>
+</section>
+
+<section id="why">
+  <div class="tag">有什么不同</div>
+  <h2>为留在你家里而造。</h2>
+  <div class="three">
+    <div><h3>本地优先</h3><p>语音、对话和密钥都留在你的电脑上。不需要账号，也不需要云端大脑。</p></div>
+    <div><h3>任意身体，任意玩法</h3><p>手机或 ESP32，屏幕、签棒或电机。换一个玩法，比如占卜、陪伴、语音控制，就是一个新玩具。</p></div>
+    <div><h3>开源</h3><p>每一根线、每一行固件、每一段提示词都在仓库里。带上你自己的零件就行。</p></div>
+  </div>
+</section>
+
+<section id="final" class="final">
+  <h2>觉得会说话的玩具有意思，就点个星吧。</h2>
+  <p>它让我们知道该继续做下去，也帮更多创客找到这张工作台。</p>
+  <a class="star" href="https://github.com/beasaltfish/bot-reborn">★ 在 GitHub 点星</a>
+</section>
+
+<footer><span>bot-reborn · MIT</span><a href="https://github.com/beasaltfish/bot-reborn">GitHub</a></footer>
+</div>
+
+<script>
+(function () {
+  var v = document.getElementById('hero-video');
+  var saver = navigator.connection && navigator.connection.saveData;
+  var wide = window.matchMedia('(min-width: 761px)').matches;
+  if (wide && !saver) { v.autoplay = true; v.play().catch(function () { v.controls = true; }); }
+  else { v.controls = true; }
+})();
+</script>
+</body>
+</html>
