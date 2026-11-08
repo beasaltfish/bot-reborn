@@ -61,7 +61,12 @@ for (const [lang, p] of Object.entries(PAGES)) {
     const lines = strip(term[1].replace(/<br\s*\/?>/g, '\n'))
       .split('\n').map((l) => l.replace(/^[\s$]+/, '').trim()).filter(Boolean);
     assert.ok(lines.length >= 3);
-    for (const line of lines) if (!line.startsWith('→')) assert.ok(readme.includes(line), `not in README: ${line}`);
+    for (const line of lines) {
+      if (line.startsWith('→')) continue;
+      // the README never spells out the clone command; the site adds it, so pin the URL instead
+      if (line.startsWith('git clone ')) { assert.equal(line, `git clone ${REPO}`); continue; }
+      assert.ok(readme.includes(line), `not in README: ${line}`);
+    }
   });
 
   test(`${lang}: hero video is cheap and poster-backed`, () => {

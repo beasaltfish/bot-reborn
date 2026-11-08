@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>bot-reborn · A workbench that takes your AI gadget from idea to hardware</title>
+<meta name="description" content="Simulate it, wire it, flash it and configure it, with the AI brain running on your own computer. Open source, local-first.">
+<meta property="og:title" content="bot-reborn">
+<meta property="og:description" content="A workbench that takes your AI gadget from idea to hardware.">
+<meta property="og:image" content="/media/poster.jpg">
+<link rel="alternate" hreflang="zh" href="/zh/">
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<link rel="preload" href="/fonts/im-fell-english-latin-400-normal-BhowGHCQ.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<nav>
+  <a class="brand" href="/"><img src="/logo.svg" alt="">bot-reborn</a>
+  <a href="https://github.com/beasaltfish/bot-reborn#readme">Docs</a>
+  <a href="/zh/" hreflang="zh">中文</a>
+  <a class="star" href="https://github.com/beasaltfish/bot-reborn">★ Star</a>
+</nav>
+
+<header class="hero">
+  <div>
+    <div class="tag">open source · local-first</div>
+    <h1>A workbench that takes your AI gadget <em>from idea to hardware.</em></h1>
+    <p>Simulate it, wire it, flash it and configure it — with the AI brain running on your own computer. Your voice never leaves your house.</p>
+    <a class="star" href="https://github.com/beasaltfish/bot-reborn">★ Star on GitHub</a>
+  </div>
+  <video id="hero-video" muted loop playsinline preload="metadata" poster="/media/poster.jpg" style="aspect-ratio:16/9" src="/media/hero.mp4"></video>
+</header>
+
+<section id="workbench">
+  <div class="tag">the workbench</div>
+  <h2>Four stations, one bench.</h2>
+  <p>Each station works on its own, so you can start wherever your idea is.</p>
+  <div class="stations">
+    <div class="stn"><div class="n">01</div><h3>Simulate</h3><p>Start from your idea. Pick parts and wire an ESP32 in the browser. No hardware needed.</p></div>
+    <div class="stn"><div class="n">02</div><h3>Build</h3><p>Flash firmware and set up Wi-Fi from a web page.</p></div>
+    <div class="stn"><div class="n">03</div><h3>Configure</h3><p>Pick a body, a play mode and a persona in Studio.</p></div>
+    <div class="stn"><div class="n">04</div><h3>Run</h3><p>A brain on your machine hears, thinks and drives the parts.</p></div>
+  </div>
+  <div class="term"><span>$</span> git clone https://github.com/beasaltfish/bot-reborn<br><span>$</span> npm install<br><span>$</span> server/models/fetch.sh<br><span>$</span> npm start</div>
+</section>
+
+<section id="story">
+  <div class="tag">the first gadget</div>
+  <h2>It started with a $4 toy robot.</h2>
+  <p>No head, no brain, a line-following toy. An old phone became its face, a computer became its brain, and it started talking back. Everything that made that possible is now a workbench you can use for your own idea.</p>
+  <div class="story">
+    <figure><img src="/media/before.jpg" alt="The toy as sold: a line-following robot in its box" loading="lazy">Before: a line-following toy</figure>
+    <figure><img src="/media/phone-mount.jpg" alt="A phone held on the headless robot by a cardboard saddle, showing the robot's face" loading="lazy">After: the phone is the face</figure>
+    <div><a class="ghost" href="https://agentlenshq.com/maker/four-dollar-robot">Read the whole build story →</a></div>
+  </div>
+</section>
+
+<section id="why">
+  <div class="tag">why it's different</div>
+  <h2>Built to stay in your house.</h2>
+  <div class="three">
+    <div><h3>Local-first</h3><p>Speech, chat and keys stay on your computer. No account, no cloud brain required.</p></div>
+    <div><h3>Any body, any trick</h3><p>Phone or ESP32, screen or wand or motors. Swap a play mode — fortune telling, companion, voice control — and it's a new toy.</p></div>
+    <div><h3>Open source</h3><p>Every wire, every line of firmware, every prompt is in the repo. Bring your own parts.</p></div>
+  </div>
+</section>
+
+<section id="final" class="final">
+  <h2>If a talking toy sounds fun, give it a star.</h2>
+  <p>It tells us to keep building, and it helps other makers find the bench.</p>
+  <a class="star" href="https://github.com/beasaltfish/bot-reborn">★ Star on GitHub</a>
+</section>
+
+<footer><span>bot-reborn · MIT</span><a href="https://github.com/beasaltfish/bot-reborn">GitHub</a></footer>
+</div>
+
+<script>
+(function () {
+  var v = document.getElementById('hero-video');
+  var saver = navigator.connection && navigator.connection.saveData;
+  var wide = window.matchMedia('(min-width: 761px)').matches;
+  if (wide && !saver) { v.autoplay = true; v.play().catch(function () { v.controls = true; }); }
+  else { v.controls = true; }
+})();
+</script>
+</body>
+</html>
