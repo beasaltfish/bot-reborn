@@ -19,7 +19,7 @@ import { diagnose, nextHint } from './diagnose.js';
 import { characterChoices, chooseCharacter, chooseLine, startBody, faultText, adminLink, keepsFault } from './body.js';
 import { keptBench, keepBench, dropKept } from './keep.js';
 import { RECIPES, startBench, recipeSteps, applyStep } from './recipes.js';
-import { runRecipe } from './scene/autowire.js';
+import { runRecipe, speedFactor } from './scene/autowire.js';
 import { createPanels } from './panels.js';
 import { createWorld } from './scene/world.js';
 import { attachInteraction, beginCarry } from './scene/interact.js';
@@ -30,6 +30,7 @@ import { createEffects } from './scene/effects.js';
 
 const BENCH_KEY = 'botreborn.sim.bench';
 const VIEW_KEY = 'botreborn.sim.view';
+const SPEED_KEY = 'botreborn.sim.speed';
 
 /** @type {ViewMode[]} */
 const VIEWS = ['tilted', 'top', 'orbit'];
@@ -65,7 +66,8 @@ const panels = createPanels({
   follow: effects.follow,
   add: (part) => addFromBin(part),
   carry: (part, e) => beginCarry(/** @type {any} */ (part), e),
-  start: (recipeId, screenId, mode, hooks, wand) => startRun(recipeId, screenId, mode, hooks, wand),
+  start: (recipeId, screenId, mode, hooks, wand, speed) => startRun(recipeId, screenId, mode, hooks, wand, speed),
+  speed: speedFactor(Number(read(SPEED_KEY))),
 });
 
 /** @param {import('./bench.js').Bench} b */
@@ -410,9 +412,11 @@ function reset() {
  * @param {boolean} [wand] also wire the tarot wand
  * @returns {{ next(): void, finish(): void, skip(): void, stop(): void } | null}
  */
-export function startRun(recipeId, screenId, mode, hooks = {}, wand = false) {
+export function startRun(recipeId, screenId, mode, hooks = {}, wand = false, speed = 1) {
   const recipe = RECIPES.find((r) => r.id === recipeId);
   if (!recipe || running) return null;
+  // Remembered only when a run actually starts: opening the panel is not a preference.
+  write(SPEED_KEY, String(speedFactor(speed)));
   // Before anything unplugs: the unplug redraws the status line, which must not offer the way back now.
   running = true;
   panels.status(null);
@@ -430,6 +434,7 @@ export function startRun(recipeId, screenId, mode, hooks = {}, wand = false) {
   const controls = runRecipe({
     steps,
     mode,
+    speed,
     getBench: () => bench,
     setBench,
     world,
