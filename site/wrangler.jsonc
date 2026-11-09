@@ -1,5 +1,8 @@
 {
   "name": "bot-reborn-site",
+  // The site is static, except that Safari will not play a video the server
+  // cannot range: this Worker cuts /media/* into 206 responses (worker.js).
+  "main": "worker.js",
   "compatibility_date": "2026-11-08",
   // 8787 belongs to the brain (`server/main.js`): the phone's /body, the screen's
   // /screen and the admin's /api/characters all live there. `wrangler dev` would
@@ -8,9 +11,17 @@
     "port": 8788
   },
   "assets": {
-    "directory": "."
+    "directory": ".",
+    "binding": "ASSETS",
+    "run_worker_first": ["/media/*"]
   },
+  // A route, not a custom domain, only because bot-reborn.agentlenshq.com still
+  // carries the proxied CNAME the old Pages project left behind: a custom domain
+  // refuses to attach while that record exists, and the API token here cannot
+  // delete DNS records. A route sits in front of whatever the record points at.
+  // Once that CNAME is gone, switch this back to
+  //   { "pattern": "bot-reborn.agentlenshq.com", "custom_domain": true }
   "routes": [
-    { "pattern": "bot-reborn.agentlenshq.com", "custom_domain": true }
+    { "pattern": "bot-reborn.agentlenshq.com/*", "zone_name": "agentlenshq.com" }
   ]
 }
