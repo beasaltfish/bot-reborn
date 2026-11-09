@@ -87,7 +87,7 @@ for (const [lang, p] of Object.entries(PAGES)) {
 
 test('en and zh have the same section ids in the same order', () => {
   /** @param {string} f */
-const ids = (f) => [...read(f).matchAll(/<section\b[^>]*\bid="([^"]+)"/g)].map((m) => m[1]);
+  const ids = (f) => [...read(f).matchAll(/<section\b[^>]*\bid="([^"]+)"/g)].map((m) => m[1]);
   assert.deepEqual(ids(PAGES.en.file), ['workbench', 'story', 'why', 'final']);
   assert.deepEqual(ids(PAGES.zh.file), ids(PAGES.en.file));
 });

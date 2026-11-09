@@ -5,8 +5,18 @@
        "$CHROME" --headless=new --disable-gpu --hide-scrollbars --allow-file-access-from-files \
          --default-background-color=00000000 --window-size=1280,720 --virtual-time-budget=3000 \
          --screenshot=/tmp/hero-cap-1.png "file://$PWD/tools/site/hero-captions.html#c1"
-     Swap #c1 for #c2 for the second card. The assembly command is in
-     docs/superpowers/plans/2026-11-09-hero-video.md. -->
+     Swap #c1 for #c2 for the second card.
+
+     Then assemble the hero from the recording and pet.mp4 (see the caption timings
+     in the overlay enables):
+       ffmpeg -y -sseof -16 -i "$SIM" -t 10 -i "$PET" \
+         -loop 1 -i /tmp/hero-cap-1.png -loop 1 -i /tmp/hero-cap-2.png \
+         -filter_complex "[0:v]scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,fps=30,crop=1280:675:0:45,scale=1280:720,setsar=1,trim=end=16,setpts=PTS-STARTPTS[a];[1:v]scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,fps=30,setsar=1,trim=end=10,setpts=PTS-STARTPTS[b];[a][b]xfade=transition=fade:duration=0.4:offset=15.6[ab];[ab][2:v]overlay=0:0:enable='between(t,0.4,15.2)'[c];[c][3:v]overlay=0:0:enable='between(t,16.2,25.2)'[v]" \
+         -map "[v]" -an -t 25.6 -c:v libx264 -profile:v high -crf 30 -preset slow \
+         -pix_fmt yuv420p -movflags +faststart site/media/hero.mp4
+     The crop drops the simulator's own toolbar row from the first beat; CRF 30 is
+     what fits the 2.5 MB budget. The poster is a still of that file at t=24.6:
+       ffmpeg -y -ss 24.6 -i site/media/hero.mp4 -frames:v 1 -q:v 3 site/media/hero-poster.jpg -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
