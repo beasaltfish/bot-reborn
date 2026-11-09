@@ -1,6 +1,12 @@
 {
   "name": "bot-reborn-site",
   "compatibility_date": "2026-11-08",
+  // 8787 belongs to the brain (`server/main.js`): the phone's /body, the screen's
+  // /screen and the admin's /api/characters all live there. `wrangler dev` would
+  // take 8787 by default and answer every one of them with a 404.
+  "dev": {
+    "port": 8788
+  },
   "assets": {
     "directory": "."
   },
