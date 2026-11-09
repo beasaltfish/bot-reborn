@@ -1,0 +1,26 @@
+<!doctype html>
+<!-- The two caption cards burned into site/media/hero.mp4.
+     Render (the PNGs are intermediate, not committed):
+       CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+       "$CHROME" --headless=new --disable-gpu --hide-scrollbars --allow-file-access-from-files \
+         --default-background-color=00000000 --window-size=1280,720 --virtual-time-budget=3000 \
+         --screenshot=/tmp/hero-cap-1.png "file://$PWD/tools/site/hero-captions.html#c1"
+     Swap #c1 for #c2 for the second card. The assembly command is in
+     docs/superpowers/plans/2026-11-09-hero-video.md. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+@font-face{font-family:"IM Fell English";src:url("../../site/fonts/im-fell-english-latin-400-normal-BhowGHCQ.woff2") format("woff2")}
+html,body{margin:0;width:1280px;height:720px;background:transparent;overflow:hidden}
+.card{position:absolute;left:0;right:0;bottom:52px;text-align:center;visibility:hidden;text-shadow:0 2px 8px #0009,0 0 2px #0006}
+.card:target{visibility:visible}
+.zh{font-family:"Songti SC",serif;font-size:46px;line-height:1.1;color:#fbf3dc;letter-spacing:1px}
+.en{font-family:"IM Fell English",Georgia,serif;font-style:italic;font-size:31px;color:#e9b95a;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="card" id="c1"><div class="zh">还没买零件？</div><div class="en">Wire it in your browser first.</div></div>
+<div class="card" id="c2"><div class="zh">然后把它装进一只真的小狗。</div><div class="en">Then build it for real.</div></div>
+</body>
+</html>
