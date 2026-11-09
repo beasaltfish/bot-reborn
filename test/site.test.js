@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -10,7 +10,9 @@ const PAGES = {
   en: { file: 'site/index.html', stations: ['Simulate', 'Build', 'Configure', 'Run'], other: 'zh' },
   zh: { file: 'site/zh/index.html', stations: ['模拟', '搭建', '配置', '运行'], other: 'en' },
 };
+/** @param {string} rel */
 const read = (rel) => readFileSync(resolve(root, rel), 'utf8');
+/** @param {string} html */
 const strip = (html) => html.replace(/<script[\s\S]*?<\/script>/g, '').replace(/<[^>]+>/g, ' ');
 
 for (const [lang, p] of Object.entries(PAGES)) {
@@ -48,8 +50,6 @@ for (const [lang, p] of Object.entries(PAGES)) {
       const clean = ref.split('#')[0];
       const target = clean.startsWith('/') ? resolve(root, 'site', '.' + clean) : resolve(base, clean);
       const isDir = clean.endsWith('/');
-      // media/hero.mp4 is produced by the separate video plan
-      if (clean.endsWith('hero.mp4')) continue;
       assert.ok(existsSync(isDir ? resolve(target, 'index.html') : target), `missing: ${ref}`);
     }
   });
@@ -59,7 +59,7 @@ for (const [lang, p] of Object.entries(PAGES)) {
     const term = html().match(/<div class="term">([\s\S]*?)<\/div>/);
     assert.ok(term, 'terminal block missing');
     const lines = strip(term[1].replace(/<br\s*\/?>/g, '\n'))
-      .split('\n').map((l) => l.replace(/^[\s$]+/, '').trim()).filter(Boolean);
+      .split('\n').map((/** @type {string} */ l) => l.replace(/^[\s$]+/, '').trim()).filter(Boolean);
     assert.ok(lines.length >= 3);
     for (const line of lines) {
       if (line.startsWith('→')) continue;
@@ -86,7 +86,8 @@ for (const [lang, p] of Object.entries(PAGES)) {
 }
 
 test('en and zh have the same section ids in the same order', () => {
-  const ids = (f) => [...read(f).matchAll(/<section\b[^>]*\bid="([^"]+)"/g)].map((m) => m[1]);
+  /** @param {string} f */
+const ids = (f) => [...read(f).matchAll(/<section\b[^>]*\bid="([^"]+)"/g)].map((m) => m[1]);
   assert.deepEqual(ids(PAGES.en.file), ['workbench', 'story', 'why', 'final']);
   assert.deepEqual(ids(PAGES.zh.file), ids(PAGES.en.file));
 });
@@ -96,4 +97,11 @@ test('stylesheet is responsive and self-hosts its fonts', () => {
   assert.match(css, /@media \(max-width/);
   assert.equal((css.match(/@font-face/g) || []).length, 3);
   assert.doesNotMatch(css, /fonts\.googleapis\.com/);
+});
+
+test('the hero video exists and is light enough to autoplay on a phone', () => {
+  const video = resolve(root, 'site/media/hero.mp4');
+  assert.ok(existsSync(video), 'site/media/hero.mp4 is missing');
+  const bytes = statSync(video).size;
+  assert.ok(bytes <= 2_500_000, `hero.mp4 is ${bytes} bytes, over the 2.5 MB budget`);
 });
