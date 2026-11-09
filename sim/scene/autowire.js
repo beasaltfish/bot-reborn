@@ -47,6 +47,7 @@ const easeOut = (t) => 1 - (1 - t) ** 3;
  * @param {{
  *   steps: Step[],
  *   mode: 'watch' | 'step',
+ *   speed?: number,
  *   getBench(): import('../bench.js').Bench,
  *   setBench(b: import('../bench.js').Bench): void,
  *   world: World,
@@ -61,6 +62,7 @@ export function runRecipe(o) {
   let mode = o.mode;
   let skipping = false;
   let stopped = false;
+  const speed = speedFactor(o.speed);
   /** Everything waiting on a timer or a click, so a control can cut the wait short. */
   /** @type {Set<() => void>} */
   const waiting = new Set();
@@ -105,7 +107,7 @@ export function runRecipe(o) {
       let start = null;
       const off = o.world.onFrame((now) => {
         start ??= now;
-        const t = skipping ? 1 : Math.min(1, (now - start) / TIMING.fly);
+        const t = skipping ? 1 : Math.min(1, (now - start) / (TIMING.fly / speed));
         const e = easeOut(t);
         group.position.lerpVectors(from, to, e);
         // Lifted from where it lay: up and over by the carry arc, down into its seat.
@@ -153,7 +155,7 @@ export function runRecipe(o) {
         if (mode === 'step' && !skipping) await gate();
         if (stopped) break;
         await play(s);
-        if (mode === 'watch' && !skipping && !stopped) await pause(pauseFor(s));
+        if (mode === 'watch' && !skipping && !stopped) await pause(pauseFor(s, speed));
       }
     } finally {
       o.hands.enable(true);
