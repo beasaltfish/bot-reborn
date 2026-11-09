@@ -17,11 +17,24 @@ import { click, tick } from './sounds.js';
 // wires, USB) and should take 30–60 s in Watch mode: about 9 s of parts, 25 s
 // of wires and 1 s of plug come to ~35 s; the audio recipe is shorter still.
 // Wires are paced slowest because each one is a link the viewer should be
-// able to follow with the eye.
-const FLY_MS = 600;
-const PART_PAUSE_MS = 700;
-const WIRE_PAUSE_MS = 1200;
-const USB_PAUSE_MS = 400;
+// able to follow with the eye. At 2× every pause above halves (see speedFactor).
+export const TIMING = { fly: 600, part: 700, wire: 1200, usb: 400 };
+
+/** 1× is the pace a first-timer needs to follow each wire; 2× is for the second run-through. */
+/** @param {number} [speed] */
+export function speedFactor(speed) {
+  return typeof speed === 'number' && Number.isFinite(speed) && speed > 0 ? speed : 1;
+}
+
+/**
+ * How long to hold on a step before the next one lands.
+ * @param {{ kind: string }} s
+ * @param {number} [speed]
+ */
+export function pauseFor(s, speed = 1) {
+  const ms = s.kind === 'wire' ? TIMING.wire : s.kind === 'usb' ? TIMING.usb : TIMING.part;
+  return ms / speedFactor(speed);
+}
 
 /** Where a flying piece starts, past the table's left edge, and how high it is carried. */
 const OFF_LEFT = 30;
@@ -92,7 +105,7 @@ export function runRecipe(o) {
       let start = null;
       const off = o.world.onFrame((now) => {
         start ??= now;
-        const t = skipping ? 1 : Math.min(1, (now - start) / FLY_MS);
+        const t = skipping ? 1 : Math.min(1, (now - start) / TIMING.fly);
         const e = easeOut(t);
         group.position.lerpVectors(from, to, e);
         // Lifted from where it lay: up and over by the carry arc, down into its seat.
@@ -124,9 +137,6 @@ export function runRecipe(o) {
         break;
     }
   }
-
-  /** @param {Step} s */
-  const pauseFor = (s) => (s.kind === 'wire' ? WIRE_PAUSE_MS : s.kind === 'usb' ? USB_PAUSE_MS : PART_PAUSE_MS);
 
   async function run() {
     o.hands.enable(false);
