@@ -1,5 +1,6 @@
 <!doctype html>
-<!-- The two caption cards burned into site/media/hero.mp4.
+<!-- The two caption cards burned into site/media/hero.mp4 — English only: one file
+     serves both the English and the Chinese page.
      Render (the PNGs are intermediate, not committed):
        CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
        "$CHROME" --headless=new --disable-gpu --hide-scrollbars --allow-file-access-from-files \
@@ -7,30 +8,38 @@
          --screenshot=/tmp/hero-cap-1.png "file://$PWD/tools/site/hero-captions.html#c1"
      Swap #c1 for #c2 for the second card.
 
-     Then assemble the hero from the recording and pet.mp4 (see the caption timings
-     in the overlay enables):
-       ffmpeg -y -sseof -16 -i "$SIM" -t 10 -i "$PET" \
+     Then assemble the hero: the real bench first (the hook), then the simulator
+     wiring sped up 1.5x on top of the 2x it was recorded at, then the puppy.
+     The overlay enables are the caption timings.
+       ffmpeg -y \
+         -ss 5 -t 7  -i "$PET" -sseof -16.5 -i "$SIM" -ss 0 -t 6 -i "$PET" \
          -loop 1 -i /tmp/hero-cap-1.png -loop 1 -i /tmp/hero-cap-2.png \
-         -filter_complex "[0:v]scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,fps=30,crop=1280:675:0:45,scale=1280:720,setsar=1,trim=end=16,setpts=PTS-STARTPTS[a];[1:v]scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,fps=30,setsar=1,trim=end=10,setpts=PTS-STARTPTS[b];[a][b]xfade=transition=fade:duration=0.4:offset=15.6[ab];[ab][2:v]overlay=0:0:enable='between(t,0.4,15.2)'[c];[c][3:v]overlay=0:0:enable='between(t,16.2,25.2)'[v]" \
-         -map "[v]" -an -t 25.6 -c:v libx264 -profile:v high -crf 30 -preset slow \
+         -filter_complex "\
+[0:v]scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,fps=30,setsar=1,setpts=PTS-STARTPTS[a];\
+[1:v]scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,crop=1280:675:0:45,scale=1280:720,trim=end=16.5,setpts=(PTS-STARTPTS)/1.5,fps=30,setsar=1[b];\
+[2:v]scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,fps=30,setsar=1,setpts=PTS-STARTPTS[c];\
+[a][b]xfade=transition=fade:duration=0.4:offset=6.6[ab];\
+[ab][c]xfade=transition=fade:duration=0.4:offset=17.2[abc];\
+[abc][3:v]overlay=0:0:enable='between(t,7.0,16.9)'[d];\
+[d][4:v]overlay=0:0:enable='between(t,17.6,22.6)'[v]" \
+         -map "[v]" -an -t 23.2 -c:v libx264 -profile:v high -crf 31 -preset slow \
          -pix_fmt yuv420p -movflags +faststart site/media/hero.mp4
-     The crop drops the simulator's own toolbar row from the first beat; CRF 30 is
-     what fits the 2.5 MB budget. The poster is a still of that file at t=24.6:
-       ffmpeg -y -ss 24.6 -i site/media/hero.mp4 -frames:v 1 -q:v 3 site/media/hero-poster.jpg -->
+     The inner crop drops the simulator's own toolbar row; CRF 30 is what fits the
+     2.5 MB budget. The poster is the first frame of that file:
+       ffmpeg -y -ss 0.6 -i site/media/hero.mp4 -frames:v 1 -q:v 3 site/media/hero-poster.jpg -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <style>
 @font-face{font-family:"IM Fell English";src:url("../../site/fonts/im-fell-english-latin-400-normal-BhowGHCQ.woff2") format("woff2")}
 html,body{margin:0;width:1280px;height:720px;background:transparent;overflow:hidden}
-.card{position:absolute;left:0;right:0;bottom:52px;text-align:center;visibility:hidden;text-shadow:0 2px 8px #0009,0 0 2px #0006}
+.card{position:absolute;left:0;right:0;bottom:56px;text-align:center;visibility:hidden}
 .card:target{visibility:visible}
-.zh{font-family:"Songti SC",serif;font-size:46px;line-height:1.1;color:#fbf3dc;letter-spacing:1px}
-.en{font-family:"IM Fell English",Georgia,serif;font-style:italic;font-size:31px;color:#e9b95a;margin-top:8px}
+.en{display:inline-block;font-family:"IM Fell English",Georgia,serif;font-style:italic;font-size:40px;color:#fbf3dc;padding:6px 22px;text-shadow:0 2px 10px #000d,0 0 3px #0009}
 </style>
 </head>
 <body>
-<div class="card" id="c1"><div class="zh">还没买零件？</div><div class="en">Wire it in your browser first.</div></div>
-<div class="card" id="c2"><div class="zh">然后把它装进一只真的小狗。</div><div class="en">Then build it for real.</div></div>
+<div class="card" id="c1"><span class="en">Wire it in your browser first.</span></div>
+<div class="card" id="c2"><span class="en">Then build it for real.</span></div>
 </body>
 </html>
