@@ -1,41 +1,46 @@
 <!doctype html>
 <!-- The two caption cards burned into site/media/hero.mp4 — English only: one file
-     serves both the English and the Chinese page.
+     serves both the English and the Chinese page. Sizes are in vw so the same page
+     renders a 1280x720 card for the site and a 1920x1080 one for an upload.
+
      Render (the PNGs are intermediate, not committed):
        CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
        "$CHROME" --headless=new --disable-gpu --hide-scrollbars --allow-file-access-from-files \
-         --default-background-color=00000000 --window-size=1280,720 --virtual-time-budget=3000 \
+         --default-background-color=00000000 --window-size=1920,1080 --virtual-time-budget=3000 \
          --screenshot=/tmp/hero-cap-1.png "file://$PWD/tools/site/hero-captions.html#c1"
      Swap #c1 for #c2 for the second card.
 
-     Then assemble the hero: the real bench first (the hook), then the simulator
-     wiring sped up 1.5x on top of the 2x it was recorded at, then the puppy.
-     The overlay enables are the caption timings.
+     Then assemble the hero: the real bench first (the hook, already wide — no
+     close-up, no pull-back), the simulator wiring at 3x (1.5x on top of the 2x it
+     was recorded at), then the puppy. The overlay enables are the caption timings.
        ffmpeg -y \
-         -ss 5 -t 7  -i "$PET" -sseof -16.5 -i "$SIM" -ss 0 -t 6 -i "$PET" \
+         -ss 11 -t 4  -i "$PET" -sseof -16.5 -i "$SIM" -ss 0 -t 4.8 -i "$PET" \
          -loop 1 -i /tmp/hero-cap-1.png -loop 1 -i /tmp/hero-cap-2.png \
          -filter_complex "\
 [0:v]scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,fps=30,setsar=1,setpts=PTS-STARTPTS[a];\
 [1:v]scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,crop=1280:675:0:45,scale=1280:720,trim=end=16.5,setpts=(PTS-STARTPTS)/1.5,fps=30,setsar=1[b];\
 [2:v]scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,fps=30,setsar=1,setpts=PTS-STARTPTS[c];\
-[a][b]xfade=transition=fade:duration=0.4:offset=6.6[ab];\
-[ab][c]xfade=transition=fade:duration=0.4:offset=17.2[abc];\
-[abc][3:v]overlay=0:0:enable='between(t,7.0,16.9)'[d];\
-[d][4:v]overlay=0:0:enable='between(t,17.6,22.6)'[v]" \
-         -map "[v]" -an -t 23.2 -c:v libx264 -profile:v high -crf 31 -preset slow \
+[a][b]xfade=transition=fade:duration=0.4:offset=3.6[ab];\
+[ab][c]xfade=transition=fade:duration=0.4:offset=14.2[abc];\
+[3:v]scale=1280:720[c1];[4:v]scale=1280:720[c2];\
+[abc][c1]overlay=0:0:enable='between(t,4.2,13.9)'[d];\
+[d][c2]overlay=0:0:enable='between(t,14.8,18.6)'[v]" \
+         -map "[v]" -an -t 19.0 -c:v libx264 -profile:v high -crf 31 -preset slow \
          -pix_fmt yuv420p -movflags +faststart site/media/hero.mp4
-     The inner crop drops the simulator's own toolbar row; CRF 30 is what fits the
-     2.5 MB budget. The poster is the first frame of that file:
-       ffmpeg -y -ss 0.6 -i site/media/hero.mp4 -frames:v 1 -q:v 3 site/media/hero-poster.jpg -->
+     The inner crop drops the simulator's own toolbar row; CRF 31 is what keeps the
+     page's copy of it near 1.4 MB. The upload copy is the same graph at 1920x1080
+     (crop 1920:1012:0:68 instead) with -crf 20, about 18 MB — social re-encodes it,
+     so it wants the bits. The poster is the first frame of the file:
+       ffmpeg -y -ss 0.3 -i site/media/hero.mp4 -frames:v 1 -q:v 3 site/media/hero-poster.jpg -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <style>
 @font-face{font-family:"IM Fell English";src:url("../../site/fonts/im-fell-english-latin-400-normal-BhowGHCQ.woff2") format("woff2")}
-html,body{margin:0;width:1280px;height:720px;background:transparent;overflow:hidden}
-.card{position:absolute;left:0;right:0;bottom:56px;text-align:center;visibility:hidden}
+html,body{margin:0;width:100vw;height:100vh;background:transparent;overflow:hidden}
+.card{position:absolute;left:0;right:0;bottom:4.375vw;text-align:center;visibility:hidden}
 .card:target{visibility:visible}
-.en{display:inline-block;font-family:"IM Fell English",Georgia,serif;font-style:italic;font-size:40px;color:#fbf3dc;padding:6px 22px;text-shadow:0 2px 10px #000d,0 0 3px #0009}
+.en{display:inline-block;font-family:"IM Fell English",Georgia,serif;font-style:italic;font-size:3.125vw;color:#fbf3dc;padding:6px 22px;text-shadow:0 2px 10px #000d,0 0 3px #0009}
 </style>
 </head>
 <body>
