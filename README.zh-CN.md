@@ -7,6 +7,8 @@
 > **一个帮你把 AI 小玩意从想法做到实物的工作台。** 模拟、接线、烧录、配置，
 > AI 大脑跑在你自己的电脑上。下面的演示是在它上面做的第一个小玩意。
 
+🌐 **主页：** https://bot-reborn.agentlenshq.com/zh/ — 20 秒看一遍这个工作台。
+
 **把一个 30 块钱的玩具机器人改成 AI 机器人：旧手机当身体，电脑当大脑。**
 
 <p align="center"><a href="https://youtube.com/shorts/SNA9ok1j0Sg"><img src="docs/media/demo.gif" width="480" alt="真狗在吃饭，机器狗陪着孩子玩"></a></p>

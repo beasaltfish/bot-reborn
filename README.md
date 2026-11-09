@@ -8,6 +8,8 @@ English | [中文](README.zh-CN.md)
 > wire it, flash it and configure it, with the AI brain running on your own
 > computer. The demo below is the first gadget built on it.
 
+🌐 **Homepage:** https://bot-reborn.agentlenshq.com — a 20-second look at the workbench.
+
 **Turn a $4 toy robot into an AI robot, with an old phone as its body and your
 computer as its brain.**
 
