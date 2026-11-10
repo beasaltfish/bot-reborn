@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   emptyBench, addPart, addBoard, place, moveBoard, trash,
-  addWire, removeWire, pinPoints, isHole, serialize, load,
+  addWire, removeWire, pinPoints, isHole, serialize, load, park,
 } from '../../sim/bench.js';
 import { boardToTable } from '../../sim/parts.js';
 
@@ -214,4 +214,25 @@ test('wands get imu, imu2 and survive save and load', () => {
   const two = addPart(one.bench, 'mpu6050', { x: 8, z: 30 });
   assert.deepEqual([one.id, two.id], ['imu', 'imu2']);
   assert.deepEqual(load(serialize(two.bench)), two.bench);
+});
+
+test('a heading survives a save and a load, and is optional', () => {
+  const placed = park(addPart(emptyBench(), 'toy', { x: -100, z: 25 }).bench, 'toy', { x: -60.5, z: 31.25 }, 37);
+  const back = load(serialize(placed));
+  const toy = /** @type {Placed} */ (back.placed.find((p) => p.id === 'toy'));
+  assert.deepEqual(toy.at, { x: -60.5, z: 31.25 });
+  assert.equal(toy.heading, 37);
+  // A bench saved before headings existed still loads.
+  const old = JSON.parse(serialize(emptyBench()));
+  for (const p of old.placed) delete p.heading;
+  assert.equal(load(JSON.stringify(old)).placed.length, 4);
+});
+
+test('a heading that is not a number is refused, and dragging resets it to rot', () => {
+  const b = addPart(emptyBench(), 'toy', { x: -100, z: 25 }).bench;
+  const bad = JSON.parse(serialize(park(b, 'toy', { x: -100, z: 25 }, 12)));
+  /** @type {any} */ (bad.placed.find((/** @type {Placed} */ p) => p.id === 'toy')).heading = 'north';
+  assert.equal(load(JSON.stringify(bad)).placed.length, 4, 'falls back to the empty bench');
+  const turned = place(b, 'toy', { x: -90, z: 25 }, 90, false);
+  assert.equal(/** @type {Placed} */ (turned.placed.find((/** @type {Placed} */ p) => p.id === 'toy')).heading, 90);
 });

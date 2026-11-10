@@ -19,6 +19,7 @@ import { PARTS, holeXY, boardToTable, tableToBoard, holeOnTable, boardGroups } f
  *   id: string, part: PartId,
  *   at: { x: number, z: number },      // the origin pin's table position
  *   rot: Rot, seated: boolean, burnt: boolean,
+ *   heading?: number,                  // degrees, any angle: a driven toy's facing (absent = rot)
  * }} Placed
  * @typedef {{ id: string, a: string, b: string, color: string }} Wire
  * @typedef {{ v: 2, boards: Board[], placed: Placed[], wires: Wire[], usb: boolean }} Bench
@@ -77,6 +78,25 @@ export function addPart(b, part, at) {
 }
 
 /**
+ * Where a driving toy came to rest. Its `at` is off the hole grid (it is on the
+ * table) and `heading` is any angle, which is why the facing is not stored in
+ * `rot`: that one stays the quarter turn a hand gives a part.
+ * @param {Bench} b
+ * @param {string} id
+ * @param {{ x: number, z: number }} at
+ * @param {number} heading degrees
+ * @returns {Bench}
+ */
+export function park(b, id, at, heading) {
+  const target = b.placed.find((p) => p.id === id);
+  if (!target) throw new Error(`no part ${id}`);
+  return {
+    ...b,
+    placed: b.placed.map((p) => (p === target ? { ...p, at: { x: at.x, z: at.z }, heading } : p)),
+  };
+}
+
+/**
  * A new breadboard on the table, id bb1, bb2… Boards are always numbered:
  * "bb" alone reads as the old single-board point ids.
  * @param {Bench} b
@@ -132,7 +152,11 @@ export function place(b, id, at, rot, seated) {
   }
   return {
     ...b,
-    placed: b.placed.map((p) => (p === target ? { ...p, at: { x: at.x, z: at.z }, rot, seated } : p)),
+    placed: b.placed.map((p) => (p === target
+      // A toy is driven at any angle, so its `heading` is separate from the
+      // quarter turn; putting it down again by hand resets that facing.
+      ? { ...p, at: { x: at.x, z: at.z }, rot, seated, ...(target.part === 'toy' ? { heading: rot } : {}) }
+      : p)),
   };
 }
 
@@ -302,6 +326,7 @@ function isPlaced(p) {
   if (!ROTS.includes(p.rot)) return false;
   if (typeof p.seated !== 'boolean' || typeof p.burnt !== 'boolean') return false;
   if (!isObject(p.at) || !isCoord(p.at.x) || !isCoord(p.at.z)) return false;
+  if (p.heading !== undefined && !isCoord(p.heading)) return false;
   // A part on the table may sit anywhere; a seated one is on the hole grid.
   return !p.seated || (Number.isInteger(p.at.x) && Number.isInteger(p.at.z));
 }

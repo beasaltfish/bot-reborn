@@ -202,6 +202,103 @@ function decal(tex, w, d, x, y, z, burnt) {
   return m;
 }
 
+
+/**
+ * The $4 toy robot as sold: a black head with two eye rings on a pale body,
+ * four wheels, and the five solder pads the wires come from (docs/media/before.jpg).
+ *
+ * The group's origin is the `U3A` pad at its rear-left corner and the body runs
+ * `+x` (forward) and `+z` from it, which is exactly what `CAR.half` and the
+ * collision circle in `sim/car.js` assume: what you see and what it bumps into
+ * are the same rectangle. The wheels and the steering pair are named groups so
+ * the world can spin and swing them without a second reference table.
+ * @param {{ burnt: boolean }} state
+ * @returns {PartMesh}
+ */
+function buildCar(state) {
+  const { w, d } = PARTS.toy.size;
+  const W = w * MM;
+  const D = d * MM;
+  const burnt = state.burnt;
+  const g = new THREE.Group();
+  /** @type {Map<string, THREE.Vector3>} */
+  const anchors = new Map();
+
+  const shell = mat('gloss', burnt ? charred(0xeceff1) : 0xeceff1);
+  const dark = mat('matte', burnt ? charred(0x1b1c20) : 0x1b1c20);
+  const rubber = mat('matte', burnt ? charred(0x101112) : 0x17181a);
+  const eyeMat = mat('gloss', burnt ? charred(0xd7dee6) : 0xd7dee6);
+
+  const R = 5.5;
+  const TW = 3.6;
+  const backX = W - 8;
+  const steerX = 9;
+  const chassisTop = 12;
+
+  /** A wheel on its own pivot, so the world can spin it about its axle (z). */
+  const wheel = (/** @type {number} */ x, /** @type {number} */ z) => {
+    const pivot = new THREE.Group();
+    pivot.name = 'wheel';
+    pivot.position.set(x, R, z);
+    const tyre = new THREE.Mesh(new THREE.CylinderGeometry(R, R, TW, 20), rubber);
+    tyre.rotation.x = Math.PI / 2;
+    pivot.add(tyre);
+    return pivot;
+  };
+
+  const wheels = new THREE.Group();
+  wheels.name = 'wheels';
+  wheels.add(wheel(backX, 3), wheel(backX, D - 3));
+  g.add(wheels);
+
+  // The front pair swings on the steering coil, about a vertical axis.
+  const axle = new THREE.Group();
+  axle.name = 'axle';
+  axle.position.set(steerX, 0, D / 2);
+  axle.add(wheel(0, -(D / 2 - 3)), wheel(0, D / 2 - 3));
+  g.add(axle);
+
+  g.add(box(W - 2, 7, D - 2, shell, W / 2, 5, D / 2));
+  const body = box(W - 14, 11, D - 12, shell, W / 2 + 5, chassisTop, D / 2);
+  body.name = 'chassis';
+  g.add(body);
+
+  const head = new THREE.Mesh(new THREE.SphereGeometry(8.5, 28, 20), dark);
+  head.name = 'head';
+  head.position.set(W / 2 + 5, 30, D / 2);
+  head.scale.set(1, 0.9, 1.05);
+  g.add(head);
+  for (const side of [-1, 1]) {
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(3.1, 0.85, 10, 40), eyeMat);
+    ring.rotation.y = Math.PI / 2;
+    ring.position.set(W / 2 + 12.6, 31, D / 2 + side * 4.2);
+    g.add(ring);
+  }
+
+  // The pads, and their names on the chassis behind them, turned to read along
+  // the rear edge as the silk on a real board does.
+  const gold = mat('metal', GOLD);
+  for (const p of PARTS.toy.pins) {
+    g.add(box(1.5, 0.3, 2.2, gold, 1.4, chassisTop, p.y));
+    anchors.set(p.name, new THREE.Vector3(1.4, chassisTop + 0.3, p.y));
+  }
+  const tex = texture('silk:toy', () => canvasTexture(W - 2, D - 2, 64, (ctx) => {
+    ctx.translate((W - 2) / 2 - W / 2, (D - 2) / 2 - D / 2);
+    ctx.fillStyle = 'rgba(245,245,240,0.92)';
+    for (const p of PARTS.toy.pins) {
+      ctx.save();
+      ctx.translate(4.4, p.y + 1);
+      ctx.rotate(-Math.PI / 2);
+      label(ctx, p.name, 0, 0, 0.55, 6);
+      ctx.restore();
+    }
+  }));
+  g.add(decal(tex, W - 2, D - 2, W / 2, chassisTop + 0.02, D / 2, burnt));
+
+  g.add(contactShadow(W + 4, D + 4, W / 2, 0.03, D / 2 + 0.5));
+  return { group: g, anchors };
+}
+
 /** The wooden table: a big plane with a grain drawn once on a canvas. */
 export function buildTable() {
   const tex = texture('wood', () => {
@@ -665,6 +762,7 @@ const LOOKS = {
 export function buildPart(def, state) {
   if (def.id === 'speaker') return buildSpeaker(state.burnt);
   if (def.id === 'mpu6050') return buildImu(state.burnt);
+  if (def.id === 'toy') return buildCar(state);
   // A screen comes from the table's own row: PCB, glass and pins.
   const model = def.model ? screenById(def.model) : undefined;
   if (model) return buildScreen(def, model, state);

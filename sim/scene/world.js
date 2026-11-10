@@ -420,7 +420,8 @@ export function createWorld(canvas) {
         g.userData = { kind: 'part', id: p.id, anchors: made.anchors, screen: made.screen ?? null };
         if (p.seated) markHanging(g, made.anchors, pinPoints(b, p), def);
         if (p.part === 'mpu6050') drawMeter(g, wands.awake(p.id), 0);
-        g.rotation.y = -THREE.MathUtils.degToRad(p.rot);
+        // A driven toy keeps any angle; every other part only turns in steps.
+      g.rotation.y = -THREE.MathUtils.degToRad(p.heading ?? p.rot);
         if (made.screen) {
           const look = screenLook.get(p.id);
           drawScreen(made.screen, look?.show ?? 'off', look?.image ?? null);
