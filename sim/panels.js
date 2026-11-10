@@ -336,7 +336,8 @@ export function createPanels(opts) {
     if (!id) return;
     runBar.replaceChildren();
     const words = el('span', { class: 'say' });
-    let speed = opts.speed === 2 ? 2 : 1;
+    // The remembered pace, if it is one of the buttons; 1× otherwise.
+    let speed = [1, 2, 3, 4].includes(opts.speed) ? opts.speed : 1;
     /** @type {ReturnType<typeof opts.start>} */
     const run = opts.start(id, id === 'screen' ? /** @type {HTMLSelectElement} */ (screenSel).value : undefined, mode, {
       onSay: (text) => { words.textContent = text; },
@@ -350,23 +351,26 @@ export function createPanels(opts) {
       b.addEventListener('click', f);
       return b;
     };
-    // The pace belongs to the run, not to the dialog it was started from: it
-    // can be changed while the bench is being built, and it is remembered.
-    const pace = el('button', { type: 'button', class: 'link', 'aria-pressed': String(speed === 2) }, []);
-    /** @param {number} x */
-    const sayPace = (x) => {
-      pace.textContent = x === 2 ? '2× speed: on' : '2× speed: off';
-      pace.setAttribute('aria-pressed', String(x === 2));
-    };
-    sayPace(speed);
-    pace.addEventListener('click', () => {
-      speed = speed === 2 ? 1 : 2;
-      run.speed(speed);
-      opts.rememberSpeed(speed);
-      sayPace(speed);
+    // The pace belongs to the run, not to the dialog it was started from: any
+    // of them can be picked while the bench is being built, and it is
+    // remembered. Each button keeps its place, so none of them dodges the pointer.
+    const paces = el('span', { class: 'pace' });
+    /** @type {HTMLButtonElement[]} */
+    const paceButtons = [1, 2, 3, 4].map((x) => {
+      const b = /** @type {HTMLButtonElement} */ (el('button', {
+        type: 'button', class: 'link', 'aria-pressed': String(x === speed),
+      }, [`${x}×`]));
+      b.addEventListener('click', () => {
+        speed = x;
+        run.speed(speed);
+        opts.rememberSpeed(speed);
+        for (const other of paceButtons) other.setAttribute('aria-pressed', String(other === b));
+      });
+      paces.append(b);
+      return b;
     });
-    if (mode === 'step') runBar.append(words, pace, button('Next', run.next), button('Finish', run.finish), button('Stop', run.stop));
-    else runBar.append(words, pace, button('Skip', run.skip), button('Stop', run.stop));
+    if (mode === 'step') runBar.append(words, paces, button('Next', run.next), button('Finish', run.finish), button('Stop', run.stop));
+    else runBar.append(words, paces, button('Skip', run.skip), button('Stop', run.stop));
     runBar.hidden = false;
   }
   watchBtn.addEventListener('click', () => go('watch'));

@@ -77,13 +77,19 @@
     #wire .go .pill { cursor: pointer; }
     #runbar {
       position: fixed; left: 50%; top: 52px; transform: translateX(-50%);
-      max-width: min(720px, calc(100vw - 32px)); box-sizing: border-box;
+      /* A fixed width, not a max: the words change every step, and a bar that
+         grows with them slides Skip out from under the pointer. */
+      width: min(760px, calc(100vw - 32px)); box-sizing: border-box;
       display: flex; align-items: center; gap: 14px; padding: 8px 16px; border-radius: 999px;
       font: 500 13px/1.3 var(--font); color: var(--ink);
       background: var(--glass-strong); border: 1px solid var(--edge);
     }
     #runbar .say { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     #runbar .link { flex: none; }
+    #runbar .pace { display: flex; gap: 2px; flex: none; }
+    #runbar .pace .link { padding: 3px 5px; border-radius: 6px; color: var(--ink-dim); }
+    #runbar .pace .link:hover { text-decoration: none; color: var(--ink); }
+    #runbar .pace .link[aria-pressed="true"] { color: var(--ink); background: rgba(255, 240, 220, 0.16); }
 
     #status {
       position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);

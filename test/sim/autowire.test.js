@@ -159,3 +159,13 @@ test('the run bar can change the pace while the bench is being built', async () 
   assert.ok(elapsed < TIMING.usb * 3.4, `ran in ${elapsed}ms, expected under ${TIMING.usb * 3.4}`);
   assert.ok(elapsed > TIMING.usb, `ran in ${elapsed}ms, too fast to be real`);
 });
+
+test('every pace the run bar offers really paces the run', () => {
+  // The bar's buttons are 1×, 2×, 3×, 4×: nothing between them may clamp.
+  for (const x of [1, 2, 3, 4]) {
+    assert.equal(speedFactor(x), x, `${x}×`);
+    for (const kind of ['wire', 'usb', 'board', 'part']) {
+      assert.equal(pauseFor({ kind }, x), pauseFor({ kind }, 1) / x, `${x}× ${kind}`);
+    }
+  }
+});
