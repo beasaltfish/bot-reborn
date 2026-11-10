@@ -48,6 +48,10 @@ FT232H D7 ──► U5 input B     (steer)   ← input pin, never the coil
 FT232H GND ─► board GND
 ```
 
+The ESP32 body drives the same four inputs, on GPIO 4–7, and the wiring
+simulator (`/sim/`, part "Toy robot") wires exactly these four plus the shared
+ground and then drives it: what you see on the bench is these five wires.
+
 ## Tarot wand
 
 A hand-held stick with an MPU-6050 on it, wired to the ESP32 body; shake it, hold it still, and the tarot reader draws a card.

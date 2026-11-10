@@ -84,10 +84,13 @@ Every build needs the brain, a computer on the same Wi-Fi as the body, plus
 OpenAI-compatible provider works; the admin page has presets for common ones.
 Then pick a body:
 
-**ESP32 body** — talks, listens and shows a pet dog; no wheels yet.
+**ESP32 body** — talks, listens, shows a pet dog, and drives a toy car: its
+four motor inputs are GPIO 4–7, the same wires the FT232H used to switch (the
+simulator wires and drives that too, before you own the parts).
 
 - An **ESP32-S3** dev board, an **INMP441** microphone, a **MAX98357A** amp
-  and a speaker, and a small SPI screen for the dog. Pin tables are in
+  and a speaker, and a small SPI screen for the dog — plus the toy car, if you
+  want it to move. Pin tables are in
   [`firmware/README.md`](firmware/README.md).
 - **Chrome or Edge** and a USB cable, to set the board up from the admin page.
 
