@@ -17,7 +17,8 @@ import { wireEnd } from './snap.js';
 /**
  * @typedef {{ say: string } & (
  *   | { kind: 'board', id: string, at: At, rot: Rot }
- *   | { kind: 'part', id: string, part: import('./parts.js').PartDef['id'], at: At, rot: Rot, seated: boolean }
+ *   | { kind: 'part', id: string, part: import('./parts.js').PartDef['id'], at: At, rot: Rot, seated: boolean,
+       heading?: number }
  *   | { kind: 'wire', a: string, b: string, named?: [string, string] }
  *   | { kind: 'usb' }
  * )} Step
@@ -70,7 +71,9 @@ const LOOSE = {
   imu: { at: { x: -50, z: ROW_Z + 30 } },
   // The toy parks behind the bench, the one lane on the mat where a straight
   // run clears the boards, the bin and the loose parts (sim-car spec §10).
-  toy: { at: { x: -55, z: -55 } },
+  // It is parked facing the viewer, so its two ring eyes are what you see when
+  // the bench comes alive; "go forward" then walks it towards you.
+  toy: { at: { x: -55, z: -55 }, heading: 90 },
 };
 
 /**
@@ -126,7 +129,7 @@ export function recipeSteps(recipeId, screenId = DEFAULT_SCREEN, wand = false) {
   }
   if (recipeId === 'toy') {
     steps.push({
-      kind: 'part', id: 'toy', part: 'toy', at: LOOSE.toy.at, rot: 0, seated: false,
+      kind: 'part', id: 'toy', part: 'toy', at: LOOSE.toy.at, rot: 0, seated: false, heading: LOOSE.toy.heading,
       say: 'The toy robot: its four motor inputs and a ground, and it carries its own battery',
     });
   }
@@ -165,10 +168,10 @@ export function applyStep(b, s) {
       return bench;
     }
     case 'part': {
-      if (b.placed.some((p) => p.id === s.id)) return place(b, s.id, s.at, s.rot, s.seated);
+      if (b.placed.some((p) => p.id === s.id)) return place(b, s.id, s.at, s.rot, s.seated, s.heading);
       const { bench, id } = addPart(b, s.part, s.at);
       if (id !== s.id) throw new Error(`expected ${s.id}, got ${id}`);
-      return place(bench, id, s.at, s.rot, s.seated);
+      return place(bench, id, s.at, s.rot, s.seated, s.heading);
     }
     case 'wire':
       return addWire(b, s.a, s.b, wireColor(b, ...(s.named ?? [s.a, s.b])));

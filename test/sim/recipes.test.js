@@ -10,7 +10,7 @@ import { nets } from '../../sim/netlist.js';
 import { BIN } from '../../sim/layout.js';
 import { SCREENS } from '../../core/screens.js';
 import { RECIPES, DEFAULT_SCREEN, startBench, recipeSteps, applyStep } from '../../sim/recipes.js';
-import { obstacles, stepCar } from '../../sim/car.js';
+import { obstacles, overlaps, stepCar } from '../../sim/car.js';
 
 /** @typedef {import('../../sim/bench.js').Bench} Bench */
 
@@ -184,17 +184,21 @@ test('with the wand option, every recipe also wires a wand that wakes', () => {
   }
 });
 
-test('the toy recipe parks the toy where it has room to drive', () => {
+test('the toy recipe parks it facing the viewer, with room to drive', () => {
   const b = build('toy');
   const toy = b.placed.find((p) => p.id === 'toy');
   assert.deepEqual(toy?.at, { x: -55, z: -55 });
-  assert.equal(toy?.rot, 0);
+  assert.equal(toy?.heading, 90, 'its face is what you see when the bench comes alive');
   assert.equal(/** @type {any} */ (powerOn(b).parts.toy).wheels, 'coast');
-  // Straight ahead is clear of the bench, the bin and the loose parts: the mat
-  // edge is what stops it, 130 units (33 cm) on.
-  const run = stepCar({ x: -55, z: -55, heading: 0 }, { wheels: 'forward', steer: 'straight' }, 4000, {
-    bounds: { x0: -120, x1: 120, z0: -70, z1: 70 }, obstacles: obstacles(b, 'toy'), leash: null,
-  });
-  assert.equal(run.blocked, 'edge');
-  assert.ok(run.pose.x > 60, `only got to ${run.pose.x}`);
+  const g = {
+    bounds: { x0: -120, x1: 120, z0: -70, z1: 70 },
+    obstacles: obstacles(b, 'toy'),
+    leash: null,
+  };
+  const parked = { x: -55, z: -55, heading: 90 };
+  assert.equal(overlaps(parked, g), false, 'parked clear of the bench, the bin and the loose parts');
+  // Forward walks it towards the viewer: it gets at least 15 cm before anything stops it.
+  const run = stepCar(parked, { wheels: 'forward', steer: 'straight' }, 4000, g);
+  const travelled = Math.hypot(run.pose.x - parked.x, run.pose.z - parked.z);
+  assert.ok(travelled > 40, `only got ${travelled}`);
 });
