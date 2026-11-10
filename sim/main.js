@@ -333,6 +333,14 @@ async function plugIn(recipe = null) {
   showLine();
   if (outcome.esp !== 'ok') return;
 
+  // A bench that came alive is watched, not wired: the orbit view shows the
+  // robot at an angle beside the bench. It used to happen only when a
+  // character connected, so a run with no character to connect to stayed flat.
+  wiringView = view === 'orbit' ? wiringView : view;
+  view = 'orbit';
+  peeking = null;
+  go(view);
+
   /** @type {{ id: string, name: string, ready: boolean, online: boolean, motion: string | null }[]} */
   let list;
   try {

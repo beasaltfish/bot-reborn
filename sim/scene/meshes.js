@@ -272,8 +272,8 @@ function buildCar(state) {
   g.add(box(W - 6, DECK - R - 0.2, D, panel, cx, R + 0.2, cz));
 
   // Torso: a narrow waist under wider shoulders, so it is not a cube.
-  const waistTop = 18.4;
-  g.add(box(W - 13, waistTop - DECK, D - 13, panel, cx, DECK, cz));
+  const waistTop = 21;
+  g.add(box(W - 15, waistTop - DECK, D - 17, panel, cx, DECK, cz));
   const shoulders = box(W - 10, 9, D - 10, glass, cx, waistTop, cz);
   shoulders.name = 'shoulders';
   g.add(shoulders);
@@ -285,13 +285,15 @@ function buildCar(state) {
   g.add(badge);
 
   // Arms: black, hanging from the shoulders, elbows and pincer hands in sight.
+  const armMat = mat('matte', burnt ? charred(0x3a3d42) : 0x3a3d42);
   for (const side of [-1, 1]) {
-    const z = cz + side * ((D - 10) / 2 + 1.2);
+    // Out past the shoulders, or at this size they read as part of the body.
+    const z = cz + side * ((D - 10) / 2 + 2.6);
     const x = cx - 2.5;
-    g.add(box(2.6, 8.5, 2.8, black, x, waistTop, z));
-    g.add(box(2.4, 7.5, 2.6, black, x - 1.4, 11.4, z));
-    g.add(box(1.1, 2.2, 2.2, grey, x - 2.6, 10.4, z - 0.7));
-    g.add(box(1.1, 2.2, 2.2, grey, x - 2.6, 10.4, z + 0.7));
+    g.add(box(2.8, 9.5, 3, armMat, x, waistTop, z));
+    g.add(box(2.6, 8.5, 2.8, armMat, x - 1.4, 12.4, z));
+    g.add(box(1.2, 2.4, 2.4, grey, x - 2.8, 10.2, z - 0.8));
+    g.add(box(1.2, 2.4, 2.4, grey, x - 2.8, 10.2, z + 0.8));
   }
 
   // Neck, then the head: a glossy black dome with two big ring eyes facing +x.
