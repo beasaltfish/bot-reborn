@@ -5,7 +5,8 @@ import {
   PARTS, holeStrip, holeXY, holeAt, stripHoles,
   boardToTable, tableToBoard, holeOnTable, boardGroups,
 } from '../../sim/parts.js';
-import { TARGET } from '../../sim/target.js';
+import { TARGET, targetFor } from '../../sim/target.js';
+import { emptyBench, addPart } from '../../sim/bench.js';
 import { SCREENS } from '../../core/screens.js';
 
 // The simulator's rules (which holes are joined, what a wire reaches) all
@@ -52,7 +53,7 @@ test('the ESP32 has the pins the firmware uses, and its grounds are joined', () 
 });
 
 test('every TARGET endpoint names a real pin', () => {
-  const byInstance = { esp: 'esp32', mic: 'inmp441', amp: 'max98357a', spk: 'speaker' };
+  const byInstance = { esp: 'esp32', mic: 'inmp441', amp: 'max98357a', spk: 'speaker', toy: 'toy' };
   /** @param {string} point */
   const exists = (point) => {
     const [inst, pin] = point.split(':');
@@ -139,4 +140,28 @@ test('the wand has four wire-only pins in GY-521 silk order', () => {
   assert.equal(wand.prefix, 'imu');
   assert.equal(wand.label, 'MPU-6050 (GY-521)');
   assert.deepEqual(wand.size, { w: 20, d: 15, h: 3 });
+});
+
+test('the toy robot is a table part with five solder pads', () => {
+  const toy = PARTS.toy;
+  assert.deepEqual(toy.pins.map((p) => p.name), ['U3A', 'U3B', 'U5A', 'U5B', 'GND']);
+  assert.ok(toy.pins.every((p) => p.wireOnly), 'pads take a wire, they never go in a hole');
+  assert.equal(toy.onBoard, false);
+  assert.equal(toy.prefix, 'toy');
+  assert.deepEqual(toy.internal, []);
+});
+
+test('targetFor wires every toy instance, in order', () => {
+  const { bench } = addPart(emptyBench(), 'toy', { x: -80, z: 30 });
+  // The opening bench's audio parts come first; the toy's five are its tail.
+  const links = targetFor(bench).slice(-5);
+  assert.ok(links.every((l) => l.a.startsWith('toy:')), 'the toy block is added after the audio one');
+  assert.deepEqual(links.map((l) => `${l.a}>${l.b}`), [
+    'toy:U3A>esp:GPIO4',
+    'toy:U3B>esp:GPIO5',
+    'toy:U5A>esp:GPIO6',
+    'toy:U5B>esp:GPIO7',
+    'toy:GND>esp:GND',
+  ]);
+  assert.ok(links.every((l) => l.why.length > 0));
 });

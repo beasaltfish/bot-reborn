@@ -87,9 +87,27 @@ function wandLinks(id) {
   ];
 }
 
+/**
+ * The four driver inputs and the ground, from `docs/hardware.md`: U3 drives
+ * the wheels, U5 swings the steering axle, and U5's two are its *inputs*,
+ * never the coil.
+ * @param {string} id @returns {Link[]}
+ */
+function toyLinks(id) {
+  return [
+    { a: `${id}:U3A`, b: 'esp:GPIO4', why: 'The wheel driver U3 takes input A here (it was the FT232H\'s D4).' },
+    { a: `${id}:U3B`, b: 'esp:GPIO5', why: 'U3 input B: one of these two high is forward, the other backward (D5).' },
+    { a: `${id}:U5A`, b: 'esp:GPIO6', why: 'The steering driver U5 takes input A on this pin, never on its coil (D6).' },
+    { a: `${id}:U5B`, b: 'esp:GPIO7', why: 'U5 input B: one side of the axle or the other (D7).' },
+    { a: `${id}:GND`, b: 'esp:GND', why: 'Both boards must share one ground, or the ESP32\'s high and low mean nothing to the toy.' },
+  ];
+}
+
 /** The opening bench: the four instance names the diagram and the tests use. */
 /** @type {Link[]} */
-export const TARGET = [...micLinks('mic'), ...ampLinks('amp'), ...speakerLinks('spk', 'amp')];
+export const TARGET = [
+  ...micLinks('mic'), ...ampLinks('amp'), ...speakerLinks('spk', 'amp'), ...toyLinks('toy'),
+];
 
 /**
  * Every live instance's links. Instance order is by number, the bare name
@@ -114,6 +132,7 @@ export function targetFor(b) {
     const amp = amps[i];
     if (amp) links.push(...speakerLinks(spk.id, amp.id));
   });
+  for (const p of instances('toy')) links.push(...toyLinks(p.id));
   for (const p of instances('mpu6050')) links.push(...wandLinks(p.id));
   for (const p of b.placed.filter((q) => q.part.startsWith('screen-')).sort((a, c) => number(a.id) - number(c.id))) {
     const model = PARTS[p.part].model;

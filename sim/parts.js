@@ -27,7 +27,7 @@ import { SCREENS } from '../core/screens.js';
  * `prefix` is the stem of its instance ids: mic, mic2, mic3…
  * `model` is the screen table row a screen part is built from.
  * @typedef {{
- *   id: 'esp32' | 'inmp441' | 'max98357a' | 'speaker' | 'mpu6050' | `screen-${string}`,
+ *   id: 'esp32' | 'inmp441' | 'max98357a' | 'speaker' | 'mpu6050' | 'toy' | `screen-${string}`,
  *   label: string,
  *   prefix: string,
  *   model?: string,
@@ -127,6 +127,19 @@ const FIXED = {
     prefix: 'imu',
     size: { w: 20, d: 15, h: 3 },
     pins: ['VCC', 'GND', 'SCL', 'SDA'].map((name, x) => ({ name, x, y: 0, wireOnly: true })),
+    internal: [],
+    onBoard: false,
+  },
+  // The $4 toy robot. Its driver board is inside it and it carries its own
+  // battery, so it never goes on the breadboard: five pads on the rear edge
+  // take the four driver inputs and the shared ground. Pads, not header pins,
+  // because on the real toy these are solder pads (docs/hardware.md §Wiring).
+  toy: {
+    id: 'toy',
+    label: 'Toy robot',
+    prefix: 'toy',
+    size: { w: 100, d: 80, h: 150 },
+    pins: ['U3A', 'U3B', 'U5A', 'U5B', 'GND'].map((name, i) => ({ name, x: 0, y: i * 6, wireOnly: true })),
     internal: [],
     onBoard: false,
   },
