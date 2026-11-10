@@ -28,7 +28,7 @@ const codes = (/** @type {import('../../sim/power.js').Outcome} */ o) => o.fault
 
 test('the full target wiring works', () => {
   assert.deepEqual(powerOn(wired()), {
-    esp: 'ok', mic: 'ok', amp: 'ok', burns: [], faults: [], screenModel: null,
+    esp: 'ok', mic: 'ok', amp: 'ok', burns: [], faults: [], screenModel: null, toys: {},
     parts: {
       mic: { kind: 'mic', path: 'ok' },
       amp: { kind: 'amp', path: 'ok' },

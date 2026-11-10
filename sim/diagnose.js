@@ -96,6 +96,17 @@ const FAULT_TEXT = {
   'imu-bus': 'The wand\'s SDA or SCL is not where the firmware listens, so it never hears the wand; SDA goes to GPIO 1 and SCL to GPIO 2.',
   'imu-bus-short': 'The wand\'s SDA and SCL are joined to each other or held at 3V3, 5V or GND, so the bus is stuck; give each its own wire to its own GPIO.',
   'bl-on-gpio': 'The backlight is on a GPIO, which works but is not how the diagram wires it; the backlight pin belongs on 3V3.',
+  'toy-burnt': 'This toy already burnt and stays dead; take it to the bin and wire a fresh one the same way.',
+  'toy-ungrounded': "The toy and the ESP32 do not share a ground, so the ESP32's high and low mean nothing to it; wire the toy's GND to the ESP32's GND.",
+  'toy-ground-raised': "The toy's ground is on a supply, so every signal it sees is at or below its own ground; both boards need the same ground, the ESP32's GND.",
+  'toy-drive-missing': "One of the wheel driver's two inputs has no wire, so the toy can only drive one way; U3 input A goes to GPIO 4 and B to GPIO 5.",
+  'toy-steer-missing': "One of the steering driver's two inputs has no wire, so the axle only swings one way; U5 input A goes to GPIO 6 and B to GPIO 7.",
+  'toy-drive-swapped': 'The two wheel inputs look swapped: the toy will drive backwards when it is told forward. U3 A goes to GPIO 4 and B to GPIO 5.',
+  'toy-steer-swapped': 'The two steering inputs look swapped: the toy will turn the other way. U5 A goes to GPIO 6 and B to GPIO 7.',
+  'toy-input-held': 'An input is wired to a supply instead of a GPIO, so it is always high: that motion never switches off.',
+  'toy-input-contended': "Two GPIOs are joined onto one of the toy's inputs, and they fight; give each input its own wire.",
+  'toy-pair-tied': 'Both inputs of one driver are on the same wire, so the first command that pulls it high is a short across its bridge; give each input its own GPIO.',
+  'toy-short': 'Both inputs of one driver were high together, which is a short across its bridge; the toy burnt. One GPIO per input.',
 };
 
 /**

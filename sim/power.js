@@ -13,6 +13,7 @@
 import { nets } from './netlist.js';
 import { PARTS } from './parts.js';
 import { screenById } from '../core/screens.js';
+import { toyWiring, toyAction, TOY_INPUTS } from './car.js';
 
 /**
  * @typedef {'ok' | 'silent' | 'noise'} Path
@@ -22,6 +23,7 @@ import { screenById } from '../core/screens.js';
  *   | { kind: 'speaker', playing: boolean }
  *   | { kind: 'screen', show: ScreenShow }
  *   | { kind: 'imu', awake: boolean }
+ *   | { kind: 'toy', wheels: import('./car.js').ToyAction['wheels'], steer: import('./car.js').ToyAction['steer'] }
  * } PartState
  * @typedef {{
  *   esp: 'ok' | 'brownout' | 'off',
@@ -30,6 +32,7 @@ import { screenById } from '../core/screens.js';
  *   faults: { code: string, points: string[] }[],
  *   parts: Record<string, PartState>,
  *   screenModel: string | null,
+ *   toys: Record<string, { wiring: import('./car.js').Wiring, action: import('./car.js').ToyAction }>,
  * }} Outcome
  */
 
@@ -58,6 +61,7 @@ export function powerOn(b) {
   const speakers = b.placed.filter((p) => p.part === 'speaker');
   const screens = b.placed.filter((p) => p.part.startsWith('screen-'));
   const wands = b.placed.filter((p) => p.part === 'mpu6050');
+  const toys = b.placed.filter((p) => p.part === 'toy');
 
   /** @type {Record<string, PartState>} */
   const parts = {};
@@ -66,9 +70,10 @@ export function powerOn(b) {
   for (const p of speakers) parts[p.id] = { kind: 'speaker', playing: false };
   for (const p of screens) parts[p.id] = { kind: 'screen', show: 'off' };
   for (const p of wands) parts[p.id] = { kind: 'imu', awake: false };
+  for (const p of toys) parts[p.id] = { kind: 'toy', wheels: 'dead', steer: 'dead' };
 
   /** No power at all: every instance is its resting state. */
-  if (!b.usb) return { esp: 'off', mic: 'silent', amp: 'silent', burns: [], faults: [], parts, screenModel: null };
+  if (!b.usb) return { esp: 'off', mic: 'silent', amp: 'silent', burns: [], faults: [], parts, screenModel: null, toys: {} };
   const n = nets(b);
 
   // Two supply pins in one net: the board's own regulator is shorted and it
@@ -77,7 +82,7 @@ export function powerOn(b) {
   const shorted = RAILS.filter((p, i) => RAILS.some((q, j) => j > i && n.same(p, q)));
   if (shorted.length) {
     const points = RAILS.filter((p) => RAILS.some((q) => q !== p && n.same(p, q)));
-    return { esp: 'brownout', mic: 'silent', amp: 'silent', burns: [], faults: [{ code: 'short-rails', points }], parts, screenModel: null };
+    return { esp: 'brownout', mic: 'silent', amp: 'silent', burns: [], faults: [{ code: 'short-rails', points }], parts, screenModel: null, toys: {} };
   }
 
   /** @type {Outcome['faults']} */
@@ -372,5 +377,81 @@ export function powerOn(b) {
     if (candidates.length) screenModel = candidates[0].model;
   }
 
-  return { esp: 'ok', mic, amp, burns, faults, parts, screenModel };
+  // The toy robot. Its own battery keeps its drivers alive, so the only things
+  // that matter are what each pad reaches and whether the two boards share a
+  // ground. A toy with no wire on it is a toy on the table, not a circuit.
+  /** @type {Outcome['toys']} */
+  const toyStates = {};
+  /** @type {import('./car.js').ToyAction} */
+  const DEAD_TOY = { wheels: 'dead', steer: 'dead', contended: [] };
+  for (const p of toys) {
+    const id = p.id;
+    const wiring = toyWiring(b, id);
+    // The firmware sets its four pins low at boot, so this is what the toy sees
+    // the moment USB goes in.
+    const action = toyAction(wiring, [false, false, false, false]);
+    toyStates[id] = { wiring, action };
+    parts[id] = { kind: 'toy', wheels: action.wheels, steer: action.steer };
+    if (!wiring.linked) continue;
+
+    /** @param {string} name */
+    const pad = (name) => `${id}:${name}`;
+    /**
+     * @param {import('./car.js').InputName} name
+     * @param {string} gpio
+     */
+    const reaches = (name, gpio) => {
+      const src = wiring.inputs[name];
+      return src.kind === 'gpio' && src.pins.includes(gpio);
+    };
+
+    if (p.burnt) {
+      faults.push({ code: 'toy-burnt', points: [pad('U3A')] });
+    } else {
+      if (wiring.ground === 'floating') faults.push({ code: 'toy-ungrounded', points: [pad('GND'), 'esp:GND'] });
+      if (wiring.ground === 'raised') {
+        const rail = RAILS.find((r) => r !== 'esp:GND' && n.same(pad('GND'), r)) ?? 'esp:5V';
+        faults.push({ code: 'toy-ground-raised', points: [pad('GND'), rail] });
+      }
+
+      const missing = TOY_INPUTS.filter((name) => wiring.inputs[name].kind === 'none');
+      const missingDrive = missing.filter((m) => m.startsWith('U3'));
+      const missingSteer = missing.filter((m) => m.startsWith('U5'));
+      if (missingDrive.length) faults.push({ code: 'toy-drive-missing', points: missingDrive.map(pad) });
+      if (missingSteer.length) faults.push({ code: 'toy-steer-missing', points: missingSteer.map(pad) });
+
+      if (reaches('U3A', 'esp:GPIO5') && reaches('U3B', 'esp:GPIO4')) {
+        faults.push({ code: 'toy-drive-swapped', points: [pad('U3A'), pad('U3B')] });
+      }
+      if (reaches('U5A', 'esp:GPIO7') && reaches('U5B', 'esp:GPIO6')) {
+        faults.push({ code: 'toy-steer-swapped', points: [pad('U5A'), pad('U5B')] });
+      }
+
+      const held = TOY_INPUTS.filter((name) => {
+        const src = wiring.inputs[name];
+        return src.kind === 'rail' && src.level === 'high';
+      });
+      if (held.length) faults.push({ code: 'toy-input-held', points: held.map(pad) });
+
+      /** @type {import('./car.js').InputName[]} */
+      const tied = [];
+      if (n.same(pad('U3A'), pad('U3B'))) tied.push('U3A', 'U3B');
+      if (n.same(pad('U5A'), pad('U5B'))) tied.push('U5A', 'U5B');
+      if (tied.length) faults.push({ code: 'toy-pair-tied', points: tied.map(pad) });
+
+      if (action.contended.length) faults.push({ code: 'toy-input-contended', points: action.contended.map(pad) });
+
+      if (action.wheels === 'short' || action.steer === 'short') {
+        burns.push(id);
+        faults.push({ code: 'toy-short', points: TOY_INPUTS.map(pad) });
+      }
+    }
+
+    if (p.burnt || action.wheels === 'short' || action.steer === 'short') {
+      parts[id] = { kind: 'toy', wheels: 'dead', steer: 'dead' };
+      toyStates[id] = { wiring, action: DEAD_TOY };
+    }
+  }
+
+  return { esp: 'ok', mic, amp, burns, faults, parts, screenModel, toys: toyStates };
 }
