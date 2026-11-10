@@ -204,11 +204,12 @@ function decal(tex, w, d, x, y, z, burnt) {
 
 
 /**
- * The $4 toy robot as sold: a black head with two eye rings on a pale body,
- * four wheels, and the five solder pads the wires come from (docs/media/before.jpg).
+ * The $4 toy robot as sold (docs/media/before.jpg): a big glossy black dome of
+ * a head with two ring eyes, a pale boxy torso with a round badge on the chest,
+ * two thin black arms with gripper hands, and a dark wheeled base underneath.
  *
- * The group's origin is the `U3A` pad at its rear-left corner and the body runs
- * `+x` (forward) and `+z` from it, which is exactly what `CAR.half` and the
+ * The group's origin is the `U3A` pad at the rear-left corner of the base and
+ * the body is centred on (W/2, D/2), which is exactly what `CAR.half` and the
  * collision circle in `sim/car.js` assume: what you see and what it bumps into
  * are the same rectangle. The wheels and the steering pair are named groups so
  * the world can spin and swing them without a second reference table.
@@ -224,78 +225,104 @@ function buildCar(state) {
   /** @type {Map<string, THREE.Vector3>} */
   const anchors = new Map();
 
-  const shell = mat('gloss', burnt ? charred(0xeceff1) : 0xeceff1);
-  const dark = mat('matte', burnt ? charred(0x1b1c20) : 0x1b1c20);
-  const rubber = mat('matte', burnt ? charred(0x101112) : 0x17181a);
-  const eyeMat = mat('gloss', burnt ? charred(0xd7dee6) : 0xd7dee6);
+  const pale = mat('gloss', burnt ? charred(0xe8e9e6) : 0xe8e9e6);
+  const dark = mat('matte', burnt ? charred(0x15171a) : 0x15171a);
+  const glass = mat('gloss', burnt ? charred(0x101114) : 0x101114);
+  const ring = mat('gloss', burnt ? charred(0xcfd6dd) : 0xcfd6dd);
 
-  const R = 5.5;
-  const TW = 3.6;
-  const backX = W - 8;
-  const steerX = 9;
-  const chassisTop = 12;
+  const R = 5.5;          // wheel radius
+  const TW = 3.4;         // wheel width
+  const BASE_TOP = 10;    // the platform the torso stands on
+  const cx = W / 2;
+  const cz = D / 2;
 
   /** A wheel on its own pivot, so the world can spin it about its axle (z). */
   const wheel = (/** @type {number} */ x, /** @type {number} */ z) => {
     const pivot = new THREE.Group();
     pivot.name = 'wheel';
     pivot.position.set(x, R, z);
-    const tyre = new THREE.Mesh(new THREE.CylinderGeometry(R, R, TW, 20), rubber);
+    const tyre = new THREE.Mesh(new THREE.CylinderGeometry(R, R, TW, 20), dark);
     tyre.rotation.x = Math.PI / 2;
     pivot.add(tyre);
+    // A pale hub, so a turning wheel reads as turning.
+    const hub = new THREE.Mesh(new THREE.BoxGeometry(TW + 0.05, 1.1, 1.1), pale);
+    hub.rotation.x = Math.PI / 2;
+    pivot.add(hub);
     return pivot;
   };
 
   const wheels = new THREE.Group();
   wheels.name = 'wheels';
-  wheels.add(wheel(backX, 3), wheel(backX, D - 3));
+  wheels.add(wheel(10, 3.5), wheel(10, D - 3.5));
   g.add(wheels);
 
   // The front pair swings on the steering coil, about a vertical axis.
   const axle = new THREE.Group();
   axle.name = 'axle';
-  axle.position.set(steerX, 0, D / 2);
-  axle.add(wheel(0, -(D / 2 - 3)), wheel(0, D / 2 - 3));
+  axle.position.set(W - 10, 0, cz);
+  axle.add(wheel(0, -(cz - 3.5)), wheel(0, cz - 3.5));
   g.add(axle);
 
-  g.add(box(W - 2, 7, D - 2, shell, W / 2, 5, D / 2));
-  const body = box(W - 14, 11, D - 12, shell, W / 2 + 5, chassisTop, D / 2);
-  body.name = 'chassis';
-  g.add(body);
+  // The base: a dark platform, wide enough to carry the pads at its rear.
+  const base = box(W - 8, 4.5, D - 1, dark, cx, R, cz);
+  base.name = 'chassis';
+  g.add(base);
+  g.add(box(W - 11, BASE_TOP - R - 4.5, D - 5, pale, cx, R + 4.5, cz));
 
-  const head = new THREE.Mesh(new THREE.SphereGeometry(8.5, 28, 20), dark);
+  // Torso, standing on the platform, with its chest badge.
+  const torsoTop = 29;
+  g.add(box(W - 15, torsoTop - BASE_TOP, D - 11, pale, cx, BASE_TOP, cz));
+  g.add(box(W - 15, 5, D - 11, dark, cx, BASE_TOP, cz));
+  const badge = new THREE.Mesh(new THREE.CylinderGeometry(2.3, 2.3, 0.7, 24), pale);
+  badge.rotation.z = Math.PI / 2;
+  badge.position.set(cx + (W - 15) / 2, 22, cz);
+  g.add(badge);
+
+  // Arms: thin, black, hanging from the shoulders with a gripper at the end.
+  for (const side of [-1, 1]) {
+    const x = cx - 3;
+    const z = cz + side * (D - 11) / 2;
+    g.add(box(2.6, 11, 2.8, dark, x, torsoTop - 11, z));
+    g.add(box(2.1, 8, 2.2, dark, x - 1.2, torsoTop - 18, z));
+    g.add(box(2.4, 1.4, 2.6, dark, x - 2.4, torsoTop - 18.8, z));
+  }
+
+  // Neck, then the head: a glossy dome with two big ring eyes facing +x.
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.2, 2.4, 20), dark);
+  neck.position.set(cx, torsoTop + 1.2, cz);
+  g.add(neck);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(11.5, 30, 22), glass);
   head.name = 'head';
-  head.position.set(W / 2 + 5, 30, D / 2);
-  head.scale.set(1, 0.9, 1.05);
+  head.position.set(cx, torsoTop + 9, cz);
+  head.scale.set(1, 0.88, 1.05);
   g.add(head);
   for (const side of [-1, 1]) {
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(3.1, 0.85, 10, 40), eyeMat);
-    ring.rotation.y = Math.PI / 2;
-    ring.position.set(W / 2 + 12.6, 31, D / 2 + side * 4.2);
-    g.add(ring);
+    const eye = new THREE.Mesh(new THREE.TorusGeometry(3.5, 0.8, 10, 36), ring);
+    eye.rotation.y = Math.PI / 2;
+    eye.position.set(cx + 9.6, torsoTop + 10.2, cz + side * 4.9);
+    g.add(eye);
   }
 
-  // The pads, and their names on the chassis behind them, turned to read along
-  // the rear edge as the silk on a real board does.
+  // The pads, and their names on the platform behind them.
   const gold = mat('metal', GOLD);
   for (const p of PARTS.toy.pins) {
-    g.add(box(1.5, 0.3, 2.2, gold, 1.4, chassisTop, p.y));
-    anchors.set(p.name, new THREE.Vector3(1.4, chassisTop + 0.3, p.y));
+    g.add(box(1.6, 0.35, 2.2, gold, 5.4, BASE_TOP, p.y));
+    anchors.set(p.name, new THREE.Vector3(5.4, BASE_TOP + 0.35, p.y));
   }
-  const tex = texture('silk:toy', () => canvasTexture(W - 2, D - 2, 64, (ctx) => {
-    ctx.translate((W - 2) / 2 - W / 2, (D - 2) / 2 - D / 2);
+  const tex = texture('silk:toy', () => canvasTexture(W - 8, D - 1, 64, (ctx) => {
+    ctx.translate((W - 8) / 2 - cx, (D - 1) / 2 - cz);
     ctx.fillStyle = 'rgba(245,245,240,0.92)';
     for (const p of PARTS.toy.pins) {
       ctx.save();
-      ctx.translate(4.4, p.y + 1);
+      ctx.translate(7.0, p.y + 1);
       ctx.rotate(-Math.PI / 2);
       label(ctx, p.name, 0, 0, 0.55, 6);
       ctx.restore();
     }
   }));
-  g.add(decal(tex, W - 2, D - 2, W / 2, chassisTop + 0.02, D / 2, burnt));
+  g.add(decal(tex, W - 8, D - 1, cx, BASE_TOP + 0.02, cz, burnt));
 
-  g.add(contactShadow(W + 4, D + 4, W / 2, 0.03, D / 2 + 0.5));
+  g.add(contactShadow(W + 4, D + 4, cx, 0.03, cz + 0.5));
   return { group: g, anchors };
 }
 
