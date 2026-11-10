@@ -22,7 +22,7 @@ import {
 } from './meshes.js';
 import { BIN } from '../layout.js';
 import { createWandState } from '../wand-state.js';
-import { CAR, obstacles, stepCar } from '../car.js';
+import { CAR, actionAt, obstacles, stepCar } from '../car.js';
 
 /** @typedef {import('../bench.js').Bench} Bench */
 /** @typedef {import('../bench.js').Placed} Placed */
@@ -489,7 +489,9 @@ export function createWorld(canvas) {
    * the pose the ticker has carried it to. The pose's origin is the part's
    * `U3A` pad, exactly like `bench.js`, so the rules in `sim/car.js` and the
    * group the scene moves are the same numbers.
-   * @type {Map<string, { action: { wheels: string, steer: string }, pose: { x: number, z: number, heading: number } }>}
+   * `until` is when the last order runs out: a `move` ends by itself, so the
+   * scene coasts a toy that stops hearing renewals.
+   * @type {Map<string, { action: { wheels: string, steer: string }, until: number, pose: { x: number, z: number, heading: number } }>}
    */
   const driving = new Map();
   /** @type {((id: string, pose: { x: number, z: number, heading: number }, blocked: string | null) => void) | null} */
@@ -544,11 +546,13 @@ export function createWorld(canvas) {
 
   /**
    * What one toy should be doing. A moving action starts it; anything else
-   * stops it and says where it came to rest, once.
+   * stops it and says where it came to rest, once. `ms` is the order's own
+   * length, as the protocol's `move` carries it: no renewal, no movement.
    * @param {string} id
    * @param {{ wheels: string, steer: string }} action
+   * @param {number} [ms]
    */
-  function drive(id, action) {
+  function drive(id, action, ms = Infinity) {
     const p = current?.placed.find((q) => q.id === id);
     if (!p || !built.get(p)) return;
     const moving = action.wheels === 'forward' || action.wheels === 'backward';
@@ -558,11 +562,13 @@ export function createWorld(canvas) {
       }
       return;
     }
+    const until = ms === Infinity ? Infinity : performance.now() + ms;
     const running = driving.get(id);
     if (running) {
       running.action = action;
+      running.until = until;
     } else {
-      driving.set(id, { action, pose: { x: p.at.x, z: p.at.z, heading: p.heading ?? p.rot } });
+      driving.set(id, { action, until, pose: { x: p.at.x, z: p.at.z, heading: p.heading ?? p.rot } });
       lastDriveMs = performance.now();
     }
     requestRender();
@@ -587,7 +593,13 @@ export function createWorld(canvas) {
         driving.delete(id);
         continue;
       }
-      const step = stepCar(t.pose, t.action, dt, {
+      const action = actionAt(t.action, t.until, now);
+      if (action.wheels === 'coast') {
+        driving.delete(id);
+        parked?.(id, t.pose, null);
+        continue;
+      }
+      const step = stepCar(t.pose, action, dt, {
         bounds: TABLE_BOUNDS,
         obstacles: obstacles(b, id),
         leash: leashFor(id),
@@ -596,13 +608,13 @@ export function createWorld(canvas) {
       g.position.set(step.pose.x, 0, step.pose.z);
       g.rotation.y = -THREE.MathUtils.degToRad(step.pose.heading);
       // Wheels turn with the ground they cover; the steering axle swings over.
-      const travel = (CAR.speed * dt) / 5.5 * (t.action.wheels === 'forward' ? 1 : -1);
+      const travel = (CAR.speed * dt) / 5.5 * (action.wheels === 'forward' ? 1 : -1);
       for (const group of ['wheels', 'axle']) {
         for (const w of g.getObjectByName(group)?.children ?? []) w.rotation.z -= travel;
       }
       const axle = g.getObjectByName('axle');
       if (axle) {
-        const lock = t.action.steer === 'left' ? 0.32 : t.action.steer === 'right' ? -0.32 : 0;
+        const lock = action.steer === 'left' ? 0.32 : action.steer === 'right' ? -0.32 : 0;
         axle.rotation.y += (lock - axle.rotation.y) * Math.min(1, dt / 80);
       }
       relayWiresFor(id);

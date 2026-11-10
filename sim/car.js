@@ -176,6 +176,19 @@ export function centreOf(pose) {
 }
 
 /**
+ * What a toy is doing at `now`: the last order while it lasts, then low pins.
+ * This is the firmware's `motion_now` rule — a `move` ends by itself — so a
+ * body that stops hearing renewals coasts to a stop with nobody telling it.
+ * @param {{ wheels: string, steer: string } | null} order
+ * @param {number} until when the order runs out, on the caller's clock
+ * @param {number} now
+ * @returns {{ wheels: string, steer: string }}
+ */
+export function actionAt(order, until, now) {
+  return order && now < until ? order : { wheels: 'coast', steer: 'centred' };
+}
+
+/**
  * Everything solid the toy can bump into: every board's outline, every part's
  * footprint except the toy itself, and the bin.
  * @param {import('./bench.js').Bench} b

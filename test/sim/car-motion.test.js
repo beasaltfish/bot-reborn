@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { addPart } from '../../sim/bench.js';
 import { BIN } from '../../sim/layout.js';
-import { CAR, centreOf, obstacles, overlaps, stepCar } from '../../sim/car.js';
+import { CAR, actionAt, centreOf, obstacles, overlaps, stepCar } from '../../sim/car.js';
 
 const BOUNDS = { x0: -120, x1: 120, z0: -70, z1: 70 };
 /** Ground with nothing on it but the mat: these tests are geometry, not benches. */
@@ -97,4 +97,14 @@ test('obstacles are the boards, the other parts and the bin, never the toy itsel
   assert.equal(rects.length, 2, JSON.stringify(rects)); // the board and the bin
   assert.ok(rects.some((r) => r.x0 < -32 && r.x1 > 32), 'bb1 spans the middle');
   assert.ok(rects.some((r) => r.x0 === BIN.x - BIN.size / 2 && r.z1 === BIN.z + BIN.size / 2), 'the bin');
+});
+
+test('an order runs for its ms and then the pins go low, as motion_now does', () => {
+  // firmware/test/test_motion.c pins the same boundary: 1599 is still moving,
+  // 1600 is stop/straight, because a move ends by itself.
+  const go = { wheels: 'forward', steer: 'left' };
+  assert.deepEqual(actionAt(go, 1600, 1599), go);
+  assert.deepEqual(actionAt(go, 1600, 1600), { wheels: 'coast', steer: 'centred' });
+  assert.deepEqual(actionAt(null, 1600, 100), { wheels: 'coast', steer: 'centred' });
+  assert.deepEqual(actionAt(go, Infinity, 1e9), go);
 });

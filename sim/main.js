@@ -262,8 +262,9 @@ function movingToys() {
 }
 
 /** A `move` from the brain: the four levels once, then each toy's own wiring. */
-function driveMove(/** @type {string} */ drive, /** @type {string} */ steer) {
+function driveMove(/** @type {{ drive: string, steer: string, ms: number }} */ msg) {
   if (!powered) return;
+  const { drive, steer } = msg;
   if (!Object.keys(powered.toys).length) {
     return panels.status('No toy robot on the bench — add one from Parts');
   }
@@ -276,7 +277,8 @@ function driveMove(/** @type {string} */ drive, /** @type {string} */ steer) {
       panels.status('A driver on the toy shorted and burnt — drag it to the bin for a fresh one');
       continue;
     }
-    world.drive(id, action);
+    delete blocks[id];
+    world.drive(id, action, msg.ms);
   }
 }
 
@@ -402,7 +404,7 @@ async function connect(mine, id, name, outcome, ending = null) {
       // A stale session must not stop the toys of the one that replaced it.
       onEnd: (msg) => { if (!live()) return; driveStop(); line.end = msg; effects.setAlive(false); showLine(); },
       onLost: () => { if (!live()) return; driveStop(); line.lost = true; showLine(); },
-      onMove: (msg) => { if (live()) driveMove(msg.drive, msg.steer); },
+      onMove: (msg) => { if (live()) driveMove(msg); },
       onStop: () => { if (live()) driveStop(); },
       onWelcome: () => { if (!live()) return; line.lost = false; line.ending = ending; if (line.state === 'connecting…') line.state = 'connected'; showLine(); },
       // The bench's screens connect the way the firmware does, with their own
