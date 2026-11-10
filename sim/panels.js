@@ -71,10 +71,11 @@ const BIN = [
 
 /** Where each pin sits on the drawing: the ESP32 on the left, the modules on the right. */
 const LAYOUT = {
-  esp: { x: 30, y: 30, w: 120, h: 280, title: 'ESP32-S3', side: 'right', pins: { '3V3': 64, '5V': 92, GND: 120, GPIO12: 172, GPIO13: 200, GPIO14: 228, GPIO15: 256 } },
+  esp: { x: 30, y: 30, w: 120, h: 350, title: 'ESP32-S3', side: 'right', pins: { '3V3': 64, '5V': 92, GND: 120, GPIO12: 172, GPIO13: 200, GPIO14: 228, GPIO15: 256, GPIO4: 292, GPIO5: 314, GPIO6: 336, GPIO7: 358 } },
   mic: { x: 430, y: 20, w: 110, h: 160, title: 'INMP441', side: 'left', pins: { VDD: 50, GND: 72, 'L/R': 94, SCK: 116, WS: 138, SD: 160 } },
   amp: { x: 430, y: 200, w: 110, h: 150, title: 'MAX98357A', side: 'left', pins: { Vin: 230, GND: 252, BCLK: 274, LRC: 296, DIN: 318, '+': 270, '-': 304 } },
   spk: { x: 590, y: 236, w: 56, h: 84, title: 'Speaker', side: 'left', pins: { '+': 270, '-': 304 } },
+  toy: { x: 430, y: 370, w: 110, h: 110, title: 'Toy robot', side: 'left', pins: { U3A: 388, U3B: 408, U5A: 428, U5B: 448, GND: 468 } },
 };
 
 /** @param {string} point @returns {{ x: number, y: number }} */
@@ -94,7 +95,7 @@ function kindOf(l) {
 }
 
 function diagram() {
-  const s = svg('svg', { viewBox: '0 0 670 360', role: 'img', 'aria-label': 'Schematic of the target wiring' });
+  const s = svg('svg', { viewBox: '0 0 670 500', role: 'img', 'aria-label': 'Schematic of the target wiring' });
   for (const [id, box] of Object.entries(LAYOUT)) {
     s.append(svg('rect', { x: box.x, y: box.y, width: box.w, height: box.h, rx: 6, class: 'chip' }));
     const t = svg('text', { x: box.x + box.w / 2, y: box.y + 18, class: 'title' });
@@ -118,7 +119,9 @@ function diagram() {
     const b = where(l.b);
     let d;
     if (l.b.startsWith('esp:')) {
-      const x = 180 + lane++ * 19;
+      // Sixteen links end on the ESP32 now, so the lanes are closer together:
+      // the last one has to stay left of the modules column at x = 430.
+      const x = 180 + lane++ * 16;
       d = `M${b.x} ${b.y} H${x} V${a.y} H${a.x}`;
       turns.set(l.b, [...(turns.get(l.b) ?? []), { x, y: b.y, kind: kindOf(l) }]);
     } else {
@@ -192,17 +195,28 @@ export function createPanels(opts) {
   function links(all, screenIds) {
     list.replaceChildren();
     let screens = false;
+    let toys = false;
     all.forEach((l, i) => {
       const isScreen = screenIds.includes(l.a.slice(0, l.a.indexOf(':')));
       if (isScreen && !screens) {
         screens = true;
         list.append(el('li', { class: 'section' }, ['Screen']));
       }
+      const isToy = l.a.startsWith('toy:') || l.b.startsWith('toy:');
+      if (isToy && !toys) {
+        toys = true;
+        list.append(el('li', { class: 'section' }, ['Toy robot']));
+      }
       list.append(row(l, i));
     });
     if (screens) {
       list.append(el('li', { class: 'section note' }, [
         'Only one kind of screen at a time: the firmware drives the model you pick on its serial console.',
+      ]));
+    }
+    if (toys) {
+      list.append(el('li', { class: 'section note' }, [
+        'U3 drives the wheels and U5 swings the steering axle: four inputs, one shared ground.',
       ]));
     }
   }
