@@ -38,6 +38,7 @@ foreach(src ${TESTS})
   target_compile_options(${name} PRIVATE -Wall -Wextra -Werror)
   target_compile_definitions(${name} PRIVATE VECTORS="${CMAKE_CURRENT_SOURCE_DIR}/brain-messages.json"
                                           SHAKE_CASES="${CMAKE_CURRENT_SOURCE_DIR}/shake-cases.json"
+                                          MOTOR_CASES="${CMAKE_CURRENT_SOURCE_DIR}/motor-cases.json"
                                           SCREENS_JSON="${CMAKE_CURRENT_SOURCE_DIR}/../../core/screens.json")
   add_test(NAME ${name} COMMAND ${name})
 endforeach()
