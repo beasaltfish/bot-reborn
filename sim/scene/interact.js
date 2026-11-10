@@ -20,6 +20,7 @@ import { place, moveBoard, trash, addPart, addBoard, addWire, removeWire, pinPoi
 import { nets } from '../netlist.js';
 import { wireColor } from '../wire-color.js';
 import { snapPart, snapBoard, freeSpot, partFootprint } from '../snap.js';
+import { CAR, centreOf } from '../car.js';
 import { BOARD_TOP, buildWire, dispose } from './meshes.js';
 import { createShake, runMeter } from '../shake.js';
 import { thunk, buzz, click, tick, pop } from './sounds.js';
@@ -185,7 +186,7 @@ export function attachInteraction(world, getBench, setBench, opts) {
    *   at: { x: number, z: number } | null, raw: { x: number, z: number },
    *   origin: { x: number, z: number }, last: PointerEvent, overBin?: boolean,
    *   shakeFrom?: { x: number, y: number },
-   *   heading?: number, lastX?: number,
+   *   heading?: number,
    * }} PartDrag
    * @typedef {{
    *   kind: 'board', id: string, group: THREE.Object3D, rot: Placed['rot'], baseRot: Placed['rot'],
@@ -539,25 +540,34 @@ export function attachInteraction(world, getBench, setBench, opts) {
     light(null);
     canvas.style.cursor = 'grabbing';
     say(d.def.id === 'toy'
-      ? 'R turns it 90° · Shift-drag aims it · drop it on the table'
+      ? 'R turns it about its middle · drop it on the table'
       : 'R to rotate · drop it on the table, or on a board');
   }
 
   /**
-   * A toy is not on the grid and it drives where it points, so a hand can aim
-   * it at any angle: Shift + drag turns it about its own origin instead of
-   * moving it. `rot` follows along as the nearest quarter turn, which is what
-   * the bench's own rules (pins, footprints) still read.
+   * A toy turns about its own middle. Every other part turns about the pin in
+   * the hand, which is right for something you press into a board; a toy is a
+   * body you aim, and swinging it round a corner reads as sliding.
    * @param {PartDrag} d
-   * @param {PointerEvent} e
+   * @param {number} step degrees
    */
-  function aimToy(d, e) {
-    const lastX = d.lastX ?? e.clientX;
-    d.lastX = e.clientX;
-    d.heading = (d.heading ?? d.rot) - (e.clientX - lastX) * 0.6;
-    d.rot = /** @type {Placed['rot']} */ ((((Math.round(d.heading / 90) * 90) % 360) + 360) % 360);
-    d.group.rotation.y = deg(d.heading);
-    say(`Facing ${Math.round(((-d.heading % 360) + 360) % 360)}° · let go to place it`);
+  function turnToy(d, step) {
+    const from = d.origin ?? d.at ?? { x: d.group.position.x, z: d.group.position.z };
+    const centre = centreOf({ ...from, heading: d.heading ?? d.rot });
+    const heading = (d.heading ?? d.rot) + step;
+    d.heading = heading;
+    d.rot = /** @type {Placed['rot']} */ ((((Math.round(heading / 90) * 90) % 360) + 360) % 360);
+    // The middle stays put: the origin moves to wherever the new facing needs it.
+    const offset = centreOf({ x: 0, z: 0, heading });
+    const origin = { x: centre.x - offset.x, z: centre.z - offset.z };
+    const p = onPlane();
+    if (p) d.offset.set(origin.x - p.x, 0, origin.z - p.z);
+    d.origin = origin;
+    d.at = { x: origin.x, z: origin.z };
+    d.group.position.set(origin.x, d.group.position.y, origin.z);
+    d.group.rotation.y = deg(heading);
+    say(`Facing ${Math.round(((360 - (heading % 360)) % 360))}° · let go to place it`);
+    if (wiredOnly(d.def)) world.refreshWires();
     world.requestRender();
   }
 
@@ -686,7 +696,7 @@ export function attachInteraction(world, getBench, setBench, opts) {
       world.requestRender();
       return;
     }
-    setBench(place(b, d.id, at, d.rot, seated));
+    setBench(place(b, d.id, at, d.rot, seated, d.heading));
     if (seated) {
       seat(d.id);
       click();
@@ -1049,11 +1059,7 @@ export function attachInteraction(world, getBench, setBench, opts) {
       drag.last = e;
       if (!drag.lifted && wandered(e, drag)) lift(drag);
       if (drag.lifted) {
-        if (e.shiftKey && drag.def.id === 'toy') aimToy(drag, e);
-        else {
-          drag.lastX = undefined;
-          carry(drag);
-        }
+        carry(drag);
         feedShake(drag, e);
       }
     } else if (drag.kind === 'board') {
@@ -1129,9 +1135,14 @@ export function attachInteraction(world, getBench, setBench, opts) {
   addEventListener('keydown', (e) => {
     if (!drag || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
     if (e.code === 'Escape') cancel();
-    else if (e.code === 'KeyR' && !e.repeat && !e.metaKey && !e.ctrlKey) {
-      if (drag.kind === 'part' && drag.lifted) turn(drag);
-      if (drag.kind === 'board' && drag.lifted) turnBoard(drag);
+    else if (e.code === 'KeyR' && !e.metaKey && !e.ctrlKey) {
+      // A held R keeps turning a toy, so a few taps aim it anywhere; every
+      // other part still takes one quarter turn per press.
+      if (drag.kind === 'part' && drag.lifted) {
+        if (drag.def.id === 'toy') turnToy(drag, 15);
+        else if (!e.repeat) turn(drag);
+      }
+      if (drag.kind === 'board' && drag.lifted && !e.repeat) turnBoard(drag);
     }
   });
   addEventListener('blur', () => cancel());

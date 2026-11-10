@@ -111,3 +111,17 @@ test('an order runs for its ms and then the pins go low, as motion_now does', ()
   assert.deepEqual(actionAt(null, 1600, 100), { wheels: 'coast', steer: 'centred' });
   assert.deepEqual(actionAt(go, Infinity, 1e9), go);
 });
+
+test('turning a toy on the bench keeps its middle where the hand left it', () => {
+  // What the R key does: the facing changes, the body's centre does not move.
+  // (sim/scene/interact.js builds the new origin exactly this way.)
+  const before = centreOf({ x: -55, z: -55, heading: 0 });
+  for (const step of [15, 90, 137, 270]) {
+    const heading = step;
+    const offset = centreOf({ x: 0, z: 0, heading });
+    const origin = { x: before.x - offset.x, z: before.z - offset.z };
+    const after = centreOf({ ...origin, heading });
+    assert.ok(Math.abs(after.x - before.x) < 1e-9, `${step}: ${after.x} vs ${before.x}`);
+    assert.ok(Math.abs(after.z - before.z) < 1e-9, `${step}: ${after.z} vs ${before.z}`);
+  }
+});
