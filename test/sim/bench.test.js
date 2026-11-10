@@ -236,3 +236,14 @@ test('a heading that is not a number is refused, and dragging resets it to rot',
   const turned = place(b, 'toy', { x: -90, z: 25 }, 90, false);
   assert.equal(/** @type {Placed} */ (turned.placed.find((/** @type {Placed} */ p) => p.id === 'toy')).heading, 90);
 });
+
+test('a toy let go at an angle keeps that facing, not the nearest quarter turn', () => {
+  const b = addPart(emptyBench(), 'toy', { x: -55, z: -55 }).bench;
+  const turned = place(b, 'toy', { x: -50, z: -50 }, 90, false, 37);
+  const toy = /** @type {Placed} */ (turned.placed.find((p) => p.id === 'toy'));
+  assert.equal(toy.heading, 37);
+  assert.equal(toy.rot, 90);
+  // And a drop with no angle given still faces the quarter turn it was put down at.
+  const plain = place(b, 'toy', { x: -50, z: -50 }, 180, false);
+  assert.equal(/** @type {Placed} */ (plain.placed.find((p) => p.id === 'toy')).heading, 180);
+});

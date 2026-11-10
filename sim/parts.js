@@ -138,7 +138,7 @@ const FIXED = {
     id: 'toy',
     label: 'Toy robot',
     prefix: 'toy',
-    size: { w: 100, d: 80, h: 150 },
+    size: { w: 80, d: 70, h: 120 },
     pins: ['U3A', 'U3B', 'U5A', 'U5B', 'GND'].map((name, i) => ({ name, x: 0, y: i * 6, wireOnly: true })),
     internal: [],
     onBoard: false,

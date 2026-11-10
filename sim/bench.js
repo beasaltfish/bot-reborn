@@ -139,9 +139,10 @@ export function pinPoints(b, placed) {
  * @param {{ x: number, z: number }} at
  * @param {Rot} rot
  * @param {boolean} seated
+ * @param {number} [heading] a toy's own facing, when the hand turned it freely
  * @returns {Bench}
  */
-export function place(b, id, at, rot, seated) {
+export function place(b, id, at, rot, seated, heading) {
   const target = b.placed.find((p) => p.id === id);
   if (!target) throw new Error(`no part ${id}`);
   if (seated) {
@@ -155,7 +156,7 @@ export function place(b, id, at, rot, seated) {
     placed: b.placed.map((p) => (p === target
       // A toy is driven at any angle, so its `heading` is separate from the
       // quarter turn; putting it down again by hand resets that facing.
-      ? { ...p, at: { x: at.x, z: at.z }, rot, seated, ...(target.part === 'toy' ? { heading: rot } : {}) }
+      ? { ...p, at: { x: at.x, z: at.z }, rot, seated, ...(target.part === 'toy' ? { heading: heading ?? rot } : {}) }
       : p)),
   };
 }

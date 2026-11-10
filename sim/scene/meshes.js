@@ -204,15 +204,16 @@ function decal(tex, w, d, x, y, z, burnt) {
 
 
 /**
- * The $4 toy robot as sold (docs/media/before.jpg): a big glossy black dome of
- * a head with two ring eyes, a pale boxy torso with a round badge on the chest,
- * two thin black arms with gripper hands, and a dark wheeled base underneath.
+ * The $4 toy robot as sold (docs/media/before.jpg and phone-mount.jpg): a big
+ * glossy black dome of a head with two ring eyes, a dark tapered torso with a
+ * grey chest plate and a round badge, two black arms with gripper hands, and a
+ * dark wheeled base.
  *
- * The group's origin is the `U3A` pad at the rear-left corner of the base and
- * the body is centred on (W/2, D/2), which is exactly what `CAR.half` and the
- * collision circle in `sim/car.js` assume: what you see and what it bumps into
- * are the same rectangle. The wheels and the steering pair are named groups so
- * the world can spin and swing them without a second reference table.
+ * The group's origin is the `U3A` pad at the rear-left corner of the base, and
+ * the body is centred on (W/2, D/2) — exactly what `CAR.half` and the collision
+ * circle in `sim/car.js` assume, and both come from `PARTS.toy.size`. Nothing
+ * overlaps anything it should not: each layer stands on the one below, so no
+ * two faces are left coplanar to fight over the depth buffer.
  * @param {{ burnt: boolean }} state
  * @returns {PartMesh}
  */
@@ -225,14 +226,15 @@ function buildCar(state) {
   /** @type {Map<string, THREE.Vector3>} */
   const anchors = new Map();
 
-  const pale = mat('gloss', burnt ? charred(0xe8e9e6) : 0xe8e9e6);
-  const dark = mat('matte', burnt ? charred(0x15171a) : 0x15171a);
-  const glass = mat('gloss', burnt ? charred(0x101114) : 0x101114);
-  const ring = mat('gloss', burnt ? charred(0xcfd6dd) : 0xcfd6dd);
+  const black = mat('matte', burnt ? charred(0x1b1c1f) : 0x1b1c1f);
+  const panel = mat('gloss', burnt ? charred(0x2c2e32) : 0x2c2e32);
+  const grey = mat('gloss', burnt ? charred(0x74777c) : 0x74777c);
+  const glass = mat('gloss', burnt ? charred(0x0d0e10) : 0x0d0e10);
+  const ring = mat('gloss', burnt ? charred(0xc7ced6) : 0xc7ced6);
 
-  const R = 5.5;          // wheel radius
-  const TW = 3.4;         // wheel width
-  const BASE_TOP = 10;    // the platform the torso stands on
+  const R = 4.4;          // wheel radius
+  const TW = 2.8;         // wheel width
+  const DECK = 10.4;      // the platform the torso stands on
   const cx = W / 2;
   const cz = D / 2;
 
@@ -241,11 +243,11 @@ function buildCar(state) {
     const pivot = new THREE.Group();
     pivot.name = 'wheel';
     pivot.position.set(x, R, z);
-    const tyre = new THREE.Mesh(new THREE.CylinderGeometry(R, R, TW, 20), dark);
+    const tyre = new THREE.Mesh(new THREE.CylinderGeometry(R, R, TW, 20), black);
     tyre.rotation.x = Math.PI / 2;
     pivot.add(tyre);
-    // A pale hub, so a turning wheel reads as turning.
-    const hub = new THREE.Mesh(new THREE.BoxGeometry(TW + 0.05, 1.1, 1.1), pale);
+    // A pale hub: without it a turning wheel looks like a still one.
+    const hub = new THREE.Mesh(new THREE.BoxGeometry(TW + 0.04, 0.9, 0.9), grey);
     hub.rotation.x = Math.PI / 2;
     pivot.add(hub);
     return pivot;
@@ -253,74 +255,79 @@ function buildCar(state) {
 
   const wheels = new THREE.Group();
   wheels.name = 'wheels';
-  wheels.add(wheel(10, 3.5), wheel(10, D - 3.5));
+  wheels.add(wheel(7, 2.6), wheel(7, D - 2.6));
   g.add(wheels);
 
   // The front pair swings on the steering coil, about a vertical axis.
   const axle = new THREE.Group();
   axle.name = 'axle';
-  axle.position.set(W - 10, 0, cz);
-  axle.add(wheel(0, -(cz - 3.5)), wheel(0, cz - 3.5));
+  axle.position.set(W - 7, 0, cz);
+  axle.add(wheel(0, -(cz - 2.6)), wheel(0, cz - 2.6));
   g.add(axle);
 
-  // The base: a dark platform, wide enough to carry the pads at its rear.
-  const base = box(W - 8, 4.5, D - 1, dark, cx, R, cz);
+  // The base: a black platform, then a slightly raised deck the pads sit on.
+  const base = box(W - 3, R + 0.2, D - 3, black, cx, R - 0.2, cz);
   base.name = 'chassis';
   g.add(base);
-  g.add(box(W - 11, BASE_TOP - R - 4.5, D - 5, pale, cx, R + 4.5, cz));
+  g.add(box(W - 6, DECK - R - 0.2, D, panel, cx, R + 0.2, cz));
 
-  // Torso, standing on the platform, with its chest badge.
-  const torsoTop = 29;
-  g.add(box(W - 15, torsoTop - BASE_TOP, D - 11, pale, cx, BASE_TOP, cz));
-  g.add(box(W - 15, 5, D - 11, dark, cx, BASE_TOP, cz));
-  const badge = new THREE.Mesh(new THREE.CylinderGeometry(2.3, 2.3, 0.7, 24), pale);
+  // Torso: a narrow waist under wider shoulders, so it is not a cube.
+  const waistTop = 18.4;
+  g.add(box(W - 13, waistTop - DECK, D - 13, panel, cx, DECK, cz));
+  const shoulders = box(W - 10, 9, D - 10, glass, cx, waistTop, cz);
+  shoulders.name = 'shoulders';
+  g.add(shoulders);
+  // The chest plate and its round badge, on the front face.
+  g.add(box(0.7, 11, D - 15, grey, cx + (W - 10) / 2 + 0.05, DECK + 1.5, cz));
+  const badge = new THREE.Mesh(new THREE.CylinderGeometry(1.7, 1.7, 0.6, 22), grey);
   badge.rotation.z = Math.PI / 2;
-  badge.position.set(cx + (W - 15) / 2, 22, cz);
+  badge.position.set(cx + (W - 10) / 2 + 0.5, waistTop + 5, cz);
   g.add(badge);
 
-  // Arms: thin, black, hanging from the shoulders with a gripper at the end.
+  // Arms: black, hanging from the shoulders, elbows and pincer hands in sight.
   for (const side of [-1, 1]) {
-    const x = cx - 3;
-    const z = cz + side * (D - 11) / 2;
-    g.add(box(2.6, 11, 2.8, dark, x, torsoTop - 11, z));
-    g.add(box(2.1, 8, 2.2, dark, x - 1.2, torsoTop - 18, z));
-    g.add(box(2.4, 1.4, 2.6, dark, x - 2.4, torsoTop - 18.8, z));
+    const z = cz + side * ((D - 10) / 2 + 1.2);
+    const x = cx - 2.5;
+    g.add(box(2.6, 8.5, 2.8, black, x, waistTop, z));
+    g.add(box(2.4, 7.5, 2.6, black, x - 1.4, 11.4, z));
+    g.add(box(1.1, 2.2, 2.2, grey, x - 2.6, 10.4, z - 0.7));
+    g.add(box(1.1, 2.2, 2.2, grey, x - 2.6, 10.4, z + 0.7));
   }
 
-  // Neck, then the head: a glossy dome with two big ring eyes facing +x.
-  const neck = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.2, 2.4, 20), dark);
-  neck.position.set(cx, torsoTop + 1.2, cz);
+  // Neck, then the head: a glossy black dome with two big ring eyes facing +x.
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.6, 1.8, 18), black);
+  neck.position.set(cx, waistTop + 9 + 0.9, cz);
   g.add(neck);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(11.5, 30, 22), glass);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(9.4, 30, 22), glass);
   head.name = 'head';
-  head.position.set(cx, torsoTop + 9, cz);
-  head.scale.set(1, 0.88, 1.05);
+  head.position.set(cx, waistTop + 18, cz);
+  head.scale.set(1, 0.86, 1.02);
   g.add(head);
   for (const side of [-1, 1]) {
-    const eye = new THREE.Mesh(new THREE.TorusGeometry(3.5, 0.8, 10, 36), ring);
+    const eye = new THREE.Mesh(new THREE.TorusGeometry(2.9, 0.65, 10, 34), ring);
     eye.rotation.y = Math.PI / 2;
-    eye.position.set(cx + 9.6, torsoTop + 10.2, cz + side * 4.9);
+    eye.position.set(cx + 8.1, waistTop + 19, cz + side * 3.9);
     g.add(eye);
   }
 
-  // The pads, and their names on the platform behind them.
+  // The pads, and their names on the deck behind them.
   const gold = mat('metal', GOLD);
   for (const p of PARTS.toy.pins) {
-    g.add(box(1.6, 0.35, 2.2, gold, 5.4, BASE_TOP, p.y));
-    anchors.set(p.name, new THREE.Vector3(5.4, BASE_TOP + 0.35, p.y));
+    g.add(box(1.5, 0.35, 2.0, gold, 4.8, DECK, p.y));
+    anchors.set(p.name, new THREE.Vector3(4.8, DECK + 0.35, p.y));
   }
-  const tex = texture('silk:toy', () => canvasTexture(W - 8, D - 1, 64, (ctx) => {
-    ctx.translate((W - 8) / 2 - cx, (D - 1) / 2 - cz);
-    ctx.fillStyle = 'rgba(245,245,240,0.92)';
+  const tex = texture('silk:toy', () => canvasTexture(W - 6, D, 64, (ctx) => {
+    ctx.translate((W - 6) / 2 - cx, D / 2 - cz);
+    ctx.fillStyle = 'rgba(230,236,242,0.9)';
     for (const p of PARTS.toy.pins) {
       ctx.save();
       ctx.translate(7.0, p.y + 1);
       ctx.rotate(-Math.PI / 2);
-      label(ctx, p.name, 0, 0, 0.55, 6);
+      label(ctx, p.name, 0, 0, 0.5, 5);
       ctx.restore();
     }
   }));
-  g.add(decal(tex, W - 8, D - 1, cx, BASE_TOP + 0.02, cz, burnt));
+  g.add(decal(tex, W - 6, D, cx, DECK + 0.02, cz, burnt));
 
   g.add(contactShadow(W + 4, D + 4, cx, 0.03, cz + 0.5));
   return { group: g, anchors };

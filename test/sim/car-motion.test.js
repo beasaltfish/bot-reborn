@@ -48,7 +48,9 @@ test('the mat edge stops it, and the body never leaves the mat', () => {
   const { pose, blocked } = stepCar(at(60, 0), forward, 4000, ground());
   assert.equal(blocked, 'edge');
   assert.equal(overlaps(pose, ground()), false);
-  assert.ok(pose.x < 76, String(pose.x));
+  // The origin stops where the body's edge meets the mat: no size hardcoded.
+  const reach = BOUNDS.x1 - CAR.radius - CAR.half.x;
+  assert.ok(pose.x <= reach + 1e-9 && pose.x > reach - 0.5, `${pose.x} vs ${reach}`);
 });
 
 test('a board in the way is stopped at, not overlapped', () => {
@@ -58,7 +60,8 @@ test('a board in the way is stopped at, not overlapped', () => {
   assert.equal(overlaps(pose, g), false);
   // It got right up to it: one more millisecond still hits.
   assert.equal(stepCar(pose, forward, 1, g).blocked, 'hit');
-  assert.ok(pose.x > -30 && pose.x < -24, String(pose.x));
+  const reach = 20 - CAR.radius - CAR.half.x;
+  assert.ok(pose.x <= reach + 1e-9 && pose.x > reach - 0.5, `${pose.x} vs ${reach}`);
 });
 
 test('being driven into a wall twice gives the same pose, not a jitter', () => {

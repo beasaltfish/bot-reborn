@@ -185,6 +185,7 @@ export function attachInteraction(world, getBench, setBench, opts) {
    *   at: { x: number, z: number } | null, raw: { x: number, z: number },
    *   origin: { x: number, z: number }, last: PointerEvent, overBin?: boolean,
    *   shakeFrom?: { x: number, y: number },
+   *   heading?: number, lastX?: number,
    * }} PartDrag
    * @typedef {{
    *   kind: 'board', id: string, group: THREE.Object3D, rot: Placed['rot'], baseRot: Placed['rot'],
@@ -537,7 +538,27 @@ export function attachInteraction(world, getBench, setBench, opts) {
     d.lifted = true;
     light(null);
     canvas.style.cursor = 'grabbing';
-    say('R to rotate · drop it on the table, or on a board');
+    say(d.def.id === 'toy'
+      ? 'R turns it 90° · Shift-drag aims it · drop it on the table'
+      : 'R to rotate · drop it on the table, or on a board');
+  }
+
+  /**
+   * A toy is not on the grid and it drives where it points, so a hand can aim
+   * it at any angle: Shift + drag turns it about its own origin instead of
+   * moving it. `rot` follows along as the nearest quarter turn, which is what
+   * the bench's own rules (pins, footprints) still read.
+   * @param {PartDrag} d
+   * @param {PointerEvent} e
+   */
+  function aimToy(d, e) {
+    const lastX = d.lastX ?? e.clientX;
+    d.lastX = e.clientX;
+    d.heading = (d.heading ?? d.rot) - (e.clientX - lastX) * 0.6;
+    d.rot = /** @type {Placed['rot']} */ ((((Math.round(d.heading / 90) * 90) % 360) + 360) % 360);
+    d.group.rotation.y = deg(d.heading);
+    say(`Facing ${Math.round(((-d.heading % 360) + 360) % 360)}° · let go to place it`);
+    world.requestRender();
   }
 
   /** @param {PartDrag} d */
@@ -564,7 +585,8 @@ export function attachInteraction(world, getBench, setBench, opts) {
       d.group.position.set(x, BOARD_TOP + HOVER, z);
       aim.set([]);
     }
-    d.group.rotation.y = deg(d.rot);
+    // An aimed toy keeps its angle while it is carried, not the quarter turn.
+    d.group.rotation.y = deg(d.heading ?? d.rot);
     if (wiredOnly(d.def)) world.refreshWires();
     world.requestRender();
   }
@@ -933,7 +955,7 @@ export function attachInteraction(world, getBench, setBench, opts) {
     if (!placed || !group) return;
     drag = {
       kind: 'part', id: added.id, def: PARTS[placed.part], group,
-      rot: placed.rot, home: { pos: group.position.clone(), rotY: group.rotation.y },
+      rot: placed.rot, heading: placed.heading ?? placed.rot, home: { pos: group.position.clone(), rotY: group.rotation.y },
       offset: new THREE.Vector3(0, 0, 0),
       x: e.clientX, y: e.clientY, lifted: false, at: placed.at, raw: { x: p.x, z: p.z },
       origin: { x: p.x, z: p.z }, last: e,
@@ -1027,7 +1049,11 @@ export function attachInteraction(world, getBench, setBench, opts) {
       drag.last = e;
       if (!drag.lifted && wandered(e, drag)) lift(drag);
       if (drag.lifted) {
-        carry(drag);
+        if (e.shiftKey && drag.def.id === 'toy') aimToy(drag, e);
+        else {
+          drag.lastX = undefined;
+          carry(drag);
+        }
         feedShake(drag, e);
       }
     } else if (drag.kind === 'board') {

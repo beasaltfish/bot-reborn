@@ -149,9 +149,14 @@ export function toyAction(wiring, levels) {
  * circle round the centre covers it whatever way it faces; using the origin
  * instead would let the drawn body slide half a car length into the bench.
  */
+const MM = 1 / 2.54;
+
 export const CAR = {
-  radius: 25.2,
-  half: { x: 19.685, z: 15.748 },
+  // Half-diagonal and half-extents of the body, from the part's own size: one
+  // place to resize the toy, and the circle, the mesh and the footprint move
+  // together.
+  radius: (Math.hypot(PARTS.toy.size.w, PARTS.toy.size.d) / 2) * MM,
+  half: { x: (PARTS.toy.size.w / 2) * MM, z: (PARTS.toy.size.d / 2) * MM },
   speed: 0.10,
   turn: 0.09,
   leash: 196.9,
