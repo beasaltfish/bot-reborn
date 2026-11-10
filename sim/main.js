@@ -7,8 +7,9 @@
 // goes in, the circuit is judged once, what burns burns, and the bench either
 // comes alive as a body or shows why not. Pulling the plug ends it.
 
-import { emptyBench, load, serialize, addPart, addBoard } from './bench.js';
+import { emptyBench, load, serialize, addPart, addBoard, park } from './bench.js';
 import { powerOn } from './power.js';
+import { motorLevels, toyAction } from './car.js';
 import { createWandFeed } from './wand-feed.js';
 import { createShakeDetector } from '../core/shake-detector.js';
 import { PARTS } from './parts.js';
@@ -246,6 +247,44 @@ function keepThisOne() {
   showLine();
 }
 
+/** What power-on made of this bench; null when the plug is out. */
+/** @type {import('./power.js').Outcome | null} */
+let powered = null;
+/** The last reason each toy stopped, so a repeated one is not re-announced. */
+/** @type {Record<string, string | null>} */
+const blocks = {};
+
+/** The toys that are part of the circuit: wired, and not burnt. */
+function movingToys() {
+  return /** @type {[string, { wiring: import('./car.js').Wiring, action: import('./car.js').ToyAction }][]} */ (
+    Object.entries(powered?.toys ?? {})
+  ).filter(([id, t]) => t.wiring.linked && !bench.placed.find((p) => p.id === id)?.burnt);
+}
+
+/** A `move` from the brain: the four levels once, then each toy's own wiring. */
+function driveMove(/** @type {string} */ drive, /** @type {string} */ steer) {
+  if (!powered) return;
+  if (!Object.keys(powered.toys).length) {
+    return panels.status('No toy robot on the bench — add one from Parts');
+  }
+  const levels = motorLevels(drive, steer);
+  for (const [id, t] of movingToys()) {
+    const action = toyAction(t.wiring, levels);
+    if (action.wheels === 'short' || action.steer === 'short') {
+      setBench({ ...bench, placed: bench.placed.map((p) => (p.id === id ? { ...p, burnt: true } : p)) });
+      effects.smoke(id);
+      panels.status('A driver on the toy shorted and burnt — drag it to the bin for a fresh one');
+      continue;
+    }
+    world.drive(id, action);
+  }
+}
+
+/** Stop every toy: the order ran out, the link dropped, or the plug came out. */
+function driveStop() {
+  for (const [id] of movingToys()) world.drive(id, { wheels: 'coast', steer: 'centred' });
+}
+
 /**
  * @param {{ need: 'any' | 'pet', ending: string } | null} [recipe] set when
  *   a recipe run plugged in: the character is then chosen for it, not picked by hand
@@ -261,8 +300,25 @@ async function plugIn(recipe = null) {
     bench = { ...bench, placed: bench.placed.map((p) => (outcome.burns.includes(p.id) ? { ...p, burnt: true } : p)) };
   }
   setBench(bench);
+  powered = outcome;
+  for (const key of Object.keys(blocks)) delete blocks[key];
   world.screens(outcome.parts);
   world.imu(outcome.parts);
+  world.onPark((id, pose, blocked) => {
+    setBench(park(bench, id, { x: pose.x, z: pose.z }, pose.heading));
+    if (!blocked || blocks[id] === blocked) return;
+    blocks[id] = blocked;
+    panels.status(/** @type {Record<string, string>} */ ({
+      hit: 'It\'s up against something — say "back up"',
+      edge: 'That\'s the edge of the mat',
+      taut: 'The wires are taut — the real build straps the board to the robot',
+      stuck: 'Move the toy off what it is standing on first',
+    })[blocked] ?? null);
+  });
+  // A pad wired to a supply is already driving the moment USB goes in.
+  for (const [id, t] of Object.entries(outcome.toys)) {
+    if (t.action.wheels === 'forward' || t.action.wheels === 'backward') world.drive(id, t.action);
+  }
   effects.playing(bench.placed
     .filter((p) => /** @type {any} */ (outcome.parts[p.id])?.kind === 'speaker' && /** @type {any} */ (outcome.parts[p.id]).playing)
     .map((p) => p.id));
@@ -343,8 +399,11 @@ async function connect(mine, id, name, outcome, ending = null) {
       },
       onFault: (msg) => { if (!live()) return; apiFor = id; line.api = faultText(msg); showLine(); },
       onLevel: (up, down) => { if (live()) effects.levels(up, down); },
-      onEnd: (msg) => { if (!live()) return; line.end = msg; effects.setAlive(false); showLine(); },
-      onLost: () => { if (!live()) return; line.lost = true; showLine(); },
+      // A stale session must not stop the toys of the one that replaced it.
+      onEnd: (msg) => { if (!live()) return; driveStop(); line.end = msg; effects.setAlive(false); showLine(); },
+      onLost: () => { if (!live()) return; driveStop(); line.lost = true; showLine(); },
+      onMove: (msg) => { if (live()) driveMove(msg.drive, msg.steer); },
+      onStop: () => { if (live()) driveStop(); },
       onWelcome: () => { if (!live()) return; line.lost = false; line.ending = ending; if (line.state === 'connecting…') line.state = 'connected'; showLine(); },
       // The bench's screens connect the way the firmware does, with their own
       // size; a character that is not a pet leaves them black (spec §5.5).
@@ -367,6 +426,8 @@ async function connect(mine, id, name, outcome, ending = null) {
 
 function unplug() {
   plugs++;
+  driveStop();
+  powered = null;
   session?.stop();
   session = null;
   clearInterval(wandTimer);

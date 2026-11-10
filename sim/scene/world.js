@@ -22,6 +22,7 @@ import {
 } from './meshes.js';
 import { BIN } from '../layout.js';
 import { createWandState } from '../wand-state.js';
+import { CAR, obstacles, stepCar } from '../car.js';
 
 /** @typedef {import('../bench.js').Bench} Bench */
 /** @typedef {import('../bench.js').Placed} Placed */
@@ -249,8 +250,9 @@ export function createWorld(canvas) {
    * chosen, not while something is being dragged — a camera that chases the
    * hand is what makes people seasick.
    * @param {Bench | null} b
+   * @param {boolean} [wide] also frame the whole mat: the toy drives across it
    */
-  function frameOf(b) {
+  function frameOf(b, wide = false) {
     let x0 = FRAME_MIN.cx - FRAME_MIN.w / 2;
     let x1 = FRAME_MIN.cx + FRAME_MIN.w / 2;
     let z0 = FRAME_MIN.cz - FRAME_MIN.d / 2;
@@ -274,6 +276,14 @@ export function createWorld(canvas) {
       z0 = Math.min(z0, p.at.z - FRAME_MARGIN);
       z1 = Math.max(z1, p.at.z + d * MM + FRAME_MARGIN);
     }
+    // A bench with a toy on it is looked at from further back in the orbit
+    // view: the toy can drive to the edge of the mat, so the mat is the frame.
+    if (wide) {
+      x0 = Math.min(x0, TABLE_BOUNDS.x0);
+      x1 = Math.max(x1, TABLE_BOUNDS.x1);
+      z0 = Math.min(z0, TABLE_BOUNDS.z0);
+      z1 = Math.max(z1, TABLE_BOUNDS.z1);
+    }
     // The bin too: something to throw things into has to be in sight.
     x0 = Math.min(x0, BIN.x - BIN.size / 2 - FRAME_MARGIN);
     x1 = Math.max(x1, BIN.x + BIN.size / 2 + FRAME_MARGIN);
@@ -284,7 +294,11 @@ export function createWorld(canvas) {
 
   /** @param {ViewMode} m @returns {Pose} */
   function poseFor(m) {
-    const frame = frameOf(framing ?? current);
+    const b = framing ?? current;
+    // Only the orbit view pulls back: the flat ones are for wiring, where the
+    // pin rows have to stay big enough to aim at.
+    const wide = m === 'orbit' && !!b?.placed.some((p) => p.part === 'toy');
+    const frame = frameOf(b, wide);
     const fitW = (frame.w * 1.06) / aspect;
     const target = new THREE.Vector3(frame.cx, BOARD_TOP, frame.cz);
     if (m === 'top') return { target, polar: 0.0001, azimuth: 0, height: Math.max(frame.d * 1.1, fitW), fov: NEAR_ORTHO_FOV, ortho: true };
@@ -469,6 +483,137 @@ export function createWorld(canvas) {
     pickables.push(...boards.children, ...parts.children, ...wires.children);
     requestRender();
   }
+
+  /**
+   * Toys being driven, by instance id: the action the page last handed in, and
+   * the pose the ticker has carried it to. The pose's origin is the part's
+   * `U3A` pad, exactly like `bench.js`, so the rules in `sim/car.js` and the
+   * group the scene moves are the same numbers.
+   * @type {Map<string, { action: { wheels: string, steer: string }, pose: { x: number, z: number, heading: number } }>}
+   */
+  const driving = new Map();
+  /** @type {((id: string, pose: { x: number, z: number, heading: number }, blocked: string | null) => void) | null} */
+  let parked = null;
+  let lastDriveMs = 0;
+
+  /** Where each of this toy's wires ends on the other side: the leash's points. */
+  function leashFor(/** @type {string} */ id) {
+    const b = current;
+    if (!b) return null;
+    /** @type {{ x: number, z: number }[]} */
+    const points = [];
+    for (const w of b.wires) {
+      const mine = w.a.startsWith(`${id}:`) ? w.a : w.b.startsWith(`${id}:`) ? w.b : null;
+      if (!mine) continue;
+      const far = pointPosition(b, mine === w.a ? w.b : w.a);
+      if (far) points.push({ x: far.x, z: far.z });
+    }
+    return points.length ? { points, radius: CAR.leash, slack: 24 } : null;
+  }
+
+  /**
+   * Redraw this part's wires only, from where its pins are now. A driving toy
+   * drags its own five wires and nothing else moves, so the rest of the bench
+   * is not rebuilt.
+   * @param {string} id
+   */
+  function relayWiresFor(id) {
+    const b = current;
+    if (!b) return;
+    const mine = (/** @type {string} */ point) => point.startsWith(`${id}:`);
+    for (const w of [...wires.children]) {
+      const own = w.userData.id ? b.wires.find((q) => q.id === w.userData.id) : null;
+      if (!own || !(mine(own.a) || mine(own.b))) continue;
+      wires.remove(w);
+      dispose(w);
+    }
+    for (const w of b.wires) {
+      if (!(mine(w.a) || mine(w.b))) continue;
+      const a = pointPosition(b, w.a);
+      const z = pointPosition(b, w.b);
+      if (!a || !z) continue;
+      const g = buildWire(a, z, w.color);
+      g.name = `wire:${w.id}`;
+      g.userData = { kind: 'wire', id: w.id };
+      wires.add(g);
+    }
+    pickables.length = 0;
+    pickables.push(...boards.children, ...parts.children, ...wires.children);
+    requestRender();
+  }
+
+  /**
+   * What one toy should be doing. A moving action starts it; anything else
+   * stops it and says where it came to rest, once.
+   * @param {string} id
+   * @param {{ wheels: string, steer: string }} action
+   */
+  function drive(id, action) {
+    const p = current?.placed.find((q) => q.id === id);
+    if (!p || !built.get(p)) return;
+    const moving = action.wheels === 'forward' || action.wheels === 'backward';
+    if (!moving) {
+      if (driving.delete(id)) {
+        parked?.(id, { x: p.at.x, z: p.at.z, heading: p.heading ?? p.rot }, null);
+      }
+      return;
+    }
+    const running = driving.get(id);
+    if (running) {
+      running.action = action;
+    } else {
+      driving.set(id, { action, pose: { x: p.at.x, z: p.at.z, heading: p.heading ?? p.rot } });
+      lastDriveMs = performance.now();
+    }
+    requestRender();
+  }
+
+  /** @param {(id: string, pose: any, blocked: string | null) => void} fn */
+  function onPark(fn) {
+    parked = fn;
+  }
+
+  // One ticker for every toy: it only exists while a toy is driving, and it
+  // keeps asking for frames until the last one stops.
+  tickers.add((now) => {
+    if (!driving.size || !current) return false;
+    const b = current;
+    const dt = Math.min(50, Math.max(0, now - lastDriveMs));
+    lastDriveMs = now;
+    for (const [id, t] of [...driving]) {
+      const p = b.placed.find((q) => q.id === id);
+      const g = p && built.get(p);
+      if (!p || !g) {
+        driving.delete(id);
+        continue;
+      }
+      const step = stepCar(t.pose, t.action, dt, {
+        bounds: TABLE_BOUNDS,
+        obstacles: obstacles(b, id),
+        leash: leashFor(id),
+      });
+      t.pose = step.pose;
+      g.position.set(step.pose.x, 0, step.pose.z);
+      g.rotation.y = -THREE.MathUtils.degToRad(step.pose.heading);
+      // Wheels turn with the ground they cover; the steering axle swings over.
+      const travel = (CAR.speed * dt) / 5.5 * (t.action.wheels === 'forward' ? 1 : -1);
+      for (const group of ['wheels', 'axle']) {
+        for (const w of g.getObjectByName(group)?.children ?? []) w.rotation.z -= travel;
+      }
+      const axle = g.getObjectByName('axle');
+      if (axle) {
+        const lock = t.action.steer === 'left' ? 0.32 : t.action.steer === 'right' ? -0.32 : 0;
+        axle.rotation.y += (lock - axle.rotation.y) * Math.min(1, dt / 80);
+      }
+      relayWiresFor(id);
+      if (step.blocked) {
+        driving.delete(id);
+        parked?.(id, step.pose, step.blocked);
+      }
+    }
+    requestRender();
+    return driving.size > 0;
+  });
 
   /** Which wands power-on found awake, kept outside the meshes like `screenLook`. */
   const wands = createWandState();
@@ -674,6 +819,8 @@ export function createWorld(canvas) {
     show,
     screens,
     imu,
+    drive,
+    onPark,
     shake,
     onWandLevel,
     refreshWires,

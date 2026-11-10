@@ -202,6 +202,7 @@ export function adminLink(id) {
  *   onEnd(msg: string): void,
  *   onLost?(): void, onWelcome?(): void,
  *   onFault?(msg: { part: string, status: number | null, kind: string }): void,
+ *   onMove?(msg: any): void, onStop?(): void,
  *   screen?: { model: import('../core/screens.js').Screen, onFrame(img: ImageBitmap): void },
  * }} o
  * onLost: the brain dropped and the link is retrying by itself; onWelcome:
@@ -260,7 +261,8 @@ export async function startBody(o) {
       if (msg.type === 'hush') player?.hush();
       else if (msg.type === 'fault') o.onFault?.(msg);
       else if (msg.type === 'state') o.onState(msg.state);
-      // move / stop: there is no car on the bench.
+      else if (msg.type === 'move') o.onMove?.(msg);
+      else if (msg.type === 'stop') o.onStop?.();
     },
     onAudio(bytes) {
       const shaped = shapeDownlink(bytes, o.outcome.amp);
