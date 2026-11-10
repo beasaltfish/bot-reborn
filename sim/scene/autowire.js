@@ -56,13 +56,13 @@ const easeOut = (t) => 1 - (1 - t) ** 3;
  *   say(text: string): void,
  *   onDone(): void,
  * }} o
- * @returns {{ next(): void, finish(): void, skip(): void, stop(): void }}
+ * @returns {{ next(): void, finish(): void, skip(): void, stop(): void, speed(x: number): void }}
  */
 export function runRecipe(o) {
   let mode = o.mode;
   let skipping = false;
   let stopped = false;
-  const speed = speedFactor(o.speed);
+  let speed = speedFactor(o.speed);
   /** Everything waiting on a timer or a click, so a control can cut the wait short. */
   /** @type {Set<() => void>} */
   const waiting = new Set();
@@ -169,5 +169,16 @@ export function runRecipe(o) {
     finish() { mode = 'watch'; wake(); },
     skip() { skipping = true; wake(); },
     stop() { stopped = true; wake(); },
+    /**
+     * Change the pace of what is left, from the run's own bar. Faster also
+     * cuts the pause it lands in short, so the change is felt at once;
+     * slower just applies to the pauses after this one.
+     * @param {number} x
+     */
+    speed(x) {
+      const next = speedFactor(x);
+      if (next > speed) wake();
+      speed = next;
+    },
   };
 }

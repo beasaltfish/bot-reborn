@@ -150,8 +150,9 @@ function diagram() {
  *   add(part: string): void,
  *   carry(part: string, e: PointerEvent): void,
  *   start(recipeId: string, screenId: string | undefined, mode: 'watch' | 'step',
- *     hooks: { onSay(text: string): void, onEnd(): void }, wand: boolean, speed: number): { next(): void, finish(): void, skip(): void, stop(): void } | null,
+ *     hooks: { onSay(text: string): void, onEnd(): void }, wand: boolean, speed: number): { next(): void, finish(): void, skip(): void, stop(): void, speed(x: number): void } | null,
  *   speed: number,
+ *   rememberSpeed(x: number): void,
  * }} opts
  */
 export function createPanels(opts) {
@@ -306,8 +307,6 @@ export function createPanels(opts) {
     return o;
   }));
   const wandBox = /** @type {HTMLInputElement} */ (el('input', { type: 'checkbox', name: 'wand' }));
-  const speedBox = /** @type {HTMLInputElement} */ (el('input', { type: 'checkbox', name: 'speed' }));
-  if (opts.speed === 2) speedBox.checked = true;
   const watchBtn = el('button', { type: 'button', class: 'pill' }, ['Watch it']);
   const stepBtn = el('button', { type: 'button', class: 'pill' }, ['Step by step']);
   const wireClose = el('button', { type: 'button', class: 'close', 'aria-label': 'Close' }, ['×']);
@@ -316,7 +315,6 @@ export function createPanels(opts) {
     ...RECIPES.map((r, i) => el('label', { class: 'opt' }, [recipeBoxes[i], r.name])),
     screenSel,
     el('label', { class: 'opt' }, [wandBox, 'Add the tarot wand (MPU6050)']),
-    el('label', { class: 'opt' }, [speedBox, 'Play at 2× speed']),
     el('div', { class: 'go' }, [watchBtn, stepBtn]),
   ]);
   const runBar = el('div', { id: 'runbar', role: 'status', hidden: '' });
@@ -338,11 +336,12 @@ export function createPanels(opts) {
     if (!id) return;
     runBar.replaceChildren();
     const words = el('span', { class: 'say' });
+    let speed = opts.speed === 2 ? 2 : 1;
     /** @type {ReturnType<typeof opts.start>} */
     const run = opts.start(id, id === 'screen' ? /** @type {HTMLSelectElement} */ (screenSel).value : undefined, mode, {
       onSay: (text) => { words.textContent = text; },
       onEnd: () => { runBar.hidden = true; runBar.replaceChildren(); },
-    }, wandBox.checked, speedBox.checked ? 2 : 1);
+    }, wandBox.checked, speed);
     if (!run) return;
     showWire(false);
     /** @param {string} label @param {() => void} f */
@@ -351,8 +350,23 @@ export function createPanels(opts) {
       b.addEventListener('click', f);
       return b;
     };
-    if (mode === 'step') runBar.append(words, button('Next', run.next), button('Finish', run.finish), button('Stop', run.stop));
-    else runBar.append(words, button('Skip', run.skip), button('Stop', run.stop));
+    // The pace belongs to the run, not to the dialog it was started from: it
+    // can be changed while the bench is being built, and it is remembered.
+    const pace = el('button', { type: 'button', class: 'link', 'aria-pressed': String(speed === 2) }, []);
+    /** @param {number} x */
+    const sayPace = (x) => {
+      pace.textContent = x === 2 ? '2× speed: on' : '2× speed: off';
+      pace.setAttribute('aria-pressed', String(x === 2));
+    };
+    sayPace(speed);
+    pace.addEventListener('click', () => {
+      speed = speed === 2 ? 1 : 2;
+      run.speed(speed);
+      opts.rememberSpeed(speed);
+      sayPace(speed);
+    });
+    if (mode === 'step') runBar.append(words, pace, button('Next', run.next), button('Finish', run.finish), button('Stop', run.stop));
+    else runBar.append(words, pace, button('Skip', run.skip), button('Stop', run.stop));
     runBar.hidden = false;
   }
   watchBtn.addEventListener('click', () => go('watch'));

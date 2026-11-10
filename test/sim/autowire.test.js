@@ -136,3 +136,26 @@ test('a part flies in faster at 2×, not just the pauses after it', async () => 
   assert.ok(once >= TIMING.fly - 16, `1× flight was ${once}ms, expected about ${TIMING.fly}`);
   assert.ok(twice <= once / 1.8, `2× flight was ${twice}ms against 1×'s ${once}ms`);
 });
+
+test('the run bar can change the pace while the bench is being built', async () => {
+  // Four plug steps at 1× would take 4 × TIMING.usb. Flipped to 2× after the
+  // first pause, the rest run at half, and the pause it lands in is cut short.
+  const elapsed = await new Promise((resolve) => {
+    const started = performance.now();
+    const run = runRecipe(/** @type {any} */ ({
+      steps: /** @type {any} */ ([{ kind: 'usb' }, { kind: 'usb' }, { kind: 'usb' }, { kind: 'usb' }]),
+      mode: 'watch',
+      speed: 1,
+      getBench: () => ({}),
+      setBench: () => {},
+      world: {},
+      usb: { insert: async () => {} },
+      hands: { enable: () => {} },
+      say: () => {},
+      onDone: () => resolve(performance.now() - started),
+    }));
+    setTimeout(() => run.speed(2), TIMING.usb * 1.2);
+  });
+  assert.ok(elapsed < TIMING.usb * 3.4, `ran in ${elapsed}ms, expected under ${TIMING.usb * 3.4}`);
+  assert.ok(elapsed > TIMING.usb, `ran in ${elapsed}ms, too fast to be real`);
+});

@@ -69,6 +69,7 @@ const panels = createPanels({
   carry: (part, e) => beginCarry(/** @type {any} */ (part), e),
   start: (recipeId, screenId, mode, hooks, wand, speed) => startRun(recipeId, screenId, mode, hooks, wand, speed),
   speed: speedFactor(Number(read(SPEED_KEY))),
+  rememberSpeed: (/** @type {number} */ x) => write(SPEED_KEY, String(speedFactor(x))),
 });
 
 /** @param {import('./bench.js').Bench} b */
@@ -481,7 +482,7 @@ function reset() {
  * @param {{ onSay?(text: string): void, onEnd?(): void }} [hooks] where the
  *   steps' words go instead of the status line, and when the run is over
  * @param {boolean} [wand] also wire the tarot wand
- * @returns {{ next(): void, finish(): void, skip(): void, stop(): void } | null}
+ * @returns {{ next(): void, finish(): void, skip(): void, stop(): void, speed(x: number): void } | null}
  */
 export function startRun(recipeId, screenId, mode, hooks = {}, wand = false, speed = 1) {
   const recipe = RECIPES.find((r) => r.id === recipeId);
