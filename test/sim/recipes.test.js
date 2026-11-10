@@ -10,6 +10,7 @@ import { nets } from '../../sim/netlist.js';
 import { BIN } from '../../sim/layout.js';
 import { SCREENS } from '../../core/screens.js';
 import { RECIPES, DEFAULT_SCREEN, startBench, recipeSteps, applyStep } from '../../sim/recipes.js';
+import { obstacles, stepCar } from '../../sim/car.js';
 
 /** @typedef {import('../../sim/bench.js').Bench} Bench */
 
@@ -21,6 +22,7 @@ const build = (recipe, screen) =>
  * @type {{ name: string, recipe: string, screen?: string }[]} */
 const CASES = [
   { name: 'audio', recipe: 'audio', screen: undefined },
+  { name: 'toy', recipe: 'toy', screen: undefined },
   ...SCREENS.map((/** @type {{ id: string }} */ s) => ({ name: `screen ${s.id}`, recipe: 'screen', screen: s.id })),
 ];
 
@@ -160,9 +162,10 @@ test('startBench keeps only the ESP32', () => {
 });
 
 test('the recipes are listed', () => {
-  assert.deepEqual(RECIPES.map((r) => r.id), ['audio', 'screen']);
+  assert.deepEqual(RECIPES.map((r) => r.id), ['audio', 'screen', 'toy']);
   assert.equal(RECIPES[0].ending, 'Say hello');
   assert.equal(RECIPES[1].ending, 'Say "Sit"');
+  assert.equal(RECIPES[2].ending, 'Say "go forward"');
   assert.ok(SCREENS.some((/** @type {{ id: string }} */ s) => s.id === DEFAULT_SCREEN));
 });
 
@@ -179,4 +182,19 @@ test('with the wand option, every recipe also wires a wand that wakes', () => {
     // Without the option there is no wand.
     assert.equal(build(recipe, screen).placed.some((p) => p.part === 'mpu6050'), false, name);
   }
+});
+
+test('the toy recipe parks the toy where it has room to drive', () => {
+  const b = build('toy');
+  const toy = b.placed.find((p) => p.id === 'toy');
+  assert.deepEqual(toy?.at, { x: -55, z: -55 });
+  assert.equal(toy?.rot, 0);
+  assert.equal(/** @type {any} */ (powerOn(b).parts.toy).wheels, 'coast');
+  // Straight ahead is clear of the bench, the bin and the loose parts: the mat
+  // edge is what stops it, 130 units (33 cm) on.
+  const run = stepCar({ x: -55, z: -55, heading: 0 }, { wheels: 'forward', steer: 'straight' }, 4000, {
+    bounds: { x0: -120, x1: 120, z0: -70, z1: 70 }, obstacles: obstacles(b, 'toy'), leash: null,
+  });
+  assert.equal(run.blocked, 'edge');
+  assert.ok(run.pose.x > 60, `only got to ${run.pose.x}`);
 });

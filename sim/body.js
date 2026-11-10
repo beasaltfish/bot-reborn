@@ -76,7 +76,7 @@ export function characterChoices(list) {
  * the reason is told in this order: a right-kind one in use, a ready one of
  * the wrong kind, nothing set up.
  * @param {{ id: string, name: string, ready: boolean, online: boolean, motion: string | null }[]} list
- * @param {'any' | 'pet'} need
+ * @param {'any' | 'pet' | 'car'} need
  * @returns {{ kind: 'connect', id: string, name: string }
  *   | { kind: 'pick', choices: { id: string, name: string, note: string | null }[] }
  *   | { kind: 'wrong-body', id: string, name: string, motion: string | null }
@@ -85,13 +85,13 @@ export function characterChoices(list) {
  */
 export function chooseCharacter(list, need) {
   /** @param {{ motion: string | null }} c */
-  const rightKind = (c) => need === 'any' || c.motion === 'pet';
+  const rightKind = (c) => need === 'any' || c.motion === need;
   const suitable = list.filter((c) => c.ready && !c.online && rightKind(c));
   if (suitable.length === 1) return { kind: 'connect', id: suitable[0].id, name: suitable[0].name };
   if (suitable.length > 1) return { kind: 'pick', choices: characterChoices(suitable) };
   const busy = list.find((c) => c.ready && c.online && rightKind(c));
   if (busy) return { kind: 'busy', id: busy.id, name: busy.name };
-  const wrong = need === 'pet' ? list.find((c) => c.ready && c.motion !== 'pet') : undefined;
+  const wrong = need === 'any' ? undefined : list.find((c) => c.ready && (c.motion !== need));
   if (wrong) return { kind: 'wrong-body', id: wrong.id, name: wrong.name, motion: wrong.motion };
   return { kind: 'none' };
 }
@@ -101,13 +101,16 @@ export function chooseCharacter(list, need) {
  * outcome of chooseCharacter except connect and pick), with the link to go
  * and fix it.
  * @param {ReturnType<typeof chooseCharacter>} chosen
- * @param {'any' | 'pet'} need
+ * @param {'any' | 'pet' | 'car'} need
  * @returns {{ text: string, link?: { href: string, label: string } } | null}
  */
 export function chooseLine(chosen, need) {
   switch (chosen.kind) {
     case 'wrong-body':
-      return { text: `${chosen.name} is a ${chosen.motion} body, not a pet — set its body to Pet`, link: { href: adminLink(chosen.id), label: 'on the admin page' } };
+      return {
+        text: `${chosen.name} is a ${chosen.motion} body, not a ${need} — set its body to ${need === 'pet' ? 'Pet' : 'Car'}`,
+        link: { href: adminLink(chosen.id), label: 'on the admin page' },
+      };
     case 'busy':
       return { text: `${chosen.name} is in use by another body — disconnect it there and plug in again` };
     case 'none':

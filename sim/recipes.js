@@ -25,15 +25,16 @@ import { wireEnd } from './snap.js';
 
 /**
  * What a recipe is: `needs` says what the character has to be able to do
- * ('pet' = it has a screen to show), `ending` is what to say to try the
- * finished bench.
- * @typedef {{ id: 'audio' | 'screen', name: string, needs: 'any' | 'pet', ending: string }} Recipe
+ * ('pet' = it has a screen to show, 'car' = it drives), `ending` is what to say
+ * to try the finished bench.
+ * @typedef {{ id: 'audio' | 'screen' | 'toy', name: string, needs: 'any' | 'pet' | 'car', ending: string }} Recipe
  */
 
 /** @type {Recipe[]} */
 export const RECIPES = [
   { id: 'audio', name: 'Audio only', needs: 'any', ending: 'Say hello' },
   { id: 'screen', name: 'Audio + screen', needs: 'pet', ending: 'Say "Sit"' },
+  { id: 'toy', name: 'Audio + toy robot', needs: 'car', ending: 'Say "go forward"' },
 ];
 
 /** The screen a recipe wires when the character has not named a model. */
@@ -67,6 +68,9 @@ const LOOSE = {
   scr: { at: { x: -12, z: ROW_Z } },
   // The wand lies loose one row further down, clear of the screen whatever its width.
   imu: { at: { x: -50, z: ROW_Z + 30 } },
+  // The toy parks behind the bench, the one lane on the mat where a straight
+  // run clears the boards, the bin and the loose parts (sim-car spec §10).
+  toy: { at: { x: -55, z: -55 } },
 };
 
 /**
@@ -118,6 +122,12 @@ export function recipeSteps(recipeId, screenId = DEFAULT_SCREEN, wand = false) {
     steps.push({
       kind: 'part', id: 'imu', part: 'mpu6050', at: LOOSE.imu.at, rot: 0, seated: false,
       say: 'The wand, which feels how you shake it',
+    });
+  }
+  if (recipeId === 'toy') {
+    steps.push({
+      kind: 'part', id: 'toy', part: 'toy', at: LOOSE.toy.at, rot: 0, seated: false,
+      say: 'The toy robot: its four motor inputs and a ground, and it carries its own battery',
     });
   }
   // The links depend on which parts stand on the table, so they are asked of

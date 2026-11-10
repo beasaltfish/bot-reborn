@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { shapeUplink, shapeDownlink, characterChoices, chooseCharacter, faultText, adminLink, keepsFault } from '../../sim/body.js';
+import { shapeUplink, shapeDownlink, characterChoices, chooseCharacter, chooseLine, faultText, adminLink, keepsFault } from '../../sim/body.js';
 
 const pcm = Int16Array.from([0, 1000, -1000, 32767, -32768]);
 const bytesOf = (/** @type {Int16Array} */ a) => /** @type {ArrayBuffer} */ (a.buffer.slice(a.byteOffset, a.byteOffset + a.byteLength));
@@ -129,4 +129,12 @@ test('chooseLine words each way a recipe cannot connect', async () => {
   assert.equal(line({ kind: 'none' }, 'any').text, 'No characters on this brain yet —');
   assert.equal(line({ kind: 'none' }, 'any').link.href, '/');
   assert.equal(chooseLine({ kind: 'connect', id: 'a', name: 'Rex' }, 'any'), null);
+});
+
+test('a toy recipe wants a car body, and says so when the ready one is a pet', () => {
+  const pet = { id: 'p', name: 'Pup', ready: true, online: false, motion: 'pet' };
+  const car = { id: 'c', name: 'Car', ready: true, online: false, motion: 'car' };
+  assert.deepEqual(chooseCharacter([pet, car], 'car'), { kind: 'connect', id: 'c', name: 'Car' });
+  assert.deepEqual(chooseCharacter([pet], 'car'), { kind: 'wrong-body', id: 'p', name: 'Pup', motion: 'pet' });
+  assert.equal(chooseLine(chooseCharacter([pet], 'car'), 'car')?.text, 'Pup is a pet body, not a car — set its body to Car');
 });
