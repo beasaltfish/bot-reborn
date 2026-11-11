@@ -4,6 +4,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { PARTS } from './parts.js';
 import { catalogueEntry } from './ui/catalogue-model.js';
 import { buildPart, dispose } from './scene/meshes.js';
+import { pinDescription } from './pin-info.js';
 
 const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById('stage'));
 const name = /** @type {HTMLElement} */ (document.getElementById('name'));
@@ -62,9 +63,7 @@ if (!part || !entry) {
       const anchor = anchors.get(pin.name);
       marker.visible = !!anchor;
       if (anchor) marker.position.copy(anchor);
-      detail.textContent = pin.role && pin.role !== pin.name
-        ? `${pin.name} — ${pin.role}`
-        : `${pin.name}${pin.wireOnly ? ' — wire connection' : ' — header pin'}`;
+      detail.textContent = `${pin.name} — ${pinDescription(id, pin)}`;
       render();
     });
     buttons.push(button);
