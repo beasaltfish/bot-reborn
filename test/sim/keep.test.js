@@ -50,3 +50,10 @@ test('dropping the kept bench leaves nothing', () => {
   dropKept(store);
   assert.equal(keptBench(store), null);
 });
+
+test('a kept version 2 bench migrates and stays unplugged', () => {
+  const b = sample();
+  const old = { ...b, v: 2, placed: b.placed.map(({ properties, ...p }) => p) };
+  const store = storeOver(new Map([[KEEP_KEY, JSON.stringify(old)]]));
+  assert.deepEqual(keptBench(store), { ...b, usb: false });
+});

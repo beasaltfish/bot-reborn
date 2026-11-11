@@ -589,7 +589,7 @@ export function attachInteraction(world, getBench, setBench, opts) {
       d.group.position.set(d.at.x, BOARD_TOP + HOVER, d.at.z);
       // Ring the holes the pins would go into, so the user sees which strips before letting go.
       /** @type {Placed} */
-      const trial = { id: d.id, part: d.def.id, at: d.at, rot: d.rot, seated: true, burnt: false };
+      const trial = { id: d.id, part: d.def.id, at: d.at, rot: d.rot, seated: true, burnt: false, properties: {} };
       aim.set(pinPoints(getBench(), trial).flatMap((q) => (q.hole ? [/** @type {THREE.Vector3} */ (position(getBench(), q.hole))] : [])));
     } else {
       d.group.position.set(x, BOARD_TOP + HOVER, z);
