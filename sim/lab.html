@@ -14,6 +14,8 @@
     ul { padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 8px; }
     .pin { padding: 6px 10px; color: #eee7dc; background: #40362d; border: 1px solid #756758; border-radius: 8px; cursor: pointer; }
     .pin[aria-pressed="true"] { color: #21170b; background: #f0b46a; }
+    #led-experiment label { display: block; margin: 10px 0; }
+    #led-experiment input[type="number"] { width: 95px; padding: 5px; }
     .muted { color: #bdb4a9; }
     @media (max-width: 700px) { main { grid-template-columns: 1fr; } #stage { height: 55vh; } }
   </style>
@@ -32,6 +34,13 @@
       <ul id="pins"></ul>
       <p id="pin-detail" role="status" class="muted">Select a pin to locate it on the model.</p>
       <section id="guide" hidden><h2 id="guide-title"></h2><ol id="guide-steps"></ol></section>
+      <section id="led-experiment" hidden>
+        <h2 id="experiment-title"></h2>
+        <label><span id="voltage-label"></span> <input id="voltage" type="number" min="0" max="12" step="0.1" value="5"> V</label>
+        <label><span id="resistance-label"></span> <input id="resistance" type="number" min="0" max="10000000" step="1" value="220"> Ω</label>
+        <label><input id="reversed" type="checkbox"> <span id="reversed-label"></span></label>
+        <p id="experiment-result" role="status"></p>
+      </section>
       <p id="status" role="status"></p>
     </aside>
   </main>
