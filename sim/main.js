@@ -7,7 +7,7 @@
 // goes in, the circuit is judged once, what burns burns, and the bench either
 // comes alive as a body or shows why not. Pulling the plug ends it.
 
-import { emptyBench, load, serialize, addPart, addBoard, park } from './bench.js';
+import { emptyBench, load, serialize, addPart, addBoard, park, setWireColor, removeWire } from './bench.js';
 import { evaluateBench } from './devices/evaluate.js';
 import { motorLevels, toyAction } from './car.js';
 import { createWandFeed } from './wand-feed.js';
@@ -94,7 +94,13 @@ function addFromBin(part) {
   setBench(kind === 'breadboard' ? addBoard(bench, at).bench : addPart(bench, kind, at).bench);
 }
 
-const hands = attachInteraction(world, () => bench, setBench, { say: (text) => panels.status(text) });
+const hands = attachInteraction(world, () => bench, setBench, {
+  say: (text) => panels.status(text),
+  selectWire: (id, x, y) => panels.wireMenu(id, x, y, {
+    color: (color) => setBench(setWireColor(bench, id, color)),
+    remove: () => setBench(removeWire(bench, id)),
+  }),
+});
 const usb = attachUsb(world, { onPlug: (on) => (on ? plugIn(recipeOn) : unplug()), locked: () => starting, bench: () => bench });
 
 // #view=top opens in that view without saving it: handy for a screenshot.

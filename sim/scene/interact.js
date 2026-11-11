@@ -106,7 +106,7 @@ export function beginCarry(part, e) {
  * @param {World} world
  * @param {() => Bench} getBench
  * @param {(b: Bench) => void} setBench  saves and redraws
- * @param {{ say(text: string): void }} opts  the page's status line, for what a drop refused
+ * @param {{ say(text: string): void, selectWire(id: string, x: number, y: number): void }} opts
  * @returns {{ enable(on: boolean): void }}
  */
 export function attachInteraction(world, getBench, setBench, opts) {
@@ -172,7 +172,7 @@ export function attachInteraction(world, getBench, setBench, opts) {
       o.userData.lit = o.material;
       o.material = LIT;
     });
-    say(id ? 'Click to pull this wire out' : null);
+    say(id ? 'Click for wire options' : null);
     world.requestRender();
   }
 
@@ -1127,12 +1127,8 @@ export function attachInteraction(world, getBench, setBench, opts) {
     }
     drag = null;
     if (wandered(e, d)) return;
-    const gone = scene.getObjectByName(`wire:${d.id}`);
     lightWire(null);
-    if (gone) world.fadeAway(gone);
-    pop();
-    setBench(removeWire(getBench(), d.id));
-    // What was lit was the net with that wire in it.
+    opts.selectWire(d.id, e.clientX, e.clientY);
     light(null);
   });
 

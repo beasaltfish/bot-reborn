@@ -10,6 +10,7 @@
 import { TARGET } from './target.js';
 import { PARTS } from './parts.js';
 import { SCREENS } from '../core/screens.js';
+import { catalogueView } from './ui/catalogue-model.js';
 import { RECIPES, DEFAULT_SCREEN } from './recipes.js';
 
 /** @typedef {{ id: string, name: string, note: string | null }} Choice */
@@ -247,6 +248,7 @@ export function createPanels(opts) {
       ...(item.note ? [el('span', { class: 'note' }, [item.note])] : []),
     ]);
     b.title = `Drag ${item.label} onto the bench, or click to place it`;
+    b.addEventListener('click', (e) => { if (e.detail === 0) opts.add(item.key); });
     b.addEventListener('pointerdown', (e) => {
       if (e.button !== 0 || !e.isPrimary) return;
       e.preventDefault();
@@ -269,21 +271,27 @@ export function createPanels(opts) {
     });
     return b;
   }
-  const binList = el('div', { class: 'items' }, BIN.map(binEntry));
-  binList.append(el('div', { class: 'section' }, ['Screens']));
-  for (const model of SCREENS) {
-    binList.append(binEntry({
-      key: `screen-${model.id}`,
-      label: model.label,
-      w: model.pcb.w,
-      d: model.pcb.d,
-      round: model.round,
-      note: `${model.w}×${model.h}${model.round ? ' round' : ''}${model.verified ? '' : ' · untested'}`,
-    }));
+  const search = /** @type {HTMLInputElement} */ (el('input', { type: 'search', placeholder: 'Search parts', 'aria-label': 'Search parts' }));
+  const binList = el('div', { class: 'items' });
+  function renderBin() {
+    binList.replaceChildren();
+    if (!search.value.trim() || 'breadboard'.includes(search.value.trim().toLowerCase())) binList.append(binEntry(BIN[0]));
+    for (const section of catalogueView({ query: search.value })) {
+      const entries = section.entries.filter((entry) => entry.part !== 'esp32');
+      if (!entries.length) continue;
+      binList.append(el('div', { class: 'section' }, [section.label]));
+      for (const entry of entries) {
+        const def = PARTS[entry.part];
+        binList.append(binEntry({ key: entry.part, label: entry.name, w: def.size.w, d: def.size.d, note: entry.summary }));
+      }
+    }
   }
+  search.addEventListener('input', renderBin);
+  renderBin();
   const partsClose = el('button', { type: 'button', class: 'close', 'aria-label': 'Close' }, ['×']);
   const partsPanel = el('div', { id: 'partsbin', role: 'dialog', 'aria-label': 'Parts', hidden: '' }, [
     el('header', {}, [el('h2', {}, ['Parts']), partsClose]),
+    search,
     binList,
   ]);
   const partsBtn = el('button', { type: 'button', class: 'pill' }, ['Parts']);
@@ -478,5 +486,30 @@ export function createPanels(opts) {
     f?.();
   });
 
-  return { status: setStatus, pick, closePicker, links };
+  const wireMenuElement = el('div', { id: 'wire-menu', hidden: '', role: 'group', 'aria-label': 'Wire options' });
+  document.body.append(wireMenuElement);
+  document.addEventListener('pointerdown', (event) => {
+    if (!wireMenuElement.hidden && event.target instanceof Node && !wireMenuElement.contains(event.target)) wireMenuElement.hidden = true;
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') wireMenuElement.hidden = true;
+  });
+  /** @param {string} id @param {number} x @param {number} y @param {{color(value: string): void, remove(): void}} actions */
+  function wireMenu(id, x, y, actions) {
+    wireMenuElement.replaceChildren(el('span', {}, [`Wire ${id}`]));
+    for (const [name, color] of Object.entries({ Red: '#d23a2e', Black: '#1d1d1f', Yellow: '#f2c230', Green: '#2e9e57', Blue: '#2f6fd0', Orange: '#e9782b', White: '#f2f0ea', Purple: '#8b54c9' })) {
+      const button = el('button', { type: 'button', 'aria-label': name, title: name, class: 'swatch', style: `background:${color}` });
+      button.addEventListener('click', () => { actions.color(color); wireMenuElement.hidden = true; });
+      wireMenuElement.append(button);
+    }
+    const remove = el('button', { type: 'button', class: 'link danger' }, ['Remove']);
+    remove.addEventListener('click', () => { actions.remove(); wireMenuElement.hidden = true; });
+    const closeMenu = el('button', { type: 'button', class: 'link', 'aria-label': 'Close wire options' }, ['×']);
+    closeMenu.addEventListener('click', () => { wireMenuElement.hidden = true; });
+    wireMenuElement.append(remove, closeMenu);
+    wireMenuElement.style.left = `${Math.max(8, Math.min(x, window.innerWidth - Math.min(340, window.innerWidth - 16)))}px`;
+    wireMenuElement.style.top = `${Math.max(8, Math.min(y, window.innerHeight - 60))}px`;
+    wireMenuElement.hidden = false;
+  }
+  return { status: setStatus, pick, closePicker, links, wireMenu };
 }
