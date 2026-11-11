@@ -27,7 +27,7 @@ export function catalogueEntry(partId, lang = 'en') {
   return { part: partId, name: translatedName === nameKey ? part.label : translatedName,
     summary: simText(lang, summaryKey), category: device.category,
     tags: [...new Set([...device.tags, ...interfaces])], voltage: null, interfaces,
-    onBoard: part.onBoard, simulated: true, firmwareSupported: PROFILES[0].supportedParts.includes(partId),
+    onBoard: part.onBoard, simulated: partId !== 'bme280-i2c', firmwareSupported: PROFILES[0].supportedParts.includes(partId),
     required: false, recent: false, favourite: false };
 }
 

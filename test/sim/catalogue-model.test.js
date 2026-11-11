@@ -13,7 +13,7 @@ test('catalogue groups devices in a stable category order', () => {
 
 test('catalogue filters by category and derived interface tags', () => {
   const sections = catalogueView({ categories: ['sensor'], tags: ['I2C'] });
-  assert.deepEqual(sections.flatMap(s => s.entries.map(e => e.part)), ['mpu6050']);
+  assert.deepEqual(sections.flatMap(s => s.entries.map(e => e.part)), ['bme280-i2c', 'mpu6050']);
   const sensor = catalogueEntry('mpu6050', 'en');
   assert.ok(sensor);
   assert.ok(sensor.interfaces.includes('I2C'));

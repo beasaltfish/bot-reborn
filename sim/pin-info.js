@@ -41,9 +41,16 @@ const ZH = {
   U5A: '转向驱动输入 A。', U5B: '转向驱动输入 B。',
 };
 
+/** @type {Record<string, Record<string, string>>} */
+const BME280 = {
+  en: { VIN: 'Power input, 3–5 V. Match the controller logic voltage.', '3Vo': 'Regulated 3.3 V output, not a power input.', GND: 'Common ground for power and logic.', SCK: 'I²C clock (SCL); also the SPI clock.', SDI: 'I²C data (SDA); also the SPI data input.', SDO: 'Address selection: default 0x77; connect to ground for 0x76.', CS: 'SPI chip select; leave unconnected for I²C.' },
+  zh: { VIN: '电源输入，3–5 V；应与控制器逻辑电压一致。', '3Vo': '稳压后的 3.3 V 输出，不是电源输入。', GND: '电源与逻辑共用的地线。', SCK: 'I²C 时钟（SCL），也可作为 SPI 时钟。', SDI: 'I²C 数据（SDA），也可作为 SPI 数据输入。', SDO: '地址选择：默认 0x77，接地选择 0x76。', CS: 'SPI 片选；使用 I²C 时无需连接。' },
+};
+
 /** @param {string} partId @param {{name:string,role?:string,wireOnly?:boolean}} pin @param {string} [lang] */
 export function pinDescription(partId, pin, lang = 'en') {
   const role = pin.role ?? pin.name.replace(/\.\d+$/, '');
+  if (partId === 'bme280-i2c' && BME280[lang === 'zh' ? 'zh' : 'en'][role]) return BME280[lang === 'zh' ? 'zh' : 'en'][role];
   if (lang === 'zh') {
     if (partId === 'led-5mm' && pin.name === 'A') return 'LED 正极，连接到电源正极方向。';
     if (partId === 'led-5mm' && pin.name === 'K') return 'LED 负极，连接到电源负极方向。';

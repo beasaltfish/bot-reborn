@@ -14,6 +14,9 @@ function device(part, category, capabilities) {
 
 /** @type {Record<string, DeviceDef>} */
 export const DEVICES = {
+  'bme280-i2c': { ...device('bme280-i2c', 'sensor', [{ kind: 'supply', positive: 'VIN', ground: 'GND' }, { kind: 'i2c', sda: 'SDI', scl: 'SCK' }]),
+    properties: { address: { kind: 'enum', default: '0x77', values: ['0x76', '0x77'] } },
+    firmware: { libraries: ['bme280'], resources: [{ kind: 'i2c', addressProperty: 'address' }], init: { addressProperty: 'address' }, actions: ['sample'], telemetry: ['temperatureC', 'humidityPct', 'pressureHpa'] } },
   'push-button': { ...device('push-button', 'input', []), properties: { pressed: { kind: 'boolean', default: false } } },
   'led-5mm': { ...device('led-5mm', 'output', [{ kind: 'led', positive: 'A', negative: 'K' }]), properties: { color: { kind: 'enum', default: 'red', values: ['red'] } } },
   resistor: { ...device('resistor', 'fundamental', [{ kind: 'resistor', positive: '1', negative: '2' }]), properties: { ohms: { kind: 'number', default: 220, min: 1, max: 10000000, unit: 'Ω' } } },

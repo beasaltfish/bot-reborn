@@ -746,8 +746,13 @@ export function buildBin() {
  * }} BoardLook
  */
 
-/** @type {Record<'esp32' | 'inmp441' | 'max98357a', BoardLook>} */
+/** @type {Record<'esp32' | 'inmp441' | 'max98357a' | 'bme280-i2c', BoardLook>} */
 const LOOKS = {
+  'bme280-i2c': {
+    color: 0x1769a5, w: 25.2 * MM, d: 18 * MM, cx: 3, cz: 2.7, t: 1.6 * MM,
+    labelDz: () => 0.7, labelSize: 0.35,
+    silk: (ctx) => label(ctx, 'BME280', 3, 3.8, 0.55),
+  },
   // The two rows are 10 pitches apart and the board 70 mm long, its USB end
   // (pins GND, 5V) at x = 0 and its module and antenna at the far end.
   esp32: {
@@ -866,6 +871,11 @@ export function buildPart(def, state) {
 
   if (def.id === 'esp32') addEspDetails(g, top, state.burnt);
   if (def.id === 'max98357a') addTerminal(g, top, state.burnt, anchors);
+  if (def.id === 'bme280-i2c') {
+    g.add(box(1.0, 0.4, 1.0, mat('metal', state.burnt ? 0x3a332c : STEEL), 3, top, 2.5));
+    g.add(box(0.45, 0.2, 0.65, mat('matte', 0x252525), 4.5, top, 3));
+    g.add(box(0.45, 0.2, 0.65, mat('matte', 0xb7a88c), 1.5, top, 3));
+  }
   g.add(contactShadow(look.w + 3, look.d + 3, look.cx, 0.03, look.cz + 0.4));
   return { group: g, anchors };
 }

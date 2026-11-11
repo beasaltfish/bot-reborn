@@ -2,6 +2,7 @@
 /** @type {Record<string, Record<string, string>>} */
 const COPY = {
   en: {
+    'name.bme280-i2c': 'BME280 environmental sensor', 'summary.bme280-i2c': 'Temperature, humidity and pressure breakout (simulation in development).',
     output: 'Outputs', fundamental: 'Basic components', power: 'Power', input: 'Inputs',
     'name.push-button': 'Push button', 'summary.push-button': 'Closes its contacts when pressed.',
     'name.led-5mm': '5 mm LED', 'name.resistor': 'Resistor', 'name.dc-source': 'DC power supply',
@@ -11,6 +12,7 @@ const COPY = {
     'summary.esp32': 'Controller board for the simulated project.', 'summary.inmp441': 'Microphone module for audio input.', 'summary.max98357a': 'Amplifier module for the speaker.', 'summary.speaker': 'Wired audio output.', 'summary.mpu6050': 'Motion sensor module for the wand.', 'summary.toy': 'Battery-powered toy with drive and steering inputs.', 'summary.display': 'Screen module for visual output.',
   },
   zh: {
+    'name.bme280-i2c': 'BME280 环境传感器', 'summary.bme280-i2c': '温度、湿度和气压模块（模拟功能开发中）。',
     output: '输出', fundamental: '基础元件', power: '电源', input: '输入',
     'name.push-button': '按键', 'summary.push-button': '按下时接通两个触点。',
     'name.led-5mm': '5 毫米 LED', 'name.resistor': '电阻', 'name.dc-source': '直流电源',
