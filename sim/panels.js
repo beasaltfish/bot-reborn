@@ -283,6 +283,8 @@ export function createPanels(opts) {
       for (const entry of entries) {
         const def = PARTS[entry.part];
         binList.append(binEntry({ key: entry.part, label: entry.name, w: def.size.w, d: def.size.d, note: entry.summary }));
+        const learn = el('a', { href: `./lab.html?part=${encodeURIComponent(entry.part)}`, class: 'learn' }, [`Learn ${entry.name} →`]);
+        binList.append(learn);
       }
     }
   }

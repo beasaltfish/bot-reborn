@@ -30,6 +30,7 @@
 export const PAGES = [
   { url: '/', html: 'admin/index.html', lan: false },
   { url: '/sim/', html: 'sim/index.html', lan: false },
+  { url: '/sim/lab.html', html: 'sim/lab.html', lan: false },
   { url: '/phone/', html: 'phone/index.html', lan: true },
   { url: '/phone/dev.html', html: 'phone/dev.html', lan: true },
 ];
