@@ -682,14 +682,17 @@ export function attachInteraction(world, getBench, setBench, opts) {
     if (!at) {
       // Loose on the table: inside the table, and clear of everything else.
       // Turned as it is held: its footprint lies the way the part does.
-      const fp = partFootprint(d.def, d.rot);
+      const fp = partFootprint(d.def, d.heading ?? d.rot);
       const cx = clamp(d.origin.x + fp.dx, world.tableBounds.x0 + fp.w / 2, world.tableBounds.x1 - fp.w / 2);
       const cz = clamp(d.origin.z + fp.dz, world.tableBounds.z0 + fp.d / 2, world.tableBounds.z1 - fp.d / 2);
       const spot = freeSpot(b, fp, cx, cz, [d.id]);
       at = { x: spot.x - fp.dx, z: spot.z - fp.dz };
     }
     const seated = at === d.at;
+    // A toy's facing is not its quarter turn: turning it with R and letting go
+    // over the same spot must still store the angle it was aimed at.
     const same = was.rot === d.rot && was.seated === seated
+      && (was.heading ?? was.rot) === (d.heading ?? d.rot)
       && was.at.x === at.x && was.at.z === at.z;
     if (same) {
       putBack(d);
@@ -1018,6 +1021,9 @@ export function attachInteraction(world, getBench, setBench, opts) {
       if (!group || !p) return;
       drag = {
         kind: 'part', id: t.id, def: PARTS[placed.part], group, rot: placed.rot,
+        // A toy keeps the angle it was parked at; the hand must not snap it back
+        // to its quarter turn the moment it is picked up.
+        heading: placed.heading ?? placed.rot,
         home: { pos: group.position.clone(), rotY: group.rotation.y },
         offset: group.position.clone().sub(p).setY(0),
         x: e.clientX, y: e.clientY, lifted: false,

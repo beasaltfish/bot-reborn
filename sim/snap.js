@@ -66,23 +66,40 @@ export function snapBoard(b, id, x, z, rot) {
  * A part's footprint, turned as it lies: its size on the table and where its
  * middle is from the origin pin. The board of a part starts at the origin pin,
  * which is its first pin, and runs right and down for its size before turning;
- * turning is about that pin, the same quarter turns pinPoints makes.
- * @param {PartDef} def @param {Rot} rot
+ * turning is about that pin, the same quarter turns pinPoints makes. A toy's
+ * `heading` is any angle, so that case gets the box that holds the turned body.
+ * @param {PartDef} def @param {number} rot degrees: a quarter turn, or a toy's facing
  * @returns {{ w: number, d: number, dx: number, dz: number }}
  */
 export function partFootprint(def, rot) {
   const w = def.size.w * MM;
   const d = def.size.d * MM;
+  const turn = ((rot % 360) + 360) % 360;
+  if (turn % 90 !== 0) {
+    // At any angle: the axis-aligned box that holds the body, and its middle,
+    // turned the way centreOf turns a toy (its own +x onto (cos, sin)).
+    const rad = (turn * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    return {
+      w: Math.abs(w * cos) + Math.abs(d * sin),
+      d: Math.abs(w * sin) + Math.abs(d * cos),
+      dx: (w / 2) * cos - (d / 2) * sin,
+      dz: (w / 2) * sin + (d / 2) * cos,
+    };
+  }
   let dx = w / 2;
   let dz = d / 2;
-  for (let i = 0; i < rot / 90; i++) [dx, dz] = [-dz, dx];
-  const across = rot === 90 || rot === 270;
+  for (let i = 0; i < turn / 90; i++) [dx, dz] = [-dz, dx];
+  const across = turn === 90 || turn === 270;
   return { w: across ? d : w, d: across ? w : d, dx, dz };
 }
 
 /** @param {import('./bench.js').Placed} p @returns {Box} */
 function partBox(p) {
-  const fp = partFootprint(PARTS[p.part], p.rot);
+  // A toy is driven at any angle, so it lies where its heading says, not where
+  // the quarter turn a hand gave it would.
+  const fp = partFootprint(PARTS[p.part], p.heading ?? p.rot);
   const cx = p.at.x + fp.dx;
   const cz = p.at.z + fp.dz;
   return { x0: cx - fp.w / 2, x1: cx + fp.w / 2, z0: cz - fp.d / 2, z1: cz + fp.d / 2 };

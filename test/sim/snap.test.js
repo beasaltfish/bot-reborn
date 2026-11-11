@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { PARTS } from '../../sim/parts.js';
-import { snapPart, snapBoard, freeSpot, isClear, partFootprint, spotForNew } from '../../sim/snap.js';
-import { emptyBench, addBoard, addPart, place, pinPoints } from '../../sim/bench.js';
+import { snapPart, snapBoard, freeSpot, isClear, partFootprint, spotForNew, under } from '../../sim/snap.js';
+import { emptyBench, addBoard, addPart, place, park, pinPoints } from '../../sim/bench.js';
 
 // Where a dropped part or board lands decides which strips it joins, so the
 // snap is pinned down here: on the grid, or not on the board at all.
@@ -112,6 +112,19 @@ test('a turned part blocks the ground it covers once turned', () => {
   assert.ok(fp.dx < 0 && fp.dz > 0, 'the centre is left of and below the pin');
   const spot = freeSpot(b, { w: 2, d: 2 }, -5, 12);
   assert.notDeepEqual(spot, { x: -5, z: 12 }, 'that ground is under the turned ESP32');
+});
+
+test('a toy parked at an angle lies where it faces, not where its quarter turn would', () => {
+  // heading 90 turns the body about the rear-left pad at (-20, 0): its 80 mm
+  // width runs along z and its 70 mm depth along -x, so it covers x -47.6..-20,
+  // z 0..31.5. Its `rot` (the quarter turn a hand gives a part) is still 0, the
+  // unturned body's box would run x -20..11.5 instead.
+  const open = { ...emptyBench(), boards: [], placed: [] };
+  const b = park(addPart(open, 'toy', { x: -20, z: 0 }).bench, 'toy', { x: -20, z: 0 }, 90);
+  assert.deepEqual(under(b, -30, 20).parts.map((p) => p.id), ['toy']);
+  assert.deepEqual(under(b, -5, 20).parts, [], 'that ground is not under the body');
+  assert.equal(isClear(b, { w: 4, d: 4 }, -30, 20), false);
+  assert.equal(isClear(b, { w: 4, d: 4 }, -5, 20), true);
 });
 
 test('things taken from the bin twice never land on top of each other or the opening parts', () => {

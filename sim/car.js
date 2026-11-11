@@ -210,7 +210,7 @@ export function obstacles(b, exceptId) {
   }
   for (const p of b.placed) {
     if (p.id === exceptId) continue;
-    const fp = partFootprint(PARTS[p.part], p.rot);
+    const fp = partFootprint(PARTS[p.part], p.heading ?? p.rot);
     const cx = p.at.x + fp.dx;
     const cz = p.at.z + fp.dz;
     rects.push({ x0: cx - fp.w / 2, x1: cx + fp.w / 2, z0: cz - fp.d / 2, z1: cz + fp.d / 2 });
