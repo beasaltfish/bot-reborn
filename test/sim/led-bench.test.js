@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { addPart, addWire, emptyBench } from '../../sim/bench.js';
+import { addPart, addWire, emptyBench, place } from '../../sim/bench.js';
 import { applyLedDamage, evaluateLedBench } from '../../sim/electrical/led-bench.js';
 
 test('LED follows the connected series resistor and power supply', () => {
@@ -45,4 +45,25 @@ test('a shorted supply is reported separately from reversed polarity', () => {
   bench = addWire(bench, 'src:+', 'src:-', 'yellow');
   assert.equal(evaluateLedBench(bench, 'led').state, 'short');
   assert.deepEqual(applyLedDamage(bench).burns, []);
+});
+
+test('breadboard strips connect a resistor and LED exactly like wires', () => {
+  let bench = emptyBench();
+  for (const part of /** @type {const} */ (['led-5mm', 'resistor', 'dc-source'])) bench = addPart(bench, part, { x: 0, z: 0 }).bench;
+  bench = place(bench, 'r', { x: -21, z: -6 }, 0, true);
+  bench = place(bench, 'led', { x: -17, z: -5 }, 0, true);
+  bench = addWire(bench, 'src:+', 'bb1:c11', 'red');
+  bench = addWire(bench, 'src:-', 'bb1:c16', 'black');
+  const outcome = evaluateLedBench(bench, 'led');
+  assert.equal(outcome.state, 'on');
+  assert.ok(Math.abs(outcome.currentMa - 3000 / 220.2) < 0.001);
+});
+
+test('the resistor can be on the cathode side of the LED', () => {
+  let bench = emptyBench();
+  for (const part of /** @type {const} */ (['led-5mm', 'resistor', 'dc-source'])) bench = addPart(bench, part, { x: 0, z: 0 }).bench;
+  bench = addWire(bench, 'src:+', 'led:A', 'red');
+  bench = addWire(bench, 'led:K', 'r:1', 'yellow');
+  bench = addWire(bench, 'r:2', 'src:-', 'black');
+  assert.equal(evaluateLedBench(bench, 'led').state, 'on');
 });
