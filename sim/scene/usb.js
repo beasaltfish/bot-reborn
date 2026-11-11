@@ -38,14 +38,26 @@ const INSERT_MS = 600;
 const INSERT_LIFT = 4;
 
 /**
+ * How high above the table the cord will climb: a breadboard with a part in
+ * it, or a part lying loose, is a few millimetres. The toy robot is 120 mm of
+ * body on wheels, and a cable is not draped across one — it lies on the table
+ * and the chassis stands over it.
+ */
+const CORD_CLIMB = 30 * MM;
+
+/**
  * How high the top of what stands at a table point is: a board, a part on
- * the table or seated on a board; 0 for bare table.
+ * the table or seated on a board; 0 for bare table, and for what is too tall
+ * to lay a cable over.
  * @param {import('../bench.js').Bench} b @param {number} x @param {number} z
  */
-function groundAt(b, x, z) {
+export function groundAt(b, x, z) {
   const here = under(b, x, z);
   let top = here.board ? BOARD_TOP : 0;
-  for (const p of here.parts) top = Math.max(top, (p.seated ? BOARD_TOP : 0) + PARTS[p.part].size.h * MM);
+  for (const p of here.parts) {
+    const h = (p.seated ? BOARD_TOP : 0) + PARTS[p.part].size.h * MM;
+    if (h <= CORD_CLIMB) top = Math.max(top, h);
+  }
   return top;
 }
 
