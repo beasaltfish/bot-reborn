@@ -75,6 +75,22 @@ expansion is complete.
    flashing, including real hardware verification. The current snapshot
    contract is preparatory and does not provide these features.
 
+## Workbench selection foundation
+
+A selection model and tests exist in `sim/selection.js` and
+`test/sim/selection.test.js`. Click selection is connected to
+`scene/interact.js`; bench updates clear removed targets and reset explicitly
+clears selection, even when IDs are reused. Pin clicks preserve click-to-wire.
+The selection description provides bilingual device names, declared pin roles,
+wire endpoints and colour, and stable action IDs; the full inspector UI remains
+for a later task. jsdom pointer-event tests exercise pin, part, wire and empty
+canvas selection and the existing click-to-wire mode. Real-browser interaction
+has not been checked.
+
+Verification: 45 focused tests passed, `npm run typecheck` and `npm test`
+(1,161 Node tests, 8 skipped; 120 admin tests) passed. A previous build passed
+with the existing warning about a chunk over 500 kB.
+
 ## Last verification
 
 At implementation commit `485cb85`, `npm test` passed: 1,154 Node tests passed,

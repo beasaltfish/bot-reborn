@@ -19,6 +19,7 @@ import {
 import { place, moveBoard, trash, addPart, addBoard, addWire, removeWire, pinPoints, isHole } from '../bench.js';
 import { nets } from '../netlist.js';
 import { wireColor } from '../wire-color.js';
+import { createSelection } from '../selection.js';
 import { snapPart, snapBoard, freeSpot, partFootprint } from '../snap.js';
 import { CAR, centreOf } from '../car.js';
 import { BOARD_TOP, buildWire, dispose } from './meshes.js';
@@ -106,11 +107,12 @@ export function beginCarry(part, e) {
  * @param {World} world
  * @param {() => Bench} getBench
  * @param {(b: Bench) => void} setBench  saves and redraws
- * @param {{ say(text: string): void, selectWire(id: string, x: number, y: number): void, selectPart(id: string, x: number, y: number): void }} opts
- * @returns {{ enable(on: boolean): void }}
+ * @param {{ say(text: string): void, selectWire(id: string, x: number, y: number): void, selectPart(id: string, x: number, y: number): void, onSelect(selection: import('../selection.js').Selection): void }} opts
+ * @returns {{ enable(on: boolean): void, selection(): import('../selection.js').Selection, refreshSelection(): void, clearSelection(): void }}
  */
 export function attachInteraction(world, getBench, setBench, opts) {
   const { canvas, scene } = world;
+  const selected = createSelection(getBench, opts.onSelect);
   const raycaster = new THREE.Raycaster();
   const boardTop = new THREE.Plane(new THREE.Vector3(0, 1, 0), -BOARD_TOP);
 
@@ -198,7 +200,7 @@ export function attachInteraction(world, getBench, setBench, opts) {
    * }} BoardDrag
    * @typedef {{
    *   kind: 'wire', from: string, fromPos: THREE.Vector3, x: number, y: number,
-   *   moved: boolean, armed: boolean, target: string | null, preview: THREE.Object3D | null,
+   *   moved: boolean, armed: boolean, target: string | null, preview: THREE.Object3D | null, selectionPoint: string | null,
    * }} WireDrag
    * @typedef {{ kind: 'pull', id: string, x: number, y: number }} WirePull
    */
@@ -991,11 +993,12 @@ export function attachInteraction(world, getBench, setBench, opts) {
     }
     const t = pick(e, false);
     if (t?.kind !== 'wire') lightWire(null);
-    if (!t) return;
+    if (!t) { selected.select(null); return; }
     e.stopImmediatePropagation();
     canvas.setPointerCapture(e.pointerId);
     if (t.kind === 'point') {
-      drag = { kind: 'wire', from: t.point, fromPos: t.pos, x: e.clientX, y: e.clientY, moved: false, armed: false, target: null, preview: null };
+      const pin = nearestPin(e);
+      drag = { kind: 'wire', from: t.point, fromPos: t.pos, x: e.clientX, y: e.clientY, moved: false, armed: false, target: null, preview: null, selectionPoint: pin?.kind === 'point' ? pin.point : null };
       light(t.point);
       aim.set([t.pos]);
       world.requestRender();
@@ -1089,6 +1092,7 @@ export function attachInteraction(world, getBench, setBench, opts) {
     if (d.kind === 'wire') {
       if (!d.armed && !d.moved && !wandered(e, d)) {
         // A click (or a tap) on a pin starts a wire whose end is the next click.
+        selected.select(d.selectionPoint ? { kind: 'pin', point: d.selectionPoint } : null);
         d.armed = true;
         say('Click a pin or a hole to end the wire · Esc to cancel');
         return;
@@ -1109,7 +1113,7 @@ export function attachInteraction(world, getBench, setBench, opts) {
       aim.set([]);
       canvas.style.cursor = '';
       if (wasLifted) drop(d);
-      else { putBack(d); opts.selectPart(d.id, e.clientX, e.clientY); }
+      else { putBack(d); selected.select({ kind: 'part', id: d.id }); opts.selectPart(d.id, e.clientX, e.clientY); }
       world.requestRender();
       return;
     }
@@ -1128,6 +1132,7 @@ export function attachInteraction(world, getBench, setBench, opts) {
     drag = null;
     if (wandered(e, d)) return;
     lightWire(null);
+    selected.select({ kind: 'wire', id: d.id });
     opts.selectWire(d.id, e.clientX, e.clientY);
     light(null);
   });
@@ -1150,6 +1155,9 @@ export function attachInteraction(world, getBench, setBench, opts) {
   addEventListener('blur', () => cancel());
 
   return {
+    selection: selected.selection,
+    refreshSelection: selected.refresh,
+    clearSelection: () => selected.select(null),
     /** Hands work in every view; this only pauses them (nothing calls it off today). */
     enable(on) {
       if (!on) cancel();

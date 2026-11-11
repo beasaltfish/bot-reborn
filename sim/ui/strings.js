@@ -2,6 +2,7 @@
 /** @type {Record<string, Record<string, string>>} */
 const COPY = {
   en: {
+    'selection.role': 'Role', 'selection.part': 'Device', 'selection.endpointA': 'From', 'selection.endpointB': 'To', 'selection.color': 'Colour', 'selection.wire': 'Wire', 'selection.startWire': 'Start wire', 'selection.removeWire': 'Remove wire', 'selection.unknownRole': 'Not declared',
     'name.bme280-i2c': 'BME280 environmental sensor', 'summary.bme280-i2c': 'Temperature, humidity and pressure breakout (simulation in development).',
     output: 'Outputs', fundamental: 'Basic components', power: 'Power', input: 'Inputs',
     'name.push-button': 'Push button', 'summary.push-button': 'Closes its contacts when pressed.',
@@ -12,6 +13,7 @@ const COPY = {
     'summary.esp32': 'Controller board for the simulated project.', 'summary.inmp441': 'Microphone module for audio input.', 'summary.max98357a': 'Amplifier module for the speaker.', 'summary.speaker': 'Wired audio output.', 'summary.mpu6050': 'Motion sensor module for the wand.', 'summary.toy': 'Battery-powered toy with drive and steering inputs.', 'summary.display': 'Screen module for visual output.',
   },
   zh: {
+    'selection.role': '作用', 'selection.part': '设备', 'selection.endpointA': '起点', 'selection.endpointB': '终点', 'selection.color': '颜色', 'selection.wire': '导线', 'selection.startWire': '开始连线', 'selection.removeWire': '移除导线', 'selection.unknownRole': '未声明',
     'name.bme280-i2c': 'BME280 环境传感器', 'summary.bme280-i2c': '温度、湿度和气压模块（模拟功能开发中）。',
     output: '输出', fundamental: '基础元件', power: '电源', input: '输入',
     'name.push-button': '按键', 'summary.push-button': '按下时接通两个触点。',

@@ -79,6 +79,7 @@ const panels = createPanels({
 function setBench(b) {
   const result = applyLedDamage(b);
   bench = result.bench;
+  hands.refreshSelection();
   write(BENCH_KEY, serialize(bench));
   world.show(bench);
   for (const id of result.burns) effects.smoke(id);
@@ -102,6 +103,9 @@ function addFromBin(part) {
 
 const hands = attachInteraction(world, () => bench, setBench, {
   say: (text) => panels.status(text),
+  onSelect: (selection) => {
+    if (selection?.kind === 'pin') panels.status(selection.point);
+  },
   selectWire: (id, x, y) => panels.wireMenu(id, x, y, {
     color: (color) => setBench(setWireColor(bench, id, color)),
     remove: () => setBench(removeWire(bench, id)),
@@ -484,6 +488,7 @@ function unplug() {
 }
 
 function reset() {
+  hands.clearSelection();
   runner?.stop();
   if (usb.plugged) {
     usb.pullOut();
