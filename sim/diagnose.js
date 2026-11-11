@@ -63,6 +63,19 @@ function holeColumn(hole) {
 
 /** What each power-on fault means for the user and what to do about it. */
 const FAULT_TEXT = {
+  'unsupported-electrical-network': 'This power network is outside the simulator’s electrical model; simplify the wiring or check it with a suitable circuit tool.',
+  'source-contention': 'Multiple power sources drive the same rail; separate their outputs or use a suitable power-sharing circuit.',
+  'reverse-polarity': 'Power and ground are reversed; disconnect power and correct the polarity before reconnecting.',
+  'source-current-limit': 'The load requests more current than the supply can deliver; reduce the load or use a higher-current supply.',
+  'regulator-dropout': 'The regulator input voltage is too low for its output; raise the input voltage within its ratings.',
+  'rail-brownout': 'The supply voltage is too low for this device; check the supply, wiring, and current demand.',
+  'device-unpowered': 'The device has no usable power; connect its supply and ground to a suitable source.',
+  'device-overvoltage': 'The supply voltage exceeds the device rating and may have damaged it; replace the device and use a suitable voltage.',
+  'device-overpower': 'The device dissipates more power than its rating and may have been damaged; replace it and reduce the load.',
+  'firmware-unsupported': 'The selected firmware does not support this device; choose a supported device or firmware profile.',
+  'i2c-address-conflict': 'Devices share an I2C address on the same bus; change an address or separate the buses.',
+  'spi-chip-select-conflict': 'Devices share a chip select on the same SPI bus; assign separate chip selects.',
+  'resource-pin-conflict': 'Incompatible signals share a pin or net; separate the connections or assign different pins.',
   'short-rails': 'Two of 3V3, 5V and GND are joined, so the board keeps resetting; take away the wire or pin that joins them.',
   'mic-5v': 'The INMP441 is rated 3.6 V at most and its VDD was on 5V, so it burnt; replace it and power it from 3V3.',
   'mic-burnt': 'This mic already burnt and stays dead; replace it with a fresh one and wire its VDD to 3V3.',

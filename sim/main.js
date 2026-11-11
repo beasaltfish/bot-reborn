@@ -8,7 +8,7 @@
 // comes alive as a body or shows why not. Pulling the plug ends it.
 
 import { emptyBench, load, serialize, addPart, addBoard, park } from './bench.js';
-import { powerOn } from './power.js';
+import { evaluateBench } from './devices/evaluate.js';
 import { motorLevels, toyAction } from './car.js';
 import { createWandFeed } from './wand-feed.js';
 import { createShakeDetector } from '../core/shake-detector.js';
@@ -296,17 +296,18 @@ async function plugIn(recipe = null) {
   recipeOn = null;
   const mine = ++plugs;
   bench = { ...bench, usb: true };
-  const outcome = powerOn(bench);
+  const merged = evaluateBench(bench);
+  const outcome = merged.legacy;
   // What burns is marked now, before anything else is shown, so a reload
   // remembers it; it stays burnt until the user drops it in the bin.
-  if (outcome.burns.length) {
-    bench = { ...bench, placed: bench.placed.map((p) => (outcome.burns.includes(p.id) ? { ...p, burnt: true } : p)) };
+  if (merged.burns.length) {
+    bench = { ...bench, placed: bench.placed.map((p) => (merged.burns.includes(p.id) ? { ...p, burnt: true } : p)) };
   }
   setBench(bench);
   powered = outcome;
   for (const key of Object.keys(blocks)) delete blocks[key];
-  world.screens(outcome.parts);
-  world.imu(outcome.parts);
+  world.screens(/** @type {any} */ (merged.parts));
+  world.imu(/** @type {any} */ (merged.parts));
   world.onPark((id, pose, blocked) => {
     setBench(park(bench, id, { x: pose.x, z: pose.z }, pose.heading));
     if (!blocked || blocks[id] === blocked) return;
@@ -323,12 +324,12 @@ async function plugIn(recipe = null) {
     if (t.action.wheels === 'forward' || t.action.wheels === 'backward') world.drive(id, t.action);
   }
   effects.playing(bench.placed
-    .filter((p) => /** @type {any} */ (outcome.parts[p.id])?.kind === 'speaker' && /** @type {any} */ (outcome.parts[p.id]).playing)
+    .filter((p) => /** @type {any} */ (merged.parts[p.id])?.kind === 'speaker' && /** @type {any} */ (merged.parts[p.id]).playing)
     .map((p) => p.id));
-  for (const id of outcome.burns) effects.smoke(id);
+  for (const id of merged.burns) effects.smoke(id);
   effects.led(outcome.esp === 'brownout' ? 'blink' : 'on');
   // After a brown-out the short is the news; a guess about some other wire would mislead.
-  const hints = diagnose(bench, outcome);
+  const hints = diagnose(bench, { ...outcome, faults: merged.faults, burns: merged.burns });
   const first = outcome.esp === 'brownout' ? hints.find((h) => h.kind === 'fault') : hints[0];
   line = { end: null, lost: false, api: null, fault: first?.text ?? null, state: null, who: null, ending: null };
   showLine();
@@ -453,8 +454,9 @@ function unplug() {
   bench = { ...bench, usb: false };
   setBench(bench);
   // Pulling the plug turns the panels off; the last look is not kept.
-  world.screens(powerOn(bench).parts);
-  world.imu(powerOn(bench).parts);
+  const { parts } = evaluateBench(bench);
+  world.screens(/** @type {any} */ (parts));
+  world.imu(/** @type {any} */ (parts));
   if (view === 'orbit' && wiringView !== 'orbit') {
     view = wiringView;
     go(view);
