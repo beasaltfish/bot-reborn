@@ -27,6 +27,10 @@ export function evaluateLedBench(bench, ledId) {
     });
     if (!direct && matching.length !== 1) continue;
     const allowed = new Set([positive, negative, anode, cathode, ...(direct ? [] : [`${matching[0].id}:1`, `${matching[0].id}:2`])]);
+    for (const button of bench.placed.filter(p => p.part === 'push-button' && p.properties.pressed === true)) {
+      allowed.add(`${button.id}:1`);
+      allowed.add(`${button.id}:2`);
+    }
     const extra = [positive, negative, anode, cathode].some(point => n.members(point).some(member => !member.startsWith('bb') && !allowed.has(member)));
     if (extra || (direct && matching.length)) return { state: 'unsupported', currentMa: 0 };
     const resistance = direct ? 0 : Number(matching[0].properties.ohms);

@@ -60,7 +60,8 @@ const peekHint = /** @type {HTMLElement} */ (document.getElementById('peek'));
 const world = createWorld(canvas);
 const effects = createEffects(world);
 // A page that was closed with the cable in is not powered when it opens again.
-let bench = { ...load(read(BENCH_KEY)), usb: false };
+const savedBench = load(read(BENCH_KEY));
+let bench = { ...savedBench, usb: false, placed: savedBench.placed.map(p => p.part === 'push-button' ? { ...p, properties: { ...p.properties, pressed: false } } : p) };
 const panels = createPanels({
   hint: () => (bench.placed.some((p) => p.burnt)
     ? 'A part burnt out; drag it to the bin and take a new one from Parts.'

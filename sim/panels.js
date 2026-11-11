@@ -522,6 +522,20 @@ export function createPanels(opts) {
     }
     for (const [key, def] of Object.entries(schema)) {
       if (def.kind === 'boolean') {
+        if (key === 'pressed') {
+          const press = /** @type {HTMLButtonElement} */ (el('button', { type: 'button', class: 'pin', 'aria-label': 'Hold to press' }, ['Hold to press']));
+          let down = false;
+          const release = () => { if (down) { down = false; change(key, false); } };
+          press.addEventListener('pointerdown', event => { event.preventDefault(); down = true; press.setPointerCapture(event.pointerId); change(key, true); });
+          press.addEventListener('pointerup', release);
+          press.addEventListener('pointercancel', release);
+          press.addEventListener('lostpointercapture', release);
+          press.addEventListener('keydown', event => { if (!event.repeat && (event.key === ' ' || event.key === 'Enter')) { event.preventDefault(); down = true; change(key, true); } });
+          press.addEventListener('keyup', event => { if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); release(); } });
+          press.addEventListener('blur', release);
+          wireMenuElement.append(press);
+          continue;
+        }
         const label = el('label', {}, [key === 'pressed' ? 'Pressed ' : `${key} `]);
         const input = /** @type {HTMLInputElement} */ (el('input', { type: 'checkbox' }));
         input.checked = values[key] === true;
