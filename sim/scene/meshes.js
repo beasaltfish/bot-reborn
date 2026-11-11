@@ -796,7 +796,7 @@ const LOOKS = {
  * @returns {PartMesh}
  */
 export function buildPart(def, state) {
-  if (def.id === 'led-5mm' || def.id === 'resistor' || def.id === 'dc-source') {
+  if (def.id === 'led-5mm' || def.id === 'resistor' || def.id === 'dc-source' || def.id === 'push-button') {
     const g = new THREE.Group();
     /** @type {Map<string, THREE.Vector3>} */
     const anchors = new Map();
@@ -812,6 +812,11 @@ export function buildPart(def, state) {
       g.add(bulb);
     } else if (def.id === 'resistor') {
       g.add(box(3, 1, 1, mat('matte', 0xd8b882), 2, height, 0));
+    } else if (def.id === 'push-button') {
+      g.add(box(2.4, 0.8, 2.4, mat('matte', 0x303030), 1, height, 0));
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.5, 24), mat('gloss', 0xc7372e));
+      cap.position.set(1, height + 1.05, 0);
+      g.add(cap);
     } else {
       g.add(box(10, 4, 7, mat('matte', 0x34383c), 1.5, height, 2));
     }

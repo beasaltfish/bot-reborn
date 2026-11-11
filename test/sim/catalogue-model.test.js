@@ -5,7 +5,7 @@ import { simText } from '../../sim/ui/strings.js';
 
 test('catalogue groups devices in a stable category order', () => {
   const sections = catalogueView({});
-  assert.deepEqual(sections.map(s => s.id), ['controller', 'audio', 'sensor', 'actuator', 'display', 'fundamental', 'output', 'power']);
+  assert.deepEqual(sections.map(s => s.id), ['controller', 'audio', 'sensor', 'actuator', 'display', 'fundamental', 'input', 'output', 'power']);
   const displays = sections.find(s => s.id === 'display');
   assert.ok(displays);
   assert.ok(displays.entries.every(e => e.part.startsWith('screen-')));

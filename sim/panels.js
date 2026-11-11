@@ -521,6 +521,15 @@ export function createPanels(opts) {
       wireMenuElement.append(el('span', {}, [`${message} ${led.currentMa.toFixed(2)} mA`]));
     }
     for (const [key, def] of Object.entries(schema)) {
+      if (def.kind === 'boolean') {
+        const label = el('label', {}, [key === 'pressed' ? 'Pressed ' : `${key} `]);
+        const input = /** @type {HTMLInputElement} */ (el('input', { type: 'checkbox' }));
+        input.checked = values[key] === true;
+        input.addEventListener('change', () => change(key, input.checked));
+        label.append(input);
+        wireMenuElement.append(label);
+        continue;
+      }
       if (def.kind !== 'number') continue;
       const label = el('label', {}, [`${key}${def.unit ? ` (${def.unit})` : ''} `]);
       const input = /** @type {HTMLInputElement} */ (el('input', { type: 'number', value: String(values[key]), ...(def.min === undefined ? {} : { min: String(def.min) }), ...(def.max === undefined ? {} : { max: String(def.max) }), step: String(def.step ?? 'any') }));
