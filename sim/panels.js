@@ -517,7 +517,7 @@ export function createPanels(opts) {
   function partMenu(id, x, y, schema, values, led, change) {
     wireMenuElement.replaceChildren(el('strong', {}, [id]));
     if (led) {
-      const message = /** @type {Record<string, string>} */ ({ off: 'No powered loop detected.', on: 'LED is lit.', limited: 'Supply current limit is active.', overcurrent: 'Current exceeds the LED rating.', unsupported: 'This circuit topology is not supported.', burnt: 'LED is burnt.' })[led.state] ?? led.state;
+      const message = /** @type {Record<string, string>} */ ({ off: 'No powered loop detected.', short: 'The supply terminals are shorted; separate the positive and negative connections.', reversed: 'LED polarity is reversed; connect A towards positive and K towards negative.', on: 'LED is lit.', limited: 'Supply current limit is active.', overcurrent: 'Current exceeds the LED rating.', unsupported: 'This circuit topology is not supported.', burnt: 'LED is burnt. Replace it and check the current limit.' })[led.state] ?? led.state;
       wireMenuElement.append(el('span', {}, [`${message} ${led.currentMa.toFixed(2)} mA`]));
     }
     for (const [key, def] of Object.entries(schema)) {

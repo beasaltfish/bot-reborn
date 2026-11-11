@@ -34,5 +34,15 @@ test('reversing the LED or disconnecting the supply leaves it off', () => {
   bench = addWire(bench, 'src:+', 'r:1', 'red');
   bench = addWire(bench, 'r:2', 'led:K', 'yellow');
   bench = addWire(bench, 'led:A', 'src:-', 'black');
-  assert.equal(evaluateLedBench(bench, 'led').state, 'off');
+  assert.equal(evaluateLedBench(bench, 'led').state, 'reversed');
+});
+
+test('a shorted supply is reported separately from reversed polarity', () => {
+  let bench = emptyBench();
+  for (const part of /** @type {const} */ (['led-5mm', 'dc-source'])) bench = addPart(bench, part, { x: 0, z: 0 }).bench;
+  bench = addWire(bench, 'src:+', 'led:A', 'red');
+  bench = addWire(bench, 'led:K', 'src:-', 'black');
+  bench = addWire(bench, 'src:+', 'src:-', 'yellow');
+  assert.equal(evaluateLedBench(bench, 'led').state, 'short');
+  assert.deepEqual(applyLedDamage(bench).burns, []);
 });
