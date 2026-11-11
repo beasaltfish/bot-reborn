@@ -7,7 +7,9 @@
 // goes in, the circuit is judged once, what burns burns, and the bench either
 // comes alive as a body or shows why not. Pulling the plug ends it.
 
-import { emptyBench, load, serialize, addPart, addBoard, park, setWireColor, removeWire } from './bench.js';
+import { emptyBench, load, serialize, addPart, addBoard, park, setWireColor, removeWire, setPartProperty } from './bench.js';
+import { deviceByPart } from './devices/catalog.js';
+import { applyLedDamage, evaluateLedBench } from './electrical/led-bench.js';
 import { evaluateBench } from './devices/evaluate.js';
 import { motorLevels, toyAction } from './car.js';
 import { createWandFeed } from './wand-feed.js';
@@ -74,10 +76,13 @@ const panels = createPanels({
 
 /** @param {import('./bench.js').Bench} b */
 function setBench(b) {
-  bench = b;
-  write(BENCH_KEY, serialize(b));
-  world.show(b);
-  panels.links(targetFor(b), b.placed.filter((p) => p.part.startsWith('screen-')).map((p) => p.id));
+  const result = applyLedDamage(b);
+  bench = result.bench;
+  write(BENCH_KEY, serialize(bench));
+  world.show(bench);
+  for (const id of result.burns) effects.smoke(id);
+  if (result.burns.length) panels.status('LED current exceeded its rating; replace the burnt LED and check the resistance or current limit.');
+  panels.links(targetFor(bench), bench.placed.filter((p) => p.part.startsWith('screen-')).map((p) => p.id));
   usb.refresh();
   effects.refresh();
 }
@@ -100,6 +105,14 @@ const hands = attachInteraction(world, () => bench, setBench, {
     color: (color) => setBench(setWireColor(bench, id, color)),
     remove: () => setBench(removeWire(bench, id)),
   }),
+  selectPart: (id, x, y) => {
+    const part = bench.placed.find(p => p.id === id);
+    if (!part) return;
+    const schema = deviceByPart(part.part)?.properties ?? {};
+    const led = part.part === 'led-5mm' ? evaluateLedBench(bench, id) : null;
+    if (Object.keys(schema).length || led) panels.partMenu(id, x, y, schema, part.properties, led,
+      (key, value) => setBench(setPartProperty(bench, id, key, value)));
+  },
 });
 const usb = attachUsb(world, { onPlug: (on) => (on ? plugIn(recipeOn) : unplug()), locked: () => starting, bench: () => bench });
 

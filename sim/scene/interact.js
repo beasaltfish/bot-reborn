@@ -106,7 +106,7 @@ export function beginCarry(part, e) {
  * @param {World} world
  * @param {() => Bench} getBench
  * @param {(b: Bench) => void} setBench  saves and redraws
- * @param {{ say(text: string): void, selectWire(id: string, x: number, y: number): void }} opts
+ * @param {{ say(text: string): void, selectWire(id: string, x: number, y: number): void, selectPart(id: string, x: number, y: number): void }} opts
  * @returns {{ enable(on: boolean): void }}
  */
 export function attachInteraction(world, getBench, setBench, opts) {
@@ -1109,7 +1109,7 @@ export function attachInteraction(world, getBench, setBench, opts) {
       aim.set([]);
       canvas.style.cursor = '';
       if (wasLifted) drop(d);
-      else putBack(d);
+      else { putBack(d); opts.selectPart(d.id, e.clientX, e.clientY); }
       world.requestRender();
       return;
     }

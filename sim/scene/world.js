@@ -23,6 +23,7 @@ import {
 import { BIN } from '../layout.js';
 import { createWandState } from '../wand-state.js';
 import { CAR, actionAt, obstacles, stepCar } from '../car.js';
+import { evaluateLedBench } from '../electrical/led-bench.js';
 
 /** @typedef {import('../bench.js').Bench} Bench */
 /** @typedef {import('../bench.js').Placed} Placed */
@@ -453,6 +454,14 @@ export function createWorld(canvas) {
     }
     for (const g of next.values()) if (g.parent !== parts) parts.add(g);
     built = next;
+
+    for (const p of b.placed.filter(part => part.part === 'led-5mm')) {
+      const bulb = /** @type {THREE.Mesh | undefined} */ (built.get(p)?.getObjectByName('led-bulb'));
+      if (bulb && bulb.material instanceof THREE.MeshPhongMaterial) {
+        const state = evaluateLedBench(b, p.id).state;
+        bulb.material.emissive.setHex(state === 'on' || state === 'limited' ? 0x9e0800 : 0x000000);
+      }
+    }
 
     refreshWires();
   }

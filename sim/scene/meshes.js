@@ -796,6 +796,27 @@ const LOOKS = {
  * @returns {PartMesh}
  */
 export function buildPart(def, state) {
+  if (def.id === 'led-5mm' || def.id === 'resistor' || def.id === 'dc-source') {
+    const g = new THREE.Group();
+    /** @type {Map<string, THREE.Vector3>} */
+    const anchors = new Map();
+    const height = state.onBoard ? COLLAR : PIN_LEN;
+    for (const pin of def.pins) {
+      g.add(box(0.25, height, 0.25, mat('metal', STEEL), pin.x, 0, pin.y));
+      anchors.set(pin.name, new THREE.Vector3(pin.x, height, pin.y));
+    }
+    if (def.id === 'led-5mm') {
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), new THREE.MeshPhongMaterial({ color: state.burnt ? 0x281b19 : 0xd82a26, shininess: 60 }));
+      bulb.position.set(0.5, height + 1, 0);
+      bulb.name = 'led-bulb';
+      g.add(bulb);
+    } else if (def.id === 'resistor') {
+      g.add(box(3, 1, 1, mat('matte', 0xd8b882), 2, height, 0));
+    } else {
+      g.add(box(10, 4, 7, mat('matte', 0x34383c), 1.5, height, 2));
+    }
+    return { group: g, anchors };
+  }
   if (def.id === 'speaker') return buildSpeaker(state.burnt);
   if (def.id === 'mpu6050') return buildImu(state.burnt);
   if (def.id === 'toy') return buildCar(state);

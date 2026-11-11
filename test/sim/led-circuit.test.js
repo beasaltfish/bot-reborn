@@ -14,6 +14,7 @@ test('series LED current and power follow the source and resistance', () => {
 test('reverse polarity, an absent resistor and source current limit are distinguished', () => {
   assert.equal(evaluateLed({ ...base, reversed: true }).state, 'off');
   assert.equal(evaluateLed({ ...base, resistance: 0 }).state, 'overcurrent');
+  assert.equal(evaluateLed({ ...base, resistance: 0, currentLimitMa: 10 }).state, 'limited');
   assert.equal(evaluateLed({ ...base, currentLimitMa: 10 }).state, 'limited');
   assert.throws(() => evaluateLed({ ...base, resistance: -1 }), RangeError);
 });

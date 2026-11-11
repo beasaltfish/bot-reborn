@@ -14,6 +14,9 @@ function device(part, category, capabilities) {
 
 /** @type {Record<string, DeviceDef>} */
 export const DEVICES = {
+  'led-5mm': { ...device('led-5mm', 'output', [{ kind: 'led', positive: 'A', negative: 'K' }]), properties: { color: { kind: 'enum', default: 'red', values: ['red'] } } },
+  resistor: { ...device('resistor', 'fundamental', [{ kind: 'resistor', positive: '1', negative: '2' }]), properties: { ohms: { kind: 'number', default: 220, min: 1, max: 10000000, unit: 'Ω' } } },
+  'dc-source': { ...device('dc-source', 'power', []), properties: { voltage: { kind: 'number', default: 5, min: 0, max: 12, unit: 'V' }, currentLimitMa: { kind: 'number', default: 500, min: 1, max: 5000, unit: 'mA' }, internalResistanceOhm: { kind: 'number', default: 0.2, min: 0, max: 10, unit: 'Ω' } } },
   esp32: device('esp32', 'controller', [
     { kind: 'source', pin: '3V3' }, { kind: 'source', pin: '5V' },
   ]),

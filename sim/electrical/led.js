@@ -18,7 +18,7 @@ export function evaluateLed(circuit) {
   const currentMa = Math.min(requestedMa, currentLimitMa);
   const ledPowerMw = currentMa * forwardVoltage;
   const resistorPowerMw = currentMa * currentMa * resistance / 1000;
-  const state = currentMa > maxCurrentMa || ledPowerMw > maxPowerMw || resistance === 0
+  const state = currentMa > maxCurrentMa || ledPowerMw > maxPowerMw
     ? 'overcurrent' : requestedMa > currentLimitMa ? 'limited' : 'on';
   return { state, currentMa, ledPowerMw, resistorPowerMw, brightness: Math.min(1, currentMa / maxCurrentMa) };
 }

@@ -27,7 +27,7 @@ import { SCREENS } from '../core/screens.js';
  * `prefix` is the stem of its instance ids: mic, mic2, mic3…
  * `model` is the screen table row a screen part is built from.
  * @typedef {{
- *   id: 'esp32' | 'inmp441' | 'max98357a' | 'speaker' | 'mpu6050' | 'toy' | `screen-${string}`,
+ *   id: 'esp32' | 'inmp441' | 'max98357a' | 'speaker' | 'mpu6050' | 'toy' | 'led-5mm' | 'resistor' | 'dc-source' | `screen-${string}`,
  *   label: string,
  *   prefix: string,
  *   model?: string,
@@ -70,6 +70,9 @@ const sameNet = (base) => ESP_PINS.map((p) => p.name).filter((n) => n === base |
 
 /** @type {Record<string, PartDef>} */
 const FIXED = {
+  'led-5mm': { id: 'led-5mm', label: '5 mm LED', prefix: 'led', size: { w: 5, d: 5, h: 9 }, pins: [{ name: 'A', x: 0, y: 0 }, { name: 'K', x: 1, y: 0 }], internal: [], onBoard: true },
+  resistor: { id: 'resistor', label: 'Resistor', prefix: 'r', size: { w: 10, d: 3, h: 3 }, pins: [{ name: '1', x: 0, y: 0 }, { name: '2', x: 4, y: 0 }], internal: [], onBoard: true },
+  'dc-source': { id: 'dc-source', label: 'DC power supply', prefix: 'src', size: { w: 35, d: 25, h: 12 }, pins: [{ name: '+', x: 0, y: 0, wireOnly: true }, { name: '-', x: 3, y: 0, wireOnly: true }], internal: [], onBoard: false },
   esp32: {
     id: 'esp32',
     label: 'ESP32-S3',

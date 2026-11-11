@@ -513,5 +513,30 @@ export function createPanels(opts) {
     wireMenuElement.style.top = `${Math.max(8, Math.min(y, window.innerHeight - 60))}px`;
     wireMenuElement.hidden = false;
   }
-  return { status: setStatus, pick, closePicker, links, wireMenu };
+  /** @param {string} id @param {number} x @param {number} y @param {Record<string, import('./devices/catalog.js').PropertyDef>} schema @param {Record<string, number|string|boolean>} values @param {{state:string,currentMa:number}|null} led @param {(key:string,value:number|string|boolean)=>void} change */
+  function partMenu(id, x, y, schema, values, led, change) {
+    wireMenuElement.replaceChildren(el('strong', {}, [id]));
+    if (led) {
+      const message = /** @type {Record<string, string>} */ ({ off: 'No powered loop detected.', on: 'LED is lit.', limited: 'Supply current limit is active.', overcurrent: 'Current exceeds the LED rating.', unsupported: 'This circuit topology is not supported.', burnt: 'LED is burnt.' })[led.state] ?? led.state;
+      wireMenuElement.append(el('span', {}, [`${message} ${led.currentMa.toFixed(2)} mA`]));
+    }
+    for (const [key, def] of Object.entries(schema)) {
+      if (def.kind !== 'number') continue;
+      const label = el('label', {}, [`${key}${def.unit ? ` (${def.unit})` : ''} `]);
+      const input = /** @type {HTMLInputElement} */ (el('input', { type: 'number', value: String(values[key]), ...(def.min === undefined ? {} : { min: String(def.min) }), ...(def.max === undefined ? {} : { max: String(def.max) }), step: String(def.step ?? 'any') }));
+      input.addEventListener('change', () => {
+        if (!input.checkValidity() || !Number.isFinite(input.valueAsNumber)) return;
+        change(key, input.valueAsNumber);
+      });
+      label.append(input);
+      wireMenuElement.append(label);
+    }
+    const close = el('button', { type: 'button', class: 'link', 'aria-label': 'Close part options' }, ['×']);
+    close.addEventListener('click', () => { wireMenuElement.hidden = true; });
+    wireMenuElement.append(close);
+    wireMenuElement.style.left = `${Math.max(8, Math.min(x, window.innerWidth - Math.min(340, window.innerWidth - 16)))}px`;
+    wireMenuElement.style.top = `${Math.max(8, Math.min(y, window.innerHeight - 100))}px`;
+    wireMenuElement.hidden = false;
+  }
+  return { status: setStatus, pick, closePicker, links, wireMenu, partMenu };
 }
