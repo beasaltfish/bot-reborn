@@ -25,9 +25,33 @@ const EN = {
   U5A: 'Steering driver input A.', U5B: 'Steering driver input B.',
 };
 
-/** @param {string} partId @param {{name:string,role?:string,wireOnly?:boolean}} pin */
-export function pinDescription(partId, pin) {
+/** @type {Record<string, string>} */
+const ZH = {
+  GND: '公共地线，与控制器共享参考电位。', VCC: '电源输入，接线前请确认模块的供电要求。',
+  VDD: '麦克风电源输入，本项目使用 3.3 V。', Vin: '功放电源输入，本项目使用 5 V。',
+  SDA: 'I²C 数据线，可由兼容的 I²C 器件共享。', SCL: 'I²C 时钟线，可由兼容的 I²C 器件共享。',
+  BCLK: 'I²S 位时钟输入。', LRC: 'I²S 字选择时钟输入。', DIN: 'I²S 音频数据输入。', WS: 'I²S 字选择时钟输入。',
+  SD: '数据或关断引脚，具体功能取决于模块。', SCK: '时钟信号，用途取决于连接的器件和协议。',
+  MOSI: '从控制器发送到显示屏的 SPI 数据。', MISO: '从模块发送到控制器的 SPI 数据。',
+  CS: 'SPI 片选，选择接收命令的模块。', DC: '显示屏控制引脚，用于区分命令和像素数据。',
+  RST: '复位输入，用于初始化器件。', BL: '显示屏背光控制或供电输入。',
+  'L/R': '选择 I²S 麦克风声道，接地选择左声道。', GAIN: '功放增益选择输入。',
+  '3V3': '控制板上的 3.3 V 电源引脚。', '5V': '控制板上的 5 V 电源引脚。',
+  U3A: '行驶电机驱动输入 A。', U3B: '行驶电机驱动输入 B。',
+  U5A: '转向驱动输入 A。', U5B: '转向驱动输入 B。',
+};
+
+/** @param {string} partId @param {{name:string,role?:string,wireOnly?:boolean}} pin @param {string} [lang] */
+export function pinDescription(partId, pin, lang = 'en') {
   const role = pin.role ?? pin.name.replace(/\.\d+$/, '');
+  if (lang === 'zh') {
+    if (partId === 'inmp441' && pin.name === 'SD') return 'I²S 麦克风音频数据输出。';
+    if (partId === 'max98357a' && pin.name === 'SD') return '功放关断控制，低电平时关闭。';
+    if (partId === 'max98357a' && (pin.name === '+' || pin.name === '-')) return '连接扬声器的桥接功放输出端。';
+    if (partId === 'speaker' && (pin.name === '+' || pin.name === '-')) return '扬声器端子，两个端子分别连接功放输出。';
+    if (/^GPIO\d+$/.test(role)) return '通用控制器引脚，具体功能取决于固件配置。';
+    return ZH[role] ?? '请查看器件接线指南了解此引脚。';
+  }
   if (partId === 'inmp441' && pin.name === 'SD') return 'I²S microphone audio data output.';
   if (partId === 'max98357a' && pin.name === 'SD') return 'Amplifier shutdown control. A low level turns it off.';
   if (partId === 'max98357a' && (pin.name === '+' || pin.name === '-')) return 'Bridged amplifier output terminal for the speaker.';

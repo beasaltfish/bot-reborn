@@ -12,12 +12,40 @@ const summary = /** @type {HTMLElement} */ (document.getElementById('summary'));
 const pins = /** @type {HTMLElement} */ (document.getElementById('pins'));
 const status = /** @type {HTMLElement} */ (document.getElementById('status'));
 const detail = /** @type {HTMLElement} */ (document.getElementById('pin-detail'));
+const language = /** @type {HTMLSelectElement} */ (document.getElementById('language'));
+const back = /** @type {HTMLAnchorElement} */ (document.querySelector('aside a'));
+const instructions = /** @type {HTMLElement} */ (document.getElementById('instructions'));
+const pinsTitle = /** @type {HTMLElement} */ (document.getElementById('pins-title'));
+let lang = 'en';
+try { if (localStorage.getItem('botreborn.sim.language') === 'zh') lang = 'zh'; } catch { /* Storage is optional. */ }
+language.value = lang;
 const id = new URLSearchParams(location.search).get('part') ?? '';
 const part = Object.hasOwn(PARTS, id) ? PARTS[id] : undefined;
-const entry = catalogueEntry(id);
+const entry = catalogueEntry(id, lang);
+
+/** @type {import('./parts.js').Pin | undefined} */ let selectedPin;
+function updateCopy() {
+  const zh = lang === 'zh';
+  document.documentElement.lang = zh ? 'zh-CN' : 'en';
+  document.title = zh ? '器件实验室' : 'Device laboratory';
+  back.textContent = zh ? '← 返回工作台' : '← Back to workbench';
+  instructions.textContent = zh ? '拖动旋转 · 滚动缩放' : 'Drag to rotate · scroll to zoom';
+  pinsTitle.textContent = zh ? '引脚' : 'Pins';
+  const translated = catalogueEntry(id, lang);
+  name.textContent = translated?.name ?? (zh ? '器件实验室' : 'Device laboratory');
+  summary.textContent = translated?.summary ?? '';
+  status.textContent = part ? '' : (zh ? '找不到此器件，请返回工作台重新选择。' : 'This device is not available. Return to the workbench and choose a device.');
+  detail.textContent = selectedPin ? `${selectedPin.name} — ${pinDescription(id, selectedPin, lang)}` : (zh ? '选择引脚，在模型上查看其位置。' : 'Select a pin to locate it on the model.');
+}
+language.addEventListener('change', () => {
+  lang = language.value === 'zh' ? 'zh' : 'en';
+  try { localStorage.setItem('botreborn.sim.language', lang); } catch { /* Storage is optional. */ }
+  updateCopy();
+});
+updateCopy();
 
 if (!part || !entry) {
-  status.textContent = 'This device is not available. Return to the workbench and choose a device.';
+  updateCopy();
 } else {
   name.textContent = entry.name;
   summary.textContent = entry.summary;
@@ -63,7 +91,8 @@ if (!part || !entry) {
       const anchor = anchors.get(pin.name);
       marker.visible = !!anchor;
       if (anchor) marker.position.copy(anchor);
-      detail.textContent = `${pin.name} — ${pinDescription(id, pin)}`;
+      selectedPin = pin;
+      updateCopy();
       render();
     });
     buttons.push(button);

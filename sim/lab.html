@@ -23,10 +23,12 @@
     <canvas id="stage" aria-label="Interactive 3D device model"></canvas>
     <aside>
       <a href="./">← Back to workbench</a>
+      <label for="language">Language / 语言</label>
+      <select id="language"><option value="en">English</option><option value="zh">中文</option></select>
       <h1 id="name">Device laboratory</h1>
       <p id="summary" class="muted"></p>
-      <p class="muted">Drag to rotate · scroll to zoom</p>
-      <h2>Pins</h2>
+      <p id="instructions" class="muted">Drag to rotate · scroll to zoom</p>
+      <h2 id="pins-title">Pins</h2>
       <ul id="pins"></ul>
       <p id="pin-detail" role="status" class="muted">Select a pin to locate it on the model.</p>
       <p id="status" role="status"></p>
