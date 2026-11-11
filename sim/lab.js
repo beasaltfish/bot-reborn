@@ -5,6 +5,7 @@ import { PARTS } from './parts.js';
 import { catalogueEntry } from './ui/catalogue-model.js';
 import { buildPart, dispose } from './scene/meshes.js';
 import { pinDescription } from './pin-info.js';
+import { ledGuide } from './led-guide.js';
 
 const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById('stage'));
 const name = /** @type {HTMLElement} */ (document.getElementById('name'));
@@ -16,6 +17,9 @@ const language = /** @type {HTMLSelectElement} */ (document.getElementById('lang
 const back = /** @type {HTMLAnchorElement} */ (document.querySelector('aside a'));
 const instructions = /** @type {HTMLElement} */ (document.getElementById('instructions'));
 const pinsTitle = /** @type {HTMLElement} */ (document.getElementById('pins-title'));
+const guide = /** @type {HTMLElement} */ (document.getElementById('guide'));
+const guideTitle = /** @type {HTMLElement} */ (document.getElementById('guide-title'));
+const guideSteps = /** @type {HTMLElement} */ (document.getElementById('guide-steps'));
 let lang = 'en';
 try { if (localStorage.getItem('botreborn.sim.language') === 'zh') lang = 'zh'; } catch { /* Storage is optional. */ }
 language.value = lang;
@@ -36,6 +40,15 @@ function updateCopy() {
   summary.textContent = translated?.summary ?? '';
   status.textContent = part ? '' : (zh ? '找不到此器件，请返回工作台重新选择。' : 'This device is not available. Return to the workbench and choose a device.');
   detail.textContent = selectedPin ? `${selectedPin.name} — ${pinDescription(id, selectedPin, lang)}` : (zh ? '选择引脚，在模型上查看其位置。' : 'Select a pin to locate it on the model.');
+  guide.hidden = id !== 'led-5mm';
+  if (!guide.hidden) {
+    guideTitle.textContent = zh ? '搭建 LED 回路' : 'Build an LED circuit';
+    guideSteps.replaceChildren(...ledGuide(lang).map(text => {
+      const item = document.createElement('li');
+      item.textContent = text;
+      return item;
+    }));
+  }
 }
 language.addEventListener('change', () => {
   lang = language.value === 'zh' ? 'zh' : 'en';

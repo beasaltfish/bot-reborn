@@ -45,6 +45,8 @@ const ZH = {
 export function pinDescription(partId, pin, lang = 'en') {
   const role = pin.role ?? pin.name.replace(/\.\d+$/, '');
   if (lang === 'zh') {
+    if (partId === 'led-5mm' && pin.name === 'A') return 'LED 正极，连接到电源正极方向。';
+    if (partId === 'led-5mm' && pin.name === 'K') return 'LED 负极，连接到电源负极方向。';
     if (partId === 'inmp441' && pin.name === 'SD') return 'I²S 麦克风音频数据输出。';
     if (partId === 'max98357a' && pin.name === 'SD') return '功放关断控制，低电平时关闭。';
     if (partId === 'max98357a' && (pin.name === '+' || pin.name === '-')) return '连接扬声器的桥接功放输出端。';
@@ -52,6 +54,8 @@ export function pinDescription(partId, pin, lang = 'en') {
     if (/^GPIO\d+$/.test(role)) return '通用控制器引脚，具体功能取决于固件配置。';
     return ZH[role] ?? '请查看器件接线指南了解此引脚。';
   }
+  if (partId === 'led-5mm' && pin.name === 'A') return 'LED anode, connected towards the positive supply.';
+  if (partId === 'led-5mm' && pin.name === 'K') return 'LED cathode, connected towards the negative supply.';
   if (partId === 'inmp441' && pin.name === 'SD') return 'I²S microphone audio data output.';
   if (partId === 'max98357a' && pin.name === 'SD') return 'Amplifier shutdown control. A low level turns it off.';
   if (partId === 'max98357a' && (pin.name === '+' || pin.name === '-')) return 'Bridged amplifier output terminal for the speaker.';
