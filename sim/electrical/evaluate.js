@@ -1,6 +1,7 @@
 // Deliberately limited to directed source -> regulator -> load networks.
 import { nets } from '../netlist.js';
 import { DEVICES } from '../devices/catalog.js';
+import { batterySource } from './power-sources.js';
 
 /** @typedef {{ p: import('../bench.js').Placed, c: any, positive: string, ground: string, input?: string }} Producer */
 /** @typedef {{ p: import('../bench.js').Placed, c: any, positive: string, ground: string, current: number }} Load */
@@ -30,15 +31,22 @@ export function evaluateElectrical(bench, { profile, mode, stimuli, devices = DE
       let unresolved = false;
       const resolve = (/** @type {any} */ value) => {
         if (value && typeof value === 'object' && ('property' in value || 'profileRail' in value)) {
-          const result = typeof value.property === 'string' ? p.properties[value.property] : /** @type {any} */ (profile).rails?.[value.profileRail];
-          if (typeof result !== 'number' || !Number.isFinite(result)) unresolved = true;
-          return result;
+          const raw = typeof value.property === 'string' ? p.properties[value.property] : /** @type {any} */ (profile).rails?.[value.profileRail];
+          const mapped = typeof value.property === 'string' && value.values && typeof value.values[String(raw)] === 'number' ? value.values[String(raw)] : raw;
+          if (typeof mapped !== 'number' || !Number.isFinite(mapped)) unresolved = true;
+          return mapped;
         }
         return value;
       };
       for (const key of ['voltage', 'currentLimitMa', 'internalResistanceOhm', 'dropoutVoltage', 'efficiency', 'minVoltage', 'maxVoltage', 'maxPowerMw']) if (key in c) c[key] = resolve(c[key]);
       if (c.currentsMa) c.currentsMa = Object.fromEntries(Object.entries(c.currentsMa).map(([key, value]) => [key, resolve(value)]));
       if (unresolved) { fault('unsupported-electrical-network', 'error', [p.id], [], {}); continue; }
+      if (c.kind === 'battery' && c.positive && c.negative) {
+        const spec = batterySource(p.properties);
+        if (!spec) { fault('unsupported-electrical-network', 'error', [p.id], [], {}); continue; }
+        sources.push({ p, c: { ...c, ...spec }, positive: n.netOf(point(p, c.positive)), ground: n.netOf(point(p, c.negative)) });
+        continue;
+      }
       if (c.kind === 'source' && c.positive && c.negative && finite(c.voltage, c.currentLimitMa, c.internalResistanceOhm) && c.voltage > 0 && c.currentLimitMa >= 0 && c.internalResistanceOhm >= 0) {
         sources.push({ p, c, positive: n.netOf(point(p, c.positive)), ground: n.netOf(point(p, c.negative)) });
       } else if (c.kind === 'regulator' && c.input && c.output && c.ground && finite(c.voltage, c.dropoutVoltage, c.efficiency, c.currentLimitMa) && c.voltage > 0 && c.dropoutVoltage >= 0 && c.efficiency > 0 && c.efficiency <= 1 && c.currentLimitMa >= 0) {
@@ -51,7 +59,6 @@ export function evaluateElectrical(bench, { profile, mode, stimuli, devices = DE
     }
   }
   for (const s of sources) if (sources.some(other => other !== s && (other.positive === s.ground || other.ground === s.positive))) fault('unsupported-electrical-network', 'error', [s.p.id], [point(s.p, s.c.positive), point(s.p, s.c.negative)], {});
-  for (const s of sources) if (s.c.internalResistanceOhm > 0 && regulators.some(r => r.input === s.positive && r.ground === s.ground)) fault('unsupported-electrical-network', 'error', [s.p.id], [point(s.p, s.c.positive)], {});
   for (const r of regulators) if (sources.some(s => s.positive === r.input && s.ground !== r.ground)) fault('unsupported-electrical-network', 'error', [r.p.id], [point(r.p, r.c.input), point(r.p, r.c.ground)], {});
   const producers = [...sources, ...regulators];
   /** @type {Map<string, Producer[]>} */ const byNet = new Map();
@@ -86,7 +93,12 @@ export function evaluateElectrical(bench, { profile, mode, stimuli, devices = DE
       const outputVoltage = available(r);
       const outputDemand = demand(r, next);
       // A current-limited constant-current output is unavailable.
-      if (outputDemand <= r.c.currentLimitMa && outputVoltage > 0) current += outputDemand * outputVoltage / (inputVoltage * r.c.efficiency);
+      if (outputDemand <= r.c.currentLimitMa && outputVoltage > 0) {
+        // A linear regulator passes output current straight through; a
+        // switching regulator trades voltage for current at its declared
+        // efficiency.
+        current += r.c.linear ? outputDemand : outputDemand * outputVoltage / (inputVoltage * r.c.efficiency);
+      }
     }
     return current;
   };

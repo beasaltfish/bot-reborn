@@ -806,7 +806,8 @@ const LOOKS = {
  * @returns {PartMesh}
  */
 export function buildPart(def, state) {
-  if (def.id === 'led-5mm' || def.id === 'resistor' || def.id === 'dc-source' || def.id === 'push-button') {
+  if (def.id === 'led-5mm' || def.id === 'resistor' || def.id === 'dc-source' || def.id === 'push-button'
+    || def.id === 'usb-5v-source' || def.id === 'battery-4xaa' || def.id === 'bench-supply' || def.id === 'breadboard-regulator') {
     const g = new THREE.Group();
     /** @type {Map<string, THREE.Vector3>} */
     const anchors = new Map();
@@ -827,6 +828,35 @@ export function buildPart(def, state) {
       const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.5, 24), mat('gloss', 0xc7372e));
       cap.position.set(1, height + 1.05, 0);
       g.add(cap);
+    } else if (def.id === 'usb-5v-source') {
+      // A small USB power breakout with a metal socket and two solder pads.
+      g.add(box(7, 2, 4, mat('matte', 0x2b2f33), 1.5, height, 0));
+      g.add(box(1.6, 0.9, 1.4, mat('metal', STEEL), 3.2, height + 2, 0));
+      g.add(box(0.8, 0.2, 0.8, mat('metal', GOLD), 0, height + 2, 0));
+      g.add(box(0.8, 0.2, 0.8, mat('metal', GOLD), 3, height + 2, 0));
+    } else if (def.id === 'battery-4xaa') {
+      // Four AA cells in a holder, seen from above.
+      g.add(box(20, 1.2, 9, mat('matte', 0x25282b), 1.5, height, 0));
+      for (let i = 0; i < 4; i++) {
+        const cell = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 3.2, 16), mat('gloss', i % 2 ? 0x2f6a3a : 0x1d4d8f));
+        cell.rotation.z = Math.PI / 2;
+        cell.position.set(3.5 + i * 4, height + 2.1, 0);
+        g.add(cell);
+      }
+    } else if (def.id === 'bench-supply') {
+      // A bench unit: body, dark display and one control knob.
+      g.add(box(20, 5, 10, mat('matte', 0x3a3f44), 1.5, height, 0));
+      g.add(box(5, 2, 0.2, mat('gloss', 0x1d2a1d), 4, height + 3, -2));
+      const knob = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.8, 20), mat('gloss', 0x1a1a1a));
+      knob.rotation.x = Math.PI / 2;
+      knob.position.set(13, height + 3, 0);
+      g.add(knob);
+    } else if (def.id === 'breadboard-regulator') {
+      // The MB102-style board: green PCB with two jumper blocks.
+      g.add(box(18, 1.2, 11, mat('matte', 0x225522), 1.5, height, 0));
+      g.add(box(2, 1, 3, mat('matte', 0x18181a), 4, height + 1.2, -2));
+      g.add(box(2, 1, 3, mat('matte', 0x18181a), 9, height + 1.2, -2));
+      g.add(box(1, 0.4, 1, mat('gloss', 0x33cc55), 14, height + 1.2, 2));
     } else {
       g.add(box(10, 4, 7, mat('matte', 0x34383c), 1.5, height, 2));
     }

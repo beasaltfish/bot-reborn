@@ -3,7 +3,7 @@ const object = (value) => value !== null && typeof value === 'object' && !Array.
 /** @param {unknown} value @returns {value is any[]} */
 const denseArray = (value) => Array.isArray(value) && Array.from({ length: value.length }, (_, i) => Object.hasOwn(value, i)).every(Boolean);
 const pinFields = /** @type {Record<string, string[]>} */ ({
-  supply: ['positive', 'ground'], source: ['pin'], regulator: ['input', 'output', 'ground'],
+  supply: ['positive', 'ground'], source: ['positive', 'negative'], regulator: ['input', 'output', 'ground'], battery: ['positive', 'negative'],
   gpio: ['pin'], pwm: ['pin'], i2c: ['sda', 'scl'], spi: ['sck', 'mosi'], oneWire: ['pin'],
   driver: ['inputs'], load: ['positive', 'negative'], resistor: ['positive', 'negative'], led: ['positive', 'negative'],
 });
@@ -48,7 +48,7 @@ export function validateDeviceCatalogue(devices, parts) {
     else d.capabilities.forEach((/** @type {any} */ cap, /** @type {number} */ i) => {
       const field = `capabilities[${i}]`;
       if (!object(cap) || typeof cap.kind !== 'string' || !Object.hasOwn(pinFields, cap.kind)) { error(id, `${field}.kind`, 'unknown capability kind'); return; }
-      const fields = [...pinFields[cap.kind], ...(cap.kind === 'spi' && cap.cs !== undefined ? ['cs'] : [])];
+      const fields = [...(cap.kind === 'source' && cap.pin !== undefined ? ['pin'] : pinFields[cap.kind]), ...(cap.kind === 'spi' && cap.cs !== undefined ? ['cs'] : [])];
       /** @type {string[]} */ const used = [];
       for (const key of fields) {
         const values = key === 'inputs' ? cap[key] : [cap[key]];

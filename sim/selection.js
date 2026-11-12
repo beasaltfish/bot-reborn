@@ -55,8 +55,18 @@ function pinRoles(part, name, lang) {
       if (cap.sck === name) roles.push('SPI SCK');
       if (cap.mosi === name) roles.push('SPI MOSI');
       if (cap.cs === name) roles.push('SPI CS');
+    } else if (cap.kind === 'source' && 'positive' in cap) {
+      if (cap.positive === name) roles.push(simText(lang, 'selection.sourcePositive'));
+      if (cap.negative === name) roles.push(simText(lang, 'selection.sourceReturn'));
+    } else if (cap.kind === 'battery') {
+      if (cap.positive === name) roles.push(simText(lang, 'selection.sourcePositive'));
+      if (cap.negative === name) roles.push(simText(lang, 'selection.sourceReturn'));
+    } else if (cap.kind === 'regulator') {
+      if (cap.input === name) roles.push(simText(lang, 'selection.regulatorInput'));
+      if (cap.output === name) roles.push(simText(lang, 'selection.regulatorOutput'));
+      if (cap.ground === name) roles.push('Ground');
     } else if ((cap.kind === 'gpio' || cap.kind === 'pwm' || cap.kind === 'oneWire') && cap.pin === name) roles.push(cap.kind);
-    else if (cap.kind === 'source' && cap.pin === name) roles.push('Source');
+    else if (cap.kind === 'source' && 'pin' in cap && cap.pin === name) roles.push('Source');
   }
   const pin = PARTS[part]?.pins.find(p => p.name === name);
   if (pin?.role) roles.push(pin.role);

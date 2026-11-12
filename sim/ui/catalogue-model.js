@@ -3,6 +3,7 @@ import { PROFILES } from '../devices/profiles.js';
 import { PARTS } from '../parts.js';
 import { screenById } from '../../core/screens.js';
 import { DEFAULT_LED_FORWARD_VOLTAGE } from '../electrical/led.js';
+import { BATTERY_CHEMISTRIES } from '../electrical/power-sources.js';
 import { simText } from './strings.js';
 
 /** @typedef {{ part: string, name: string, summary: string, category: string, tags: string[], voltage: string|null, interfaces: string[], onBoard: boolean, simulated: boolean, firmwareSupported: boolean, required: boolean, recent: boolean, favourite: boolean, structural?: boolean, simulationLimited?: boolean, firmwareIndependent?: boolean }} CatalogueEntry */
@@ -15,6 +16,10 @@ function voltageLabel(partId, lang) {
   const text = (/** @type {string} */ key, /** @type {Record<string, string|number>} */ vars = {}) => simText(lang, `voltage.${key}`, vars);
   if (partId === 'bme280-i2c') return text('bme280');
   if (partId === 'hc-sr04') return text('hcSr04');
+  if (partId === 'usb-5v-source') return text('usb');
+  if (partId === 'battery-4xaa') return text('battery', { full: BATTERY_CHEMISTRIES.alkaline.fullVoltage, empty: BATTERY_CHEMISTRIES.alkaline.emptyVoltage });
+  if (partId === 'bench-supply') return text('bench');
+  if (partId === 'breadboard-regulator') return text('regulator');
   if (partId === 'led-5mm') return text('led', { voltage: DEFAULT_LED_FORWARD_VOLTAGE });
   if (partId === 'dc-source') {
     const spec = DEVICES[partId]?.properties.voltage;

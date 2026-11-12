@@ -48,13 +48,36 @@ export const BME280_PROJECT = {
   ],
 };
 
+/** @type {import('./target.js').Link[]} */
+const POWER_LINKS = [
+  { a: 'bat:+', b: 'reg:VIN', why: 'The battery pack feeds the regulator input.' },
+  { a: 'bat:-', b: 'reg:GND', why: 'Connect the pack return to the regulator ground.' },
+  { a: 'reg:VOUT', b: 'r:1', why: 'The regulated rail feeds the current-limiting resistor.' },
+  { a: 'r:2', b: 'led:A', why: 'The resistor feeds the LED anode.' },
+  { a: 'led:K', b: 'reg:GND', why: 'The LED cathode returns to the regulator ground.' },
+];
+/** @type {Project} */
+export const POWER_PROJECT = {
+  id: 'power-a-rail', name: 'Power a rail', needs: 'any', ending: 'Measure the regulated rail',
+  ignoredFaultCodes: ['firmware-unsupported'],
+  links: POWER_LINKS,
+  steps: [
+    { kind: 'part', id: 'bat', part: 'battery-4xaa', at: { x: -25, z: 32 }, rot: 0, seated: false, say: 'Place the 4×AA battery holder.' },
+    { kind: 'part', id: 'reg', part: 'breadboard-regulator', at: { x: 0, z: 32 }, rot: 0, seated: false, say: 'Place the MB102 regulator.' },
+    { kind: 'part', id: 'r', part: 'resistor', at: { x: 15, z: 32 }, rot: 0, seated: false, say: 'Place the current-limiting resistor.' },
+    { kind: 'part', id: 'led', part: 'led-5mm', at: { x: 25, z: 32 }, rot: 0, seated: false, say: 'Place the LED.' },
+    ...POWER_LINKS.map(link => /** @type {import('./recipes.js').Step} */ ({ kind: 'wire', a: link.a, b: link.b, named: [link.a, link.b], say: link.why })),
+  ],
+};
+
 /** @type {Project[]} */
-export const PROJECTS = [...RECIPES.map(recipe => adapt(recipe)), LED_PROJECT, BME280_PROJECT];
+export const PROJECTS = [...RECIPES.map(recipe => adapt(recipe)), LED_PROJECT, BME280_PROJECT, POWER_PROJECT];
 
 /** @param {string} id @param {{screenId?:string, wand?:boolean}} [options] */
 export function projectById(id, options) {
   if (id === LED_PROJECT.id) return LED_PROJECT;
   if (id === BME280_PROJECT.id) return BME280_PROJECT;
+  if (id === POWER_PROJECT.id) return POWER_PROJECT;
   const recipe = RECIPES.find(candidate => candidate.id === id);
   if (!recipe) return null;
   if (options?.screenId || options?.wand) return adapt(recipe, options.screenId, options.wand);
