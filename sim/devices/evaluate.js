@@ -1,4 +1,11 @@
 import { evaluateElectrical } from '../electrical/evaluate.js';
+import { evaluateLedBench } from '../electrical/led-bench.js';
+import { dcSourceSafety } from '../electrical/dc-source-safety.js';
+import { bme280PullupSafety } from '../electrical/bme280-pullup-safety.js';
+import { boardGpioSafety } from '../electrical/board-gpio-safety.js';
+import { poweredOutputSafety } from '../electrical/powered-output-safety.js';
+import { blockingBoardPowerFault } from '../board-power-gate.js';
+import { evaluateBme280Bench } from './bme280-evaluate.js';
 import { powerOn } from '../power.js';
 import { DEVICES } from './catalog.js';
 import { PROFILES, checkResources } from './profiles.js';
@@ -34,9 +41,37 @@ export function evaluateDevices(bench, { profile = PROFILES[0], mode = 'idle', s
     return !(a && b && a.part === b.part && devices[a.part] === DEVICES[a.part]
       && DEVICES[a.part]?.category === 'display' && profile.supportedParts.includes(a.part));
   });
-  const faults = uniqueFaults([...electrical.faults, ...resources]);
+  // Keep the bounded LED experiment visible in the shared diagnosis without
+  // pretending the generic supply solver supports arbitrary LED networks.
+  const ledResults = devices['led-5mm'] === DEVICES['led-5mm'] ? bench.placed
+    .filter(p => p.part === 'led-5mm')
+    .map(p => ({ id: p.id, outcome: evaluateLedBench(bench, p.id) })) : [];
+  /** @type {Record<string, {code:string, severity:import('../electrical/supply.js').ElectricalFault['severity']}>} */
+  const ledCodes = {
+    unsupported: { code: 'unsupported-electrical-network', severity: 'error' },
+    reversed: { code: 'led-reversed', severity: 'warning' },
+    overcurrent: { code: 'led-overcurrent', severity: 'destructive' },
+    burnt: { code: 'led-burnt', severity: 'error' },
+    limited: { code: 'led-current-limited', severity: 'info' },
+  };
+  const ledFaults = ledResults.flatMap(({ id, outcome }) => {
+    const diagnostic = ledCodes[outcome.state];
+    const values = outcome.state === 'overcurrent' || outcome.state === 'limited' ? { currentMa: outcome.currentMa } : {};
+    return diagnostic ? [{ ...diagnostic, instances: [id], points: [`${id}:A`, `${id}:K`], values }] : [];
+  });
+  const sourceFaults = devices['dc-source'] === DEVICES['dc-source'] ? dcSourceSafety(bench, profile) : [];
+  const pullupFaults = devices['bme280-i2c'] === DEVICES['bme280-i2c'] ? bme280PullupSafety(bench, profile) : [];
+  const boardGpioFaults = devices.esp32 === DEVICES.esp32 ? boardGpioSafety(bench, profile) : [];
+  const sonarFaults = devices['hc-sr04'] === DEVICES['hc-sr04'] ? poweredOutputSafety(bench, profile, { part: 'hc-sr04', supplyPin: 'VCC', signalPins: ['ECHO'], directCode: 'logic-level-incompatible' }) : [];
+  const basicFaults = [...electrical.faults, ...resources, ...ledFaults, ...sourceFaults, ...pullupFaults, ...boardGpioFaults, ...sonarFaults];
+  const board = devices['bme280-i2c'] === DEVICES['bme280-i2c'] && bench.placed.some(part => part.part === 'bme280-i2c') ? powerOn(bench) : null;
+  const controllerPowered = !!board && board.esp === 'ok' && !blockingBoardPowerFault(bench, { faults: [...board.faults, ...basicFaults] });
+  const sensor = board ? evaluateBme280Bench(bench, profile, controllerPowered, stimuli) : null;
+  const faults = uniqueFaults([...basicFaults, ...(sensor?.faults ?? [])]);
+  const bme280 = sensor?.parts ?? {};
   const parts = Object.fromEntries(Object.entries(electrical.devices).map(([id, state]) => [id, { electrical: state }]));
-  return { electrical, resources, parts, faults, burns: [...new Set(electrical.burns)].sort() };
+  const burns = [...new Set([...electrical.burns, ...ledResults.filter(({ outcome }) => outcome.state === 'overcurrent').map(({ id }) => id)])].sort();
+  return { electrical, resources, parts, faults, burns, bme280 };
 }
 
 /**

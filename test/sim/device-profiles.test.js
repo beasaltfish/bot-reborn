@@ -17,6 +17,13 @@ test('firmware profile records board pin assignments', () => {
   assert.deepEqual(profile.endpoints.toy, { driveA: 'GPIO4', driveB: 'GPIO5', steerA: 'GPIO6', steerB: 'GPIO7' });
 });
 
+test('passive resistor and independent supply do not claim unsupported firmware', () => {
+  let bench = emptyBench();
+  for (const part of /** @type {const} */ (['resistor', 'dc-source', 'bme280-i2c'])) bench = addPart(bench, part, { x: 0, z: 0 }).bench;
+  const issues = checkResources(bench, profile, DEVICES).filter(issue => issue.code === 'firmware-unsupported');
+  assert.deepEqual(issues.map(issue => issue.instances), [['env']]);
+});
+
 test('same I2C address conflicts only on the same wired bus', () => {
   let b = emptyBench();
   ({ bench: b } = addPart(b, 'mpu6050', { x: 0, z: 0 }));
@@ -34,6 +41,18 @@ test('same I2C address conflicts only on the same wired bus', () => {
   assert.equal(issues[0].code, 'i2c-address-conflict');
   assert.deepEqual(issues[0].instances, ['imu', 'imu2']);
   assert.equal(issues[0].detail.address, 0x68);
+});
+
+test('BME280 resource address follows grounded SDO and does not guess unknown wiring', () => {
+  let b = emptyBench();
+  ({ bench: b } = addPart(b, 'bme280-i2c', { x: 0, z: 30 }));
+  ({ bench: b } = addPart(b, 'bme280-i2c', { x: 10, z: 30 }));
+  for (const id of ['env', 'env2']) { wire(b, `${id}:SDI`, 'esp:GPIO1'); wire(b, `${id}:SCK`, 'esp:GPIO2'); }
+  assert.ok(checkResources(b, profile, DEVICES).some(issue => issue.code === 'i2c-address-conflict'));
+  wire(b, 'env2:SDO', 'env2:GND');
+  assert.ok(!checkResources(b, profile, DEVICES).some(issue => issue.code === 'i2c-address-conflict'));
+  wire(b, 'env2:SDO', 'esp:GPIO4');
+  assert.ok(!checkResources(b, profile, DEVICES).some(issue => issue.code === 'i2c-address-conflict'));
 });
 
 test('unsupported part reports firmware support without invented electrical conflicts', () => {

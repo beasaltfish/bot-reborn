@@ -2,6 +2,8 @@
 import { SCREENS } from '../../core/screens.js';
 import { PARTS } from '../parts.js';
 import { nets } from '../netlist.js';
+import { DEVICES, firmwareIndependent } from './catalog.js';
+import { bme280Wiring } from './bme280-wiring.js';
 
 /** @typedef {{ code: string, instances: string[], points: string[], detail: Record<string, unknown> }} ResourceIssue */
 /** @typedef {{ id: string, rails: Record<string, number>, gpioVoltage: number, adcPins: string[], i2cBuses: {id:string,sda:string,scl:string}[], spiBuses: {id:string,sck:string,mosi:string,miso:string}[], pwmPins: string[], pwmChannels: number, endpoints: Record<string, Record<string, string|number>>, supportedParts: string[] }} Profile */
@@ -47,14 +49,15 @@ export function checkResources(bench, profile, devices) {
   /** @type {{instance:string, point:string, kind:string, direction:unknown}[]} */ const pins = [];
   for (const p of bench.placed.filter((p) => !p.burnt).sort((a, b) => a.id.localeCompare(b.id))) {
     const d = devices[p.part];
-    if (!profile.supportedParts.includes(p.part)) issues.push({ code: 'firmware-unsupported', instances: [p.id], points: [], detail: { part: p.part } });
+    if (!firmwareIndependent(p.part) && !profile.supportedParts.includes(p.part)) issues.push({ code: 'firmware-unsupported', instances: [p.id], points: [], detail: { part: p.part } });
     if (!d) continue;
     for (const cap of d.capabilities) {
       const point = (/** @type {string} */ pin) => `${p.id}:${pin}`;
       if (cap.kind === 'i2c') {
         pins.push({ instance: p.id, point: point(cap.sda), kind: 'i2c:sda', direction: undefined }, { instance: p.id, point: point(cap.scl), kind: 'i2c:scl', direction: undefined });
         const need = d.firmware.resources.find((r) => r.kind === 'i2c');
-        const address = addressNumber(typeof need?.addressProperty === 'string' ? p.properties[need.addressProperty] : (need?.address ?? (p.part === 'mpu6050' ? profile.endpoints.wand?.address : undefined)));
+        const configured = addressNumber(typeof need?.addressProperty === 'string' ? p.properties[need.addressProperty] : (need?.address ?? (p.part === 'mpu6050' ? profile.endpoints.wand?.address : undefined)));
+        const address = p.part === 'bme280-i2c' && d === DEVICES['bme280-i2c'] ? bme280Wiring(bench, p.id).address ?? undefined : configured;
         if (address !== undefined) i2c.push({ instance: p.id, sda: point(cap.sda), scl: point(cap.scl), address });
       } else if (cap.kind === 'spi') {
         pins.push({ instance: p.id, point: point(cap.sck), kind: 'spi:sck', direction: undefined }, { instance: p.id, point: point(cap.mosi), kind: 'spi:mosi', direction: undefined });

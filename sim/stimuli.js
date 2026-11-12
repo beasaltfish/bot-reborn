@@ -1,5 +1,5 @@
 // Session-only environment inputs; these are deliberately not bench properties.
-const LIMITS = /** @type {const} */ ({
+export const STIMULUS_LIMITS = /** @type {const} */ ({
   temperatureC: [-40, 85], humidityPct: [0, 100], pressureHpa: [300, 1100],
 });
 
@@ -9,7 +9,7 @@ export function defaultStimuli() {
 
 /** @param {ReturnType<typeof defaultStimuli>} state @param {string} key @param {unknown} value */
 export function setStimulus(state, key, value) {
-  if (!Object.hasOwn(LIMITS, key) || typeof value !== 'number' || !Number.isFinite(value)) return state;
-  const [min, max] = LIMITS[/** @type {keyof typeof LIMITS} */ (key)];
+  if (!Object.hasOwn(STIMULUS_LIMITS, key) || typeof value !== 'number' || !Number.isFinite(value)) return state;
+  const [min, max] = STIMULUS_LIMITS[/** @type {keyof typeof STIMULUS_LIMITS} */ (key)];
   return { ...state, [key]: Math.min(max, Math.max(min, value)) };
 }

@@ -14,6 +14,8 @@ function device(part, category, capabilities) {
 
 /** @type {Record<string, DeviceDef>} */
 export const DEVICES = {
+  'hc-sr04': { ...device('hc-sr04', 'sensor', [{ kind: 'supply', positive: 'VCC', ground: 'GND' }, { kind: 'gpio', pin: 'TRIG' }, { kind: 'gpio', pin: 'ECHO' }]),
+    firmware: { libraries: ['hc-sr04'], resources: [{ kind: 'gpio', pin: 'TRIG', direction: 'output' }, { kind: 'gpio', pin: 'ECHO', direction: 'input' }], init: {}, actions: ['measure'], telemetry: ['distanceCm'] } },
   'bme280-i2c': { ...device('bme280-i2c', 'sensor', [{ kind: 'supply', positive: 'VIN', ground: 'GND' }, { kind: 'i2c', sda: 'SDI', scl: 'SCK' }]),
     properties: { address: { kind: 'enum', default: '0x77', values: ['0x76', '0x77'] } },
     firmware: { libraries: ['bme280'], resources: [{ kind: 'i2c', addressProperty: 'address' }], init: { addressProperty: 'address' }, actions: ['sample'], telemetry: ['temperatureC', 'humidityPct', 'pressureHpa'] } },
@@ -41,6 +43,11 @@ for (const screen of SCREENS) {
   if (sck && mosi) capabilities.push({ kind: 'spi', sck, mosi, ...(cs ? { cs } : {}) });
   DEVICES[part] = device(part, 'display', capabilities);
 }
+
+/** Passive resistance and standalone supplies do not need a firmware driver. */
+const FIRMWARE_INDEPENDENT = new Set(['resistor', 'dc-source']);
+/** @param {string} partId */
+export function firmwareIndependent(partId) { return FIRMWARE_INDEPENDENT.has(partId); }
 
 /** @param {string} partId @returns {DeviceDef | undefined} */
 export function deviceByPart(partId) { return Object.hasOwn(DEVICES, partId) ? DEVICES[partId] : undefined; }

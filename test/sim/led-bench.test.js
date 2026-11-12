@@ -59,6 +59,58 @@ test('breadboard strips connect a resistor and LED exactly like wires', () => {
   assert.ok(Math.abs(outcome.currentMa - 3000 / 220.2) < 0.001);
 });
 
+test('a closed LED loop with two series resistors is unsupported, not off or working', () => {
+  let bench = emptyBench();
+  for (const part of /** @type {const} */ (['led-5mm', 'resistor', 'resistor', 'dc-source'])) bench = addPart(bench, part, { x: 0, z: 0 }).bench;
+  bench = addWire(bench, 'src:+', 'r:1', 'red');
+  bench = addWire(bench, 'r:2', 'r2:1', 'yellow');
+  bench = addWire(bench, 'r2:2', 'led:A', 'yellow');
+  bench = addWire(bench, 'led:K', 'src:-', 'black');
+  assert.equal(evaluateLedBench(bench, 'led').state, 'unsupported');
+  assert.deepEqual(applyLedDamage(bench).burns, []);
+});
+
+test('a closed loop with two series sources is unsupported', () => {
+  let bench = emptyBench();
+  for (const part of /** @type {const} */ (['led-5mm', 'resistor', 'dc-source', 'dc-source'])) bench = addPart(bench, part, { x: 0, z: 0 }).bench;
+  bench = addWire(bench, 'src:+', 'r:1', 'red');
+  bench = addWire(bench, 'r:2', 'led:A', 'yellow');
+  bench = addWire(bench, 'led:K', 'src2:-', 'black');
+  bench = addWire(bench, 'src2:+', 'src:-', 'black');
+  assert.equal(evaluateLedBench(bench, 'led').state, 'unsupported');
+  assert.deepEqual(applyLedDamage(bench).burns, []);
+});
+
+test('an unrelated source does not invalidate a supported LED loop', () => {
+  let bench = emptyBench();
+  for (const part of /** @type {const} */ (['led-5mm', 'resistor', 'dc-source', 'dc-source'])) bench = addPart(bench, part, { x: 0, z: 0 }).bench;
+  bench = addWire(bench, 'src:+', 'r:1', 'red');
+  bench = addWire(bench, 'r:2', 'led:A', 'yellow');
+  bench = addWire(bench, 'led:K', 'src:-', 'black');
+  assert.equal(evaluateLedBench(bench, 'led').state, 'on');
+});
+
+test('two LEDs in series are explicitly unsupported', () => {
+  let bench = emptyBench();
+  for (const part of /** @type {const} */ (['led-5mm', 'led-5mm', 'resistor', 'dc-source'])) bench = addPart(bench, part, { x: 0, z: 0 }).bench;
+  bench = addWire(bench, 'src:+', 'r:1', 'red');
+  bench = addWire(bench, 'r:2', 'led:A', 'yellow');
+  bench = addWire(bench, 'led:K', 'led2:A', 'yellow');
+  bench = addWire(bench, 'led2:K', 'src:-', 'black');
+  assert.equal(evaluateLedBench(bench, 'led').state, 'unsupported');
+  assert.equal(evaluateLedBench(bench, 'led2').state, 'unsupported');
+  assert.deepEqual(applyLedDamage(bench).burns, []);
+});
+
+test('an open LED circuit with two resistors remains off', () => {
+  let bench = emptyBench();
+  for (const part of /** @type {const} */ (['led-5mm', 'resistor', 'resistor', 'dc-source'])) bench = addPart(bench, part, { x: 0, z: 0 }).bench;
+  bench = addWire(bench, 'src:+', 'r:1', 'red');
+  bench = addWire(bench, 'r:2', 'r2:1', 'yellow');
+  bench = addWire(bench, 'r2:2', 'led:A', 'yellow');
+  assert.equal(evaluateLedBench(bench, 'led').state, 'off');
+});
+
 test('the resistor can be on the cathode side of the LED', () => {
   let bench = emptyBench();
   for (const part of /** @type {const} */ (['led-5mm', 'resistor', 'dc-source'])) bench = addPart(bench, part, { x: 0, z: 0 }).bench;

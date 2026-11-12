@@ -6,7 +6,7 @@ import { nets } from '../netlist.js';
  * @param {import('../bench.js').Bench} bench
  * @param {import('../devices/profiles.js').Profile} profile
  * @param {{id:string, sda:string, scl:string, address:number}[]} instances
- * @param {{devices: Record<string, {status:string}>}} electrical
+ * @param {{controllerPowered:boolean, devices: Record<string, {status:string}>}} electrical
  */
 export function evaluateI2c(bench, profile, instances, electrical) {
   const net = nets(bench);
@@ -20,7 +20,17 @@ export function evaluateI2c(bench, profile, instances, electrical) {
     const sda = `${item.id}:${item.sda}`, scl = `${item.id}:${item.scl}`;
     const points = [sda, scl];
     const status = electrical.devices[item.id]?.status;
-    if (status !== 'ok') { states[item.id] = status === 'overvoltage' ? 'unsupported-voltage' : 'off'; fault('i2c-unpowered', [item.id], points); continue; }
+    if (status !== 'ok') {
+      const invalidSupply = status === 'overvoltage' || status === 'reversed' || status === 'overpower';
+      states[item.id] = status === 'overvoltage' ? 'unsupported-voltage' : 'off';
+      fault(invalidSupply ? 'i2c-supply-invalid' : 'i2c-unpowered', [item.id], points);
+      continue;
+    }
+    if (!controller || electrical.controllerPowered !== true) {
+      states[item.id] = 'off';
+      fault('i2c-controller-unpowered', [item.id], points);
+      continue;
+    }
     if (net.same(sda, scl)) { states[item.id] = 'shorted'; fault('i2c-lines-shorted', [item.id], points); continue; }
     const rails = controller ? ['GND', ...Object.keys(profile.rails)].map(p => `${controller.id}:${p}`) : [];
     const rail = rails.find(p => net.same(p, sda) || net.same(p, scl));
@@ -32,11 +42,15 @@ export function evaluateI2c(bench, profile, instances, electrical) {
     states[item.id] = swapped ? 'swapped' : 'wrong-bus';
     fault(swapped ? 'i2c-sda-scl-swapped' : 'i2c-wrong-bus', [item.id], points);
   }
-  for (let a = 0; a < ready.length; a++) for (let b = a + 1; b < ready.length; b++) {
-    const x = ready[a], y = ready[b];
-    if (x.bus !== y.bus || x.address !== y.address) continue;
-    states[x.id] = states[y.id] = 'address-conflict';
-    fault('i2c-address-conflict', [x.id, y.id], [x.sda, x.scl, y.sda, y.scl]);
+  /** @type {Map<string, typeof ready>} */ const groups = new Map();
+  for (const item of ready) {
+    const key = JSON.stringify([item.bus, item.address]);
+    groups.set(key, [...(groups.get(key) ?? []), item]);
+  }
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+    for (const item of group) states[item.id] = 'address-conflict';
+    fault('i2c-address-conflict', group.map(item => item.id), group.flatMap(item => [item.sda, item.scl]));
   }
   return { buses: profile.i2cBuses.map(b => ({ id: b.id, instances: ready.filter(r => r.bus === b.id).map(r => r.id) })), states, faults };
 }

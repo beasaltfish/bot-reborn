@@ -1,5 +1,6 @@
 // A bounded DC model for one LED and a series resistor. Values are volts,
 // ohms, milliamps and milliwatts. This is a fixed-forward-voltage approximation.
+export const DEFAULT_LED_FORWARD_VOLTAGE = 2;
 
 /**
  * @param {{voltage:number, resistance:number, forwardVoltage:number, maxCurrentMa:number, maxPowerMw:number, currentLimitMa:number, reversed?:boolean}} circuit
