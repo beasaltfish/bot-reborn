@@ -25,14 +25,16 @@ test('clicking a pin selects it while keeping click-to-wire active', () => {
     camera.updateMatrixWorld();
     const group = new THREE.Group();
     group.name = 'part:mic';
-    group.userData.anchors = new Map([['GND', new THREE.Vector3(0, 0, 0)]]);
+    group.userData.anchors = new Map([['GND', new THREE.Vector3(0, 0, 0)], ['VDD', new THREE.Vector3(3, 0, 0)]]);
     scene.add(group);
     let bench = emptyBench();
     /** @type {import('../../sim/selection.js').Selection[]} */
     const changes = [];
+    /** @type {[string, number, number][]} */
+    const pinMenus = [];
     const world = /** @type {any} */ ({ canvas, scene, camera, pickables: [], requestRender() {}, binHover() {} });
     const hands = attachInteraction(world, () => bench, next => { bench = next; }, {
-      say() {}, selectWire() {}, selectPart() {}, onSelect: value => changes.push(value),
+      say() {}, selectWire() {}, selectPart() {}, selectPin: (point, x, y) => pinMenus.push([point, x, y]), onSelect: value => changes.push(value),
     });
     for (const type of ['pointerdown', 'pointerup']) {
       const e = new dom.window.MouseEvent(type, { clientX: 100, clientY: 100, button: 0, bubbles: true });
@@ -40,8 +42,33 @@ test('clicking a pin selects it while keeping click-to-wire active', () => {
       canvas.dispatchEvent(e);
     }
     assert.deepEqual(hands.selection(), { kind: 'pin', point: 'mic:GND' });
+    assert.deepEqual(pinMenus, [['mic:GND', 100, 100]]);
+    hands.highlightPoints(['mic:GND', 'mic:missing']);
+    const diagnostic = /** @type {THREE.InstancedMesh} */ (scene.getObjectByName('diagnostic-points'));
+    assert.ok(diagnostic);
+    assert.equal(diagnostic.count, 1);
+    hands.highlightGuidance(['mic:VDD']);
+    const guidance = /** @type {THREE.InstancedMesh} */ (scene.getObjectByName('guidance-points'));
+    assert.ok(guidance);
+    assert.equal(guidance.count, 1);
+    assert.equal(diagnostic.count, 1);
+    hands.highlightGuidance([]);
+    assert.equal(guidance.count, 0);
+    assert.equal(diagnostic.count, 1);
+    hands.highlightPoints([]);
+    assert.equal(diagnostic.count, 0);
     assert.deepEqual(changes, [{ kind: 'pin', point: 'mic:GND' }]);
     assert.match(dom.window.document.body.textContent ?? '', /Click a pin or a hole to end the wire/);
+    canvas.dispatchEvent(new dom.window.Event('pointercancel'));
+    hands.startWire('mic:GND');
+    for (const type of ['pointerdown', 'pointerup']) {
+      const e = new dom.window.MouseEvent(type, { clientX: 130, clientY: 100, button: 0, bubbles: true });
+      Object.defineProperties(e, { isPrimary: { value: true }, pointerId: { value: 1 } });
+      canvas.dispatchEvent(e);
+    }
+    assert.equal(bench.wires.length, 1);
+    assert.equal(bench.wires[0].a, 'mic:GND');
+    assert.equal(bench.wires[0].b, 'mic:VDD');
     const removed = trash(bench, 'mic');
     assert.ok(!('refused' in removed));
     bench = removed;
@@ -99,6 +126,13 @@ test('clicking a part and wire selects them without replacing existing menus', (
     wire.add(new THREE.Mesh(new THREE.BoxGeometry(2, 1, 2), new THREE.MeshBasicMaterial()));
     scene.add(wire);
     scene.updateMatrixWorld(true);
+    const originalMaterial = /** @type {THREE.Mesh} */ (wire.children[0]).material;
+    hands.highlightPoints(['esp:3V3']);
+    assert.ok(wire.getObjectByName('diagnostic-wire-outline'));
+    assert.equal(/** @type {THREE.Mesh} */ (wire.children[0]).material, originalMaterial);
+    hands.highlightPoints([]);
+    assert.equal(wire.getObjectByName('diagnostic-wire-outline'), undefined);
+    assert.equal(/** @type {THREE.Mesh} */ (wire.children[0]).material, originalMaterial);
     world.pickables = [wire];
     click(100, 100);
     assert.deepEqual(hands.selection(), { kind: 'wire', id: bench.wires[0].id });

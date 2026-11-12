@@ -43,6 +43,8 @@
 
     #tools { position: fixed; top: 14px; left: 14px; display: flex; gap: 8px; flex-wrap: wrap; max-width: calc(100vw - 120px); }
     .pill.confirm { display: inline-flex; align-items: center; gap: 10px; background: var(--glass-strong); }
+    .language-control { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 999px; color: var(--ink); background: var(--glass); border: 1px solid var(--edge); font: 600 12px var(--font); }
+    .language-control select { color: var(--ink); background: #40362d; border: 1px solid var(--edge); border-radius: 5px; padding: 3px; }
     .link {
       padding: 0; border: 0; background: none; cursor: pointer;
       font: 600 13px/1 var(--font); color: var(--accent);
@@ -136,10 +138,25 @@
     #partsbin .close { border: 0; background: none; color: var(--ink-dim); font: 400 22px/1 var(--font); cursor: pointer; padding: 2px 6px; }
     #partsbin .close:hover { color: var(--ink); }
     #partsbin .items { display: grid; gap: 6px; }
-    #wire-menu { position: fixed; z-index: 5; display: flex; flex-wrap: wrap; box-sizing: border-box; max-width: calc(100vw - 16px); align-items: center; gap: 7px; padding: 8px 10px; border-radius: 12px; color: var(--ink); background: var(--glass-strong); border: 1px solid var(--edge); font: 12px var(--font); }
+    #wire-menu { position: fixed; z-index: 5; display: flex; flex-wrap: wrap; box-sizing: border-box; max-width: calc(100vw - 16px); max-height: calc(100dvh - 16px); overflow-y: auto; align-items: center; gap: 7px; padding: 8px 10px; border-radius: 12px; color: var(--ink); background: var(--glass-strong); border: 1px solid var(--edge); font: 12px var(--font); }
     #wire-menu .swatch { width: 20px; height: 20px; border: 2px solid #aaa; border-radius: 50%; cursor: pointer; }
+    #selection-context { position: fixed; z-index: 5; top: 64px; right: 16px; display: flex; flex-wrap: wrap; box-sizing: border-box; overflow: auto; align-items: center; gap: 7px; max-width: min(290px, calc(100vw - 16px)); max-height: calc(100vh - 16px); padding: 10px; border-radius: 12px; color: var(--ink); background: var(--glass-strong); border: 1px solid var(--edge); font: 12px var(--font); }
+    #selection-context strong, #selection-context div { flex-basis: 100%; }
+    #selection-context button[data-color] { width: 24px; height: 24px; border: 2px solid #aaa; border-radius: 50%; cursor: pointer; }
+    #selection-context button[data-color][aria-pressed="true"] { outline: 3px solid var(--ink); outline-offset: 2px; }
+    #wire-menu .bme280-panel { flex-basis: 100%; max-width: 300px; }
+    #wire-menu .bme280-panel label { display: flex; justify-content: space-between; gap: 8px; margin: 6px 0; }
     #wire-menu input[type="number"] { width: 76px; padding: 4px; color: var(--ink); background: #40362d; border: 1px solid var(--edge); border-radius: 5px; }
     #partsbin input[type="search"] { box-sizing: border-box; width: 100%; margin-bottom: 10px; padding: 8px 10px; color: var(--ink); background: rgba(255,240,220,0.06); border: 1px solid var(--edge); border-radius: 8px; font: inherit; }
+    #partsbin header button { border: 0; background: none; color: var(--ink-dim); font: 400 22px var(--font); cursor: pointer; }
+    #partsbin [role="group"] { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+    #partsbin button:not(.close) { cursor: pointer; color: var(--ink); background: rgba(255,240,220,0.06); border: 1px solid var(--edge); border-radius: 6px; padding: 4px 7px; }
+    #partsbin button[aria-pressed="true"] { border-color: var(--accent); background: rgba(240,180,106,0.2); }
+    #partsbin article { padding: 8px; margin: 6px 0; border: 1px solid var(--edge); border-radius: 8px; }
+    #partsbin article h4, #partsbin article p { margin: 0 0 5px; }
+    #partsbin article p { color: var(--ink-dim); font-size: 12px; }
+    #partsbin article button { margin-right: 4px; }
+    #partsbin h3 { margin: 12px 0 4px; font-size: 13px; }
     #partsbin .section { margin: 10px 0 2px; color: var(--ink-dim); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; }
     #partsbin .learn { color: var(--accent); font-size: 12px; margin: 0 0 4px 45px; }
     #partsbin button.part {
@@ -155,6 +172,22 @@
     #partsbin button.part .name { flex: 1 1 auto; }
     #partsbin button.part .note { color: var(--ink-dim); font-size: 11.5px; max-width: 48%; }
 
+    #project-panel {
+      position: fixed; top: 56px; left: 14px; bottom: 14px; z-index: 2;
+      width: min(340px, calc(100vw - 28px)); box-sizing: border-box; overflow: auto;
+      padding: 14px 16px 18px; border-radius: 14px; color: var(--ink);
+      background: #1f1913; border: 1px solid var(--edge); font: 500 13px/1.4 var(--font);
+    }
+    #project-panel header { display: flex; align-items: center; justify-content: space-between; }
+    #project-panel h2 { font-size: 15px; margin: 8px 0; }
+    #project-panel h3 { font-size: 13px; margin: 10px 0 5px; }
+    #project-panel select, #project-panel button { color: var(--ink); background: #40362d; border: 1px solid var(--edge); border-radius: 6px; padding: 5px 8px; }
+    #project-panel button { cursor: pointer; }
+    #project-panel ol { margin: 0; padding-left: 24px; }
+    #project-panel li { padding: 8px 0; border-bottom: 1px solid var(--edge); }
+    #project-panel li p { color: var(--ink-dim); margin: 4px 0; }
+    #project-panel li[data-status="fault"] > span { color: #ff9788; }
+    #project-panel li[data-status="complete"] > span { color: #96d9a6; }
     #diagram {
       position: fixed; top: 56px; left: 14px; bottom: 14px;
       width: min(700px, calc(100vw - 28px)); box-sizing: border-box; overflow: auto;

@@ -12,9 +12,21 @@
     aside { padding: 24px; background: #1f1913; overflow: auto; }
     a { color: #f0b46a; } h1 { font-size: 22px; } h2 { margin-top: 28px; font-size: 16px; }
     ul { padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 8px; }
+    .lab-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .lab-actions button { min-height: 44px; padding: 8px 12px; cursor: pointer; }
+    .lesson-panel { margin-top: 24px; padding: 12px; border: 1px solid #756758; border-radius: 8px; }
+    .lesson-panel h2 { margin-top: 0; }
+    .lesson-panel nav { display: flex; gap: 8px; }
+    .lesson-panel button { min-height: 44px; padding: 8px 12px; cursor: pointer; }
+    .lesson-panel li { margin-bottom: 10px; }
+    .lesson-panel li button { display: block; margin-top: 4px; }
     .pin { padding: 6px 10px; color: #eee7dc; background: #40362d; border: 1px solid #756758; border-radius: 8px; cursor: pointer; }
     .pin[aria-pressed="true"] { color: #21170b; background: #f0b46a; }
-    #led-experiment label { display: block; margin: 10px 0; }
+    .bme280-panel label, .button-lab-panel label, #led-experiment label { display: block; margin: 10px 0; }
+    .button-lab-panel button, .sonar-lab-panel button { min-height: 44px; padding: 8px 12px; }
+    .sonar-lab-panel label { display: block; margin: 10px 0; }
+    .sonar-lab-panel input { display: block; width: 100%; }
+    .bme280-panel input { width: 95px; padding: 5px; }
     #led-experiment input[type="number"] { width: 95px; padding: 5px; }
     .muted { color: #bdb4a9; }
     @media (max-width: 700px) { main { grid-template-columns: 1fr; } #stage { height: 55vh; } }

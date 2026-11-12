@@ -8,10 +8,16 @@
 // bin wait until asked for (spec §5, anti-goal: a busy screen).
 
 import { TARGET } from './target.js';
-import { PARTS } from './parts.js';
 import { SCREENS } from '../core/screens.js';
 import { catalogueView } from './ui/catalogue-model.js';
+import { createCataloguePanel } from './ui/catalogue-panel.js';
+import { createProjectPanel } from './ui/project-panel.js';
+import { simText } from './ui/strings.js';
+import { createLanguageControl } from './ui/language-control.js';
 import { RECIPES, DEFAULT_SCREEN } from './recipes.js';
+import { WIRE_PALETTE } from './wire-color.js';
+import { createPropertyEditor } from './ui/property-editor.js';
+import { createBme280Panel } from './ui/bme280-panel.js';
 
 /** @typedef {{ id: string, name: string, note: string | null }} Choice */
 
@@ -53,20 +59,6 @@ function pointName(point) {
   const label = /** @type {Record<string, string>} */ ({ mic: 'mic', amp: 'amp', spk: 'speaker', scr: 'screen' })[stem] ?? stem;
   return `${label}${num ? ` ${num}` : ''} ${pin}`;
 }
-
-/**
- * What the parts bin offers besides boards and screens, in the order the
- * opening bench was built in (spec §5.1). No ESP32: there is only ever one.
- * @type {{ key: string, label: string, w: number, d: number }[]}
- */
-const BIN = [
-  { key: 'breadboard', label: 'Breadboard', w: 65.2, d: 20.6 },
-  { key: 'inmp441', label: PARTS.inmp441.label, w: PARTS.inmp441.size.w * 0.02, d: PARTS.inmp441.size.d * 0.02 },
-  { key: 'max98357a', label: PARTS.max98357a.label, w: PARTS.max98357a.size.w * 0.02, d: PARTS.max98357a.size.d * 0.02 },
-  { key: 'speaker', label: PARTS.speaker.label, w: PARTS.speaker.size.w * 0.05, d: PARTS.speaker.size.d * 0.05 },
-  { key: 'mpu6050', label: PARTS.mpu6050.label, w: PARTS.mpu6050.size.w * 0.02, d: PARTS.mpu6050.size.d * 0.02 },
-  { key: 'toy', label: PARTS.toy.label, w: PARTS.toy.size.w * 0.02, d: PARTS.toy.size.d * 0.02 },
-];
 
 // ---- The wiring diagram ---------------------------------------------------
 
@@ -150,6 +142,11 @@ function diagram() {
  *   follow(el: HTMLElement, id: string): void,
  *   add(part: string): void,
  *   carry(part: string, e: PointerEvent): void,
+ *   learn?(part: string): void,
+ *   changeLanguage?(lang:'en'|'zh'): boolean,
+ *   projectState?(id: string): import('./ui/project-panel.js').State,
+ *   focusProject?(points: string[]): void,
+ *   clearProjectFocus?(): void,
  *   start(recipeId: string, screenId: string | undefined, mode: 'watch' | 'step',
  *     hooks: { onSay(text: string): void, onEnd(): void }, wand: boolean, speed: number): { next(): void, finish(): void, skip(): void, stop(): void, speed(x: number): void } | null,
  *   speed: number,
@@ -157,16 +154,19 @@ function diagram() {
  * }} opts
  */
 export function createPanels(opts) {
+  const lang = document.documentElement.lang === 'zh' ? 'zh' : 'en';
+  const t = (/** @type {string} */ key) => simText(lang, `tools.${key}`);
   const bar = el('div', { id: 'tools' });
-  const diagramBtn = el('button', { type: 'button', class: 'pill' }, ['Wiring diagram']);
-  const hintBtn = el('button', { type: 'button', class: 'pill' }, ['Hint']);
-  const resetBtn = el('button', { type: 'button', class: 'pill' }, ['Reset bench']);
+  const diagramBtn = el('button', { type: 'button', class: 'pill' }, [t('diagram')]);
+  const hintBtn = el('button', { type: 'button', class: 'pill' }, [t('hint')]);
+  const resetBtn = el('button', { type: 'button', class: 'pill' }, [t('reset')]);
   const resetAsk = el('span', { class: 'pill confirm', hidden: '' }, [
-    'Clear the whole bench? ',
-    el('button', { type: 'button', class: 'link danger' }, ['Reset']),
-    el('button', { type: 'button', class: 'link' }, ['Keep']),
+    t('confirmReset'),
+    el('button', { type: 'button', class: 'link danger' }, [t('confirm')]),
+    el('button', { type: 'button', class: 'link' }, [t('keep')]),
   ]);
   bar.append(diagramBtn, hintBtn, resetBtn, resetAsk);
+  if (opts.changeLanguage) bar.append(createLanguageControl(document.documentElement.lang === 'zh' ? 'zh' : 'en', opts.changeLanguage).element);
 
   const bubble = el('div', { id: 'hint', role: 'status', hidden: '' });
   const status = el('div', { id: 'status', role: 'status', hidden: '' });
@@ -223,108 +223,107 @@ export function createPanels(opts) {
     }
   }
   links(TARGET, []);
-  const close = el('button', { type: 'button', class: 'close', 'aria-label': 'Close' }, ['×']);
-  const panel = el('div', { id: 'diagram', role: 'dialog', 'aria-label': 'Wiring diagram', hidden: '' }, [
-    el('header', {}, [el('h2', {}, ['Wiring diagram']), close]),
+  const close = el('button', { type: 'button', class: 'close', 'aria-label': t('close') }, ['×']);
+  const panel = el('div', { id: 'diagram', role: 'dialog', 'aria-label': t('diagram'), hidden: '' }, [
+    el('header', {}, [el('h2', {}, [t('diagram')]), close]),
     drawing,
     el('p', { class: 'note' }, ['GAIN and SD on the amp stay unconnected. The speaker plays the same either way round.']),
     list,
   ]);
-  // ---- The parts bin ----
-  /** @param {{ key: string, label: string, w: number, d: number, note?: string, round?: boolean }} item */
-  function binEntry(item) {
-    const box = 26;
-    const k = Math.min(box / item.w, 15 / item.d);
-    const w = Math.max(4, item.w * k);
-    const h = Math.max(4, item.d * k);
-    const icon = item.round
-      ? svg('circle', { cx: 13, cy: 9, r: Math.min(w, h) / 2 })
-      : svg('rect', { x: 13 - w / 2, y: 9 - h / 2, width: w, height: h, rx: 1.5 });
-    const pic = svg('svg', { viewBox: '0 0 26 18', 'aria-hidden': 'true' });
-    pic.append(icon);
-    const b = el('button', { type: 'button', class: 'part' }, [
-      pic,
-      el('span', { class: 'name' }, [item.label]),
-      ...(item.note ? [el('span', { class: 'note' }, [item.note])] : []),
-    ]);
-    b.title = `Drag ${item.label} onto the bench, or click to place it`;
-    b.addEventListener('click', (e) => { if (e.detail === 0) opts.add(item.key); });
-    b.addEventListener('pointerdown', (e) => {
-      if (e.button !== 0 || !e.isPrimary) return;
-      e.preventDefault();
-      const start = { x: e.clientX, y: e.clientY };
-      /** @type {(ev: PointerEvent) => void} */
-      const move = (ev) => {
-        if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) <= 5) return;
-        done();
-        opts.carry(item.key, ev);
-      };
-      const up = () => { done(); opts.add(item.key); };
-      const done = () => {
-        removeEventListener('pointermove', move);
-        removeEventListener('pointerup', up);
-        removeEventListener('pointercancel', up);
-      };
-      addEventListener('pointermove', move);
-      addEventListener('pointerup', up);
-      addEventListener('pointercancel', up);
-    });
-    return b;
+  // ---- The parts catalogue ----
+  const favouriteKey = 'botreborn.sim.favourites';
+  /** @type {string[]} */
+  let favourites = [];
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(favouriteKey) ?? '[]');
+    if (Array.isArray(stored)) favourites = stored.filter(value => typeof value === 'string');
+  } catch { /* storage unavailable or corrupt: use an empty list */ }
+  let query = '';
+  /** @type {string[]} */ let categories = [];
+  /** @type {string[]} */ let tags = [];
+  /** @param {string[]} values @param {string} value */
+  const toggle = (values, value) => values.includes(value) ? values.filter(v => v !== value) : [...values, value];
+  const all = catalogueView({ lang }).map(section => ({ ...section, entries: section.entries.filter(entry => entry.part !== 'esp32') })).filter(section => section.entries.length);
+  const availableCategories = all.map(section => ({ id: section.id, label: section.label }));
+  const availableTags = [...new Set(all.flatMap(section => section.entries.flatMap(entry => entry.interfaces)))].sort();
+  const catalogue = createCataloguePanel({
+    lang,
+    add: opts.add,
+    carry: opts.carry,
+    learn: part => opts.learn?.(part),
+    setQuery: value => { query = value; renderCatalogue(); },
+    toggleCategory: value => { categories = toggle(categories, value); renderCatalogue(); },
+    toggleTag: value => { tags = toggle(tags, value); renderCatalogue(); },
+    toggleFavourite: value => {
+      favourites = toggle(favourites, value);
+      try { window.localStorage.setItem(favouriteKey, JSON.stringify(favourites)); } catch { /* not saved */ }
+      renderCatalogue();
+    },
+  });
+  function renderCatalogue() {
+    const sections = catalogueView({ query, categories, tags, favourites, lang }).map(section => ({ ...section, entries: section.entries.filter(entry => entry.part !== 'esp32') })).filter(section => section.entries.length);
+    catalogue.render({ query, sections, categories: availableCategories, tags: availableTags, selectedCategories: categories, selectedTags: tags });
   }
-  const search = /** @type {HTMLInputElement} */ (el('input', { type: 'search', placeholder: 'Search parts', 'aria-label': 'Search parts' }));
-  const binList = el('div', { class: 'items' });
-  function renderBin() {
-    binList.replaceChildren();
-    if (!search.value.trim() || 'breadboard'.includes(search.value.trim().toLowerCase())) binList.append(binEntry(BIN[0]));
-    for (const section of catalogueView({ query: search.value })) {
-      const entries = section.entries.filter((entry) => entry.part !== 'esp32');
-      if (!entries.length) continue;
-      binList.append(el('div', { class: 'section' }, [section.label]));
-      for (const entry of entries) {
-        const def = PARTS[entry.part];
-        binList.append(binEntry({ key: entry.part, label: entry.name, w: def.size.w, d: def.size.d, note: entry.summary }));
-        const learn = el('a', { href: `./lab.html?part=${encodeURIComponent(entry.part)}`, class: 'learn' }, [`Learn ${entry.name} →`]);
-        binList.append(learn);
-      }
-    }
-  }
-  search.addEventListener('input', renderBin);
-  renderBin();
-  const partsClose = el('button', { type: 'button', class: 'close', 'aria-label': 'Close' }, ['×']);
-  const partsPanel = el('div', { id: 'partsbin', role: 'dialog', 'aria-label': 'Parts', hidden: '' }, [
-    el('header', {}, [el('h2', {}, ['Parts']), partsClose]),
-    search,
-    binList,
+  renderCatalogue();
+  const partsPanel = catalogue.element;
+  partsPanel.id = 'partsbin';
+  partsPanel.setAttribute('role', 'dialog');
+  const partsBtn = el('button', { type: 'button', class: 'pill' }, [t('parts')]);
+  const projectBtn = el('button', { type: 'button', class: 'pill' }, [simText(lang, 'project.button')]);
+  bar.prepend(partsBtn, projectBtn);
+  const projectView = createProjectPanel({ lang, focus: points => {
+    // On a phone the sidebar leaves too little bench visible to frame two pins.
+    if (window.innerWidth < 600) showProject(false);
+    opts.focusProject?.(points);
+  } });
+  const projectSelect = /** @type {HTMLSelectElement} */ (el('select', { 'aria-label': simText(lang, 'project.choose') }));
+  projectSelect.append(el('option', { value: '' }, [simText(lang, 'project.free')]));
+  for (const id of [...RECIPES.map(recipe => recipe.id), 'led-basics', 'bme280-readings']) projectSelect.append(el('option', { value: id }, [simText(lang, `project.${id}`)]));
+  const projectClose = el('button', { type: 'button', class: 'close', 'aria-label': simText(lang, 'project.close') }, ['×']);
+  const projectPanel = el('div', { id: 'project-panel', role: 'region', 'aria-label': simText(lang, 'project.button'), hidden: '' }, [
+    el('header', {}, [el('h2', {}, [simText(lang, 'project.button')]), projectClose]), projectSelect, projectView.element,
   ]);
-  const partsBtn = el('button', { type: 'button', class: 'pill' }, ['Parts']);
-  bar.prepend(partsBtn);
-  const showParts = (/** @type {boolean} */ on) => { partsPanel.hidden = !on; };
-  partsBtn.addEventListener('click', () => { showDiagram(false); showParts(Boolean(partsPanel.hidden)); });
-  partsClose.addEventListener('click', () => showParts(false));
-  document.body.append(bar, bubble, status, picker, panel, partsPanel);
+  function refreshProject() {
+    if (projectPanel.hidden) return;
+    const state = opts.projectState?.(projectSelect.value);
+    if (state) projectView.render(state);
+  }
+  /** @param {string} id */
+  function selectProject(id) { projectSelect.value = id; refreshProject(); }
+  const showProject = (/** @type {boolean} */ on) => {
+    if (!on && !projectPanel.hidden) opts.clearProjectFocus?.();
+    projectPanel.hidden = !on;
+    if (on) refreshProject();
+  };
+  projectSelect.addEventListener('change', () => { opts.clearProjectFocus?.(); refreshProject(); });
+  projectClose.addEventListener('click', () => showProject(false));
+  projectBtn.addEventListener('click', () => { showParts(false); showDiagram(false); showWire(false); showProject(Boolean(projectPanel.hidden)); });
+  const showParts = (/** @type {boolean} */ on) => { if (on) catalogue.open(); else catalogue.close(); };
+  partsBtn.addEventListener('click', () => { showProject(false); showDiagram(false); showWire(false); showParts(Boolean(partsPanel.hidden)); });
+  document.body.append(bar, bubble, status, picker, panel, partsPanel, projectPanel);
 
   // ---- Wire it for me ----
-  const wireBtn = el('button', { type: 'button', class: 'pill' }, ['Wire it for me']);
+  const wireBtn = el('button', { type: 'button', class: 'pill' }, [t('wire')]);
   bar.prepend(wireBtn);
   const recipeBoxes = RECIPES.map((r, i) => {
     const input = /** @type {HTMLInputElement} */ (el('input', { type: 'radio', name: 'recipe', value: r.id }));
     if (r.id === 'screen') input.setAttribute('checked', '');
     return input;
   });
-  const screenSel = el('select', { 'aria-label': 'Screen' }, SCREENS.map((s) => {
+  const screenSel = el('select', { 'aria-label': t('screen') }, SCREENS.map((s) => {
     const o = el('option', { value: s.id }, [s.label]);
     if (s.id === DEFAULT_SCREEN) o.setAttribute('selected', '');
     return o;
   }));
   const wandBox = /** @type {HTMLInputElement} */ (el('input', { type: 'checkbox', name: 'wand' }));
-  const watchBtn = el('button', { type: 'button', class: 'pill' }, ['Watch it']);
-  const stepBtn = el('button', { type: 'button', class: 'pill' }, ['Step by step']);
-  const wireClose = el('button', { type: 'button', class: 'close', 'aria-label': 'Close' }, ['×']);
-  const wirePanel = el('div', { id: 'wire', role: 'dialog', 'aria-label': 'Wire it for me', hidden: '' }, [
-    el('header', {}, [el('h2', {}, ['Wire it for me']), wireClose]),
-    ...RECIPES.map((r, i) => el('label', { class: 'opt' }, [recipeBoxes[i], r.name])),
+  const watchBtn = el('button', { type: 'button', class: 'pill' }, [t('watch')]);
+  const stepBtn = el('button', { type: 'button', class: 'pill' }, [t('step')]);
+  const wireClose = el('button', { type: 'button', class: 'close', 'aria-label': t('close') }, ['×']);
+  const wirePanel = el('div', { id: 'wire', role: 'dialog', 'aria-label': t('wire'), hidden: '' }, [
+    el('header', {}, [el('h2', {}, [t('wire')]), wireClose]),
+    ...RECIPES.map((r, i) => el('label', { class: 'opt' }, [recipeBoxes[i], simText(lang, `project.${r.id}`)])),
     screenSel,
-    el('label', { class: 'opt' }, [wandBox, 'Add the tarot wand (MPU6050)']),
+    el('label', { class: 'opt' }, [wandBox, t('wand')]),
     el('div', { class: 'go' }, [watchBtn, stepBtn]),
   ]);
   const runBar = el('div', { id: 'runbar', role: 'status', hidden: '' });
@@ -334,7 +333,7 @@ export function createPanels(opts) {
   for (const b of recipeBoxes) b.addEventListener('change', syncScreen);
   syncScreen();
   const showWire = (/** @type {boolean} */ on) => { wirePanel.hidden = !on; };
-  wireBtn.addEventListener('click', () => { hideHint(); showParts(false); showDiagram(false); showWire(Boolean(wirePanel.hidden)); });
+  wireBtn.addEventListener('click', () => { hideHint(); showParts(false); showProject(false); showDiagram(false); showWire(Boolean(wirePanel.hidden)); });
   wireClose.addEventListener('click', () => showWire(false));
 
   /**
@@ -388,7 +387,7 @@ export function createPanels(opts) {
 
   // ---- Wiring diagram ----
   const showDiagram = (/** @type {boolean} */ on) => { panel.hidden = !on; };
-  diagramBtn.addEventListener('click', () => { hideHint(); showParts(false); showDiagram(Boolean(panel.hidden)); });
+  diagramBtn.addEventListener('click', () => { hideHint(); showParts(false); showProject(false); showWire(false); showDiagram(Boolean(panel.hidden)); });
   close.addEventListener('click', () => showDiagram(false));
 
   // ---- Hint ----
@@ -421,6 +420,8 @@ export function createPanels(opts) {
     if (e.code !== 'Escape') return;
     showDiagram(false);
     showWire(false);
+    showParts(false);
+    showProject(false);
     hideHint();
     asking(false);
   });
@@ -489,18 +490,32 @@ export function createPanels(opts) {
   });
 
   const wireMenuElement = el('div', { id: 'wire-menu', hidden: '', role: 'group', 'aria-label': 'Wire options' });
+  /** @type {(() => void) | null} */
+  let releasePressed = null;
+  /** @type {{id:string, editor:ReturnType<typeof createPropertyEditor>, sensor:ReturnType<typeof createBme280Panel>|null} | null} */
+  let activePart = null;
+  function closeOptions() {
+    const release = releasePressed;
+    releasePressed = null;
+    activePart = null;
+    wireMenuElement.hidden = true;
+    release?.();
+  }
   document.body.append(wireMenuElement);
   document.addEventListener('pointerdown', (event) => {
-    if (!wireMenuElement.hidden && event.target instanceof Node && !wireMenuElement.contains(event.target)) wireMenuElement.hidden = true;
+    if (!wireMenuElement.hidden && event.target instanceof Node && !wireMenuElement.contains(event.target)) closeOptions();
   });
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') wireMenuElement.hidden = true;
+    if (event.key === 'Escape') closeOptions();
   });
   /** @param {string} id @param {number} x @param {number} y @param {{color(value: string): void, remove(): void}} actions */
   function wireMenu(id, x, y, actions) {
+    closeOptions();
     wireMenuElement.replaceChildren(el('span', {}, [`Wire ${id}`]));
-    for (const [name, color] of Object.entries({ Red: '#d23a2e', Black: '#1d1d1f', Yellow: '#f2c230', Green: '#2e9e57', Blue: '#2f6fd0', Orange: '#e9782b', White: '#f2f0ea', Purple: '#8b54c9' })) {
-      const button = el('button', { type: 'button', 'aria-label': name, title: name, class: 'swatch', style: `background:${color}` });
+    for (const { id: name, color } of WIRE_PALETTE) {
+      if (!color) continue;
+      const label = name[0].toUpperCase() + name.slice(1);
+      const button = el('button', { type: 'button', 'aria-label': label, title: label, class: 'swatch', style: `background:${color}` });
       button.addEventListener('click', () => { actions.color(color); wireMenuElement.hidden = true; });
       wireMenuElement.append(button);
     }
@@ -513,53 +528,53 @@ export function createPanels(opts) {
     wireMenuElement.style.top = `${Math.max(8, Math.min(y, window.innerHeight - 60))}px`;
     wireMenuElement.hidden = false;
   }
-  /** @param {string} id @param {number} x @param {number} y @param {Record<string, import('./devices/catalog.js').PropertyDef>} schema @param {Record<string, number|string|boolean>} values @param {{state:string,currentMa:number}|null} led @param {(key:string,value:number|string|boolean)=>void} change */
-  function partMenu(id, x, y, schema, values, led, change) {
+  /** @param {string} id @param {number} x @param {number} y @param {Record<string, import('./devices/catalog.js').PropertyDef>} schema @param {Record<string, number|string|boolean>} values @param {{state:string,currentMa:number}|null} led @param {(key:string,value:number|string|boolean)=>void} change @param {{state:import('./ui/bme280-panel.js').SensorState,environment:import('./ui/bme280-panel.js').Environment,change(key:string,value:number):void}} [bme] */
+  function partMenu(id, x, y, schema, values, led, change, bme) {
+    closeOptions();
     wireMenuElement.replaceChildren(el('strong', {}, [id]));
     if (led) {
       const message = /** @type {Record<string, string>} */ ({ off: 'No powered loop detected.', short: 'The supply terminals are shorted; separate the positive and negative connections.', reversed: 'LED polarity is reversed; connect A towards positive and K towards negative.', on: 'LED is lit.', limited: 'Supply current limit is active.', overcurrent: 'Current exceeds the LED rating.', unsupported: 'This circuit topology is not supported.', burnt: 'LED is burnt. Replace it and check the current limit.' })[led.state] ?? led.state;
       wireMenuElement.append(el('span', {}, [`${message} ${led.currentMa.toFixed(2)} mA`]));
     }
-    for (const [key, def] of Object.entries(schema)) {
-      if (def.kind === 'boolean') {
-        if (key === 'pressed') {
-          const press = /** @type {HTMLButtonElement} */ (el('button', { type: 'button', class: 'pin', 'aria-label': 'Hold to press' }, ['Hold to press']));
-          let down = false;
-          const release = () => { if (down) { down = false; change(key, false); } };
-          press.addEventListener('pointerdown', event => { event.preventDefault(); down = true; press.setPointerCapture(event.pointerId); change(key, true); });
-          press.addEventListener('pointerup', release);
-          press.addEventListener('pointercancel', release);
-          press.addEventListener('lostpointercapture', release);
-          press.addEventListener('keydown', event => { if (!event.repeat && (event.key === ' ' || event.key === 'Enter')) { event.preventDefault(); down = true; change(key, true); } });
-          press.addEventListener('keyup', event => { if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); release(); } });
-          press.addEventListener('blur', release);
-          wireMenuElement.append(press);
-          continue;
-        }
-        const label = el('label', {}, [key === 'pressed' ? 'Pressed ' : `${key} `]);
-        const input = /** @type {HTMLInputElement} */ (el('input', { type: 'checkbox' }));
-        input.checked = values[key] === true;
-        input.addEventListener('change', () => change(key, input.checked));
-        label.append(input);
-        wireMenuElement.append(label);
-        continue;
-      }
-      if (def.kind !== 'number') continue;
-      const label = el('label', {}, [`${key}${def.unit ? ` (${def.unit})` : ''} `]);
-      const input = /** @type {HTMLInputElement} */ (el('input', { type: 'number', value: String(values[key]), ...(def.min === undefined ? {} : { min: String(def.min) }), ...(def.max === undefined ? {} : { max: String(def.max) }), step: String(def.step ?? 'any') }));
-      input.addEventListener('change', () => {
-        if (!input.checkValidity() || !Number.isFinite(input.valueAsNumber)) return;
-        change(key, input.valueAsNumber);
-      });
-      label.append(input);
-      wireMenuElement.append(label);
+    const { pressed, ...ordinarySchema } = schema;
+    if (pressed?.kind === 'boolean') {
+      const press = /** @type {HTMLButtonElement} */ (el('button', { type: 'button', class: 'pin', 'aria-label': 'Hold to press' }, ['Hold to press']));
+      let down = false;
+      const release = () => { if (down) { down = false; change('pressed', false); } };
+      releasePressed = release;
+      press.addEventListener('pointerdown', event => { event.preventDefault(); down = true; press.setPointerCapture(event.pointerId); change('pressed', true); });
+      press.addEventListener('pointerup', release);
+      press.addEventListener('pointercancel', release);
+      press.addEventListener('lostpointercapture', release);
+      press.addEventListener('keydown', event => { if (!event.repeat && (event.key === ' ' || event.key === 'Enter')) { event.preventDefault(); down = true; change('pressed', true); } });
+      press.addEventListener('keyup', event => { if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); release(); } });
+      press.addEventListener('blur', release);
+      wireMenuElement.append(press);
     }
+    const editor = createPropertyEditor(ordinarySchema, values, change);
+    const sensor = bme ? createBme280Panel({ lang, change: bme.change }) : null;
+    if (sensor && bme) sensor.update(bme.state, bme.environment);
+    activePart = { id, editor, sensor };
+    wireMenuElement.append(editor.element);
+    if (sensor) wireMenuElement.append(sensor.element);
     const close = el('button', { type: 'button', class: 'link', 'aria-label': 'Close part options' }, ['×']);
-    close.addEventListener('click', () => { wireMenuElement.hidden = true; });
+    close.addEventListener('click', closeOptions);
     wireMenuElement.append(close);
     wireMenuElement.style.left = `${Math.max(8, Math.min(x, window.innerWidth - Math.min(340, window.innerWidth - 16)))}px`;
     wireMenuElement.style.top = `${Math.max(8, Math.min(y, window.innerHeight - 100))}px`;
     wireMenuElement.hidden = false;
+    const rect = wireMenuElement.getBoundingClientRect();
+    wireMenuElement.style.left = `${Math.max(8, Math.min(x, window.innerWidth - rect.width - 8))}px`;
+    wireMenuElement.style.top = `${Math.max(8, Math.min(y, window.innerHeight - rect.height - 8))}px`;
   }
-  return { status: setStatus, pick, closePicker, links, wireMenu, partMenu };
+  /** @param {string} id @param {Record<string, number|string|boolean> | null} values @param {import('./ui/bme280-panel.js').SensorState} [state] @param {import('./ui/bme280-panel.js').Environment} [environment] */
+  function refreshPart(id, values, state, environment) {
+    if (!activePart || activePart.id !== id || wireMenuElement.hidden) return;
+    if (values === null) closeOptions();
+    else {
+      activePart.editor.update(values);
+      if (state && environment) activePart.sensor?.update(state, environment);
+    }
+  }
+  return { status: setStatus, pick, closePicker, links, wireMenu, partMenu, refreshPart, openPartId: () => activePart?.id ?? null, refreshProject, selectProject, openProject: (/** @type {string} */ id) => { selectProject(id); showParts(false); showDiagram(false); showWire(false); showProject(true); } };
 }

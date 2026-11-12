@@ -11,6 +11,7 @@ import { emptyBench, load, serialize, addPart, addBoard, park, setWireColor, rem
 import { deviceByPart } from './devices/catalog.js';
 import { applyLedDamage, evaluateLedBench } from './electrical/led-bench.js';
 import { evaluateBench } from './devices/evaluate.js';
+import { defaultStimuli, setStimulus } from './stimuli.js';
 import { motorLevels, toyAction } from './car.js';
 import { createWandFeed } from './wand-feed.js';
 import { createShakeDetector } from '../core/shake-detector.js';
@@ -19,11 +20,23 @@ import { spotForNew } from './snap.js';
 import { targetFor } from './target.js';
 import { screenById } from '../core/screens.js';
 import { diagnose, nextHint } from './diagnose.js';
+import { liveDiagnosis } from './live-diagnosis.js';
+import { isViewPeekShortcut } from './view-shortcut.js';
 import { characterChoices, chooseCharacter, chooseLine, startBody, faultText, adminLink, keepsFault } from './body.js';
 import { keptBench, keepBench, dropKept } from './keep.js';
 import { RECIPES, startBench, recipeSteps, applyStep } from './recipes.js';
+import { projectById } from './projects.js';
+import { consumeLabHandoff } from './lab-handoff.js';
+import { connectionProgress } from './project-progress.js';
+import { rankedDiagnoses } from './ranked-diagnoses.js';
+import { blockingBoardPowerFault, initialDriveActions } from './board-power-gate.js';
+import { createPowerInterlock, createStartLock } from './power-interlock.js';
 import { runRecipe, speedFactor } from './scene/autowire.js';
 import { createPanels } from './panels.js';
+import { createContextPanel } from './ui/context-panel.js';
+import { SIM_LANGUAGE_KEY, simulatorLanguage, requestLanguageChange } from './ui/language.js';
+import { simText } from './ui/strings.js';
+import { describeSelection } from './selection.js';
 import { createWorld } from './scene/world.js';
 import { attachInteraction, beginCarry } from './scene/interact.js';
 import { attachUsb } from './scene/usb.js';
@@ -54,6 +67,9 @@ function write(key, value) {
 /** @param {unknown} v @returns {v is ViewMode} */
 const isView = (v) => VIEWS.includes(/** @type {ViewMode} */ (v));
 
+// Share the laboratory's saved language; invalid or unavailable storage falls back to English.
+document.documentElement.lang = simulatorLanguage(read(SIM_LANGUAGE_KEY));
+
 const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById('bench'));
 const viewButtons = /** @type {HTMLButtonElement[]} */ ([...document.querySelectorAll('#views button')]);
 const peekHint = /** @type {HTMLElement} */ (document.getElementById('peek'));
@@ -62,26 +78,98 @@ const effects = createEffects(world);
 // A page that was closed with the cable in is not powered when it opens again.
 const savedBench = load(read(BENCH_KEY));
 let bench = { ...savedBench, usb: false, placed: savedBench.placed.map(p => p.part === 'push-button' ? { ...p, properties: { ...p.properties, pressed: false } } : p) };
+let environment = defaultStimuli();
+/** @type {import('./projects.js').Project | null} */
+let activeProject = null;
 const panels = createPanels({
   hint: () => (bench.placed.some((p) => p.burnt)
-    ? 'A part burnt out; drag it to the bin and take a new one from Parts.'
-    : nextHint(bench)?.text ?? 'Looks complete — plug in USB.'),
+    ? document.documentElement.lang === 'zh' ? simText('zh', 'hint.burnt') : 'A part burnt out; drag it to the bin and take a new one from Parts.'
+    : nextHint(bench, document.documentElement.lang)?.text ?? (document.documentElement.lang === 'zh' ? simText('zh', 'hint.ready') : 'Looks complete — plug in USB.')),
   reset,
   follow: effects.follow,
   add: (part) => addFromBin(part),
   carry: (part, e) => beginCarry(/** @type {any} */ (part), e),
+  changeLanguage: lang => {
+    let storageFailed = false;
+    const changed = requestLanguageChange(lang, {
+      confirm: () => window.confirm(document.documentElement.lang === 'zh'
+        ? '切换语言会保存接线、重新加载工作台并断开当前会话。当前项目选择不会保存。是否继续？'
+        : 'Changing language saves the bench, reloads the workbench and disconnects the current session. The project selection is not saved. Continue?'),
+      save: value => { try { localStorage.setItem(BENCH_KEY, serialize(bench)); localStorage.setItem(SIM_LANGUAGE_KEY, value); } catch (error) { storageFailed = true; throw error; } },
+      reload: () => location.reload(),
+    });
+    if (storageFailed) panels.status(document.documentElement.lang === 'zh' ? '无法保存语言设置，请检查浏览器存储权限。' : 'Could not save the language preference; check browser storage permissions.');
+    return changed;
+  },
+  learn: (part) => {
+    if (!deviceByPart(part)) return panels.status('Unknown device; select one from the catalogue.');
+    location.href = `./lab.html?part=${encodeURIComponent(part)}`;
+  },
+  projectState: id => {
+    const project = activeProject?.id === id ? activeProject : projectById(id);
+    const selection = describeSelection(bench, hands.selection(), document.documentElement.lang);
+    if (project) return { mode: 'guided', project, progress: connectionProgress(bench, project), selection, diagnoses: [] };
+    // Independent DC supplies can energize an LED circuit without USB.
+    const result = bench.usb || bench.placed.some(part => part.part === 'dc-source' && !part.burnt) ? evaluateBench(bench) : null;
+    const diagnoses = result ? rankedDiagnoses(bench, result, document.documentElement.lang) : [];
+    return { mode: 'free', project: null, progress: [], selection, diagnoses };
+  },
+  focusProject: points => {
+    hands.highlightGuidance(points);
+    const panel = document.getElementById('project-panel');
+    const left = panel && !panel.hidden ? Math.max(0, panel.getBoundingClientRect().right - canvas.getBoundingClientRect().left) : 0;
+    void world.focusPoints(points, { left });
+  },
+  clearProjectFocus: () => hands.highlightGuidance([]),
   start: (recipeId, screenId, mode, hooks, wand, speed) => startRun(recipeId, screenId, mode, hooks, wand, speed),
   speed: speedFactor(Number(read(SPEED_KEY))),
   rememberSpeed: (/** @type {number} */ x) => write(SPEED_KEY, String(speedFactor(x))),
 });
 
+const context = createContextPanel({
+  lang: document.documentElement.lang === 'zh' ? 'zh' : 'en',
+  startWire: point => hands.startWire(point),
+  recolorWire: (id, color) => setBench(setWireColor(bench, id, color)),
+  removeWire: id => setBench(removeWire(bench, id)),
+});
+document.body.append(context.element);
+/** @param {import('./selection.js').Selection} selection */
+function showContext(selection) {
+  if (!selection || selection.kind === 'part') { context.hide(); return; }
+  const info = describeSelection(bench, selection, document.documentElement.lang);
+  const color = selection.kind === 'wire' ? bench.wires.find(w => w.id === selection.id)?.color : undefined;
+  context.show({ selection, info, color });
+}
+
 /** @param {import('./bench.js').Bench} b */
 function setBench(b) {
   const result = applyLedDamage(b);
   bench = result.bench;
+  const openPart = panels.openPartId();
+  if (openPart) {
+    const selected = bench.placed.find(p => p.id === openPart);
+    const sensor = selected?.part === 'bme280-i2c' ? evaluateBench(bench, { stimuli: environment }).engineering.bme280[openPart] : undefined;
+    panels.refreshPart(openPart, selected?.properties ?? null, sensor, environment);
+  }
   hands.refreshSelection();
+  if (!context.element.hidden) showContext(hands.selection());
   write(BENCH_KEY, serialize(bench));
   world.show(bench);
+  // The body normally uses a power-on snapshot; unsafe board power changes
+  // instead stop the session and latch until USB is cycled.
+  if (bench.usb && powered) {
+    const evaluated = evaluateBench(bench);
+    const fault = powerInterlock.observe(bench, evaluated);
+    const hint = fault
+      ? diagnose(bench, { ...evaluated.legacy, faults: [fault], burns: evaluated.burns }, document.documentElement.lang).find(item => item.kind === 'fault') ?? null
+      : liveDiagnosis(bench, document.documentElement.lang, evaluated);
+    hands.highlightPoints(hint?.points ?? []);
+    const reconnect = powerInterlock.tripped() ? simText(document.documentElement.lang, 'power.reconnect') : '';
+    line.fault = [hint?.text, reconnect].filter(Boolean).join(' ') || null;
+    showLine();
+  }
+  hands.refreshHighlights();
+  panels.refreshProject();
   for (const id of result.burns) effects.smoke(id);
   if (result.burns.length) panels.status('LED current exceeded its rating; replace the burnt LED and check the resistance or current limit.');
   panels.links(targetFor(bench), bench.placed.filter((p) => p.part.startsWith('screen-')).map((p) => p.id));
@@ -104,22 +192,38 @@ function addFromBin(part) {
 const hands = attachInteraction(world, () => bench, setBench, {
   say: (text) => panels.status(text),
   onSelect: (selection) => {
-    if (selection?.kind === 'pin') panels.status(selection.point);
+    context.element.style.left = '';
+    context.element.style.top = '';
+    context.element.style.right = '';
+    showContext(selection);
+    panels.refreshProject();
   },
-  selectWire: (id, x, y) => panels.wireMenu(id, x, y, {
-    color: (color) => setBench(setWireColor(bench, id, color)),
-    remove: () => setBench(removeWire(bench, id)),
-  }),
+  selectWire: (id, x, y) => {
+    showContext({ kind: 'wire', id });
+    context.position(x, y);
+  },
+  selectPin: (_point, x, y) => context.position(x, y),
   selectPart: (id, x, y) => {
     const part = bench.placed.find(p => p.id === id);
     if (!part) return;
     const schema = deviceByPart(part.part)?.properties ?? {};
     const led = part.part === 'led-5mm' ? evaluateLedBench(bench, id) : null;
-    if (Object.keys(schema).length || led) panels.partMenu(id, x, y, schema, part.properties, led,
-      (key, value) => setBench(setPartProperty(bench, id, key, value)));
+    const bme = part.part === 'bme280-i2c' ? {
+      state: evaluateBench(bench, { stimuli: environment }).engineering.bme280[id], environment,
+      change: (/** @type {string} */ key, /** @type {number} */ value) => {
+        environment = setStimulus(environment, key, value);
+        const current = bench.placed.find(item => item.id === id);
+        const state = evaluateBench(bench, { stimuli: environment }).engineering.bme280[id];
+        panels.refreshPart(id, current?.properties ?? null, state, environment);
+      },
+    } : undefined;
+    if (Object.keys(schema).length || led || bme) panels.partMenu(id, x, y, schema, part.properties, led,
+      (key, value) => setBench(setPartProperty(bench, id, key, value)), bme);
   },
 });
-const usb = attachUsb(world, { onPlug: (on) => (on ? plugIn(recipeOn) : unplug()), locked: () => starting, bench: () => bench });
+const startLock = createStartLock();
+const powerInterlock = createPowerInterlock(stopUnsafeSession);
+const usb = attachUsb(world, { onPlug: (on) => (on ? plugIn(recipeOn) : unplug()), locked: () => startLock.locked(), bench: () => bench });
 
 // #view=top opens in that view without saving it: handy for a screenshot.
 const asked = new URLSearchParams(location.hash.slice(1)).get('view');
@@ -160,11 +264,8 @@ for (const b of viewButtons) {
   });
 }
 
-/** @param {KeyboardEvent} e */
-const isSpace = (e) => e.code === 'Space' && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement);
-
 addEventListener('keydown', (e) => {
-  if (!isSpace(e)) return;
+  if (!isViewPeekShortcut(e)) return;
   // Space would also press a focused button; this key belongs to the bench.
   e.preventDefault();
   if (e.repeat || peeking) return;
@@ -177,7 +278,7 @@ const unpeek = () => {
   go(view);
 };
 addEventListener('keyup', (e) => {
-  if (!isSpace(e)) return;
+  if (e.code !== 'Space' || !peeking) return;
   e.preventDefault();
   unpeek();
 });
@@ -189,12 +290,12 @@ addEventListener('blur', unpeek);
 /** The running body, if the bench is one. */
 /** @type {{ stop(): void } | null} */
 let session = null;
+/** @type {AbortController | null} */
+let pendingStart = null;
 /** Reads the wand into the shake detector while a body is plugged in. @type {ReturnType<typeof createWandFeed> | null} */
 let wandFeed = null;
 /** @type {ReturnType<typeof setInterval> | undefined} */
 let wandTimer;
-/** startBody has been called and not yet returned: the plug stays where it is. */
-let starting = false;
 /** Bumped by every plug and unplug, so an answer from an older plug-in is ignored. */
 let plugs = 0;
 /** The character whose layer failed, for the link on the api line. */
@@ -259,6 +360,8 @@ function backToMine() {
     usb.pullOut();
     unplug();
   }
+  activeProject = null;
+  panels.selectProject('');
   setBench(mine);
   dropKept(store());
   running = false;
@@ -312,6 +415,29 @@ function driveStop() {
   for (const [id] of movingToys()) world.drive(id, { wheels: 'coast', steer: 'centred' });
 }
 
+/** Invalidate pending starts before stopping so late callbacks cannot restart motion. */
+function stopUnsafeSession() {
+  plugs++;
+  pendingStart?.abort();
+  pendingStart = null;
+  startLock.clear();
+  driveStop();
+  const old = session;
+  session = null;
+  old?.stop();
+  clearInterval(wandTimer);
+  wandFeed = null;
+  world.onWandLevel(null);
+  panels.closePicker();
+  effects.setAlive(false);
+  effects.playing([]);
+  effects.led('off');
+  line = { end: null, lost: false, api: null, fault: null, state: null, who: null, ending: null };
+  const off = evaluateBench({ ...bench, usb: false }).parts;
+  world.screens(/** @type {any} */ (off));
+  world.imu(/** @type {any} */ (off));
+}
+
 /**
  * @param {{ need: 'any' | 'pet' | 'car', ending: string } | null} [recipe] set when
  *   a recipe run plugged in: the character is then chosen for it, not picked by hand
@@ -322,6 +448,7 @@ async function plugIn(recipe = null) {
   bench = { ...bench, usb: true };
   const merged = evaluateBench(bench);
   const outcome = merged.legacy;
+  const blocked = blockingBoardPowerFault(bench, merged);
   // What burns is marked now, before anything else is shown, so a reload
   // remembers it; it stays burnt until the user drops it in the bin.
   if (merged.burns.length) {
@@ -329,9 +456,12 @@ async function plugIn(recipe = null) {
   }
   setBench(bench);
   powered = outcome;
+  powerInterlock.arm(bench, merged);
   for (const key of Object.keys(blocks)) delete blocks[key];
-  world.screens(/** @type {any} */ (merged.parts));
-  world.imu(/** @type {any} */ (merged.parts));
+  // When board power is indeterminate, do not present legacy devices as active.
+  const visualParts = blocked ? evaluateBench({ ...bench, usb: false }).parts : merged.parts;
+  world.screens(/** @type {any} */ (visualParts));
+  world.imu(/** @type {any} */ (visualParts));
   world.onPark((id, pose, blocked) => {
     setBench(park(bench, id, { x: pose.x, z: pose.z }, pose.heading));
     if (!blocked || blocks[id] === blocked) return;
@@ -344,20 +474,19 @@ async function plugIn(recipe = null) {
     })[blocked] ?? null);
   });
   // A pad wired to a supply is already driving the moment USB goes in.
-  for (const [id, t] of Object.entries(outcome.toys)) {
-    if (t.action.wheels === 'forward' || t.action.wheels === 'backward') world.drive(id, t.action);
-  }
-  effects.playing(bench.placed
+  for (const [id, t] of initialDriveActions(bench, merged)) world.drive(id, t.action);
+  effects.playing(blocked ? [] : bench.placed
     .filter((p) => /** @type {any} */ (merged.parts[p.id])?.kind === 'speaker' && /** @type {any} */ (merged.parts[p.id]).playing)
     .map((p) => p.id));
   for (const id of merged.burns) effects.smoke(id);
-  effects.led(outcome.esp === 'brownout' ? 'blink' : 'on');
+  effects.led(blocked ? 'off' : outcome.esp === 'brownout' ? 'blink' : 'on');
   // After a brown-out the short is the news; a guess about some other wire would mislead.
-  const hints = diagnose(bench, { ...outcome, faults: merged.faults, burns: merged.burns });
-  const first = outcome.esp === 'brownout' ? hints.find((h) => h.kind === 'fault') : hints[0];
+  const hints = diagnose(bench, { ...outcome, faults: blocked ? [blocked] : merged.faults, burns: merged.burns }, document.documentElement.lang);
+  const first = blocked || outcome.esp === 'brownout' ? hints.find((h) => h.kind === 'fault') : hints[0];
+  hands.highlightPoints(first?.points ?? []);
   line = { end: null, lost: false, api: null, fault: first?.text ?? null, state: null, who: null, ending: null };
   showLine();
-  if (outcome.esp !== 'ok') return;
+  if (outcome.esp !== 'ok' || blocked) return;
 
   // A bench that came alive is watched, not wired: the orbit view shows the
   // robot at an angle beside the bench. It used to happen only when a
@@ -409,7 +538,9 @@ async function plugIn(recipe = null) {
  */
 async function connect(mine, id, name, outcome, ending = null) {
   if (mine !== plugs) return;
-  starting = true;
+  startLock.begin(mine);
+  const abort = new AbortController();
+  pendingStart = abort;
   line.who = name;
   line.state = 'connecting…';
   showLine();
@@ -426,6 +557,8 @@ async function connect(mine, id, name, outcome, ending = null) {
     const started = await startBody({
       id,
       outcome,
+      isCurrent: live,
+      signal: abort.signal,
       // The brain names its states in capitals (LISTENING); the line reads as a sentence.
       onState: (s) => {
         if (!live()) return;
@@ -444,7 +577,7 @@ async function connect(mine, id, name, outcome, ending = null) {
       // The bench's screens connect the way the firmware does, with their own
       // size; a character that is not a pet leaves them black (spec §5.5).
       screen: outcome.screenModel
-        ? { model: /** @type {any} */ (screenById(outcome.screenModel)), onFrame: (img) => world.paintScreens(img) }
+        ? { model: /** @type {any} */ (screenById(outcome.screenModel)), onFrame: (img) => { if (live()) world.paintScreens(img); } }
         : undefined,
     });
     // Reset bench can pull the plug while this was starting.
@@ -456,12 +589,18 @@ async function connect(mine, id, name, outcome, ending = null) {
       wandTimer = setInterval(() => wandFeed?.tick(), 50);
     } else started.stop();
   } finally {
-    starting = false;
+    if (pendingStart === abort) pendingStart = null;
+    startLock.release(mine);
   }
 }
 
 function unplug() {
+  hands.highlightPoints([]);
   plugs++;
+  pendingStart?.abort();
+  pendingStart = null;
+  startLock.clear();
+  powerInterlock.reset();
   driveStop();
   powered = null;
   session?.stop();
@@ -488,6 +627,9 @@ function unplug() {
 }
 
 function reset() {
+  activeProject = null;
+  panels.selectProject('');
+  hands.highlightGuidance([]);
   hands.clearSelection();
   runner?.stop();
   if (usb.plugged) {
@@ -526,6 +668,8 @@ export function startRun(recipeId, screenId, mode, hooks = {}, wand = false, spe
   const hasWork = bench.boards.length > 0 || bench.wires.length > 0 || bench.placed.length > 1;
   if (hasWork && !keptBench(store())) keepBench(store(), bench);
   recipeOn = { need: recipe.needs, ending: recipe.ending };
+  activeProject = projectById(recipe.id, { screenId, wand });
+  panels.selectProject(recipe.id);
   const steps = recipeSteps(recipe.id, screenId, wand);
   setBench(startBench(bench));
   // Frame the camera for the bench the run will end with, so nothing lands off screen.
@@ -554,3 +698,13 @@ export function startRun(recipeId, screenId, mode, hooks = {}, wand = false, spe
 }
 // A bench kept before a reload is still there to go back to.
 showLine();
+
+// Lab requests are applied only after the workbench is fully initialized.
+try {
+  const handoff = consumeLabHandoff(localStorage, bench, () => window.confirm(simText(document.documentElement.lang, 'lab.replaceConfirm')));
+  if (handoff.kind === 'applied') {
+    activeProject = handoff.projectId ? projectById(handoff.projectId) : null;
+    setBench(handoff.bench);
+    if (activeProject) panels.openProject(activeProject.id);
+  } else if (handoff.kind === 'error') panels.status(simText(document.documentElement.lang, 'lab.handoffError'));
+} catch { /* Unavailable storage leaves the current bench unchanged. */ }

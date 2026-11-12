@@ -11,6 +11,7 @@ import { openScreenFeed } from './screen-feed.js';
 import { AudioPipeline } from '../phone/audio/pipeline.js';
 import { PcmPlayer } from '../phone/audio/player.js';
 import { toInt16 } from '../core/audio/pcm.js';
+import { createPipelinePool } from './audio-pipeline-pool.js';
 
 /** @typedef {import('./power.js').Outcome} Outcome */
 
@@ -140,22 +141,9 @@ const REJECTS = {
 const rejectMessage = (reason) =>
   /** @type {Record<string, string>} */ (REJECTS)[reason] ?? `The brain turned this body away (${reason}).`;
 
-// The phone never lets go of the microphone (pipeline.js explains why), and
-// neither does the bench: unplugging only stops listening. Plugging in again
-// reuses the open pipeline unless the character wants the echo canceller the
-// other way, which cannot be changed on a live track.
-/** @type {{ echo: boolean, pipeline: AudioPipeline } | null} */
-let held = null;
-
-/** @param {boolean} echo */
-async function pipelineFor(echo) {
-  if (held && held.echo === echo) return held.pipeline;
-  held?.pipeline.stop();
-  held = null;
-  const pipeline = await AudioPipeline.start({ echoCancellation: echo });
-  held = { echo, pipeline };
-  return pipeline;
-}
+// Successfully used microphones remain shared across sessions as before;
+// an abandoned startup never claims the shared pipeline.
+const pipelines = createPipelinePool((echo, signal) => AudioPipeline.start({ echoCancellation: echo, signal }));
 
 /**
  * What the status line says when a layer of the brain failed, in the words of
@@ -201,6 +189,8 @@ export function adminLink(id) {
 /**
  * @param {{
  *   id: string, outcome: Outcome,
+ *   isCurrent?(): boolean,
+ *   signal?: AbortSignal,
  *   onState(s: string): void, onLevel(up: number, down: number): void,
  *   onEnd(msg: string): void,
  *   onLost?(): void, onWelcome?(): void,
@@ -235,58 +225,69 @@ export async function startBody(o) {
   };
   /** Ends the session for a reason the page should show. */
   const end = (/** @type {string} */ msg) => { if (!stopped) { stop(); o.onEnd(msg); } };
+  const current = () => !stopped && !o.signal?.aborted && (o.isCurrent?.() ?? true);
 
   /** @type {{ token: string, config: { bargeIn: boolean } }} */
   let character;
   try {
-    const res = await fetch(`/api/characters/${encodeURIComponent(o.id)}`);
+    const res = await fetch(`/api/characters/${encodeURIComponent(o.id)}`, { signal: o.signal });
     if (!res.ok) throw new Error(String(res.status));
     character = await res.json();
   } catch {
-    end('Could not reach the brain — is it running?');
+    if (current()) end('Could not reach the brain — is it running?'); else stop();
     return { stop, sendShake };
   }
+  if (!current()) { stop(); return { stop, sendShake }; }
 
+  /** @type {Awaited<ReturnType<typeof pipelines.acquire>>} */
+  let lease;
   try {
-    pipeline = await pipelineFor(Boolean(character.config.bargeIn));
+    lease = await pipelines.acquire(Boolean(character.config.bargeIn), current, o.signal);
   } catch {
-    end('Microphone blocked — allow it in the address bar and plug in again.');
+    if (current()) end('Microphone blocked — allow it in the address bar and plug in again.'); else stop();
     return { stop, sendShake };
   }
-  if (stopped) return { stop, sendShake };
+  if (!lease || !current()) { lease?.cancel(); stop(); return { stop, sendShake }; }
+  pipeline = lease.pipeline;
+  try {
+    player = new PcmPlayer(pipeline.audioContext);
+    link = connectBody({
+      url: `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/body`,
+      token: character.token,
+      onWelcome() { if (!stopped) o.onWelcome?.(); },
+      onMessage(msg) {
+        if (msg.type === 'hush') player?.hush();
+        else if (msg.type === 'fault') o.onFault?.(msg);
+        else if (msg.type === 'state') o.onState(msg.state);
+        else if (msg.type === 'move') o.onMove?.(msg);
+        else if (msg.type === 'stop') o.onStop?.();
+      },
+      onAudio(bytes) {
+        const shaped = shapeDownlink(bytes, o.outcome.amp);
+        down = shaped ? level(shaped) : 0;
+        o.onLevel(up, down);
+        if (shaped) player?.play(shaped);
+      },
+      onLost() { if (!stopped) o.onLost?.(); },
+      onReject: (reason) => end(rejectMessage(reason)),
+    });
 
-  player = new PcmPlayer(pipeline.audioContext);
-  link = connectBody({
-    url: `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/body`,
-    token: character.token,
-    onWelcome() { if (!stopped) o.onWelcome?.(); },
-    onMessage(msg) {
-      if (msg.type === 'hush') player?.hush();
-      else if (msg.type === 'fault') o.onFault?.(msg);
-      else if (msg.type === 'state') o.onState(msg.state);
-      else if (msg.type === 'move') o.onMove?.(msg);
-      else if (msg.type === 'stop') o.onStop?.();
-    },
-    onAudio(bytes) {
-      const shaped = shapeDownlink(bytes, o.outcome.amp);
-      down = shaped ? level(shaped) : 0;
+    // One feed for the bench's screens: the firmware drives one panel, and every
+    // glass of that model shows what it shows (spec §5.5).
+    if (o.screen) feed = openScreenFeed({ token: character.token, model: o.screen.model, onFrame: o.screen.onFrame });
+
+    pipeline.subscribe(name, (frame) => {
+      const shaped = shapeUplink(toInt16(frame), o.outcome.mic);
+      up = level(shaped);
       o.onLevel(up, down);
-      if (shaped) player?.play(shaped);
-    },
-    onLost() { if (!stopped) o.onLost?.(); },
-    onReject: (reason) => end(rejectMessage(reason)),
-  });
-
-  // One feed for the bench's screens: the firmware drives one panel, and every
-  // glass of that model shows what it shows (spec §5.5).
-  if (o.screen) feed = openScreenFeed({ token: character.token, model: o.screen.model, onFrame: o.screen.onFrame });
-
-  pipeline.subscribe(name, (frame) => {
-    const shaped = shapeUplink(toInt16(frame), o.outcome.mic);
-    up = level(shaped);
-    o.onLevel(up, down);
-    link?.sendAudio(shaped);
-  });
+      link?.sendAudio(shaped);
+    });
+    lease.commit();
+  } catch (error) {
+    stop();
+    lease.cancel();
+    throw error;
+  }
 
   return { stop, sendShake };
 }

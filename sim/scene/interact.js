@@ -20,6 +20,7 @@ import { place, moveBoard, trash, addPart, addBoard, addWire, removeWire, pinPoi
 import { nets } from '../netlist.js';
 import { wireColor } from '../wire-color.js';
 import { createSelection } from '../selection.js';
+import { createDiagnosticWires } from './diagnostic-wires.js';
 import { snapPart, snapBoard, freeSpot, partFootprint } from '../snap.js';
 import { CAR, centreOf } from '../car.js';
 import { BOARD_TOP, buildWire, dispose } from './meshes.js';
@@ -107,8 +108,8 @@ export function beginCarry(part, e) {
  * @param {World} world
  * @param {() => Bench} getBench
  * @param {(b: Bench) => void} setBench  saves and redraws
- * @param {{ say(text: string): void, selectWire(id: string, x: number, y: number): void, selectPart(id: string, x: number, y: number): void, onSelect(selection: import('../selection.js').Selection): void }} opts
- * @returns {{ enable(on: boolean): void, selection(): import('../selection.js').Selection, refreshSelection(): void, clearSelection(): void }}
+ * @param {{ say(text: string): void, selectWire(id: string, x: number, y: number): void, selectPart(id: string, x: number, y: number): void, selectPin?(point: string, x: number, y: number): void, onSelect(selection: import('../selection.js').Selection): void }} opts
+ * @returns {{ enable(on: boolean): void, selection(): import('../selection.js').Selection, refreshSelection(): void, clearSelection(): void, startWire(point: string): void, highlightPoints(points: string[]): void, highlightGuidance(points: string[]): void, refreshHighlights(): void }}
  */
 export function attachInteraction(world, getBench, setBench, opts) {
   const { canvas, scene } = world;
@@ -118,7 +119,16 @@ export function attachInteraction(world, getBench, setBench, opts) {
 
   const lit = markers(0xffb547, 0.5);
   const aim = markers(0xfffbe8, 0.62);
-  scene.add(lit.mesh, aim.mesh);
+  const diagnostic = markers(0xff492e, 0.82);
+  const guidance = markers(0x66cfff, 1.05);
+  const diagnosticWires = createDiagnosticWires(scene);
+  diagnostic.mesh.name = 'diagnostic-points';
+  guidance.mesh.name = 'guidance-points';
+  scene.add(lit.mesh, aim.mesh, diagnostic.mesh, guidance.mesh);
+  /** @type {string[]} */
+  let diagnosticPoints = [];
+  /** @type {string[]} */
+  let guidancePoints = [];
 
   const tip = document.createElement('div');
   tip.style.cssText = [
@@ -170,7 +180,7 @@ export function attachInteraction(world, getBench, setBench, opts) {
     litWire = id;
     const now = id ? scene.getObjectByName(`wire:${id}`) : undefined;
     now?.traverse((/** @type {THREE.Object3D} */ o) => {
-      if (!(o instanceof THREE.Mesh) || o.userData.lit) return;
+      if (!(o instanceof THREE.Mesh) || o.userData.lit || o.userData.diagnosticOutline) return;
       o.userData.lit = o.material;
       o.material = LIT;
     });
@@ -1093,6 +1103,7 @@ export function attachInteraction(world, getBench, setBench, opts) {
       if (!d.armed && !d.moved && !wandered(e, d)) {
         // A click (or a tap) on a pin starts a wire whose end is the next click.
         selected.select(d.selectionPoint ? { kind: 'pin', point: d.selectionPoint } : null);
+        if (d.selectionPoint) opts.selectPin?.(d.selectionPoint, e.clientX, e.clientY);
         d.armed = true;
         say('Click a pin or a hole to end the wire · Esc to cancel');
         return;
@@ -1154,7 +1165,46 @@ export function attachInteraction(world, getBench, setBench, opts) {
   });
   addEventListener('blur', () => cancel());
 
+  /** Refresh independent diagnostic rings after the bench is redrawn. */
+  function refreshHighlights() {
+    const b = getBench();
+    diagnosticWires.show(b, diagnosticPoints);
+    diagnostic.set(diagnosticPoints.flatMap(point => {
+      const pos = position(b, point);
+      return pos ? [pos] : [];
+    }));
+    guidance.set(guidancePoints.flatMap(point => {
+      const pos = position(b, point);
+      return pos ? [pos] : [];
+    }));
+    world.requestRender();
+  }
+
   return {
+    highlightPoints(points) {
+      diagnosticPoints = [...new Set(points)];
+      refreshHighlights();
+    },
+    highlightGuidance(points) {
+      guidancePoints = [...new Set(points)];
+      refreshHighlights();
+    },
+    refreshHighlights,
+    /** Begin the same click-to-click wire gesture as a direct pin click. */
+    startWire(point) {
+      if (!enabled) return;
+      const pin = pins(getBench()).find(p => p.point === point);
+      if (!pin) return;
+      const target = jumperFor(getBench(), pin, pin.pos);
+      if (!target || target.kind !== 'point') return;
+      cancel();
+      drag = { kind: 'wire', from: target.point, fromPos: target.pos, x: 0, y: 0, moved: false, armed: true, target: null, preview: null, selectionPoint: point };
+      selected.select({ kind: 'pin', point });
+      light(target.point);
+      aim.set([target.pos]);
+      say('Click a pin or a hole to end the wire · Esc to cancel');
+      world.requestRender();
+    },
     selection: selected.selection,
     refreshSelection: selected.refresh,
     clearSelection: () => selected.select(null),

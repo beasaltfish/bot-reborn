@@ -6,7 +6,18 @@ import { catalogueEntry } from './ui/catalogue-model.js';
 import { buildPart, dispose } from './scene/meshes.js';
 import { pinDescription } from './pin-info.js';
 import { ledGuide } from './led-guide.js';
-import { evaluateLed } from './electrical/led.js';
+import { evaluateLedLabExperiment } from './lessons/led-circuit.js';
+import { lessonByPart } from './lessons/index.js';
+import { queueLabHandoff } from './lab-handoff.js';
+import { createLabActions } from './ui/lab-actions.js';
+import { createLedLessonPanel } from './ui/led-lesson-panel.js';
+import { createBme280Panel } from './ui/bme280-panel.js';
+import { createBme280LessonPanel } from './ui/bme280-lesson-panel.js';
+import { createButtonLabPanel } from './ui/button-lab-panel.js';
+import { createSonarLabPanel } from './ui/hc-sr04-panel.js';
+import { createBme280LabExample } from './lessons/bme280-example.js';
+import { defaultStimuli, setStimulus } from './stimuli.js';
+import { simText } from './ui/strings.js';
 
 const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById('stage'));
 const name = /** @type {HTMLElement} */ (document.getElementById('name'));
@@ -32,11 +43,52 @@ language.value = lang;
 const id = new URLSearchParams(location.search).get('part') ?? '';
 const part = Object.hasOwn(PARTS, id) ? PARTS[id] : undefined;
 const entry = catalogueEntry(id, lang);
+const actions = createLabActions({
+  part: part && id !== 'esp32' ? id : null,
+  projectId: lessonByPart(id)?.projectId ?? null,
+  projectAddress: id === 'bme280-i2c' ? () => example?.address() ?? '0x77' : undefined,
+  enqueue: request => { try { return queueLabHandoff(localStorage, request); } catch { return false; } },
+  navigate: () => { location.href = './'; },
+  onError: () => { status.textContent = simText(lang, 'lab.storageError'); },
+});
+summary.after(actions.element);
+/** @type {Storage|null} */ let lessonStore = null;
+try { lessonStore = localStorage; } catch { /* Lessons remain usable without storage. */ }
+const lessonPanel = id === 'led-5mm' ? createLedLessonPanel({ store: lessonStore, lang }) : null;
+if (lessonPanel) actions.element.after(lessonPanel.element);
+let environment = defaultStimuli();
+const example = id === 'bme280-i2c' ? createBme280LabExample() : null;
+const exampleLabel = document.createElement('p');
+const bmePanel = example ? createBme280Panel({ lang, change: (key, value) => {
+  environment = setStimulus(environment, key, value);
+  bmePanel?.update(example.evaluate(environment), environment);
+  bmeLesson?.controlChanged(key);
+} }) : null;
+if (example && bmePanel) {
+  bmePanel.update(example.evaluate(environment), environment);
+  actions.element.after(exampleLabel, bmePanel.element);
+}
+const bmeLesson = example ? createBme280LessonPanel({ store: lessonStore, lang, example, changed: () => bmePanel?.update(example.evaluate(environment), environment) }) : null;
+if (bmeLesson) actions.element.after(bmeLesson.element);
+const buttonPanel = id === 'push-button' ? createButtonLabPanel(lang) : null;
+if (buttonPanel) {
+  actions.element.after(buttonPanel.element);
+  window.addEventListener('pagehide', () => buttonPanel.dispose(), { once: true });
+}
+const sonarPanel = id === 'hc-sr04' ? createSonarLabPanel(lang) : null;
+if (sonarPanel) actions.element.after(sonarPanel.element);
 
 /** @type {import('./parts.js').Pin | undefined} */ let selectedPin;
 function updateCopy() {
   const zh = lang === 'zh';
   document.documentElement.lang = zh ? 'zh-CN' : 'en';
+  actions.setLanguage(lang);
+  lessonPanel?.setLanguage(lang);
+  bmePanel?.setLanguage(lang);
+  bmeLesson?.setLanguage(lang);
+  buttonPanel?.setLanguage(lang);
+  sonarPanel?.setLanguage(lang);
+  exampleLabel.textContent = simText(lang, 'bme.example');
   document.title = zh ? '器件实验室' : 'Device laboratory';
   back.textContent = zh ? '← 返回工作台' : '← Back to workbench';
   instructions.textContent = zh ? '拖动旋转 · 滚动缩放' : 'Drag to rotate · scroll to zoom';
@@ -59,7 +111,7 @@ function updateCopy() {
   if (!experiment.hidden) {
     /** @type {HTMLElement} */ (document.getElementById('experiment-title')).textContent = zh ? '尝试电路' : 'Try the circuit';
     /** @type {HTMLElement} */ (document.getElementById('voltage-label')).textContent = zh ? '电源电压' : 'Supply voltage';
-    /** @type {HTMLElement} */ (document.getElementById('resistance-label')).textContent = zh ? '串联电阻' : 'Series resistance';
+    /** @type {HTMLElement} */ (document.getElementById('resistance-label')).textContent = zh ? '串联电阻（0 表示无电阻）' : 'Series resistance (0 means no resistor)';
     /** @type {HTMLElement} */ (document.getElementById('reversed-label')).textContent = zh ? '反接 LED' : 'Reverse LED';
     updateExperiment();
   }
@@ -69,20 +121,26 @@ function updateExperiment() {
     experimentResult.textContent = lang === 'zh' ? '请输入有效的电压和电阻值。' : 'Enter a valid voltage and resistance.';
     return;
   }
-  const result = evaluateLed({ voltage: voltage.valueAsNumber, resistance: resistance.valueAsNumber + 0.2, forwardVoltage: 2, maxCurrentMa: 20, maxPowerMw: 60, currentLimitMa: 500, reversed: reversed.checked });
+  const { outcome: result } = evaluateLedLabExperiment({ voltage: voltage.valueAsNumber, resistance: resistance.valueAsNumber, reversed: reversed.checked });
+  /** @type {Record<string,string>} */
   const messages = lang === 'zh'
-    ? { off: 'LED 不亮', on: 'LED 发光', limited: '电源限流', overcurrent: '电流超过额定值，LED 可能损坏' }
-    : { off: 'LED is off', on: 'LED is lit', limited: 'Supply is current-limited', overcurrent: 'Current exceeds the rating; the LED may be damaged' };
-  experimentResult.textContent = `${messages[result.state]} · ${result.currentMa.toFixed(2)} mA`;
+    ? { off: 'LED 不亮', on: 'LED 发光', limited: '电源限流', overcurrent: '电流超过额定值，LED 可能损坏', reversed: 'LED 极性接反', short: '电源短路', unsupported: '电路不在模拟范围内', burnt: 'LED 已损坏' }
+    : { off: 'LED is off', on: 'LED is lit', limited: 'Supply is current-limited', overcurrent: 'Current exceeds the rating; the LED may be damaged', reversed: 'LED polarity is reversed', short: 'Supply is shorted', unsupported: 'Circuit is outside the modeled range', burnt: 'LED is burnt' };
+  experimentResult.textContent = `${messages[result.state] ?? result.state} · ${result.currentMa.toFixed(2)} mA`;
+  lessonPanel?.experiment({ reversed: reversed.checked, voltage: voltage.valueAsNumber, resistance: resistance.valueAsNumber, state: result.state });
   const bulb = /** @type {THREE.Mesh | undefined} */ (sceneGroup?.getObjectByName('led-bulb'));
   if (bulb && bulb.material instanceof THREE.MeshPhongMaterial) {
     bulb.material.emissive.setHex(result.state === 'on' || result.state === 'limited' ? 0x9e0800 : 0);
+    bulb.material.emissiveIntensity = 'brightness' in result ? result.brightness : 0;
     renderScene?.();
   }
 }
 /** @type {THREE.Group | undefined} */ let sceneGroup;
 /** @type {(() => void) | undefined} */ let renderScene;
-for (const input of [voltage, resistance, reversed]) input.addEventListener('input', updateExperiment);
+for (const input of [voltage, resistance, reversed]) input.addEventListener('input', () => {
+  updateExperiment();
+  if (voltage.checkValidity() && resistance.checkValidity() && (input === voltage || input === resistance)) lessonPanel?.controlChanged(input.id);
+});
 language.addEventListener('change', () => {
   lang = language.value === 'zh' ? 'zh' : 'en';
   try { localStorage.setItem('botreborn.sim.language', lang); } catch { /* Storage is optional. */ }
@@ -140,6 +198,8 @@ if (!part || !entry) {
       marker.visible = !!anchor;
       if (anchor) marker.position.copy(anchor);
       selectedPin = pin;
+      lessonPanel?.selectPin(pin.name);
+      bmeLesson?.selectPin(pin.name);
       updateCopy();
       render();
     });

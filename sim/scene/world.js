@@ -24,6 +24,7 @@ import { BIN } from '../layout.js';
 import { createWandState } from '../wand-state.js';
 import { CAR, actionAt, obstacles, stepCar } from '../car.js';
 import { evaluateLedBench } from '../electrical/led-bench.js';
+import { focusFrame } from './focus-frame.js';
 
 /** @typedef {import('../bench.js').Bench} Bench */
 /** @typedef {import('../bench.js').Placed} Placed */
@@ -122,7 +123,7 @@ export function createWorld(canvas) {
   const screenLook = new Map();
 
   let pending = false;
-  /** @type {{ from: Pose, to: Pose, start: number } | null} */
+  /** @type {{ from: Pose, to: Pose, start: number, resolve?: () => void } | null} */
   let move = null;
   /**
    * Called before each frame is drawn, with the camera already where it will
@@ -144,9 +145,11 @@ export function createWorld(canvas) {
     if (move) {
       const t = Math.min(1, (now - move.start) / MOVE_MS);
       if (t >= 1) {
-        apply(move.to);
+        const completed = move;
+        apply(completed.to);
         move = null;
         settleControls();
+        completed.resolve?.();
       } else {
         apply(blend(move.from, move.to, ease(t)));
         requestRender();
@@ -321,6 +324,7 @@ export function createWorld(canvas) {
     framing = frameFor ?? null;
     touched = false;
     controls.enabled = false;
+    move?.resolve?.();
     move = { from: currentPose(), to: poseFor(m), start: performance.now() };
     requestRender();
   }
@@ -359,6 +363,27 @@ export function createWorld(canvas) {
     if (!g || !anchor) return null;
     g.updateMatrixWorld();
     return g.localToWorld(anchor.clone());
+  }
+
+  /**
+   * Frame the points that still exist. A later view or focus settles an
+   * interrupted promise too, so callers never wait for a superseded move.
+   * @param {string[]} points
+   * @param {{left?:number, right?:number}} [occlusion]
+   * @returns {Promise<void>}
+   */
+  function focusPoints(points, occlusion = {}) {
+    if (!current) return Promise.resolve();
+    const from = currentPose();
+    const frame = focusFrame(points.map(point => pointPosition(/** @type {Bench} */ (current), point)), aspect, from, { width: canvas.clientWidth || 1, ...occlusion });
+    if (!frame) return Promise.resolve();
+    touched = true;
+    controls.enabled = false;
+    move?.resolve?.();
+    return new Promise(resolve => {
+      move = { from, to: { ...from, ...frame }, start: performance.now(), resolve };
+      requestRender();
+    });
   }
 
   /**
@@ -853,6 +878,7 @@ export function createWorld(canvas) {
     fadeAway,
     tableBounds: TABLE_BOUNDS,
     view,
+    focusPoints,
     requestRender,
     /**
      * @param {(now: number) => boolean} fn  true while it wants more frames

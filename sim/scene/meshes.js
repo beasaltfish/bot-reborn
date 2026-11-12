@@ -746,8 +746,13 @@ export function buildBin() {
  * }} BoardLook
  */
 
-/** @type {Record<'esp32' | 'inmp441' | 'max98357a' | 'bme280-i2c', BoardLook>} */
+/** @type {Record<'esp32' | 'inmp441' | 'max98357a' | 'bme280-i2c' | 'hc-sr04', BoardLook>} */
 const LOOKS = {
+  'hc-sr04': {
+    color: 0x1769a5, w: 45 * MM, d: 20 * MM, cx: 1.5, cz: 2.8, t: 1.6 * MM,
+    labelDz: () => 0.65, labelSize: 0.32,
+    silk: (ctx) => label(ctx, 'HC-SR04', 1.5, 5.8, 0.48),
+  },
   'bme280-i2c': {
     color: 0x1769a5, w: 25.2 * MM, d: 18 * MM, cx: 3, cz: 2.7, t: 1.6 * MM,
     labelDz: () => 0.7, labelSize: 0.35,
@@ -871,6 +876,14 @@ export function buildPart(def, state) {
 
   if (def.id === 'esp32') addEspDetails(g, top, state.burnt);
   if (def.id === 'max98357a') addTerminal(g, top, state.burnt, anchors);
+  if (def.id === 'hc-sr04') {
+    for (const [name, x] of /** @type {const} */ ([['sonar-transmitter', -3.5], ['sonar-receiver', 6.5]])) {
+      const can = new THREE.Mesh(new THREE.CylinderGeometry(2.75, 2.75, 4.2, 32), mat('metal', state.burnt ? 0x3a332c : STEEL));
+      can.position.set(x, top + 2.1, 3.8); can.name = name; g.add(can);
+      const face = new THREE.Mesh(new THREE.CircleGeometry(2.3, 32), mat('matte', state.burnt ? 0x1c1916 : 0x555b5d));
+      face.rotation.x = -Math.PI / 2; face.position.set(x, top + 4.21, 3.8); g.add(face);
+    }
+  }
   if (def.id === 'bme280-i2c') {
     g.add(box(1.0, 0.4, 1.0, mat('metal', state.burnt ? 0x3a332c : STEEL), 3, top, 2.5));
     g.add(box(0.45, 0.2, 0.65, mat('matte', 0x252525), 4.5, top, 3));
