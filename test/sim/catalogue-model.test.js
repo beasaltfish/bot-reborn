@@ -30,6 +30,15 @@ test('catalogue offers bilingual descriptions and preserves model labels', () =>
   assert.equal(catalogueEntry('missing', 'en'), undefined);
 });
 
+test('voltage labels distinguish sourced ratings, simulator assumptions and unknown limits', () => {
+  assert.match(catalogueEntry('bme280-i2c', 'en')?.voltage ?? '', /VIN.*3–5 V/);
+  assert.match(catalogueEntry('dc-source', 'en')?.voltage ?? '', /0–12 V.*model/i);
+  assert.match(catalogueEntry('led-5mm', 'zh')?.voltage ?? '', /2 V.*模型/);
+  assert.match(catalogueEntry('screen-st7789-320', 'en')?.voltage ?? '', /3\.3 V.*model/i);
+  assert.match(catalogueEntry('screen-ili9341-ips', 'en')?.voltage ?? '', /5 V.*model/i);
+  assert.equal(catalogueEntry('speaker', 'en')?.voltage, null);
+});
+
 test('translations fall back to the key and interpolate variables', () => {
   assert.equal(simText('zh', 'missing.key'), 'missing.key');
   assert.equal(simText('en', 'results', { count: 3 }), '3 results');

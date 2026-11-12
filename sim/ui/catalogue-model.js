@@ -1,15 +1,34 @@
-import { DEVICES } from '../devices/catalog.js';
+import { DEVICES, firmwareIndependent } from '../devices/catalog.js';
 import { PROFILES } from '../devices/profiles.js';
 import { PARTS } from '../parts.js';
+import { screenById } from '../../core/screens.js';
+import { DEFAULT_LED_FORWARD_VOLTAGE } from '../electrical/led.js';
 import { simText } from './strings.js';
 
-/** @typedef {{ part: string, name: string, summary: string, category: string, tags: string[], voltage: null, interfaces: string[], onBoard: boolean, simulated: boolean, firmwareSupported: boolean, required: boolean, recent: boolean, favourite: boolean }} CatalogueEntry */
+/** @typedef {{ part: string, name: string, summary: string, category: string, tags: string[], voltage: string|null, interfaces: string[], onBoard: boolean, simulated: boolean, firmwareSupported: boolean, required: boolean, recent: boolean, favourite: boolean, structural?: boolean, simulationLimited?: boolean, firmwareIndependent?: boolean }} CatalogueEntry */
 /** @typedef {{ id: string, label: string, entries: CatalogueEntry[] }} CatalogueSection */
 /** @param {string} value */
 const normalize = (value) => value.normalize('NFKC').trim().toLocaleLowerCase();
 
+/** @param {string} partId @param {string} lang @returns {string|null} */
+function voltageLabel(partId, lang) {
+  const text = (/** @type {string} */ key, /** @type {Record<string, string|number>} */ vars = {}) => simText(lang, `voltage.${key}`, vars);
+  if (partId === 'bme280-i2c') return text('bme280');
+  if (partId === 'hc-sr04') return text('hcSr04');
+  if (partId === 'led-5mm') return text('led', { voltage: DEFAULT_LED_FORWARD_VOLTAGE });
+  if (partId === 'dc-source') {
+    const spec = DEVICES[partId]?.properties.voltage;
+    if (spec?.kind === 'number' && spec.min !== undefined && spec.max !== undefined) return text('dcSource', { min: spec.min, max: spec.max });
+  }
+  const model = PARTS[partId]?.model;
+  const screen = model ? screenById(model) : undefined;
+  if (screen) return text('screen', { voltage: screen.vcc === '3v3' ? '3.3' : '5' });
+  return null;
+}
+
 /** @param {string} partId @param {string} [lang] @returns {CatalogueEntry | undefined} */
 export function catalogueEntry(partId, lang = 'en') {
+  if (partId === 'breadboard') return { part: partId, name: simText(lang, 'name.breadboard'), summary: simText(lang, 'summary.breadboard'), category: 'fundamental', tags: [], voltage: null, interfaces: [], onBoard: false, simulated: true, firmwareSupported: false, required: false, recent: false, favourite: false, structural: true };
   if (!Object.hasOwn(DEVICES, partId) || !Object.hasOwn(PARTS, partId)) return undefined;
   const device = DEVICES[partId], part = PARTS[partId];
   if (!device || !part) return undefined;
@@ -26,8 +45,10 @@ export function catalogueEntry(partId, lang = 'en') {
   const summaryKey = `summary.${device.category === 'display' ? 'display' : device.summaryKey}`;
   return { part: partId, name: translatedName === nameKey ? part.label : translatedName,
     summary: simText(lang, summaryKey), category: device.category,
-    tags: [...new Set([...device.tags, ...interfaces])], voltage: null, interfaces,
-    onBoard: part.onBoard, simulated: partId !== 'bme280-i2c', firmwareSupported: PROFILES[0].supportedParts.includes(partId),
+    tags: [...new Set([...device.tags, ...interfaces])], voltage: voltageLabel(partId, lang), interfaces,
+    onBoard: part.onBoard, simulated: !['bme280-i2c', 'hc-sr04'].includes(partId), firmwareSupported: PROFILES[0].supportedParts.includes(partId),
+    simulationLimited: ['led-5mm', 'resistor', 'dc-source', 'push-button'].includes(partId),
+    firmwareIndependent: firmwareIndependent(partId),
     required: false, recent: false, favourite: false };
 }
 
@@ -36,7 +57,7 @@ export function catalogueEntry(partId, lang = 'en') {
  * @returns {CatalogueSection[]}
  */
 export function catalogueView({ query = '', categories = [], tags = [], required = [], recent = [], favourites = [], lang = 'en' } = {}) {
-  const entries = Object.keys(DEVICES).flatMap(id => {
+  const entries = ['breadboard', ...Object.keys(DEVICES)].flatMap(id => {
     const entry = catalogueEntry(id, lang);
     return entry ? [{ ...entry, required: required.includes(id), recent: recent.includes(id), favourite: favourites.includes(id) }] : [];
   });

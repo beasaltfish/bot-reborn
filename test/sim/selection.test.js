@@ -30,6 +30,20 @@ test('descriptions expose localized names, declared pin roles and actionable wir
   assert.ok(wire.actions.some(action => action.id === 'remove-wire'));
 });
 
+test('pin inspection explains isolated supply polarity and BME280 auxiliary pins in both languages', () => {
+  let bench = addPart(emptyBench(), 'dc-source', { x: 0, z: 0 }).bench;
+  bench = addPart(bench, 'bme280-i2c', { x: 0, z: 0 }).bench;
+  const positive = describeSelection(bench, { kind: 'pin', point: 'src:+' }, 'en');
+  const negative = describeSelection(bench, { kind: 'pin', point: 'src:-' }, 'zh');
+  const output = describeSelection(bench, { kind: 'pin', point: 'env:3Vo' }, 'zh');
+  const address = describeSelection(bench, { kind: 'pin', point: 'env:SDO' }, 'en');
+  assert.ok(positive && negative && output && address);
+  assert.match(positive.rows.map(row => row.value).join(' '), /positive output/i);
+  assert.match(negative.rows.map(row => row.value).join(' '), /负极.*不一定/);
+  assert.match(output.rows.map(row => row.value).join(' '), /输出.*不是电源输入/);
+  assert.match(address.rows.map(row => row.value).join(' '), /0x77.*0x76/);
+});
+
 test('selection controller emits changes and clears removed targets on refresh', () => {
   let bench = emptyBench();
   /** @type {import('../../sim/selection.js').Selection[]} */

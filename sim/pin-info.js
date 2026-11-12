@@ -51,7 +51,15 @@ const BME280 = {
 export function pinDescription(partId, pin, lang = 'en') {
   const role = pin.role ?? pin.name.replace(/\.\d+$/, '');
   if (partId === 'bme280-i2c' && BME280[lang === 'zh' ? 'zh' : 'en'][role]) return BME280[lang === 'zh' ? 'zh' : 'en'][role];
+  if (partId === 'hc-sr04') {
+    const copy = lang === 'zh'
+      ? { VCC: '5 V 模块电源输入。', TRIG: '测距触发输入；3.3 V 触发兼容性尚未确认。', ECHO: '5 V 回波输出；不能直接接 3.3 V GPIO，需合适的电平转换。', GND: '电源与逻辑共用地线。' }
+      : { VCC: '5 V module supply input.', TRIG: 'Ranging trigger input; 3.3 V trigger compatibility is not established.', ECHO: '5 V echo output; do not connect directly to a 3.3 V GPIO. Use suitable level shifting.', GND: 'Common ground for supply and logic.' };
+    if (Object.hasOwn(copy, role)) return /** @type {Record<string,string>} */ (copy)[role];
+  }
   if (lang === 'zh') {
+    if (partId === 'dc-source' && pin.name === '+') return '直流电源正极输出；电压相对于负极设定。';
+    if (partId === 'dc-source' && pin.name === '-') return '直流电源负极或回流端，不一定是大地或控制板地。';
     if (partId === 'led-5mm' && pin.name === 'A') return 'LED 正极，连接到电源正极方向。';
     if (partId === 'led-5mm' && pin.name === 'K') return 'LED 负极，连接到电源负极方向。';
     if (partId === 'inmp441' && pin.name === 'SD') return 'I²S 麦克风音频数据输出。';
@@ -61,6 +69,8 @@ export function pinDescription(partId, pin, lang = 'en') {
     if (/^GPIO\d+$/.test(role)) return '通用控制器引脚，具体功能取决于固件配置。';
     return ZH[role] ?? '请查看器件接线指南了解此引脚。';
   }
+  if (partId === 'dc-source' && pin.name === '+') return 'Positive output of the DC supply; voltage is set relative to its negative terminal.';
+  if (partId === 'dc-source' && pin.name === '-') return 'Negative output or return; it is not necessarily earth or controller ground.';
   if (partId === 'led-5mm' && pin.name === 'A') return 'LED anode, connected towards the positive supply.';
   if (partId === 'led-5mm' && pin.name === 'K') return 'LED cathode, connected towards the negative supply.';
   if (partId === 'inmp441' && pin.name === 'SD') return 'I²S microphone audio data output.';

@@ -3,6 +3,7 @@ import { PARTS } from './parts.js';
 import { deviceByPart } from './devices/catalog.js';
 import { catalogueEntry } from './ui/catalogue-model.js';
 import { simText } from './ui/strings.js';
+import { pinDescription } from './pin-info.js';
 
 /** @typedef {null | {kind:'part', id:string} | {kind:'pin', point:string} | {kind:'wire', id:string}} Selection */
 /** @param {import('./bench.js').Bench} bench @param {Selection} selection @returns {Selection} */
@@ -37,10 +38,12 @@ export function createSelection(getBench, onSelect) {
   return { select, refresh: () => select(current), selection: () => current };
 }
 
-/** @param {string} part @param {string} name */
-function pinRoles(part, name) {
+/** @param {string} part @param {string} name @param {string} lang */
+function pinRoles(part, name, lang) {
   /** @type {string[]} */
   const roles = [];
+  if (part === 'dc-source' && name === '+') roles.push(simText(lang, 'selection.sourcePositive'));
+  if (part === 'dc-source' && name === '-') roles.push(simText(lang, 'selection.sourceReturn'));
   for (const cap of deviceByPart(part)?.capabilities ?? []) {
     if (cap.kind === 'supply') {
       if (cap.positive === name) roles.push('Supply +');
@@ -74,8 +77,12 @@ export function describeSelection(bench, selection, lang) {
     const colon = s.point.indexOf(':');
     const p = bench.placed.find(p => p.id === s.point.slice(0, colon));
     if (!p) return null;
-    const roles = pinRoles(p.part, s.point.slice(colon + 1));
-    return { kind: s.kind, title: s.point, rows: [{ label: text('role'), value: roles.join(', ') || text('unknownRole') }], actions: [{ id: 'start-wire', label: text('startWire') }], points: [s.point] };
+    const name = s.point.slice(colon + 1);
+    const roles = pinRoles(p.part, name, lang);
+    const pin = PARTS[p.part].pins.find(item => item.name === name);
+    const rows = [{ label: text('role'), value: roles.join(', ') || text('unknownRole') }];
+    if (pin) rows.push({ label: text('description'), value: pinDescription(p.part, pin, lang) });
+    return { kind: s.kind, title: s.point, rows, actions: [{ id: 'start-wire', label: text('startWire') }], points: [s.point] };
   }
   const wire = bench.wires.find(w => w.id === s.id);
   if (!wire) return null;

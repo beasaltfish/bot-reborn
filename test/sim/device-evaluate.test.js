@@ -65,6 +65,22 @@ test('repeated resource conflicts retain all affected pins', () => {
   assert.deepEqual(faults[0].points, ['toy2:U3A', 'toy2:U3B', 'toy:U3A', 'toy:U3B'].sort());
 });
 
+test('unsupported closed LED networks appear in merged diagnostics even with USB disconnected', () => {
+  let b = emptyBench();
+  for (const part of /** @type {const} */ (['led-5mm', 'resistor', 'resistor', 'dc-source'])) b = addPart(b, part, { x: 0, z: 0 }).bench;
+  b = addWire(b, 'src:+', 'r:1', 'red');
+  b = addWire(b, 'r:2', 'r2:1', 'yellow');
+  b = addWire(b, 'r2:2', 'led:A', 'yellow');
+  assert.ok(!evaluateBench(b).faults.some(f => f.code === 'unsupported-electrical-network'));
+  b = addWire(b, 'led:K', 'src:-', 'black');
+  const result = evaluateBench(b);
+  const fault = result.faults.find(f => f.code === 'unsupported-electrical-network');
+  assert.ok(fault);
+  assert.deepEqual(fault.points, ['led:A', 'led:K']);
+  assert.ok(!result.burns.includes('led'));
+  assert.ok(diagnose(b, { ...result.legacy, faults: result.faults, burns: result.burns }, 'zh').some(h => h.kind === 'fault' && /超出/.test(h.text)));
+});
+
 test('generic electrical and resource diagnoses explain cause and remedy', () => {
   const b = fixture();
   const outcome = powerOn(b);
