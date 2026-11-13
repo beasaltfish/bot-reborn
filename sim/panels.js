@@ -215,6 +215,9 @@ export function createPanels(opts) {
   /** @param {string} id @param {'watch'|'step'} mode */
   function runDemo(id, mode) {
     if (!id) return;
+    // On a phone the panel and the run bar would fight for the same top space.
+    if (window.innerWidth < 700) showProject(false);
+    if (window.innerWidth < 700) document.body.classList.add('demo-running');
     runBar.replaceChildren();
     const words = el('span', { class: 'say' });
     // The remembered pace, if it is one of the buttons; 1× otherwise.
@@ -222,9 +225,9 @@ export function createPanels(opts) {
     /** @type {ReturnType<typeof opts.start>} */
     const run = opts.start(id, mode, {
       onSay: (text) => { words.textContent = text; },
-      onEnd: () => { runBar.hidden = true; runBar.replaceChildren(); },
+      onEnd: () => { runBar.hidden = true; runBar.replaceChildren(); document.body.classList.remove('demo-running'); },
     }, speed);
-    if (!run) return;
+    if (!run) { document.body.classList.remove('demo-running'); return; }
     /** @param {string} label @param {() => void} f */
     const button = (label, f) => {
       const b = el('button', { type: 'button', class: 'link' }, [label]);

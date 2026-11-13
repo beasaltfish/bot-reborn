@@ -178,7 +178,7 @@
     #project-panel .project-tabs { display: flex; gap: 4px; margin-bottom: 8px; }
     #project-panel .project-tabs button { flex: 1; padding: 5px 8px; border: 1px solid var(--edge); border-radius: 7px; color: var(--ink-dim); background: rgba(255,240,220,0.06); font: 600 12px var(--font); cursor: pointer; }
     #project-panel .project-tabs button[aria-selected="true"] { color: var(--ink); border-color: var(--accent); background: rgba(240,180,106,0.18); }
-    #project-panel .project-actions { display: flex; gap: 8px; margin-top: 10px; }
+    #project-panel .project-actions { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; padding: 8px 0 2px; background: #1f1913; border-top: 1px solid var(--edge); }
     #project-panel [data-action="build"], #project-panel [data-action="leave"] { padding: 5px 9px; border: 1px solid var(--edge); border-radius: 7px; background: none; font: 600 12px var(--font); cursor: pointer; }
     #project-panel [data-action="build"] { color: var(--accent); border-color: var(--accent); }
     #project-panel [data-action="leave"] { padding: 5px 9px; border: 1px solid var(--edge); border-radius: 7px; color: var(--accent); background: none; font: 600 12px var(--font); cursor: pointer; }
@@ -252,6 +252,14 @@
     #diagram li .num { flex: none; width: 18px; color: var(--ink-dim); font-weight: 600; text-align: right; }
     #diagram li b { display: block; font-weight: 600; }
     #diagram li .why { color: var(--ink-dim); }
+
+    @media (max-width: 600px) {
+      #tools { max-width: calc(100vw - 28px); }
+      #viewbox { top: auto; bottom: 58px; right: 14px; }
+      #peek { display: none; }
+      #runbar { top: 54px; }
+      body.demo-running #tools { display: none; }
+    }
   </style>
 </head>
 <body>

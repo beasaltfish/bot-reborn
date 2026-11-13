@@ -10,6 +10,7 @@ test('Chinese workbench exposes translated primary controls and recipe choices',
   const previous = { document: globalThis.document, window: globalThis.window, addEventListener: globalThis.addEventListener };
   globalThis.document = dom.window.document; globalThis.window = dom.window; globalThis.addEventListener = dom.window.addEventListener.bind(dom.window);
   try {
+    Object.defineProperty(dom.window, 'innerWidth', { value: 390, configurable: true });
     /** @type {[string,string][]} */ const runs = [];
     const panels = createPanels(/** @type {any} */ ({ hint() { return '提示'; }, reset() {}, follow() {}, add() {}, carry() {}, start: (/** @type {string} */ id, /** @type {string} */ mode) => { runs.push([id, mode]); return { next() {}, finish() {}, skip() {}, stop() {}, speed() {} }; }, speed: 1, rememberSpeed() {},
       projectState: (/** @type {string} */ id) => { const plan = planById(id); return { mode: plan ? 'guided' : 'free', evaluated: true, project: plan, progress: [], selection: null, diagnoses: [] }; },
@@ -22,5 +23,6 @@ test('Chinese workbench exposes translated primary controls and recipe choices',
     const step = /** @type {HTMLButtonElement} */ (dom.window.document.querySelector('#project-panel [data-action="step"]'));
     assert.ok(step); step.click();
     assert.deepEqual(runs, [['audio', 'watch'], ['audio', 'step']]);
+    assert.ok(dom.window.document.body.classList.contains('demo-running'));
   } finally { globalThis.document = previous.document; globalThis.window = previous.window; globalThis.addEventListener = previous.addEventListener; dom.window.close(); }
 });
