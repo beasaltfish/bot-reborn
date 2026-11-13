@@ -1,7 +1,7 @@
 import { simText } from './strings.js';
 
 /** @typedef {{query:string, sections:import('./catalogue-model.js').CatalogueSection[], categories:{id:string,label:string}[], tags:string[], selectedCategories:string[], selectedTags:string[]}} CatalogueState */
-/** @param {{lang:string, add(part:string):void, carry(part:string,event:PointerEvent):void, learn(part:string):void, setQuery(query:string):void, toggleCategory(id:string):void, toggleTag(id:string):void, toggleFavourite(part:string):void}} opts */
+/** @param {{lang:string, add(part:string):void, carry(part:string,event:PointerEvent):void, learn(part:string):void, setQuery(query:string):void, toggleCategory(id:string):void, toggleTag(id:string):void, toggleFavourite(part:string):void, thumbnail?(part:string):string|null}} opts */
 export function createCataloguePanel(opts) {
   const text = (/** @type {string} */ key) => simText(opts.lang, `catalogue.${key}`);
   const element = document.createElement('section');
@@ -63,6 +63,13 @@ export function createCataloguePanel(opts) {
       const heading = document.createElement('h3'); heading.textContent = section.label; group.append(heading);
       for (const entry of section.entries) {
         const card = document.createElement('article'); card.dataset.part = entry.part;
+        const body = document.createElement('div'); body.className = 'card-body';
+        const thumb = opts.thumbnail?.(entry.part);
+        if (thumb) {
+          const image = document.createElement('img');
+          image.className = 'thumb'; image.src = thumb; image.alt = ''; image.loading = 'lazy'; image.width = 64; image.height = 64;
+          card.append(image);
+        }
         const name = document.createElement('h4'); name.textContent = entry.name;
         const summary = document.createElement('p'); summary.textContent = entry.summary;
         const meta = document.createElement('p');
@@ -74,9 +81,10 @@ export function createCataloguePanel(opts) {
         const favourite = actionButton(entry.favourite ? '★' : '☆', entry.name, 'favourite', () => opts.toggleFavourite(entry.part));
         favourite.classList.add('star');
         favourite.setAttribute('aria-pressed', String(entry.favourite));
-        card.append(name, summary, meta, add);
-        if (!entry.structural) card.append(learn);
-        card.append(favourite);
+        body.append(name, summary, meta, add);
+        if (!entry.structural) body.append(learn);
+        body.append(favourite);
+        card.append(body);
         card.addEventListener('pointerdown', event => {
           const target = /** @type {Element|null} */ (event.target);
           if (event.button !== 0 || event.isPrimary === false || target?.closest('button')) return;

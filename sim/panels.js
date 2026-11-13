@@ -19,6 +19,7 @@ import { PROJECTS } from './projects.js';
 import { WIRE_PALETTE } from './wire-color.js';
 import { createPropertyEditor } from './ui/property-editor.js';
 import { createBme280Panel } from './ui/bme280-panel.js';
+import { createPartThumbnails } from './scene/thumbnails.js';
 
 /** @typedef {{ id: string, name: string, note: string | null }} Choice */
 
@@ -247,8 +248,10 @@ export function createPanels(opts) {
   const all = catalogueView({ lang }).map(section => ({ ...section, entries: section.entries.filter(entry => entry.part !== 'esp32') })).filter(section => section.entries.length);
   const availableCategories = all.map(section => ({ id: section.id, label: section.label }));
   const availableTags = [...new Set(all.flatMap(section => section.entries.flatMap(entry => entry.interfaces)))].sort();
+  /** @type {ReturnType<typeof createPartThumbnails>|null} */ let thumbnails = null;
   const catalogue = createCataloguePanel({
     lang,
+    thumbnail: part => thumbnails ? thumbnails(part) : null,
     add: opts.add,
     carry: opts.carry,
     learn: part => opts.learn?.(part),
@@ -302,7 +305,10 @@ export function createPanels(opts) {
   projectSelect.addEventListener('change', () => { opts.clearProjectFocus?.(); refreshProject(); });
   projectClose.addEventListener('click', () => showProject(false));
   projectBtn.addEventListener('click', () => { showParts(false); showDiagram(false); showWire(false); showProject(Boolean(projectPanel.hidden)); });
-  const showParts = (/** @type {boolean} */ on) => { if (on) catalogue.open(); else catalogue.close(); };
+  const showParts = (/** @type {boolean} */ on) => {
+    if (on && !thumbnails) { thumbnails = createPartThumbnails(); renderCatalogue(); }
+    if (on) catalogue.open(); else catalogue.close();
+  };
   partsBtn.addEventListener('click', () => { showProject(false); showDiagram(false); showWire(false); showParts(Boolean(partsPanel.hidden)); });
   document.body.append(bar, bubble, status, picker, panel, partsPanel, projectPanel);
 

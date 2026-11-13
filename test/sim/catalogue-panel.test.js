@@ -11,7 +11,7 @@ test('catalogue exposes search, filters, required parts and labelled actions', (
   globalThis.document = dom.window.document;
   try {
     /** @type {string[]} */ const events = [];
-    const panel = createCataloguePanel({ lang: 'en', add: p => events.push(`add:${p}`), carry: p => events.push(`carry:${p}`), learn: p => events.push(`learn:${p}`), setQuery: q => events.push(`query:${q}`), toggleCategory: id => events.push(`category:${id}`), toggleTag: id => events.push(`tag:${id}`), toggleFavourite: p => events.push(`favourite:${p}`) });
+    const panel = createCataloguePanel({ lang: 'en', add: p => events.push(`add:${p}`), carry: p => events.push(`carry:${p}`), learn: p => events.push(`learn:${p}`), setQuery: q => events.push(`query:${q}`), toggleCategory: id => events.push(`category:${id}`), toggleTag: id => events.push(`tag:${id}`), toggleFavourite: p => events.push(`favourite:${p}`), thumbnail: part => part === 'led-5mm' ? 'data:image/png;base64,abc' : null });
     dom.window.document.body.append(panel.element);
     panel.render({ query: 'led', sections: catalogueView({ query: 'led', required: ['resistor'], favourites: ['led-5mm'] }), categories: [{ id: 'fundamental', label: 'Basic components' }], tags: ['GPIO'], selectedCategories: ['fundamental'], selectedTags: [] });
     panel.open();
@@ -45,6 +45,11 @@ test('catalogue exposes search, filters, required parts and labelled actions', (
     assert.ok(events.includes('add:resistor'));
     assert.ok(events.includes('learn:resistor'));
     assert.ok(events.includes('favourite:led-5mm'));
+    const image = /** @type {HTMLImageElement|null} */ (led.querySelector('img.thumb'));
+    assert.ok(image);
+    assert.equal(image.getAttribute('src'), 'data:image/png;base64,abc');
+    const plainCard = /** @type {HTMLElement} */ (panel.element.querySelector('[data-part="resistor"]'));
+    assert.equal(plainCard.querySelector('img.thumb'), null);
     panel.close();
     assert.equal(panel.element.hidden, true);
   } finally { globalThis.document = previous; dom.window.close(); }
