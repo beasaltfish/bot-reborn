@@ -14,6 +14,7 @@ import { evaluateBench } from './devices/evaluate.js';
 import { formatReadings } from './devices/ssd1306.js';
 import { createRuntimePanel } from './ui/device-runtime-panel.js';
 import { planById, planOptionsFor, planSteps } from './plan.js';
+import { previewStates, previewText } from './project-preview.js';
 import { nextPlanHint } from './guidance.js';
 import { defaultStimuli, setStimulus } from './stimuli.js';
 import { motorLevels, toyAction } from './car.js';
@@ -130,7 +131,7 @@ const panels = createPanels({
     void world.focusPoints(points, { left });
   },
   clearProjectFocus: () => hands.highlightGuidance([]),
-  start: (recipeId, screenId, mode, hooks, wand, speed) => startRun(recipeId, screenId, mode, hooks, wand, speed),
+  start: (id, mode, hooks, speed) => startPlan(id, planOptionsFor(bench), mode, hooks, speed),
   build: (id, options) => startPlan(id, options),
   planOptions: options => planOptionsFor(bench, options),
   leaveProject: () => { activeProject = null; },
@@ -767,9 +768,10 @@ export function startRun(recipeId, screenId, mode, hooks = {}, wand = false, spe
  * Build a plan onto a fresh bench, keeping the previous one for Back to my bench.
  * Project plans have no body demo, so this returns inert run controls.
  * @param {string} planId
- * @param {{ onEnd?(): void }} [hooks]
+ * @param {'build'|'watch'|'step'} [mode]
+ * @param {{ onSay?(text: string): void, onEnd?(): void }} [hooks]
  */
-export function startPlan(planId, options = {}, hooks = {}) {
+export function startPlan(planId, options = {}, mode = 'build', hooks = {}, speed = 1) {
   const plan = planById(planId, options);
   if (!plan || running) return null;
   running = true;
@@ -780,21 +782,58 @@ export function startPlan(planId, options = {}, hooks = {}) {
   }
   const hasWork = bench.boards.length > 0 || bench.wires.length > 0 || bench.placed.length > 1;
   if (hasWork && !keptBench(store())) keepBench(store(), bench);
-  recipeOn = null;
+  const steps = planSteps(plan);
+  const demoSteps = plan.id === 'tarot'
+    ? [...steps, /** @type {import('./recipes.js').Step} */ ({ kind: 'usb', say: 'Plug in USB and shake the wand.' })]
+    : steps;
+  recipeOn = plan.legacy
+    ? { need: /** @type {any} */ (plan.needs), ending: /** @type {any} */ (plan.ending) }
+    : plan.id === 'tarot' ? { need: 'pet', ending: 'Shake the wand' } : null;
   activeProject = plan;
   panels.selectProject(plan.id);
-  let built = startBench(bench);
-  // Project builds never plug in; the demo path is the toolbar's job.
-  for (const step of planSteps(plan)) if (step.kind !== 'usb') built = applyStep(built, step);
-  setBench(built);
-  world.view(view, built);
-  running = false;
-  runner = null;
-  const lang = document.documentElement.lang === 'zh' ? 'zh' : 'en';
-  const projectLabel = simText(lang, `project.${plan.id}`);
-  if (!offerBack()) panels.status(simText(lang, 'project.built', { name: projectLabel === `project.${plan.id}` ? plan.name : projectLabel }));
-  hooks.onEnd?.();
-  return { next() {}, finish() {}, skip() {}, stop() {}, speed() {} };
+  setBench(startBench(bench));
+  world.view(view, steps.reduce(applyStep, bench));
+  if (mode === 'build') {
+    let built = startBench(bench);
+    for (const step of steps) if (step.kind !== 'usb') built = applyStep(built, step);
+    setBench(built);
+    world.view(view, built);
+    running = false;
+    runner = null;
+    const lang = document.documentElement.lang === 'zh' ? 'zh' : 'en';
+    const projectLabel = simText(lang, `project.${plan.id}`);
+    if (!offerBack()) panels.status(simText(lang, 'project.built', { name: projectLabel === `project.${plan.id}` ? plan.name : projectLabel }));
+    hooks.onEnd?.();
+    return { next() {}, finish() {}, skip() {}, stop() {}, speed() {} };
+  }
+  const controls = runRecipe({
+    steps: demoSteps,
+    mode,
+    speed,
+    getBench: () => bench,
+    setBench,
+    world,
+    usb,
+    hands,
+    say: (text) => (hooks.onSay ? hooks.onSay(text) : panels.status(text)),
+    onDone: () => {
+      hooks.onEnd?.();
+      running = false;
+      recipeOn = null;
+      runner = null;
+      if (!usb.plugged) {
+        const kept = offerBack();
+        if (!kept) {
+          const text = previewText(plan.id, document.documentElement.lang);
+          if (text) panels.status(text);
+        }
+        const preview = previewStates(plan.id, environment);
+        if (preview) world.devices(preview);
+      }
+    },
+  });
+  runner = controls;
+  return controls;
 }
 
 // A bench kept before a reload is still there to go back to.

@@ -302,7 +302,9 @@ starting a body demo or plugging in USB; the toolbar's "Demo build" keeps the
 animated recipe demos.
 
 Every project now exposes the same actions: Build it for me, Demo and Step.
-Demo and Step replay the plan's own steps (recipes also run their body demo);
+Demo and Step replay the plan's own steps. Recipe projects run their body demo;
+device projects show a result preview (servo angle, motor spin, strip colour,
+OLED readings, button press) and tarot runs its body demo;
 no separate recipe chooser remains. The tarot wand is its own project instead
 of an add-on checkbox. Project builds lay the joined breadboards and seat the
 ESP32, then seat on-board parts at fixed holes; off-board parts stay on the
