@@ -85,6 +85,7 @@ const sonarPanel = id === 'hc-sr04' ? createSonarLabPanel(lang) : null;
 if (sonarPanel) actions.element.after(sonarPanel.element);
 
 /** @type {import('./parts.js').Pin | undefined} */ let selectedPin;
+let refreshCallout = () => {};
 function updateCopy() {
   const zh = lang === 'zh';
   document.documentElement.lang = zh ? 'zh-CN' : 'en';
@@ -105,6 +106,7 @@ function updateCopy() {
   summary.textContent = translated?.summary ?? '';
   status.textContent = part ? '' : (zh ? '找不到此器件，请返回工作台重新选择。' : 'This device is not available. Return to the workbench and choose a device.');
   detail.textContent = selectedPin ? `${selectedPin.name} — ${pinDescription(id, selectedPin, lang)}` : (zh ? '选择引脚，在模型上查看其位置。' : 'Select a pin to locate it on the model.');
+  refreshCallout();
   guide.hidden = id !== 'led-5mm';
   if (!guide.hidden) {
     guideTitle.textContent = zh ? '搭建 LED 回路' : 'Build an LED circuit';
@@ -244,7 +246,43 @@ if (!part || !entry) {
   const controls = new OrbitControls(camera, canvas);
   controls.target.copy(center);
   controls.update();
-  const render = () => renderer.render(scene, camera);
+  const callout = document.createElement('div');
+  callout.id = 'pin-callout';
+  callout.hidden = true;
+  document.body.append(callout);
+  const leader = new THREE.Line(
+    new THREE.BufferGeometry(),
+    new THREE.LineBasicMaterial({ color: 0xffb547, depthTest: false, transparent: true }),
+  );
+  leader.visible = false;
+  leader.renderOrder = 11;
+  scene.add(leader);
+  /** @type {THREE.Vector3|null} */ let calloutEnd = null;
+  const updateCalloutPosition = () => {
+    if (!calloutEnd) { callout.hidden = true; return; }
+    const point = calloutEnd.clone().project(camera);
+    callout.hidden = false;
+    callout.style.left = `${(point.x * 0.5 + 0.5) * canvas.clientWidth}px`;
+    callout.style.top = `${(-point.y * 0.5 + 0.5) * canvas.clientHeight}px`;
+  };
+  /** @param {import('./parts.js').Pin} pin */
+  const showPinCallout = pin => {
+    const anchor = anchors.get(pin.name);
+    if (!anchor) { calloutEnd = null; leader.visible = false; callout.hidden = true; return; }
+    const start = anchor.clone();
+    group.localToWorld(start);
+    const outward = start.clone().sub(center);
+    if (outward.lengthSq() < 1e-6) outward.set(0, 1, 0);
+    outward.normalize();
+    calloutEnd = start.clone().addScaledVector(outward, Math.max(3, size.length() * 0.25));
+    leader.geometry.setFromPoints([start, calloutEnd]);
+    leader.visible = true;
+    callout.textContent = `${pin.name} — ${pinDescription(id, pin, lang)}`;
+    updateCalloutPosition();
+  };
+  const hidePinCallout = () => { calloutEnd = null; leader.visible = false; callout.hidden = true; };
+  refreshCallout = () => { if (selectedPin) showPinCallout(selectedPin); };
+  const render = () => { renderer.render(scene, camera); updateCalloutPosition(); };
   renderScene = render;
   const marker = new THREE.Mesh(
     new THREE.SphereGeometry(0.6, 16, 12),
@@ -268,6 +306,7 @@ if (!part || !entry) {
       marker.visible = !!anchor;
       if (anchor) marker.position.copy(anchor);
       selectedPin = pin;
+      showPinCallout(pin);
       lessonPanel?.selectPin(pin.name);
       bmeLesson?.selectPin(pin.name);
       updateCopy();
@@ -284,9 +323,22 @@ if (!part || !entry) {
     camera.updateProjectionMatrix();
     render();
   };
+  /** @type {{x:number,y:number}|null} */ let downAt = null;
+  canvas.addEventListener('pointerdown', event => { downAt = { x: event.clientX, y: event.clientY }; });
+  canvas.addEventListener('pointerup', event => {
+    const moved = downAt ? Math.hypot(event.clientX - downAt.x, event.clientY - downAt.y) : 99;
+    downAt = null;
+    if (moved > 4) return;
+    for (const other of buttons) other.setAttribute('aria-pressed', 'false');
+    marker.visible = false;
+    selectedPin = undefined;
+    hidePinCallout();
+    updateCopy();
+    render();
+  });
   controls.addEventListener('change', render);
   window.addEventListener('resize', resize);
-  window.addEventListener('pagehide', () => { controls.dispose(); dispose(group); renderer.dispose(); }, { once: true });
+  window.addEventListener('pagehide', () => { controls.dispose(); dispose(group); renderer.dispose(); callout.remove(); }, { once: true });
   resize();
   if (id === 'led-5mm') updateExperiment();
 }

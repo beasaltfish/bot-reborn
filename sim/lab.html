@@ -30,6 +30,15 @@
     #led-experiment input[type="number"] { width: 95px; padding: 5px; }
     .muted { color: #bdb4a9; }
     @media (max-width: 700px) { main { grid-template-columns: 1fr; } #stage { height: 55vh; } }
+
+    #pin-callout {
+      position: fixed; z-index: 6; max-width: min(240px, calc(100vw - 32px));
+      transform: translate(14px, -50%); pointer-events: none;
+      padding: 7px 10px; border-radius: 9px;
+      font: 500 12px/1.4 var(--font, ui-sans-serif, system-ui, sans-serif); color: #f6eee3;
+      background: rgba(36, 28, 21, 0.92); border: 1px solid rgba(255, 240, 220, 0.24);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+    }
   </style>
 </head>
 <body>
