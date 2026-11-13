@@ -57,6 +57,7 @@ export function evaluateServo(bench, profile, { controllerPowered = false, elect
       frequencyHz: pwm.frequencyHz,
       currentMa,
       supplyVoltage: powered ? voltage : 0,
+      supplyNet: network.netOf(vcc),
     };
   }
   return { parts, faults };

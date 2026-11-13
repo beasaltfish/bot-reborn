@@ -807,7 +807,7 @@ const LOOKS = {
  */
 export function buildPart(def, state) {
   if (def.id === 'led-5mm' || def.id === 'resistor' || def.id === 'dc-source' || def.id === 'push-button'
-    || def.id === 'button-module' || def.id === 'ssd1306' || def.id === 'sg90' || def.id === 'tb6612fng' || def.id === 'dc-motor-small'
+    || def.id === 'button-module' || def.id === 'ssd1306' || def.id === 'sg90' || def.id === 'tb6612fng' || def.id === 'dc-motor-small' || def.id === 'ws2812-strip'
     || def.id === 'usb-5v-source' || def.id === 'battery-4xaa' || def.id === 'bench-supply' || def.id === 'breadboard-regulator') {
     const g = new THREE.Group();
     /** @type {Map<string, THREE.Vector3>} */
@@ -829,6 +829,10 @@ export function buildPart(def, state) {
       const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.5, 24), mat('gloss', 0xc7372e));
       cap.position.set(1, height + 1.05, 0);
       g.add(cap);
+    } else if (def.id === 'ws2812-strip') {
+      // A short flexible strip with a row of addressable LEDs.
+      g.add(box(18, 0.35, 3, mat('matte', 0x1b1b1b), 1, height, 0));
+      for (let i = 0; i < 8; i++) g.add(box(0.8, 0.25, 0.8, mat('gloss', 0xe8e8e2), 2 + i * 2, height + 0.35, 0));
     } else if (def.id === 'tb6612fng') {
       // The driver breakout and its black chip.
       g.add(box(8, 0.6, 8, mat('matte', 0x8a1c1c), 1, height, 0));

@@ -23,6 +23,7 @@ const ZH = {
   'floating-input': 'GPIO 输入没有确定的电平；请根据电路配置合适的上拉或下拉。',
   'gpio-contention': 'GPIO 输出或电源轨正在驱动相反电平；请断电并分开冲突的驱动端。',
   'logic-level-incompatible': '连接的信号可能高于配置的 GPIO 逻辑电压；请断电并使用合适的电平转换。',
+  'onewire-data-direction': '单线数据接到了输出端或不可用引脚；请将控制器接 DIN，并保留 DOUT 给下一段。',
   'driver-gpio-power': '电机驱动器电源接到了 GPIO；请使用合适的 3.3 V/5 V 电源轨。',
   'motor-standby': '驱动器 STBY 未拉高，桥臂处于待机；请将 STBY 接到逻辑高电平。',
   'motor-bridge-shorted': '同一桥臂的两个输入接到同一 GPIO，可能造成桥臂短路；请分开 AIN1 和 AIN2。',

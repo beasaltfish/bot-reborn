@@ -16,6 +16,9 @@ function device(part, category, capabilities) {
 export const DEVICES = {
   'hc-sr04': { ...device('hc-sr04', 'sensor', [{ kind: 'supply', positive: 'VCC', ground: 'GND' }, { kind: 'gpio', pin: 'TRIG' }, { kind: 'gpio', pin: 'ECHO' }]),
     firmware: { libraries: ['hc-sr04'], resources: [{ kind: 'gpio', pin: 'TRIG', direction: 'output', gpio: 'GPIO4' }, { kind: 'gpio', pin: 'ECHO', direction: 'input', gpio: 'GPIO5' }], init: {}, actions: ['measure'], telemetry: ['distanceCm'] } },
+  'ws2812-strip': { ...device('ws2812-strip', 'actuator', [{ kind: 'supply', positive: '5V', ground: 'GND' }, { kind: 'oneWire', pin: 'DIN' }]),
+    properties: { pixels: { kind: 'number', default: 8, min: 1, max: 60, unit: 'px' } },
+    firmware: { libraries: ['ws2812'], resources: [{ kind: 'oneWire', pin: 'DIN', direction: 'output' }], init: {}, actions: ['show'], telemetry: [] } },
   tb6612fng: { ...device('tb6612fng', 'actuator', [{ kind: 'supply', positive: 'VCC', ground: 'GND' }, { kind: 'supply', positive: 'VM', ground: 'GND2' }, { kind: 'driver', inputs: ['AIN1', 'AIN2', 'PWMA', 'STBY'] }]),
     firmware: { libraries: ['tb6612fng'], resources: [{ kind: 'gpio', pin: 'AIN1', direction: 'output' }, { kind: 'gpio', pin: 'AIN2', direction: 'output' }, { kind: 'gpio', pin: 'PWMA', direction: 'output' }, { kind: 'gpio', pin: 'STBY', direction: 'output' }], init: {}, actions: ['drive', 'brake', 'coast'], telemetry: ['duty'] } },
   'dc-motor-small': device('dc-motor-small', 'actuator', [{ kind: 'load', positive: '+', negative: '-' }]),

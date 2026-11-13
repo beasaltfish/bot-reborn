@@ -42,6 +42,8 @@ const ZH = {
   'PWMA sets the motor speed.': 'PWMA 设置电机速度。',
   'Connect one motor terminal to AO1.': '将电机一端接到 AO1。',
   'Connect the other motor terminal to AO2.': '将电机另一端接到 AO2。',
+  'The strip needs a 5 V supply sized for its pixels.': '灯带需要与像素数量匹配的 5 V 电源。',
+  'DIN carries the one-wire data; 3.3 V logic may need shifting for a 5 V strip.': 'DIN 传输单线数据；5 V 灯带可能需要 3.3 V 逻辑电平转换。',
   'The mic is rated 3.6 V at most, so it takes 3V3, not 5V.': '麦克风额定电压最高为 3.6 V，因此应接 3V3，不能接 5V。',
   'The mic needs a ground shared with the ESP32.': '麦克风需要与 ESP32 共地。',
   'With L/R low the mic talks in the left slot, which is the one the firmware reads.': 'L/R 接低电平时麦克风使用左声道时隙，固件读取的正是该时隙。',

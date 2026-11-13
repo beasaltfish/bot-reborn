@@ -27,7 +27,7 @@ import { SCREENS } from '../core/screens.js';
  * `prefix` is the stem of its instance ids: mic, mic2, mic3…
  * `model` is the screen table row a screen part is built from.
  * @typedef {{
- *   id: 'esp32' | 'inmp441' | 'max98357a' | 'speaker' | 'mpu6050' | 'toy' | 'led-5mm' | 'resistor' | 'dc-source' | 'push-button' | 'button-module' | 'ssd1306' | 'sg90' | 'tb6612fng' | 'dc-motor-small' | 'bme280-i2c' | 'hc-sr04' | 'usb-5v-source' | 'battery-4xaa' | 'bench-supply' | 'breadboard-regulator' | `screen-${string}`,
+ *   id: 'esp32' | 'inmp441' | 'max98357a' | 'speaker' | 'mpu6050' | 'toy' | 'led-5mm' | 'resistor' | 'dc-source' | 'push-button' | 'button-module' | 'ssd1306' | 'sg90' | 'tb6612fng' | 'dc-motor-small' | 'ws2812-strip' | 'bme280-i2c' | 'hc-sr04' | 'usb-5v-source' | 'battery-4xaa' | 'bench-supply' | 'breadboard-regulator' | `screen-${string}`,
  *   label: string,
  *   prefix: string,
  *   model?: string,
@@ -77,6 +77,8 @@ const FIXED = {
   tb6612fng: { id: 'tb6612fng', label: 'TB6612FNG motor driver', prefix: 'drv', size: { w: 20.3, d: 20.3, h: 4 }, pins: ['VM', 'VCC', 'GND', 'AIN1', 'AIN2', 'PWMA', 'STBY', 'BIN1', 'BIN2', 'PWMB', 'GND2', 'AO1', 'AO2', 'BO1', 'BO2'].map((name, x) => ({ name, x, y: 0 })), internal: [], onBoard: true },
   // A small geared DC motor with two solder terminals.
   'dc-motor-small': { id: 'dc-motor-small', label: 'Small DC motor', prefix: 'motor', size: { w: 25, d: 20, h: 15 }, pins: [{ name: '+', x: 0, y: 0, wireOnly: true }, { name: '-', x: 2, y: 0, wireOnly: true }], internal: [], onBoard: false },
+  // A short WS2812/NeoPixel strip: 5 V, DIN, GND at the input, DOUT at the end.
+  'ws2812-strip': { id: 'ws2812-strip', label: 'WS2812 strip', prefix: 'strip', size: { w: 50, d: 10, h: 3 }, pins: ['5V', 'DIN', 'GND', 'DOUT'].map((name, x) => ({ name, x, y: 0, wireOnly: true })), internal: [], onBoard: false },
   // SG90: 22.8 x 12.2 x 28.5 mm, three-wire lead in GND, VCC, SIG order.
   sg90: { id: 'sg90', label: 'SG90 servo', prefix: 'servo', size: { w: 23, d: 12, h: 29 }, pins: ['GND', 'VCC', 'SIG'].map((name, x) => ({ name, x, y: 0, wireOnly: true })), internal: [], onBoard: false },
   // A common 0.96-inch 128x64 I2C module; GND, VCC, SCL, SDA silk order.

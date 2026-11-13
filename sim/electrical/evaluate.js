@@ -108,7 +108,7 @@ export function evaluateElectrical(bench, { profile, mode, stimuli, devices = DE
     if (outcome.rails[s.positive]) return outcome.rails[s.positive];
     const group = byNet.get(s.positive) ?? [];
     /** @type {import('./supply.js').RailState} */
-    const rail = { voltage: 0, requestedCurrentMa: demand(s), deliveredCurrentMa: 0, sourceInstances: group.map(x => x.p.id), status: 'off' };
+    const rail = { voltage: 0, requestedCurrentMa: demand(s), currentLimitMa: s.c.currentLimitMa, deliveredCurrentMa: 0, sourceInstances: group.map(x => x.p.id), status: 'off' };
     outcome.rails[s.positive] = rail;
     if (cyclic.has(s) || evaluating.has(s)) return rail;
     if (group.length > 1) {

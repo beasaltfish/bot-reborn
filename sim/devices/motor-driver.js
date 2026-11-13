@@ -77,6 +77,7 @@ export function evaluateMotorDriver(bench, profile, { controllerPowered = false,
       rpmRatio: running && load !== 'stall' ? speed : 0,
       currentMa,
       supplyVoltage: vmPowered ? (network.same(vm, `${board.id}:5V`) ? profile.rails?.['5V'] ?? 0 : rail?.voltage ?? 0) : 0,
+      supplyNet: network.netOf(vm),
     };
     parts[driver.id] = { state, currentMa, pwmPin: pwma };
   }

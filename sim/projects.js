@@ -184,8 +184,26 @@ export const MOTOR_PROJECT = {
   ],
 };
 
+/** @type {import('./target.js').Link[]} */
+const STRIP_LINKS = [
+  { a: 'strip:5V', b: 'esp:5V', why: 'The strip needs a 5 V supply sized for its pixels.' },
+  { a: 'strip:GND', b: 'esp:GND', why: 'Share ground with the controller.' },
+  { a: 'strip:DIN', b: 'esp:GPIO6', why: 'DIN carries the one-wire data; 3.3 V logic may need shifting for a 5 V strip.' },
+];
+/** @type {Project} */
+export const STRIP_PROJECT = {
+  id: 'status-light-strip', name: 'Status light strip', needs: 'any', ending: 'Light the strip',
+  ignoredFaultCodes: ['firmware-unsupported', 'device-unpowered'],
+  links: STRIP_LINKS,
+  steps: [
+    { kind: 'part', id: 'strip', part: 'ws2812-strip', at: { x: -10, z: 40 }, rot: 0, seated: false, say: 'Place the WS2812 strip.' },
+    ...STRIP_LINKS.map(link => /** @type {import('./recipes.js').Step} */ ({ kind: 'wire', a: link.a, b: link.b, named: [link.a, link.b], say: link.why })),
+    { kind: 'usb', say: 'Plug in USB and light the strip.' },
+  ],
+};
+
 /** @type {Project[]} */
-export const PROJECTS = [...RECIPES.map(recipe => adapt(recipe)), LED_PROJECT, BME280_PROJECT, POWER_PROJECT, BUTTON_PROJECT, SONAR_PROJECT, DISPLAY_PROJECT, SERVO_PROJECT, MOTOR_PROJECT];
+export const PROJECTS = [...RECIPES.map(recipe => adapt(recipe)), LED_PROJECT, BME280_PROJECT, POWER_PROJECT, BUTTON_PROJECT, SONAR_PROJECT, DISPLAY_PROJECT, SERVO_PROJECT, MOTOR_PROJECT, STRIP_PROJECT];
 
 /** @param {string} id @param {{screenId?:string, wand?:boolean}} [options] */
 export function projectById(id, options) {
@@ -197,6 +215,7 @@ export function projectById(id, options) {
   if (id === DISPLAY_PROJECT.id) return DISPLAY_PROJECT;
   if (id === SERVO_PROJECT.id) return SERVO_PROJECT;
   if (id === MOTOR_PROJECT.id) return MOTOR_PROJECT;
+  if (id === STRIP_PROJECT.id) return STRIP_PROJECT;
   const recipe = RECIPES.find(candidate => candidate.id === id);
   if (!recipe) return null;
   if (options?.screenId || options?.wand) return adapt(recipe, options.screenId, options.wand);
