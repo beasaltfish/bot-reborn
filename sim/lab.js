@@ -284,12 +284,23 @@ if (!part || !entry) {
   refreshCallout = () => { if (selectedPin) showPinCallout(selectedPin); };
   const render = () => { renderer.render(scene, camera); updateCalloutPosition(); };
   renderScene = render;
-  const marker = new THREE.Mesh(
-    new THREE.SphereGeometry(0.6, 16, 12),
+  const markerRadius = Math.max(0.22, Math.min(0.9, size.length() * 0.02));
+  const marker = new THREE.Group();
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(markerRadius * 0.65, markerRadius, 24),
     new THREE.MeshBasicMaterial({ color: 0xffb547, depthTest: false }),
   );
+  ring.rotation.x = -Math.PI / 2;
+  const dot = new THREE.Mesh(
+    new THREE.CircleGeometry(markerRadius * 0.18, 16),
+    new THREE.MeshBasicMaterial({ color: 0xffb547, depthTest: false }),
+  );
+  dot.rotation.x = -Math.PI / 2;
+  marker.add(ring, dot);
   marker.visible = false;
   marker.renderOrder = 10;
+  ring.renderOrder = 10;
+  dot.renderOrder = 11;
   group.add(marker);
   /** @type {HTMLButtonElement[]} */
   const buttons = [];

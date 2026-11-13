@@ -24,6 +24,7 @@ export function connectionProgress(bench, project) {
     const faultCodes = complete ? [...new Set(faults.filter(fault => !project.ignoredFaultCodes?.includes(fault.code) && fault.points.some((/** @type {string} */ point) => points.some(p => network.same(p, point)))).map(fault => fault.code))].sort() : [];
     return {
       id: `${project.id}:${link.a}:${link.b}`,
+      present,
       a: link.a,
       b: link.b,
       whyKey: `project.${project.id}.link.${encodeURIComponent(link.a)}.${encodeURIComponent(link.b)}.why`,

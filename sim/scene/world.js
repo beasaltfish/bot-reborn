@@ -375,7 +375,11 @@ export function createWorld(canvas) {
   function focusPoints(points, occlusion = {}) {
     if (!current) return Promise.resolve();
     const from = currentPose();
-    const frame = focusFrame(points.map(point => pointPosition(/** @type {Bench} */ (current), point)), aspect, from, { width: canvas.clientWidth || 1, ...occlusion });
+    const positions = points.map(point => pointPosition(/** @type {Bench} */ (current), point));
+    // A connection with one end missing cannot be framed: framing the remaining
+    // end alone would zoom onto a single pin. Leave the camera where it is.
+    if (positions.some(position => !position)) return Promise.resolve();
+    const frame = focusFrame(positions, aspect, from, { width: canvas.clientWidth || 1, ...occlusion });
     if (!frame) return Promise.resolve();
     touched = true;
     controls.enabled = false;

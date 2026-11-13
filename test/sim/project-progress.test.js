@@ -17,6 +17,7 @@ function entry(bench, a) {
 test('connection progress uses nets rather than literal endpoints', () => {
   let b = emptyBench();
   assert.equal(entry(b, 'mic:VDD').status, 'missing');
+  assert.equal(entry(b, 'mic:VDD').present, true);
   b = addWire(b, 'mic:VDD', 'bb1:a1', 'red');
   b = addWire(b, 'esp:3V3', 'bb1:e1', 'red');
   const result = entry(b, 'mic:VDD');
@@ -50,4 +51,5 @@ test('removed project parts do not make a connection complete', () => {
   assert.ok(!('refused' in removed));
   b = removed;
   assert.equal(entry(b, 'mic:VDD').status, 'missing');
+  assert.equal(entry(b, 'mic:VDD').present, false);
 });

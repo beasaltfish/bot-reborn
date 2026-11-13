@@ -56,7 +56,9 @@ export function createProjectPanel(opts) {
         const why = reason ? projectReason(opts.lang, reason) : null;
         if (why) row.append(child('p', why));
         if (link.faultCodes.length) row.append(child('div', link.faultCodes.join(', ')));
-        row.append(showButton([link.a, link.b]));
+        const show = showButton([link.a, link.b]);
+        if (!link.present) { show.disabled = true; show.title = text('notOnBench'); }
+        row.append(show);
         list.append(row);
       }
       element.append(list);

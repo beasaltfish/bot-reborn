@@ -79,3 +79,20 @@ test('free mode shows the selection and diagnoses without asserting a correct ci
     assert.deepEqual(focused, [['mic:VDD']]);
   } finally { globalThis.document = previous; dom.window.close(); }
 });
+
+test('a connection with a missing part cannot be focused', () => {
+  const dom = new JSDOM('<!doctype html><body></body>');
+  const previous = globalThis.document;
+  globalThis.document = dom.window.document;
+  try {
+    const project = projectById('toy');
+    assert.ok(project);
+    const panel = createProjectPanel({ lang: 'en', focus() {} });
+    panel.render({ mode: 'guided', project, progress: connectionProgress(emptyBench(), project), selection: null, diagnoses: [] });
+    const row = [...panel.element.querySelectorAll('[data-status]')].find(item => (item.textContent ?? '').includes('toy:U3A'));
+    assert.ok(row);
+    const button = /** @type {HTMLButtonElement} */ (row.querySelector('button'));
+    assert.equal(button.disabled, true);
+    assert.equal(button.title, 'Place the parts first');
+  } finally { globalThis.document = previous; dom.window.close(); }
+});
