@@ -106,7 +106,6 @@ export function createProjectPanel(opts) {
   }
   /** @param {State} current */
   function renderDiagnostics(current) {
-    element.append(child('h2', text('diagnoses')));
     if (current.selection) {
       element.append(child('h3', text('selection')), child('strong', current.selection.title));
       for (const row of current.selection.rows) element.append(child('div', `${row.label}: ${row.value}`));
@@ -144,7 +143,7 @@ export function createProjectPanel(opts) {
       const nextProject = next.project?.id ?? null;
       state = next;
       diagnostics = freeState;
-      if (!tabTouched || previousProject !== nextProject) tab = next.mode === 'guided' ? 'project' : 'diagnostics';
+      if (!tabTouched || previousProject !== nextProject) tab = 'project';
       paint();
     },
     /** @param {string} id */

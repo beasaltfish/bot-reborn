@@ -70,6 +70,7 @@ test('free mode shows the selection and diagnoses without asserting a correct ci
     const panel = createProjectPanel({ lang: 'zh', focus: points => focused.push(points) });
     const selection = describeSelection(emptyBench(), { kind: 'pin', point: 'mic:VDD' }, 'zh');
     panel.render({ mode: 'free', project: null, progress: [], selection, diagnoses: [{ kind: 'fault', text: 'Fault explanation', points: ['mic:VDD'] }] });
+    panel.element.querySelector('[data-tab="diagnostics"]')?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     assert.match(panel.element.textContent ?? '', /mic:VDD/);
     assert.match(panel.element.textContent ?? '', /Fault explanation/);
     assert.doesNotMatch(panel.element.textContent ?? '', /complete|正确电路/i);
@@ -130,6 +131,7 @@ test('project and diagnostics are separate tabs and leaving clears the plan', ()
     leave.click();
     assert.equal(leaves, 1);
     panel.render({ ...guided, project: null, mode: 'free' }, { ...free, evaluated: false, diagnoses: [] });
+    panel.element.querySelector('[data-tab="diagnostics"]')?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     assert.match(panel.element.textContent ?? '', /Plug in USB/);
   } finally { globalThis.document = previous; dom.window.close(); }
 });

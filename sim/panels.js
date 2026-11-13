@@ -167,12 +167,14 @@ export function createPanels(opts) {
     opts.clearProjectFocus?.();
     refreshProject();
   } });
-  const projectSelect = /** @type {HTMLSelectElement} */ (el('select', { 'aria-label': simText(lang, 'project.choose') }));
+  const projectSelect = /** @type {HTMLSelectElement} */ (el('select', { 'aria-label': simText(lang, 'project.choosePlaceholder') }));
+  projectSelect.append(el('option', { value: '', disabled: '' }, [simText(lang, 'project.choosePlaceholder')]));
   for (const project of PROJECTS) {
     const label = simText(lang, `project.${project.id}`);
     projectSelect.append(el('option', { value: project.id }, [label === `project.${project.id}` ? project.name : label]));
   }
-  projectSelect.selectedIndex = -1;
+  projectSelect.selectedIndex = 0;
+  projectSelect.required = true;
   const projectClose = el('button', { type: 'button', class: 'close', 'aria-label': simText(lang, 'project.close') }, ['×']);
   const projectPanel = el('div', { id: 'project-panel', role: 'region', 'aria-label': simText(lang, 'project.button'), hidden: '' }, [
     el('header', {}, [el('h2', {}, [simText(lang, 'project.button')]), projectClose]), projectSelect, projectView.element,

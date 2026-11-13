@@ -30,7 +30,7 @@ test('project panel switches modes, focuses connections and yields to Parts', ()
     assert.match(panel.textContent ?? '', /Diagnostics/);
     const select = /** @type {HTMLSelectElement} */ (panel.querySelector('select'));
     const options = [...select.options].map(option => option.value);
-    assert.equal(options.length, PROJECTS.length);
+    assert.equal(options.length, PROJECTS.length + 1);
     assert.ok(options.includes('power-a-rail') && options.includes('environment-display'));
     select.value = 'audio'; select.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
     select.value = 'screen'; select.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
