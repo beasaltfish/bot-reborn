@@ -3,7 +3,7 @@
 const COPY = {
   en: {
     'power.reconnect': 'Power safety stop: unplug USB and reconnect after correcting the circuit.',
-    'tools.wire': 'Wire it for me', 'tools.parts': 'Parts', 'tools.diagram': 'Wiring overview', 'tools.hint': 'Next hint', 'tools.reset': 'Reset bench', 'tools.confirmReset': 'Clear the whole bench? ', 'tools.confirm': 'Reset', 'tools.keep': 'Keep', 'tools.close': 'Close', 'tools.screen': 'Screen', 'tools.wand': 'Add the tarot wand (MPU6050)', 'tools.watch': 'Watch it', 'tools.step': 'Step by step',
+    'tools.wire': 'Demo build', 'tools.parts': 'Parts', 'tools.diagram': 'Wiring overview', 'tools.hint': 'Next hint', 'tools.reset': 'Reset bench', 'tools.confirmReset': 'Clear the whole bench? ', 'tools.confirm': 'Reset', 'tools.keep': 'Keep', 'tools.close': 'Close', 'tools.screen': 'Screen', 'tools.wand': 'Add the tarot wand (MPU6050)', 'tools.watch': 'Watch it', 'tools.step': 'Step by step',
     'lab.addToBench': 'Add to current bench', 'lab.startProject': 'Start project', 'lab.storageError': 'Could not save the request; check browser storage permissions.', 'lab.replaceConfirm': 'Starting this project will replace the current bench. Continue?', 'lab.handoffError': 'Could not apply the laboratory request; the current bench was not replaced.', 'project.led-basics': 'LED basics', 'project.bme280-readings': 'BME280 readings',
     'sonarLab.title': 'Hypothetical ranging example', 'sonarLab.note': 'This isolated example assumes 5 V power, a valid trigger and safe ECHO level shifting. It is not proof that 3.3 V TRIG or your workbench wiring is compatible; no real firmware is used.', 'sonarLab.distance': 'Target distance', 'sonarLab.trigger': 'Simulate trigger', 'sonarLab.noMeasurement': 'No measurement yet.', 'sonarLab.result': 'Simulated: {distance} cm · estimated ECHO {duration} µs',
     'buttonLab.title': 'Button input example', 'buttonLab.note': 'An isolated hypothetical GPIO4 input connected through the button to ground. The pull setting is not the real firmware configuration.', 'buttonLab.pull': 'Hypothetical input pull', 'buttonLab.up': 'Pull-up', 'buttonLab.down': 'Pull-down', 'buttonLab.none': 'None', 'buttonLab.hold': 'Hold to press', 'buttonLab.state.high': 'GPIO4: high', 'buttonLab.state.low': 'GPIO4: low', 'buttonLab.state.floating': 'GPIO4: floating — input is not defined', 'buttonLab.state.unsupported': 'GPIO4: unsupported circuit', 'buttonLab.state.off': 'GPIO4: off', 'buttonLab.state.contended': 'GPIO4: conflicting drivers', 'buttonLab.state.unsupported-voltage': 'GPIO4: incompatible voltage',
@@ -153,7 +153,7 @@ const COPY = {
   },
   zh: {
     'power.reconnect': '电源安全保护已停止会话；纠正电路后，请拔出并重新插入 USB。',
-    'tools.wire': '自动布线', 'tools.parts': '元件', 'tools.diagram': '接线总览', 'tools.hint': '下一步提示', 'tools.reset': '重置工作台', 'tools.confirmReset': '清空整个工作台？', 'tools.confirm': '重置', 'tools.keep': '保留', 'tools.close': '关闭', 'tools.screen': '屏幕', 'tools.wand': '添加塔罗手杖（MPU6050）', 'tools.watch': '观看演示', 'tools.step': '逐步操作',
+    'tools.wire': '示例演示', 'tools.parts': '元件', 'tools.diagram': '接线总览', 'tools.hint': '下一步提示', 'tools.reset': '重置工作台', 'tools.confirmReset': '清空整个工作台？', 'tools.confirm': '重置', 'tools.keep': '保留', 'tools.close': '关闭', 'tools.screen': '屏幕', 'tools.wand': '添加塔罗手杖（MPU6050）', 'tools.watch': '观看演示', 'tools.step': '逐步操作',
     'hint.missingParts': '请先放置 {parts}。',
     'guidance.needsPlan': '选择一个项目后可用；自由搭建时没有目标连接。',
     'hint.swapped': '{a} 与 {b} 看起来接反了：{a} 应接到 {toA}，{b} 应接到 {toB}。',

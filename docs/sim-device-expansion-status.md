@@ -297,8 +297,13 @@ evaluated. Selecting a project switches to Project; leaving it switches back to
 Diagnostics. The wiring overview uses the familiar schematic when every endpoint has a
 legacy position; otherwise it draws an automatic left-to-right graph of the
 plan's parts and links. A plan with no links falls back to an empty list, so a
-wrong schematic is never drawn. "Build it for me" applies a plan onto a fresh bench
-and keeps the previous bench for "Back to my bench".
+wrong schematic is never drawn. "Build it for me" applies any selected plan onto a fresh bench without
+starting a body demo or plugging in USB; the toolbar's "Demo build" keeps the
+animated recipe demos.
+
+The two entry points have separate jobs: Demo build is the three legacy recipes
+with watch/step and body demos; Build it for me is every project, applied at
+once and left unplugged so the user can inspect and power it deliberately.
 
 `targetFor` remains as the legacy link generator used by the plan adapter,
 recipes and power tests; the duplicated presentation copies of the target and

@@ -122,8 +122,9 @@ Complete each project in both languages; every checklist item should reach
 - [ ] `status-light-strip` (data-level risk may remain visible)
 - [ ] `led-basics`, `bme280-readings` and the original audio/screen/toy recipes
       still start and finish unchanged.
-- [ ] Build it for me applies the selected plan, keeps the previous bench for
-      Back to my bench, and does not merge into the old circuit.
+- [ ] Build it for me applies any selected plan at once, stays unplugged, keeps
+      the previous bench for Back to my bench, and does not merge into the old
+      circuit. Demo build is the animated recipe path with watch/step.
 - [ ] The wiring overview draws the legacy schematic for audio/toy and an
       automatic part/link graph for new devices; a plan without links shows an
       empty list, never a guessed drawing.

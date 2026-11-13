@@ -772,9 +772,6 @@ export function startRun(recipeId, screenId, mode, hooks = {}, wand = false, spe
 export function startPlan(planId, options = {}, hooks = {}) {
   const plan = planById(planId, options);
   if (!plan || running) return null;
-  if (plan.legacy?.recipeId) {
-    return startRun(plan.legacy.recipeId, plan.legacy.screenId, 'watch', hooks, plan.legacy.wand === true, 1);
-  }
   running = true;
   panels.status(null);
   if (usb.plugged) {
@@ -787,7 +784,8 @@ export function startPlan(planId, options = {}, hooks = {}) {
   activeProject = plan;
   panels.selectProject(plan.id);
   let built = startBench(bench);
-  for (const step of planSteps(plan)) built = applyStep(built, step);
+  // Project builds never plug in; the demo path is the toolbar's job.
+  for (const step of planSteps(plan)) if (step.kind !== 'usb') built = applyStep(built, step);
   setBench(built);
   world.view(view, built);
   running = false;
