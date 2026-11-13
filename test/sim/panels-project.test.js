@@ -21,10 +21,10 @@ test('project panel switches modes, focuses connections and yields to Parts', ()
     assert.ok(button); button.click();
     const panel = /** @type {HTMLElement} */ (dom.window.document.querySelector('#project-panel'));
     assert.equal(panel.hidden, false);
-    assert.match(panel.textContent ?? '', /Free workbench/);
+    assert.match(panel.textContent ?? '', /Diagnostics/);
     const select = /** @type {HTMLSelectElement} */ (panel.querySelector('select'));
     const options = [...select.options].map(option => option.value);
-    assert.equal(options.length, PROJECTS.length + 1);
+    assert.equal(options.length, PROJECTS.length);
     assert.ok(options.includes('power-a-rail') && options.includes('environment-display'));
     select.value = 'audio'; select.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
     assert.ok(panel.querySelector('[data-status="missing"]'));
@@ -32,6 +32,10 @@ test('project panel switches modes, focuses connections and yields to Parts', ()
     assert.deepEqual(focused, [['mic:VDD', 'esp:3V3']]);
     panels.selectProject('power-a-rail');
     assert.match(panel.textContent ?? '', /0\/5 complete/);
+    const leave = /** @type {HTMLButtonElement} */ (panel.querySelector('[data-action="leave"]'));
+    assert.ok(leave); leave.click();
+    assert.equal(select.value, '');
+    panels.selectProject('power-a-rail');
     panels.selectProject('toy');
     assert.equal(select.value, 'toy');
     const parts = [...dom.window.document.querySelectorAll('#tools button')].find(b => b.textContent === 'Parts');

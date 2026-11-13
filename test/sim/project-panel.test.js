@@ -73,8 +73,8 @@ test('free mode shows the selection and diagnoses without asserting a correct ci
     assert.match(panel.element.textContent ?? '', /mic:VDD/);
     assert.match(panel.element.textContent ?? '', /Fault explanation/);
     assert.doesNotMatch(panel.element.textContent ?? '', /complete|正确电路/i);
-    const button = /** @type {HTMLButtonElement} */ (panel.element.querySelector('button'));
-    assert.equal(button.getAttribute('aria-label'), '查看位置: mic:VDD');
+    const button = /** @type {HTMLButtonElement} */ (panel.element.querySelector('button[aria-label="查看位置: mic:VDD"]'));
+    assert.ok(button);
     button.click();
     assert.deepEqual(focused, [['mic:VDD']]);
   } finally { globalThis.document = previous; dom.window.close(); }
@@ -96,5 +96,31 @@ test('a connection with a missing part cannot be focused', () => {
     assert.equal(button.title, 'Place the parts first');
     assert.equal(row.getAttribute('data-missing'), 'true');
     assert.match(row.textContent ?? '', /Missing: toy/);
+  } finally { globalThis.document = previous; dom.window.close(); }
+});
+
+test('project and diagnostics are separate tabs and leaving clears the plan', () => {
+  const dom = new JSDOM('<!doctype html><body></body>');
+  const previous = globalThis.document;
+  globalThis.document = dom.window.document;
+  try {
+    let leaves = 0;
+    const project = projectById('power-a-rail');
+    assert.ok(project);
+    const panel = createProjectPanel({ lang: 'en', focus() {}, leave: () => { leaves += 1; } });
+    /** @type {any} */ const guided = { mode: 'guided', project, progress: connectionProgress(emptyBench(), project), selection: null, diagnoses: [] };
+    /** @type {any} */ const free = { mode: 'free', project: null, progress: [], selection: null, diagnoses: [{ kind: 'fault', text: 'A free-mode fault', points: [] }] };
+    panel.render(guided, free);
+    const tabs = [...panel.element.querySelectorAll('[data-tab]')];
+    assert.deepEqual(tabs.map((/** @type {any} */ tab) => tab.dataset.tab), ['project', 'diagnostics']);
+    assert.ok(panel.element.querySelector('[data-status]'));
+    tabs[1].dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    assert.match(panel.element.textContent ?? '', /A free-mode fault/);
+    assert.equal(panel.element.querySelector('[data-status]'), null);
+    tabs[0].dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    const leave = /** @type {HTMLButtonElement} */ (panel.element.querySelector('[data-action="leave"]'));
+    assert.ok(leave);
+    leave.click();
+    assert.equal(leaves, 1);
   } finally { globalThis.document = previous; dom.window.close(); }
 });

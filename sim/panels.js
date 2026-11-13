@@ -279,13 +279,18 @@ export function createPanels(opts) {
     // On a phone the sidebar leaves too little bench visible to frame two pins.
     if (window.innerWidth < 600) showProject(false);
     opts.focusProject?.(points);
+  }, leave: () => {
+    projectSelect.value = '';
+    projectView.showProject('');
+    opts.clearProjectFocus?.();
+    refreshProject();
   } });
   const projectSelect = /** @type {HTMLSelectElement} */ (el('select', { 'aria-label': simText(lang, 'project.choose') }));
-  projectSelect.append(el('option', { value: '' }, [simText(lang, 'project.free')]));
   for (const project of PROJECTS) {
     const label = simText(lang, `project.${project.id}`);
     projectSelect.append(el('option', { value: project.id }, [label === `project.${project.id}` ? project.name : label]));
   }
+  projectSelect.selectedIndex = -1;
   const projectClose = el('button', { type: 'button', class: 'close', 'aria-label': simText(lang, 'project.close') }, ['×']);
   const projectPanel = el('div', { id: 'project-panel', role: 'region', 'aria-label': simText(lang, 'project.button'), hidden: '' }, [
     el('header', {}, [el('h2', {}, [simText(lang, 'project.button')]), projectClose]), projectSelect, projectView.element,
@@ -293,16 +298,17 @@ export function createPanels(opts) {
   function refreshProject() {
     if (projectPanel.hidden) return;
     const state = opts.projectState?.(projectSelect.value);
-    if (state) projectView.render(state);
+    const free = opts.projectState?.('');
+    if (state) projectView.render(state, free ?? state);
   }
   /** @param {string} id */
-  function selectProject(id) { projectSelect.value = id; refreshProject(); }
+  function selectProject(id) { projectSelect.value = id; projectView.showProject(id); refreshProject(); }
   const showProject = (/** @type {boolean} */ on) => {
     if (!on && !projectPanel.hidden) opts.clearProjectFocus?.();
     projectPanel.hidden = !on;
     if (on) refreshProject();
   };
-  projectSelect.addEventListener('change', () => { opts.clearProjectFocus?.(); refreshProject(); });
+  projectSelect.addEventListener('change', () => { opts.clearProjectFocus?.(); projectView.showProject(projectSelect.value); refreshProject(); });
   projectClose.addEventListener('click', () => showProject(false));
   projectBtn.addEventListener('click', () => { showParts(false); showDiagram(false); showWire(false); showProject(Boolean(projectPanel.hidden)); });
   const showParts = (/** @type {boolean} */ on) => {

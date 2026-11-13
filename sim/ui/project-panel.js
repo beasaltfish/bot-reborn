@@ -4,12 +4,18 @@ import { projectReason } from './project-copy.js';
 /** @typedef {ReturnType<typeof import('../project-progress.js').connectionProgress>[number]} Progress */
 /** @typedef {ReturnType<typeof import('../selection.js').describeSelection>} SelectionInfo */
 /** @typedef {{mode:'guided'|'free', project:import('../projects.js').Project|null, progress:Progress[], selection:SelectionInfo, diagnoses:import('../diagnose.js').Hint[]}} State */
+/** @typedef {'project'|'diagnostics'} Tab */
 
-/** @param {{lang:string, focus(points:string[]):void}} opts */
+/** @param {{lang:string, focus(points:string[]):void, leave?():void}} opts */
 export function createProjectPanel(opts) {
   const element = document.createElement('section');
   element.className = 'project-panel';
   const text = (/** @type {string} */ key) => simText(opts.lang, `project.${key}`);
+  /** @type {Tab} */ let tab = 'project';
+  let tabTouched = false;
+  /** @type {State|null} */ let state = null;
+  /** @type {State|null} */ let diagnostics = null;
+
   /** @param {string} tag @param {string} value */
   function child(tag, value) {
     const node = document.createElement(tag);
@@ -24,28 +30,37 @@ export function createProjectPanel(opts) {
     button.addEventListener('click', () => opts.focus(points));
     return button;
   }
-  /** @param {State} state */
-  function render(state) {
-    const active = document.activeElement;
-    const focusLabel = active?.tagName === 'BUTTON' && element.contains(active) ? active.getAttribute('aria-label') : null;
-    const restoreFocus = () => {
-      if (!focusLabel) return;
-      [...element.querySelectorAll('button')].find(button => button.getAttribute('aria-label') === focusLabel)?.focus();
-    };
-    element.replaceChildren();
-    if (state.mode === 'guided' && state.project) {
-      const project = state.project;
+  function renderTabs() {
+    const strip = document.createElement('div');
+    strip.className = 'project-tabs';
+    strip.setAttribute('role', 'tablist');
+    for (const [id, label] of /** @type {[Tab,string][]} */ ([['project', text('tabProject')], ['diagnostics', text('tabDiagnostics')]])) {
+      const button = document.createElement('button');
+      button.type = 'button'; button.dataset.tab = id; button.textContent = label;
+      button.setAttribute('role', 'tab');
+      button.setAttribute('aria-selected', String(tab === id));
+      button.addEventListener('click', () => { tab = id; tabTouched = true; paint(); });
+      strip.append(button);
+    }
+    element.append(strip);
+  }
+  /** @param {State} current */
+  function renderProject(current) {
+    if (current.mode === 'guided' && current.project) {
+      const project = current.project;
       const title = text(project.id);
-      const completed = state.progress.filter(link => link.status === 'complete').length;
+      const completed = current.progress.filter(link => link.status === 'complete').length;
       const heading = document.createElement('div');
       heading.className = 'project-heading';
       heading.append(child('h2', title === `project.${project.id}` ? project.name : title));
-      heading.append(child('span', text('progress').replace('{done}', String(completed)).replace('{total}', String(state.progress.length))));
+      heading.append(child('span', text('progress').replace('{done}', String(completed)).replace('{total}', String(current.progress.length))));
       element.append(heading);
-      const next = state.progress.find(link => link.status !== 'complete');
+      const goal = text(`goal.${project.id}`);
+      if (goal !== `project.${project.id}`) element.append(child('p', goal));
+      const next = current.progress.find(link => link.status !== 'complete');
       if (next) element.append(child('p', `${text('next')}: ${next.a} → ${next.b}`));
       const list = document.createElement('ol');
-      for (const link of state.progress) {
+      for (const link of current.progress) {
         const row = document.createElement('li');
         row.dataset.status = link.status;
         const label = text(link.status);
@@ -71,23 +86,59 @@ export function createProjectPanel(opts) {
         list.append(row);
       }
       element.append(list);
-      restoreFocus();
+      const leave = /** @type {HTMLButtonElement} */ (child('button', text('leave')));
+      leave.type = 'button';
+      leave.dataset.action = 'leave';
+      leave.addEventListener('click', () => opts.leave?.());
+      element.append(leave);
       return;
     }
-    element.append(child('h2', text('free')));
-    if (state.selection) {
-      element.append(child('h3', text('selection')), child('strong', state.selection.title));
-      for (const row of state.selection.rows) element.append(child('div', `${row.label}: ${row.value}`));
+    element.append(child('h2', text('free')), child('p', text('choosePrompt')));
+  }
+  /** @param {State} current */
+  function renderDiagnostics(current) {
+    element.append(child('h2', text('diagnoses')));
+    if (current.selection) {
+      element.append(child('h3', text('selection')), child('strong', current.selection.title));
+      for (const row of current.selection.rows) element.append(child('div', `${row.label}: ${row.value}`));
     }
-    element.append(child('h3', text('diagnoses')));
-    if (!state.diagnoses.length) element.append(child('p', text('none')));
-    for (const hint of state.diagnoses) {
+    if (!current.diagnoses.length) {
+      element.append(child('p', text('none')));
+      return;
+    }
+    for (const hint of current.diagnoses) {
       const row = document.createElement('div');
       row.append(child('p', hint.text));
       if (hint.points.length) row.append(showButton(hint.points));
       element.append(row);
     }
-    restoreFocus();
   }
-  return { element, render };
+  function paint() {
+    if (!state) return;
+    const active = document.activeElement;
+    const focusLabel = active?.tagName === 'BUTTON' && element.contains(active) ? active.getAttribute('aria-label') : null;
+    element.replaceChildren();
+    renderTabs();
+    if (tab === 'diagnostics') renderDiagnostics(diagnostics ?? state);
+    else renderProject(state);
+    if (focusLabel) [...element.querySelectorAll('button')].find(button => button.getAttribute('aria-label') === focusLabel)?.focus();
+  }
+  return {
+    element,
+    /** @param {State} next @param {State} [freeState] */
+    render(next, freeState = next) {
+      const previousProject = state?.project?.id ?? null;
+      const nextProject = next.project?.id ?? null;
+      state = next;
+      diagnostics = freeState;
+      if (!tabTouched || previousProject !== nextProject) tab = next.mode === 'guided' ? 'project' : 'diagnostics';
+      paint();
+    },
+    /** @param {string} id */
+    showProject(id) {
+      if (!id) { tab = 'diagnostics'; tabTouched = true; }
+      else { tab = 'project'; tabTouched = true; }
+      paint();
+    },
+  };
 }

@@ -175,6 +175,10 @@
     #partsbin article button { margin-right: 4px; }
     #partsbin article button.star { border: 0; background: none; color: var(--accent); font-size: 17px; line-height: 1; padding: 2px 6px; }
     #partsbin article button.star[aria-pressed="false"] { color: var(--ink-dim); }
+    #project-panel .project-tabs { display: flex; gap: 4px; margin-bottom: 8px; }
+    #project-panel .project-tabs button { flex: 1; padding: 5px 8px; border: 1px solid var(--edge); border-radius: 7px; color: var(--ink-dim); background: rgba(255,240,220,0.06); font: 600 12px var(--font); cursor: pointer; }
+    #project-panel .project-tabs button[aria-selected="true"] { color: var(--ink); border-color: var(--accent); background: rgba(240,180,106,0.18); }
+    #project-panel [data-action="leave"] { margin-top: 10px; padding: 5px 9px; border: 1px solid var(--edge); border-radius: 7px; color: var(--accent); background: none; font: 600 12px var(--font); cursor: pointer; }
     #project-panel .project-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
     #project-panel .project-heading span { color: var(--ink-dim); font: 600 11px/1.2 var(--font); white-space: nowrap; }
     #project-panel [data-missing="true"] { opacity: 0.75; }
