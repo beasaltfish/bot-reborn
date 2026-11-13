@@ -27,7 +27,7 @@ import { SCREENS } from '../core/screens.js';
  * `prefix` is the stem of its instance ids: mic, mic2, mic3…
  * `model` is the screen table row a screen part is built from.
  * @typedef {{
- *   id: 'esp32' | 'inmp441' | 'max98357a' | 'speaker' | 'mpu6050' | 'toy' | 'led-5mm' | 'resistor' | 'dc-source' | 'push-button' | 'button-module' | 'bme280-i2c' | 'hc-sr04' | 'usb-5v-source' | 'battery-4xaa' | 'bench-supply' | 'breadboard-regulator' | `screen-${string}`,
+ *   id: 'esp32' | 'inmp441' | 'max98357a' | 'speaker' | 'mpu6050' | 'toy' | 'led-5mm' | 'resistor' | 'dc-source' | 'push-button' | 'button-module' | 'ssd1306' | 'bme280-i2c' | 'hc-sr04' | 'usb-5v-source' | 'battery-4xaa' | 'bench-supply' | 'breadboard-regulator' | `screen-${string}`,
  *   label: string,
  *   prefix: string,
  *   model?: string,
@@ -73,6 +73,8 @@ const FIXED = {
   'hc-sr04': { id: 'hc-sr04', label: 'HC-SR04 (5 V)', prefix: 'sonar', size: { w: 45, d: 20, h: 15 }, pins: ['VCC', 'TRIG', 'ECHO', 'GND'].map((name, x) => ({ name, x, y: 0 })), internal: [], onBoard: true },
   'bme280-i2c': { id: 'bme280-i2c', label: 'BME280 (Adafruit 2652)', prefix: 'env', size: { w: 25.2, d: 18, h: 4.6 }, pins: ['VIN', '3Vo', 'GND', 'SCK', 'SDO', 'SDI', 'CS'].map((name, x) => ({ name, x, y: 0 })), internal: [], onBoard: true },
   'push-button': { id: 'push-button', label: 'Push button', prefix: 'button', size: { w: 6, d: 6, h: 5 }, pins: [{ name: '1', x: 0, y: 0 }, { name: '2', x: 2, y: 0 }], internal: [], onBoard: true },
+  // A common 0.96-inch 128x64 I2C module; GND, VCC, SCL, SDA silk order.
+  ssd1306: { id: 'ssd1306', label: 'SSD1306 0.96" OLED', prefix: 'oled', size: { w: 27, d: 27, h: 4 }, pins: ['GND', 'VCC', 'SCL', 'SDA'].map((name, x) => ({ name, x, y: 0 })), internal: [], onBoard: true },
   // KY-004: S, VCC, GND from left to right on most boards; 18.5 x 15 mm.
   'button-module': { id: 'button-module', label: 'KY-004 button module', prefix: 'btn', size: { w: 18.5, d: 15, h: 6 }, pins: ['S', 'VCC', 'GND'].map((name, x) => ({ name, x, y: 0 })), internal: [], onBoard: true },
   'led-5mm': { id: 'led-5mm', label: '5 mm LED', prefix: 'led', size: { w: 5, d: 5, h: 9 }, pins: [{ name: 'A', x: 0, y: 0 }, { name: 'K', x: 1, y: 0 }], internal: [], onBoard: true },

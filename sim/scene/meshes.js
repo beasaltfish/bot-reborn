@@ -807,7 +807,7 @@ const LOOKS = {
  */
 export function buildPart(def, state) {
   if (def.id === 'led-5mm' || def.id === 'resistor' || def.id === 'dc-source' || def.id === 'push-button'
-    || def.id === 'button-module'
+    || def.id === 'button-module' || def.id === 'ssd1306'
     || def.id === 'usb-5v-source' || def.id === 'battery-4xaa' || def.id === 'bench-supply' || def.id === 'breadboard-regulator') {
     const g = new THREE.Group();
     /** @type {Map<string, THREE.Vector3>} */
@@ -829,6 +829,10 @@ export function buildPart(def, state) {
       const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.5, 24), mat('gloss', 0xc7372e));
       cap.position.set(1, height + 1.05, 0);
       g.add(cap);
+    } else if (def.id === 'ssd1306') {
+      // A four-pin breakout with a dark glass panel.
+      g.add(box(10, 0.6, 10, mat('matte', 0x1b1f24), 1, height, 0));
+      g.add(box(8, 0.25, 7, mat('gloss', 0x080b0e), 1, height + 0.6, 0));
     } else if (def.id === 'button-module') {
       // The KY-004 board, with its cap visibly lower while the button is held.
       g.add(box(7, 0.5, 5, mat('matte', 0x1d4d8f), 1, height, 0));

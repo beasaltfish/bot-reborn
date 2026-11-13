@@ -21,6 +21,7 @@ function voltageLabel(partId, lang) {
   if (partId === 'battery-4xaa') return text('battery', { full: BATTERY_CHEMISTRIES.alkaline.fullVoltage, empty: BATTERY_CHEMISTRIES.alkaline.emptyVoltage });
   if (partId === 'bench-supply') return text('bench');
   if (partId === 'breadboard-regulator') return text('regulator');
+  if (partId === 'ssd1306') return text('oled');
   if (partId === 'led-5mm') return text('led', { voltage: DEFAULT_LED_FORWARD_VOLTAGE });
   if (partId === 'dc-source') {
     const spec = DEVICES[partId]?.properties.voltage;

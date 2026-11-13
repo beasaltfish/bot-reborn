@@ -112,8 +112,32 @@ export const SONAR_PROJECT = {
   ],
 };
 
+/** @type {import('./target.js').Link[]} */
+const DISPLAY_LINKS = [
+  { a: 'env:VIN', b: 'esp:3V3', why: 'Power the BME280 from 3.3 V so its pull-ups match the controller.' },
+  { a: 'env:GND', b: 'esp:GND', why: 'Share ground between the sensor and controller.' },
+  { a: 'env:SDI', b: 'esp:GPIO1', why: 'Connect the sensor data line to the I2C bus.' },
+  { a: 'env:SCK', b: 'esp:GPIO2', why: 'Connect the sensor clock line to the I2C bus.' },
+  { a: 'oled:VCC', b: 'esp:3V3', why: 'Power the display from 3.3 V.' },
+  { a: 'oled:GND', b: 'esp:GND', why: 'Share ground with the display.' },
+  { a: 'oled:SDA', b: 'esp:GPIO1', why: 'Put the display data line on the shared I2C bus.' },
+  { a: 'oled:SCL', b: 'esp:GPIO2', why: 'Put the display clock line on the shared I2C bus.' },
+];
+/** @type {Project} */
+export const DISPLAY_PROJECT = {
+  id: 'environment-display', name: 'Environment display', needs: 'any', ending: 'Draw the readings',
+  ignoredFaultCodes: ['firmware-unsupported'],
+  links: DISPLAY_LINKS,
+  steps: [
+    { kind: 'part', id: 'env', part: 'bme280-i2c', at: { x: -25, z: 40 }, rot: 0, seated: false, say: 'Place the BME280 breakout.' },
+    { kind: 'part', id: 'oled', part: 'ssd1306', at: { x: 15, z: 40 }, rot: 0, seated: false, say: 'Place the SSD1306 display.' },
+    ...DISPLAY_LINKS.map(link => /** @type {import('./recipes.js').Step} */ ({ kind: 'wire', a: link.a, b: link.b, named: [link.a, link.b], say: link.why })),
+    { kind: 'usb', say: 'Plug in USB and draw the simulated readings.' },
+  ],
+};
+
 /** @type {Project[]} */
-export const PROJECTS = [...RECIPES.map(recipe => adapt(recipe)), LED_PROJECT, BME280_PROJECT, POWER_PROJECT, BUTTON_PROJECT, SONAR_PROJECT];
+export const PROJECTS = [...RECIPES.map(recipe => adapt(recipe)), LED_PROJECT, BME280_PROJECT, POWER_PROJECT, BUTTON_PROJECT, SONAR_PROJECT, DISPLAY_PROJECT];
 
 /** @param {string} id @param {{screenId?:string, wand?:boolean}} [options] */
 export function projectById(id, options) {
@@ -122,6 +146,7 @@ export function projectById(id, options) {
   if (id === POWER_PROJECT.id) return POWER_PROJECT;
   if (id === BUTTON_PROJECT.id) return BUTTON_PROJECT;
   if (id === SONAR_PROJECT.id) return SONAR_PROJECT;
+  if (id === DISPLAY_PROJECT.id) return DISPLAY_PROJECT;
   const recipe = RECIPES.find(candidate => candidate.id === id);
   if (!recipe) return null;
   if (options?.screenId || options?.wand) return adapt(recipe, options.screenId, options.wand);

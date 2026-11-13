@@ -2,6 +2,7 @@ import { nets } from '../netlist.js';
 import { evaluateI2c } from '../electrical/i2c.js';
 import { bme280State } from './bme280.js';
 import { bme280Wiring } from './bme280-wiring.js';
+import { DEVICES } from './catalog.js';
 import { defaultStimuli, setStimulus } from '../stimuli.js';
 
 /** Evaluate only direct 3.3 V ESP32-powered BME280 networks. Other supplies,
@@ -44,9 +45,12 @@ export function evaluateBme280Bench(bench, profile, controllerPowered, input) {
     if (!Number.isFinite(profile.gpioVoltage) || !Number.isFinite(profile.rails['3V3']) || Math.abs(profile.gpioVoltage - profile.rails['3V3']) > 0.05) {
       states[id] = 'unsupported'; fault('unsupported-electrical-network', [id], pins); continue;
     }
+    const peers = bench.placed.filter(other => other.part !== 'bme280-i2c' && !other.burnt
+      && (DEVICES[other.part]?.capabilities ?? []).some(cap => cap.kind === 'i2c'));
     const allowed = new Set([
       ...profile.i2cBuses.flatMap(bus => [`${controller?.id}:${bus.sda}`, `${controller?.id}:${bus.scl}`]),
       ...[...eligible].flatMap(other => [`${other}:SDI`, `${other}:SCK`]),
+      ...peers.flatMap(other => (DEVICES[other.part]?.capabilities ?? []).filter(cap => cap.kind === 'i2c').flatMap(cap => [`${other.id}:${cap.sda}`, `${other.id}:${cap.scl}`])),
     ]);
     const placedIds = new Set(bench.placed.map(part => part.id));
     const unexpected = [...new Set(pins.flatMap(pin => network.members(pin)).filter(point => placedIds.has(point.slice(0, point.indexOf(':'))) && !allowed.has(point)))];

@@ -2,7 +2,7 @@
 import { SCREENS } from '../../core/screens.js';
 
 /** @typedef {{ kind: 'number', default: number, min?: number, max?: number, step?: number, unit?: string } | { kind: 'enum', default: string, values: string[] } | { kind: 'boolean', default: boolean }} PropertyDef */
-/** @typedef {{ kind: 'supply', positive: string, ground: string } | { kind: 'source', pin: string } | { kind: 'source', positive: string, negative: string, voltage: unknown, currentLimitMa: unknown, internalResistanceOhm: unknown } | { kind: 'battery', positive: string, negative: string, chemistryProperty: string, chargeProperty: string } | { kind: 'regulator', input: string, output: string, ground: string, voltage: unknown, dropoutVoltage: unknown, efficiency: unknown, currentLimitMa: unknown, linear?: boolean, reverseCurrent?: string } | { kind: 'gpio' | 'pwm' | 'oneWire', pin: string } | { kind: 'i2c', sda: string, scl: string } | { kind: 'spi', sck: string, mosi: string, cs?: string } | { kind: 'driver', inputs: string[] } | { kind: 'load' | 'resistor' | 'led', positive: string, negative: string }} Capability */
+/** @typedef {{ kind: 'supply', positive: string, ground: string, currentsMa?: Record<string, unknown>, minVoltage?: unknown, maxVoltage?: unknown } | { kind: 'source', pin: string } | { kind: 'source', positive: string, negative: string, voltage: unknown, currentLimitMa: unknown, internalResistanceOhm: unknown } | { kind: 'battery', positive: string, negative: string, chemistryProperty: string, chargeProperty: string } | { kind: 'regulator', input: string, output: string, ground: string, voltage: unknown, dropoutVoltage: unknown, efficiency: unknown, currentLimitMa: unknown, linear?: boolean, reverseCurrent?: string } | { kind: 'gpio' | 'pwm' | 'oneWire', pin: string } | { kind: 'i2c', sda: string, scl: string } | { kind: 'spi', sck: string, mosi: string, cs?: string } | { kind: 'driver', inputs: string[] } | { kind: 'load' | 'resistor' | 'led', positive: string, negative: string }} Capability */
 /** @typedef {{ kind: string, [key: string]: unknown }} ResourceNeed */
 /** @typedef {{ part: string, category: string, summaryKey: string, tags: string[], properties: Record<string, PropertyDef>, capabilities: Capability[], firmware: { libraries: string[], resources: ResourceNeed[], init: Record<string, unknown>, actions: string[], telemetry: string[] } }} DeviceDef */
 
@@ -16,6 +16,9 @@ function device(part, category, capabilities) {
 export const DEVICES = {
   'hc-sr04': { ...device('hc-sr04', 'sensor', [{ kind: 'supply', positive: 'VCC', ground: 'GND' }, { kind: 'gpio', pin: 'TRIG' }, { kind: 'gpio', pin: 'ECHO' }]),
     firmware: { libraries: ['hc-sr04'], resources: [{ kind: 'gpio', pin: 'TRIG', direction: 'output', gpio: 'GPIO4' }, { kind: 'gpio', pin: 'ECHO', direction: 'input', gpio: 'GPIO5' }], init: {}, actions: ['measure'], telemetry: ['distanceCm'] } },
+  ssd1306: { ...device('ssd1306', 'display', [{ kind: 'supply', positive: 'VCC', ground: 'GND', minVoltage: 2.7, maxVoltage: 3.6 }, { kind: 'i2c', sda: 'SDA', scl: 'SCL' }]),
+    properties: { address: { kind: 'enum', default: '0x3c', values: ['0x3c', '0x3d'] } },
+    firmware: { libraries: ['ssd1306'], resources: [{ kind: 'i2c', addressProperty: 'address' }], init: { addressProperty: 'address' }, actions: ['drawFrame'], telemetry: [] } },
   'button-module': { ...device('button-module', 'input', [{ kind: 'supply', positive: 'VCC', ground: 'GND' }, { kind: 'gpio', pin: 'S' }]),
     properties: { pressed: { kind: 'boolean', default: false } },
     firmware: { libraries: ['ky-004'], resources: [{ kind: 'gpio', pin: 'S', direction: 'input' }], init: {}, actions: ['read'], telemetry: ['pressed'] } },

@@ -8,7 +8,7 @@ test('catalogue groups devices in a stable category order', () => {
   assert.deepEqual(sections.map(s => s.id), ['controller', 'audio', 'sensor', 'actuator', 'display', 'fundamental', 'input', 'output', 'power']);
   const displays = sections.find(s => s.id === 'display');
   assert.ok(displays);
-  assert.ok(displays.entries.every(e => e.part.startsWith('screen-')));
+  assert.ok(displays.entries.every(e => e.part.startsWith('screen-') || e.part === 'ssd1306'));
 });
 
 test('catalogue filters by category and derived interface tags', () => {
