@@ -123,7 +123,8 @@ test('every model in the table is a part, with its pins in silk order', () => {
     assert.ok(def, model.id);
     assert.equal(def.label, model.label);
     assert.equal(def.prefix, 'scr');
-    assert.equal(def.onBoard, true);
+    // Screens are wired on the table, as the screen recipe lays them.
+    assert.equal(def.onBoard, false);
     assert.deepEqual(def.pins.map((p) => p.name), model.pins.map((p) => p.silk));
     assert.deepEqual(def.pins.map((p) => p.x), model.pins.map((_, i) => i));
     assert.ok(def.pins.every((p) => p.y === 0));

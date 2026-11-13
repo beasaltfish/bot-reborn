@@ -36,7 +36,7 @@ function seatSteps(steps) {
   steps.forEach((step, index) => {
     if (step.kind !== 'part') return;
     const def = PARTS[step.part];
-    if (!def?.onBoard || def.id === 'esp32' || def.id.startsWith('screen-') || def.pins.every(pin => pin.wireOnly)) return;
+    if (!def?.onBoard || def.id === 'esp32' || def.pins.every(pin => pin.wireOnly)) return;
     seats.push({ index, width: Math.max(...def.pins.map(pin => pin.x)) + 1 });
   });
   /** @type {Map<number, { x: number, z: number }>} */

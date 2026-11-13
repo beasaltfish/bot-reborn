@@ -80,7 +80,7 @@ test('every guided project seats its on-board parts in fixed holes', () => {
     assert.ok(plan, project.id);
     const bench = planSteps(plan).reduce(applyStep, startBench(emptyBench()));
     for (const step of plan.steps ?? []) {
-      if (step.kind !== 'part' || !PARTS[step.part]?.onBoard || step.part.startsWith('screen-')) continue;
+      if (step.kind !== 'part' || !PARTS[step.part]?.onBoard) continue;
       const placed = bench.placed.find(item => item.id === step.id);
       assert.ok(placed?.seated, `${project.id}: ${step.id} seated`);
       assert.ok(pinPoints(bench, placed).some(point => point.hole), `${project.id}: ${step.id} in a hole`);

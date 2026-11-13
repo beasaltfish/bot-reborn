@@ -184,7 +184,8 @@ const SCREEN_PARTS = Object.fromEntries(SCREENS.map((model) => [`screen-${model.
   size: { w: model.pcb.w, d: model.pcb.d, h: 3 },
   pins: model.pins.map((pin, i) => ({ name: pin.silk, x: i, y: 0, role: pin.role })),
   internal: [],
-  onBoard: true,
+  // Screens are wired on the table, like the screen recipe; they are not seated.
+  onBoard: false,
 }]));
 
 /** Every part the bench knows: the fixed four, then one per screen model. */
