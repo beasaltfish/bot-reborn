@@ -80,7 +80,7 @@ test('every guided project seats its on-board parts in fixed holes', () => {
     assert.ok(plan, project.id);
     const bench = planSteps(plan).reduce(applyStep, startBench(emptyBench()));
     for (const step of plan.steps ?? []) {
-      if (step.kind !== 'part' || !PARTS[step.part]?.onBoard) continue;
+      if (step.kind !== 'part' || !PARTS[step.part]?.onBoard || step.part.startsWith('screen-')) continue;
       const placed = bench.placed.find(item => item.id === step.id);
       assert.ok(placed?.seated, `${project.id}: ${step.id} seated`);
       assert.ok(pinPoints(bench, placed).some(point => point.hole), `${project.id}: ${step.id} in a hole`);
@@ -94,4 +94,8 @@ test('the tarot wand is its own project with the wand wired in', () => {
   assert.ok(plan.links.some(link => link.a.startsWith('imu:') || link.b.startsWith('imu:')));
   assert.ok(plan.links.some(link => link.a.startsWith('scr:') || link.b.startsWith('scr:')));
   assert.ok(!plan.id.includes('wand'));
+  const tarotBench = planSteps(plan).reduce(applyStep, startBench(emptyBench()));
+  const screen = tarotBench.placed.find(part => part.part.startsWith('screen-'));
+  assert.ok(screen);
+  assert.equal(screen.seated, false);
 });
