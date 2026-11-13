@@ -7,7 +7,6 @@
 // Nothing here is shown by default but the buttons: explanations and the parts
 // bin wait until asked for (spec §5, anti-goal: a busy screen).
 
-import { TARGET } from './target.js';
 import { SCREENS } from '../core/screens.js';
 import { catalogueView } from './ui/catalogue-model.js';
 import { createCataloguePanel } from './ui/catalogue-panel.js';
@@ -20,6 +19,8 @@ import { WIRE_PALETTE } from './wire-color.js';
 import { createPropertyEditor } from './ui/property-editor.js';
 import { createBme280Panel } from './ui/bme280-panel.js';
 import { createPartThumbnails } from './scene/thumbnails.js';
+import { createWiringOverview } from './ui/wiring-overview.js';
+import { planById } from './plan.js';
 
 /** @typedef {{ id: string, name: string, note: string | null }} Choice */
 
@@ -62,79 +63,6 @@ function pointName(point) {
   return `${label}${num ? ` ${num}` : ''} ${pin}`;
 }
 
-// ---- The wiring diagram ---------------------------------------------------
-
-/** Where each pin sits on the drawing: the ESP32 on the left, the modules on the right. */
-const LAYOUT = {
-  esp: { x: 30, y: 30, w: 120, h: 350, title: 'ESP32-S3', side: 'right', pins: { '3V3': 64, '5V': 92, GND: 120, GPIO12: 172, GPIO13: 200, GPIO14: 228, GPIO15: 256, GPIO4: 292, GPIO5: 314, GPIO6: 336, GPIO7: 358 } },
-  mic: { x: 430, y: 20, w: 110, h: 160, title: 'INMP441', side: 'left', pins: { VDD: 50, GND: 72, 'L/R': 94, SCK: 116, WS: 138, SD: 160 } },
-  amp: { x: 430, y: 200, w: 110, h: 150, title: 'MAX98357A', side: 'left', pins: { Vin: 230, GND: 252, BCLK: 274, LRC: 296, DIN: 318, '+': 270, '-': 304 } },
-  spk: { x: 590, y: 236, w: 56, h: 84, title: 'Speaker', side: 'left', pins: { '+': 270, '-': 304 } },
-  toy: { x: 430, y: 370, w: 110, h: 110, title: 'Toy robot', side: 'left', pins: { U3A: 388, U3B: 408, U5A: 428, U5B: 448, GND: 468 } },
-};
-
-/** @param {string} point @returns {{ x: number, y: number }} */
-function where(point) {
-  const [id, pin] = point.split(':');
-  const box = LAYOUT[/** @type {keyof typeof LAYOUT} */ (id)];
-  // The amp's screw terminal is on its right edge; every other pin on the side facing its partner.
-  const right = box.side === 'right' || (id === 'amp' && (pin === '+' || pin === '-'));
-  return { x: right ? box.x + box.w : box.x, y: /** @type {Record<string, number>} */ (box.pins)[pin] };
-}
-
-/** @param {{ a: string, b: string }} l */
-function kindOf(l) {
-  if (/:(3V3|5V|VDD|Vin)$/.test(l.a) || /:(3V3|5V)$/.test(l.b)) return 'power';
-  if (/:GND$/.test(l.b) || /:-$/.test(l.a)) return 'ground';
-  return 'signal';
-}
-
-function diagram() {
-  const s = svg('svg', { viewBox: '0 0 670 500', role: 'img', 'aria-label': 'Schematic of the target wiring' });
-  for (const [id, box] of Object.entries(LAYOUT)) {
-    s.append(svg('rect', { x: box.x, y: box.y, width: box.w, height: box.h, rx: 6, class: 'chip' }));
-    const t = svg('text', { x: box.x + box.w / 2, y: box.y + 18, class: 'title' });
-    t.textContent = box.title;
-    s.append(t);
-    for (const [pin, y] of Object.entries(box.pins)) {
-      const { x } = where(`${id}:${pin}`);
-      const inside = x === box.x ? 8 : -8;
-      const label = svg('text', { x: x + inside, y: y + 4, class: 'pin', 'text-anchor': inside > 0 ? 'start' : 'end' });
-      label.textContent = pin.replace(/^GPIO/, 'GPIO ');
-      s.append(label, svg('circle', { cx: x, cy: y, r: 2.6, class: 'dot' }));
-    }
-  }
-  // Each link from the ESP32 runs out on its own vertical lane, so a pin
-  // feeding two chips (GND, the clocks) visibly fans out.
-  let lane = 0;
-  /** @type {Map<string, { x: number, y: number, kind: string }[]>} */
-  const turns = new Map();
-  TARGET.forEach((l, i) => {
-    const a = where(l.a);
-    const b = where(l.b);
-    let d;
-    if (l.b.startsWith('esp:')) {
-      // Sixteen links end on the ESP32 now, so the lanes are closer together:
-      // the last one has to stay left of the modules column at x = 430.
-      const x = 180 + lane++ * 16;
-      d = `M${b.x} ${b.y} H${x} V${a.y} H${a.x}`;
-      turns.set(l.b, [...(turns.get(l.b) ?? []), { x, y: b.y, kind: kindOf(l) }]);
-    } else {
-      d = `M${b.x} ${b.y} H${565} V${a.y} H${a.x}`;
-    }
-    s.append(svg('path', { d, class: `wire ${kindOf(l)}`, 'data-link': i }));
-    const n = svg('text', { x: a.x - 13, y: a.y - 4, class: 'num', 'text-anchor': 'middle' });
-    n.textContent = String(i + 1);
-    s.append(n);
-  });
-  // Wires off one pin share its run, and each turns away where a later one
-  // carries on. Only those turns get a dot: a crossing without one is no join.
-  for (const t of turns.values()) {
-    for (const { x, y, kind } of t.slice(0, -1)) s.append(svg('circle', { cx: x, cy: y, r: 3.4, class: `junction ${kind}` }));
-  }
-  return s;
-}
-
 // ---- The panels -------------------------------------------------------------
 
 /**
@@ -174,63 +102,13 @@ export function createPanels(opts) {
   const status = el('div', { id: 'status', role: 'status', hidden: '' });
   const picker = el('div', { id: 'picker', hidden: '' });
 
-  const drawing = diagram();
-  const list = el('ol');
-  /**
-   * One line of the diagram's list.
-   * @param {{ a: string, b: string, why: string }} l @param {number} i
-   */
-  const row = (l, i) => {
-    const r = el('li', { 'data-link': String(i) }, [
-      el('span', { class: 'num' }, [String(i + 1)]),
-      el('span', {}, [el('b', {}, [`${pointName(l.a)} → ${pointName(l.b)}`]), el('span', { class: 'why' }, [l.why])]),
-    ]);
-    // Pointing at a line picks its wire out on the drawing, when there is one.
-    const path = drawing.querySelector(`path[data-link="${i}"]`);
-    r.addEventListener('mouseenter', () => path?.classList.add('lit'));
-    r.addEventListener('mouseleave', () => path?.classList.remove('lit'));
-    return r;
-  };
-  /**
-   * The list of wires to make: the audio ones always, then the screens that
-   * are on the bench (spec §5.5), with the one-model rule said once.
-   * @param {{ a: string, b: string, why: string }[]} all @param {string[]} screenIds
-   */
-  function links(all, screenIds) {
-    list.replaceChildren();
-    let screens = false;
-    let toys = false;
-    all.forEach((l, i) => {
-      const isScreen = screenIds.includes(l.a.slice(0, l.a.indexOf(':')));
-      if (isScreen && !screens) {
-        screens = true;
-        list.append(el('li', { class: 'section' }, ['Screen']));
-      }
-      const isToy = l.a.startsWith('toy:') || l.b.startsWith('toy:');
-      if (isToy && !toys) {
-        toys = true;
-        list.append(el('li', { class: 'section' }, ['Toy robot']));
-      }
-      list.append(row(l, i));
-    });
-    if (screens) {
-      list.append(el('li', { class: 'section note' }, [
-        'Only one kind of screen at a time: the firmware drives the model you pick on its serial console.',
-      ]));
-    }
-    if (toys) {
-      list.append(el('li', { class: 'section note' }, [
-        'U3 drives the wheels and U5 swings the steering axle: four inputs, one shared ground.',
-      ]));
-    }
-  }
-  links(TARGET, []);
+  const diagramHost = el('div', { id: 'diagram-view' });
+  const diagramNote = el('p', { class: 'note', hidden: '' }, ['GAIN and SD on the amp stay unconnected. The speaker plays the same either way round.']);
   const close = el('button', { type: 'button', class: 'close', 'aria-label': t('close') }, ['×']);
   const panel = el('div', { id: 'diagram', role: 'dialog', 'aria-label': t('diagram'), hidden: '' }, [
     el('header', {}, [el('h2', {}, [t('diagram')]), close]),
-    drawing,
-    el('p', { class: 'note' }, ['GAIN and SD on the amp stay unconnected. The speaker plays the same either way round.']),
-    list,
+    diagramHost,
+    diagramNote,
   ]);
   // ---- The parts catalogue ----
   const favouriteKey = 'botreborn.sim.favourites';
@@ -405,6 +283,12 @@ export function createPanels(opts) {
   const showDiagram = (/** @type {boolean} */ on) => { panel.hidden = !on; };
   diagramBtn.addEventListener('click', () => {
     if (!projectSelect.value) { explainNeedsPlan(); return; }
+    const plan = planById(projectSelect.value);
+    if (plan) {
+      const view = createWiringOverview(plan);
+      diagramHost.replaceChildren(view);
+      diagramNote.hidden = view.dataset.layout !== 'true';
+    }
     hideHint(); showParts(false); showProject(false); showWire(false); showDiagram(Boolean(panel.hidden));
   });
   close.addEventListener('click', () => showDiagram(false));
@@ -603,5 +487,5 @@ export function createPanels(opts) {
       if (state && environment) activePart.sensor?.update(state, environment);
     }
   }
-  return { status: setStatus, pick, closePicker, links, wireMenu, partMenu, refreshPart, openPartId: () => activePart?.id ?? null, refreshProject, selectProject, openProject: (/** @type {string} */ id) => { selectProject(id); showParts(false); showDiagram(false); showWire(false); showProject(true); } };
+  return { status: setStatus, pick, closePicker, wireMenu, partMenu, refreshPart, openPartId: () => activePart?.id ?? null, refreshProject, selectProject, openProject: (/** @type {string} */ id) => { selectProject(id); showParts(false); showDiagram(false); showWire(false); showProject(true); } };
 }

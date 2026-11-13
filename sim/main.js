@@ -21,7 +21,6 @@ import { createWandFeed } from './wand-feed.js';
 import { createShakeDetector } from '../core/shake-detector.js';
 import { PARTS } from './parts.js';
 import { spotForNew } from './snap.js';
-import { targetFor } from './target.js';
 import { screenById } from '../core/screens.js';
 import { diagnose } from './diagnose.js';
 import { liveDiagnosis } from './live-diagnosis.js';
@@ -233,7 +232,6 @@ function setBench(b) {
   panels.refreshProject();
   for (const id of result.burns) effects.smoke(id);
   if (result.burns.length) panels.status('LED current exceeded its rating; replace the burnt LED and check the resistance or current limit.');
-  panels.links(targetFor(bench), bench.placed.filter((p) => p.part.startsWith('screen-')).map((p) => p.id));
   usb.refresh();
   effects.refresh();
 }
