@@ -403,7 +403,10 @@ export function createPanels(opts) {
 
   // ---- Wiring diagram ----
   const showDiagram = (/** @type {boolean} */ on) => { panel.hidden = !on; };
-  diagramBtn.addEventListener('click', () => { hideHint(); showParts(false); showProject(false); showWire(false); showDiagram(Boolean(panel.hidden)); });
+  diagramBtn.addEventListener('click', () => {
+    if (!projectSelect.value) { explainNeedsPlan(); return; }
+    hideHint(); showParts(false); showProject(false); showWire(false); showDiagram(Boolean(panel.hidden));
+  });
   close.addEventListener('click', () => showDiagram(false));
 
   // ---- Hint ----
@@ -414,8 +417,16 @@ export function createPanels(opts) {
     if (hintTimer) clearTimeout(hintTimer);
     hintTimer = null;
   };
+  /** Put a one-line reason in the existing hint bubble. */
+  function explainNeedsPlan() {
+    hideHint();
+    bubble.textContent = simText(lang, 'guidance.needsPlan');
+    bubble.hidden = false;
+    hintTimer = setTimeout(hideHint, HINT_MS);
+  }
   hintBtn.addEventListener('click', () => {
     if (!bubble.hidden) return hideHint();
+    if (!projectSelect.value) { explainNeedsPlan(); return; }
     showDiagram(false);
     bubble.textContent = opts.hint(projectSelect.value || undefined) ?? '';
     bubble.hidden = false;

@@ -49,3 +49,22 @@ test('project panel switches modes, focuses connections and yields to Parts', ()
     assert.ok(focused.length >= 2);
   } finally { globalThis.document = previous.document; globalThis.window = previous.window; globalThis.addEventListener = previous.addEventListener; dom.window.close(); }
 });
+
+test('guidance explains why it needs a project', () => {
+  const dom = new JSDOM('<!doctype html><html lang="en"><body></body></html>', { url: 'https://example.test/sim/' });
+  const previous = { document: globalThis.document, window: globalThis.window, addEventListener: globalThis.addEventListener };
+  globalThis.document = dom.window.document; globalThis.window = dom.window; globalThis.addEventListener = dom.window.addEventListener.bind(dom.window);
+  try {
+    const panels = createPanels(/** @type {any} */ ({ hint: () => null, reset() {}, follow() {}, add() {}, carry() {}, start() {}, speed: 1, rememberSpeed() {},
+      projectState: (/** @type {string} */ id) => ({ mode: id ? 'guided' : 'free', project: id ? projectById(id) : null, progress: [], selection: null, diagnoses: [] }),
+      focusProject() {}, clearProjectFocus() {},
+    }));
+    /** @param {string} label */
+    const button = label => /** @type {HTMLButtonElement} */ ([...dom.window.document.querySelectorAll('#tools button')].find(b => b.textContent === label));
+    button('Next hint').click();
+    assert.match(dom.window.document.querySelector('#hint')?.textContent ?? '', /Choose a project first/);
+    button('Wiring overview').click();
+    assert.match(dom.window.document.querySelector('#hint')?.textContent ?? '', /Choose a project first/);
+    assert.ok(panels);
+  } finally { globalThis.document = previous.document; globalThis.window = previous.window; globalThis.addEventListener = previous.addEventListener; dom.window.close(); }
+});

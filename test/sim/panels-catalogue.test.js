@@ -35,7 +35,10 @@ test('Parts opens the live catalogue with breadboard, search, add, learn and per
     assert.ok(events.includes('learn:led-5mm'));
     assert.match(dom.window.localStorage.getItem('botreborn.sim.favourites') ?? '', /led-5mm/);
     assert.equal(panel.querySelector('[data-part="led-5mm"] [data-action=favourite]')?.getAttribute('aria-pressed'), 'true');
-    const diagram = [...dom.window.document.querySelectorAll('#tools button')].find(b => b.textContent === 'Wiring diagram');
+    const projectSelect = /** @type {HTMLSelectElement} */ (dom.window.document.querySelector('#project-panel select'));
+    projectSelect.value = 'audio';
+    projectSelect.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+    const diagram = [...dom.window.document.querySelectorAll('#tools button')].find(b => b.textContent === 'Wiring overview');
     assert.ok(diagram); diagram.click();
     assert.equal(panel.hidden, true);
     assert.equal(/** @type {HTMLElement} */ (dom.window.document.querySelector('#diagram')).hidden, false);

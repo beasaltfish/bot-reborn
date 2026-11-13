@@ -11,7 +11,7 @@ test('Chinese workbench exposes translated primary controls and recipe choices',
   try {
     createPanels(/** @type {any} */ ({ hint() { return '提示'; }, reset() {}, follow() {}, add() {}, carry() {}, start() {}, speed: 1, rememberSpeed() {} }));
     const labels = [...dom.window.document.querySelectorAll('#tools button')].map(button => button.textContent);
-    for (const label of ['自动布线', '元件', '项目', '接线图', '提示', '重置工作台']) assert.ok(labels.includes(label), label);
+    for (const label of ['自动布线', '元件', '项目', '接线总览', '下一步提示', '重置工作台']) assert.ok(labels.includes(label), label);
     const wire = [...dom.window.document.querySelectorAll('#tools button')].find(button => button.textContent === '自动布线');
     assert.ok(wire); wire.click();
     const panel = /** @type {HTMLElement} */ (dom.window.document.querySelector('#wire'));
