@@ -13,7 +13,7 @@ import { applyLedDamage, evaluateLedBench } from './electrical/led-bench.js';
 import { evaluateBench } from './devices/evaluate.js';
 import { formatReadings } from './devices/ssd1306.js';
 import { createRuntimePanel } from './ui/device-runtime-panel.js';
-import { planById, planFromProject, planSteps } from './plan.js';
+import { planById, planOptionsFor, planSteps } from './plan.js';
 import { nextPlanHint } from './guidance.js';
 import { defaultStimuli, setStimulus } from './stimuli.js';
 import { motorLevels, toyAction } from './car.js';
@@ -115,15 +115,13 @@ const panels = createPanels({
     location.href = `./lab.html?part=${encodeURIComponent(part)}`;
   },
   projectState: (id, options) => {
-    const plan = activeProject?.id === id
-      ? ('goalKey' in activeProject ? activeProject : planFromProject(activeProject))
-      : planById(id, options);
+    const plan = planById(id, options);
     const selection = describeSelection(bench, hands.selection(), document.documentElement.lang);
-    if (plan) return { mode: 'guided', project: plan, progress: connectionProgress(bench, plan), selection, diagnoses: [] };
+    if (plan) return { mode: 'guided', evaluated: true, project: plan, progress: connectionProgress(bench, plan), selection, diagnoses: [] };
     // Independent DC supplies can energize an LED circuit without USB.
     const result = bench.usb || bench.placed.some(part => part.part === 'dc-source' && !part.burnt) ? evaluateBench(bench) : null;
     const diagnoses = result ? rankedDiagnoses(bench, result, document.documentElement.lang) : [];
-    return { mode: 'free', project: null, progress: [], selection, diagnoses };
+    return { mode: 'free', evaluated: Boolean(result), project: null, progress: [], selection, diagnoses };
   },
   focusProject: points => {
     hands.highlightGuidance(points);
@@ -133,7 +131,9 @@ const panels = createPanels({
   },
   clearProjectFocus: () => hands.highlightGuidance([]),
   start: (recipeId, screenId, mode, hooks, wand, speed) => startRun(recipeId, screenId, mode, hooks, wand, speed),
-  build: id => startPlan(id),
+  build: (id, options) => startPlan(id, options),
+  planOptions: options => planOptionsFor(bench, options),
+  leaveProject: () => { activeProject = null; },
   speed: speedFactor(Number(read(SPEED_KEY))),
   rememberSpeed: (/** @type {number} */ x) => write(SPEED_KEY, String(speedFactor(x))),
 });
@@ -769,9 +769,12 @@ export function startRun(recipeId, screenId, mode, hooks = {}, wand = false, spe
  * @param {string} planId
  * @param {{ onEnd?(): void }} [hooks]
  */
-export function startPlan(planId, hooks = {}) {
-  const plan = planById(planId);
+export function startPlan(planId, options = {}, hooks = {}) {
+  const plan = planById(planId, options);
   if (!plan || running) return null;
+  if (plan.legacy?.recipeId) {
+    return startRun(plan.legacy.recipeId, plan.legacy.screenId, 'watch', hooks, plan.legacy.wand === true, 1);
+  }
   running = true;
   panels.status(null);
   if (usb.plugged) {
@@ -791,7 +794,7 @@ export function startPlan(planId, hooks = {}) {
   runner = null;
   const lang = document.documentElement.lang === 'zh' ? 'zh' : 'en';
   const projectLabel = simText(lang, `project.${plan.id}`);
-  panels.status(simText(lang, 'project.built', { name: projectLabel === `project.${plan.id}` ? plan.name : projectLabel }));
+  if (!offerBack()) panels.status(simText(lang, 'project.built', { name: projectLabel === `project.${plan.id}` ? plan.name : projectLabel }));
   hooks.onEnd?.();
   return { next() {}, finish() {}, skip() {}, stop() {}, speed() {} };
 }

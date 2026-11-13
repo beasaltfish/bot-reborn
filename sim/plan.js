@@ -5,6 +5,7 @@ import { RECIPES, DEFAULT_SCREEN, recipeSteps, startBench, applyStep } from './r
 import { PROJECTS } from './projects.js';
 import { targetFor } from './target.js';
 import { LESSONS } from './lessons/index.js';
+import { PARTS } from './parts.js';
 
 /**
  * @typedef {{ id: string, part: string, at: { x: number, z: number }, rot: number, seated: boolean }} PlanPart
@@ -24,7 +25,7 @@ function derivedSteps(parts, links) {
   /** @type {import('./recipes.js').Step[]} */
   const steps = parts.map(part => ({ kind: 'part', id: part.id, part: /** @type {any} */ (part.part), at: part.at, rot: /** @type {any} */ (part.rot), seated: part.seated, say: `Place ${part.part}.` }));
   for (const link of links) steps.push({ kind: 'wire', a: link.a, b: link.b, named: [link.a, link.b], say: link.why });
-  steps.push({ kind: 'usb', say: 'Plug in USB.' });
+  // Project builds stay unplugged so the plug, powered state and diagnostics agree.
   return steps;
 }
 
@@ -75,6 +76,13 @@ export function planById(id, options) {
   if (RECIPES.some(recipe => recipe.id === id)) return planFromRecipe(id, options);
   const project = PROJECTS.find(item => item.id === id);
   return project ? planFromProject(project) : null;
+}
+
+/** Prefer the screen model actually placed on the bench. @param {import('./bench.js').Bench} bench @param {{screenId?:string,wand?:boolean}} [options] */
+export function planOptionsFor(bench, options = {}) {
+  const screen = bench.placed.find(part => part.part.startsWith('screen-'));
+  const model = screen ? PARTS[screen.part]?.model : undefined;
+  return { ...options, ...(model ? { screenId: model } : {}) };
 }
 
 /** A plan's identity, including a recipe's screen/wand variant. @param {Plan} plan */

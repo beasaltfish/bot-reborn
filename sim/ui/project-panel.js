@@ -3,8 +3,8 @@ import { projectReason } from './project-copy.js';
 
 /** @typedef {ReturnType<typeof import('../project-progress.js').connectionProgress>[number]} Progress */
 /** @typedef {ReturnType<typeof import('../selection.js').describeSelection>} SelectionInfo */
-/** @typedef {{id:string,name:string,links:import('../target.js').Link[],ignoredFaultCodes?:string[]}} ProjectView */
-/** @typedef {{mode:'guided'|'free', project:ProjectView|null, progress:Progress[], selection:SelectionInfo, diagnoses:import('../diagnose.js').Hint[]}} State */
+/** @typedef {{id:string,name:string,goalKey?:string,links:import('../target.js').Link[],ignoredFaultCodes?:string[]}} ProjectView */
+/** @typedef {{mode:'guided'|'free', evaluated?:boolean, project:ProjectView|null, progress:Progress[], selection:SelectionInfo, diagnoses:import('../diagnose.js').Hint[]}} State */
 /** @typedef {'project'|'diagnostics'} Tab */
 
 /** @param {{lang:string, focus(points:string[]):void, leave?():void, build?(id:string):void}} opts */
@@ -56,8 +56,9 @@ export function createProjectPanel(opts) {
       heading.append(child('h2', title === `project.${project.id}` ? project.name : title));
       heading.append(child('span', text('progress').replace('{done}', String(completed)).replace('{total}', String(current.progress.length))));
       element.append(heading);
-      const goal = text(`goal.${project.id}`);
-      if (goal !== `project.${project.id}`) element.append(child('p', goal));
+      const goalKey = project.goalKey ?? `goal.${project.id}`;
+      const goal = simText(opts.lang, goalKey);
+      if (goal !== goalKey) element.append(child('p', goal));
       const next = current.progress.find(link => link.status !== 'complete');
       if (next) element.append(child('p', `${text('next')}: ${next.a} → ${next.b}`));
       const list = document.createElement('ol');
@@ -101,7 +102,7 @@ export function createProjectPanel(opts) {
       element.append(actions);
       return;
     }
-    element.append(child('h2', text('free')), child('p', text('choosePrompt')));
+    element.append(child('p', text('choosePrompt')));
   }
   /** @param {State} current */
   function renderDiagnostics(current) {
@@ -109,6 +110,10 @@ export function createProjectPanel(opts) {
     if (current.selection) {
       element.append(child('h3', text('selection')), child('strong', current.selection.title));
       for (const row of current.selection.rows) element.append(child('div', `${row.label}: ${row.value}`));
+    }
+    if (current.evaluated === false) {
+      element.append(child('p', text('powerFirst')));
+      return;
     }
     if (!current.diagnoses.length) {
       element.append(child('p', text('none')));

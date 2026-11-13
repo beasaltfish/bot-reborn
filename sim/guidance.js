@@ -1,5 +1,5 @@
 // Views derived from a plan: today the next-step hint; later the overview too.
-import { hanging } from './diagnose.js';
+import { hanging, name } from './diagnose.js';
 import { projectReason } from './ui/project-copy.js';
 import { simText } from './ui/strings.js';
 import { connectionProgress } from './project-progress.js';
@@ -19,7 +19,7 @@ export function nextPlanHint(bench, plan, lang = 'en') {
     const loose = hanging(bench, lang)[0];
     if (loose) return loose;
   }
-  const row = connectionProgress(bench, plan).find(item => item.status !== 'complete');
+  const row = connectionProgress(bench, plan).find(item => item.status === 'missing');
   if (!row) return null;
   if (!row.present) {
     return { kind: 'missing', text: simText(lang, 'hint.missingParts', { parts: row.missing.join(', ') }), points: [row.a, row.b] };
@@ -27,7 +27,7 @@ export function nextPlanHint(bench, plan, lang = 'en') {
   const link = plan.links.find(item => item.a === row.a && item.b === row.b);
   const why = link ? projectReason(lang, link.why) ?? link.why : '';
   const text = lang === 'zh'
-    ? simText(lang, 'hint.next', { a: row.a, b: row.b, reason: why })
-    : `Connect ${row.a} to ${row.b}. ${why}`;
+    ? simText(lang, 'hint.next', { a: name(row.a), b: name(row.b), reason: why })
+    : `Connect ${name(row.a)} to ${name(row.b)}. ${why}`;
   return { kind: 'missing', text, points: [row.a, row.b] };
 }

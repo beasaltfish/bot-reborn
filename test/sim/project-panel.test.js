@@ -110,11 +110,13 @@ test('project and diagnostics are separate tabs and leaving clears the plan', ()
     assert.ok(project);
     const panel = createProjectPanel({ lang: 'en', focus() {}, leave: () => { leaves += 1; }, build: id => { built = id; } });
     /** @type {any} */ const guided = { mode: 'guided', project, progress: connectionProgress(emptyBench(), project), selection: null, diagnoses: [] };
-    /** @type {any} */ const free = { mode: 'free', project: null, progress: [], selection: null, diagnoses: [{ kind: 'fault', text: 'A free-mode fault', points: [] }] };
+    /** @type {any} */ const free = { mode: 'free', evaluated: true, project: null, progress: [], selection: null, diagnoses: [{ kind: 'fault', text: 'A free-mode fault', points: [] }] };
     panel.render(guided, free);
     const tabs = [...panel.element.querySelectorAll('[data-tab]')];
     assert.deepEqual(tabs.map((/** @type {any} */ tab) => tab.dataset.tab), ['project', 'diagnostics']);
     assert.ok(panel.element.querySelector('[data-status]'));
+    assert.match(panel.element.textContent ?? '', /battery through a regulator/);
+    assert.doesNotMatch(panel.element.textContent ?? '', /project\.goal\./);
     tabs[1].dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     assert.match(panel.element.textContent ?? '', /A free-mode fault/);
     assert.equal(panel.element.querySelector('[data-status]'), null);
@@ -127,5 +129,7 @@ test('project and diagnostics are separate tabs and leaving clears the plan', ()
     assert.ok(leave);
     leave.click();
     assert.equal(leaves, 1);
+    panel.render({ ...guided, project: null, mode: 'free' }, { ...free, evaluated: false, diagnoses: [] });
+    assert.match(panel.element.textContent ?? '', /Plug in USB/);
   } finally { globalThis.document = previous; dom.window.close(); }
 });

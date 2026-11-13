@@ -68,6 +68,8 @@ function pointName(point) {
 /**
  * @param {{
  *   hint(projectId?: string, options?: {screenId?: string, wand?: boolean}): string|null,
+ *   planOptions?(options?: {screenId?: string, wand?: boolean}): {screenId?: string, wand?: boolean},
+ *   leaveProject?(): void,
  *   reset(): void,
  *   follow(el: HTMLElement, id: string): void,
  *   add(part: string): void,
@@ -76,7 +78,7 @@ function pointName(point) {
  *   changeLanguage?(lang:'en'|'zh'): boolean,
  *   projectState?(id: string, options?: {screenId?: string, wand?: boolean}): import('./ui/project-panel.js').State,
  *   focusProject?(points: string[]): void,
- *   build?(id: string): void,
+ *   build?(id: string, options?: {screenId?: string, wand?: boolean}): void,
  *   clearProjectFocus?(): void,
  *   start(recipeId: string, screenId: string | undefined, mode: 'watch' | 'step',
  *     hooks: { onSay(text: string): void, onEnd(): void }, wand: boolean, speed: number): { next(): void, finish(): void, skip(): void, stop(): void, speed(x: number): void } | null,
@@ -158,9 +160,10 @@ export function createPanels(opts) {
     // On a phone the sidebar leaves too little bench visible to frame two pins.
     if (window.innerWidth < 600) showProject(false);
     opts.focusProject?.(points);
-  }, build: id => opts.build?.(id), leave: () => {
+  }, build: (id) => opts.build?.(id, planChoice()), leave: () => {
     projectSelect.value = '';
     projectView.showProject('');
+    opts.leaveProject?.();
     opts.clearProjectFocus?.();
     refreshProject();
   } });
@@ -176,7 +179,7 @@ export function createPanels(opts) {
   ]);
   function refreshProject() {
     if (projectPanel.hidden) return;
-    const state = opts.projectState?.(projectSelect.value, planOptions());
+    const state = opts.projectState?.(projectSelect.value, planChoice());
     const free = opts.projectState?.('');
     if (state) projectView.render(state, free ?? state);
   }
@@ -229,6 +232,8 @@ export function createPanels(opts) {
   syncScreen();
   /** @returns {{screenId?: string, wand?: boolean}} */
   function planOptions() { return { screenId: screenSel.value || DEFAULT_SCREEN, wand: wandBox.checked }; }
+  /** Options after the bench's placed screen model has had its say. */
+  function planChoice() { return opts.planOptions?.(planOptions()) ?? planOptions(); }
   screenSel.addEventListener('change', () => refreshProject());
   wandBox.addEventListener('change', () => refreshProject());
   const showWire = (/** @type {boolean} */ on) => { wirePanel.hidden = !on; };
@@ -288,7 +293,7 @@ export function createPanels(opts) {
   const showDiagram = (/** @type {boolean} */ on) => { panel.hidden = !on; };
   diagramBtn.addEventListener('click', () => {
     if (!projectSelect.value) { explainNeedsPlan(); return; }
-    const plan = planById(projectSelect.value, planOptions());
+    const plan = planById(projectSelect.value, planChoice());
     if (plan) {
       const view = createWiringOverview(plan);
       diagramHost.replaceChildren(view);
@@ -317,7 +322,7 @@ export function createPanels(opts) {
     if (!bubble.hidden) return hideHint();
     if (!projectSelect.value) { explainNeedsPlan(); return; }
     showDiagram(false);
-    bubble.textContent = opts.hint(projectSelect.value || undefined, planOptions()) ?? '';
+    bubble.textContent = opts.hint(projectSelect.value || undefined, planChoice()) ?? '';
     bubble.hidden = false;
     hintTimer = setTimeout(hideHint, HINT_MS);
   });

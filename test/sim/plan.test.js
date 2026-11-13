@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { planFromProject, planFromRecipe, planById, planSteps, planId } from '../../sim/plan.js';
+import { planFromProject, planFromRecipe, planById, planSteps, planId, planOptionsFor } from '../../sim/plan.js';
+import { addPart } from '../../sim/bench.js';
 import { projectById } from '../../sim/projects.js';
 import { emptyBench } from '../../sim/bench.js';
 import { startBench, applyStep } from '../../sim/recipes.js';
@@ -38,13 +39,14 @@ test('planById prefers authored projects and keeps screen variants', () => {
   assert.ok(screen?.links.some(link => link.a === 'scr:SDA' || link.b === 'scr:SDA'));
 });
 
-test('plan steps for a new project place parts, wire links and plug in USB', () => {
+test('plan steps for a new project place parts and wire links but stay unplugged', () => {
   const plan = planById('button-led');
   assert.ok(plan);
   const steps = planSteps(plan);
   assert.ok(steps.some(step => step.kind === 'part' && step.part === 'button-module'));
   assert.equal(steps.filter(step => step.kind === 'wire').length, plan.links.length);
-  assert.equal(steps.at(-1)?.kind, 'usb');
+  assert.equal(steps.at(-1)?.kind, 'wire');
+  assert.ok(!steps.some(step => step.kind === 'usb'));
 });
 
 test('plan identity keeps recipe variants distinct', () => {
@@ -57,4 +59,13 @@ test('plan identity keeps recipe variants distinct', () => {
   const power = planById('power-a-rail');
   assert.ok(power);
   assert.equal(planId(power), 'power-a-rail');
+});
+
+test('the placed screen model overrides the chooser default', () => {
+  const bench = addPart(emptyBench(), 'screen-st7735-160', { x: 0, z: 0 }).bench;
+  const options = planOptionsFor(bench, { screenId: 'ili9341-ips' });
+  assert.equal(options.screenId, 'st7735-160');
+  const plan = planById('screen', options);
+  assert.ok(plan);
+  assert.ok(plan.links.some(link => link.a === 'scr:SDA' || link.b === 'scr:SDA'));
 });

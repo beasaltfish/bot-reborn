@@ -28,3 +28,10 @@ test('a completed plan has no next hint', () => {
   const bench = planSteps(plan).reduce(applyStep, startBench(emptyBench()));
   assert.equal(nextPlanHint(bench, plan, 'en'), null);
 });
+
+test('a faulted but connected link is not offered as the next connection', () => {
+  const plan = planById('distance-reader');
+  assert.ok(plan);
+  const bench = planSteps(plan).reduce(applyStep, startBench(emptyBench()));
+  assert.equal(nextPlanHint(bench, plan, 'en'), null);
+});
