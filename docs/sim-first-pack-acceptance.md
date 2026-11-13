@@ -122,9 +122,10 @@ Complete each project in both languages; every checklist item should reach
 - [ ] `status-light-strip` (data-level risk may remain visible)
 - [ ] `led-basics`, `bme280-readings` and the original audio/screen/toy recipes
       still start and finish unchanged.
-- [ ] Build it for me applies any selected plan at once, stays unplugged, keeps
-      the previous bench for Back to my bench, and does not merge into the old
-      circuit. Demo build is the animated recipe path with watch/step.
+- [ ] Build it for me lays the breadboards, seats the ESP32, applies the plan at
+      once, stays unplugged, keeps the previous bench for Back to my bench, and
+      does not merge into the old circuit. Recipe projects also show Demo build,
+      the animated watch/step path, from the same panel.
 - [ ] The wiring overview draws the legacy schematic for audio/toy and an
       automatic part/link graph for new devices; a plan without links shows an
       empty list, never a guessed drawing.

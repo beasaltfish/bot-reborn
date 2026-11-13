@@ -1,7 +1,7 @@
 // One adapted plan for both authored projects and legacy recipes. The bench,
 // evaluation and lessons stay as they are; guidance reads this shape.
 import { emptyBench } from './bench.js';
-import { RECIPES, DEFAULT_SCREEN, recipeSteps, startBench, applyStep } from './recipes.js';
+import { RECIPES, DEFAULT_SCREEN, recipeSteps, benchSetupSteps, startBench, applyStep } from './recipes.js';
 import { PROJECTS } from './projects.js';
 import { targetFor } from './target.js';
 import { LESSONS } from './lessons/index.js';
@@ -23,7 +23,10 @@ const isPartStep = step => step.kind === 'part';
 /** @param {PlanPart[]} parts @param {import('./target.js').Link[]} links @returns {import('./recipes.js').Step[]} */
 function derivedSteps(parts, links) {
   /** @type {import('./recipes.js').Step[]} */
-  const steps = parts.map(part => ({ kind: 'part', id: part.id, part: /** @type {any} */ (part.part), at: part.at, rot: /** @type {any} */ (part.rot), seated: part.seated, say: `Place ${part.part}.` }));
+  const steps = [
+    ...benchSetupSteps(),
+    ...parts.map(part => /** @type {import('./recipes.js').Step} */ ({ kind: 'part', id: part.id, part: /** @type {any} */ (part.part), at: part.at, rot: /** @type {any} */ (part.rot), seated: part.seated, say: `Place ${part.part}.` })),
+  ];
   for (const link of links) steps.push({ kind: 'wire', a: link.a, b: link.b, named: [link.a, link.b], say: link.why });
   // Project builds stay unplugged so the plug, powered state and diagnostics agree.
   return steps;

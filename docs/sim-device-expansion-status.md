@@ -301,9 +301,10 @@ wrong schematic is never drawn. "Build it for me" applies any selected plan onto
 starting a body demo or plugging in USB; the toolbar's "Demo build" keeps the
 animated recipe demos.
 
-The two entry points have separate jobs: Demo build is the three legacy recipes
-with watch/step and body demos; Build it for me is every project, applied at
-once and left unplugged so the user can inspect and power it deliberately.
+The two entry points live together in the project panel: recipe projects show
+Demo build (the animated watch/step body demo), while every project shows Build
+it for me (applied at once, left unplugged). Project builds now lay the joined
+breadboards and seat the ESP32 first, then place the project parts and wires.
 
 `targetFor` remains as the legacy link generator used by the plan adapter,
 recipes and power tests; the duplicated presentation copies of the target and

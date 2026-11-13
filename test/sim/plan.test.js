@@ -43,6 +43,7 @@ test('plan steps for a new project place parts and wire links but stay unplugged
   const plan = planById('button-led');
   assert.ok(plan);
   const steps = planSteps(plan);
+  assert.ok(steps.some(step => step.kind === 'board'));
   assert.ok(steps.some(step => step.kind === 'part' && step.part === 'button-module'));
   assert.equal(steps.filter(step => step.kind === 'wire').length, plan.links.length);
   assert.equal(steps.at(-1)?.kind, 'wire');

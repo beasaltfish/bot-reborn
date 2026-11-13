@@ -160,7 +160,7 @@ export function createPanels(opts) {
     // On a phone the sidebar leaves too little bench visible to frame two pins.
     if (window.innerWidth < 600) showProject(false);
     opts.focusProject?.(points);
-  }, build: (id) => opts.build?.(id, planChoice()), leave: () => {
+  }, demo: id => openDemo(id), build: (id) => opts.build?.(id, planChoice()), leave: () => {
     projectSelect.value = '';
     projectView.showProject('');
     opts.leaveProject?.();
@@ -203,8 +203,6 @@ export function createPanels(opts) {
   document.body.append(bar, bubble, status, picker, panel, partsPanel, projectPanel);
 
   // ---- Wire it for me ----
-  const wireBtn = el('button', { type: 'button', class: 'pill' }, [t('wire')]);
-  bar.prepend(wireBtn);
   const recipeBoxes = RECIPES.map((r, i) => {
     const input = /** @type {HTMLInputElement} */ (el('input', { type: 'radio', name: 'recipe', value: r.id }));
     if (r.id === 'screen') input.setAttribute('checked', '');
@@ -239,7 +237,12 @@ export function createPanels(opts) {
   screenSel.addEventListener('change', () => refreshProject());
   wandBox.addEventListener('change', () => refreshProject());
   const showWire = (/** @type {boolean} */ on) => { wirePanel.hidden = !on; };
-  wireBtn.addEventListener('click', () => { hideHint(); showParts(false); showProject(false); showDiagram(false); showWire(Boolean(wirePanel.hidden)); });
+  /** Open the demo chooser with the selected recipe ticked. @param {string} id */
+  function openDemo(id) {
+    const box = recipeBoxes.find(item => item.value === id);
+    if (box) { box.checked = true; syncScreen(); }
+    hideHint(); showParts(false); showProject(false); showDiagram(false); showWire(true);
+  }
   wireClose.addEventListener('click', () => showWire(false));
 
   /**

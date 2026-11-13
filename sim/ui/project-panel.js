@@ -3,11 +3,11 @@ import { projectReason } from './project-copy.js';
 
 /** @typedef {ReturnType<typeof import('../project-progress.js').connectionProgress>[number]} Progress */
 /** @typedef {ReturnType<typeof import('../selection.js').describeSelection>} SelectionInfo */
-/** @typedef {{id:string,name:string,goalKey?:string,links:import('../target.js').Link[],ignoredFaultCodes?:string[]}} ProjectView */
+/** @typedef {{id:string,name:string,goalKey?:string,legacy?:{recipeId?:string},links:import('../target.js').Link[],ignoredFaultCodes?:string[]}} ProjectView */
 /** @typedef {{mode:'guided'|'free', evaluated?:boolean, project:ProjectView|null, progress:Progress[], selection:SelectionInfo, diagnoses:import('../diagnose.js').Hint[]}} State */
 /** @typedef {'project'|'diagnostics'} Tab */
 
-/** @param {{lang:string, focus(points:string[]):void, leave?():void, build?(id:string):void}} opts */
+/** @param {{lang:string, focus(points:string[]):void, leave?():void, build?(id:string):void, demo?(id:string):void}} opts */
 export function createProjectPanel(opts) {
   const element = document.createElement('section');
   element.className = 'project-panel';
@@ -98,6 +98,13 @@ export function createProjectPanel(opts) {
       leave.type = 'button';
       leave.dataset.action = 'leave';
       leave.addEventListener('click', () => opts.leave?.());
+      if (project.legacy?.recipeId) {
+        const demo = /** @type {HTMLButtonElement} */ (child('button', text('demo')));
+        demo.type = 'button';
+        demo.dataset.action = 'demo';
+        demo.addEventListener('click', () => opts.demo?.(project.id));
+        actions.append(demo);
+      }
       actions.append(build, leave);
       element.append(actions);
       return;
