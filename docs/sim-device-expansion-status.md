@@ -1,6 +1,6 @@
 # Simulator device expansion: progress and remaining work
 
-Snapshot: 2026-11-11. This record describes what is implemented in the
+Snapshot: 2026-11-13. This record describes what is implemented in the
 `codex/sim-device-expansion` branch; it is not a claim that the overall device
 expansion is complete.
 
@@ -262,6 +262,27 @@ is stopped rather than retained. An already successful shared microphone remains
 held according to the existing audio design. Browser permission prompts themselves
 cannot be forcibly dismissed. This protects only hazards the current bounded
 evaluator detects; it is not a general electrical safety guarantee.
+
+## First device pack update (2026-11-13)
+
+Tasks 1-6 of `docs/superpowers/plans/2026-11-11-sim-first-device-pack.md` are
+implemented and committed: independent USB/battery/bench/MB102 power, the
+KY-004 button module and HC-SR04 measurement state, the SSD1306 OLED, the SG90
+servo, the TB6612FNG with a DC motor, and the WS2812 strip with aggregate
+startup-current brownout. Each family has a checked-in hardware note, a
+five-stage bilingual lesson, at least one guided project and focused tests. A
+`test/sim/first-pack.test.js` registry asserts parts, catalogue rows, firmware
+contracts, round-trip persistence, lesson shape and project use.
+
+Remaining acceptance work is explicit: the real-browser Chrome/Edge matrix
+(both languages, touch and accessibility, roughly 20 devices, 60/30 fps and
+LOD fallback) has not been run; the power/button/sonar/OLED/servo/motor/strip
+lessons are registered content but do not yet have dedicated lab stage panels;
+OLED frames and servo/motor motion are not drawn in the 3D scene; the raw
+two-terminal button and resistor are taught inside existing lessons rather than
+standalone; and the real firmware still implements only the original
+audio/screen/toy build. Do not describe the pack as fully accepted or
+firmware-supported.
 
 ## Last verification
 

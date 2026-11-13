@@ -91,6 +91,28 @@ npm test             # node --test and the admin page's vitest — no browser
 npm run typecheck    # tsc --noEmit, strict, over core/, server/, phone/, sim/, test/ and admin/
 ```
 
+## Simulator device pack
+
+`sim/parts.js` owns physical pins and seating, `sim/devices/catalog.js` owns
+capabilities, properties and the future firmware contract, and
+`sim/electrical/evaluate.js` resolves bounded source/regulator/load networks.
+Device-specific evaluators (`digital-inputs.js`, `servo.js`, `motor-driver.js`,
+`ws2812.js`, `ssd1306.js`, `bme280-evaluate.js`) add state without guessing
+firmware pin modes. `sim/lessons/` holds bilingual lesson content and
+`sim/projects.js` the guided projects.
+
+To add a device: add a checked-in note under `docs/hardware/`, a `PartDef`, a
+catalogue row with properties/firmware contract, a procedural visual, a
+capability evaluator and tests, a five-stage lesson and at least one project.
+Keep unsupported networks explicitly unsupported; do not treat a missing model
+as a working circuit. Solver limits are listed in each hardware note: no SPICE,
+no thermal or timing simulation, no charging chemistry, no arbitrary resistor
+networks.
+
+The hardware notes are the source of truth for selected variants:
+`sim-power-sources.md`, `sim-digital-inputs.md`, `sim-ssd1306.md`,
+`sim-sg90.md`, `sim-tb6612-motor.md` and `sim-ws2812.md`.
+
 ### Trying Volcengine (豆包语音) with a real key
 
 The Volcengine adapters (`server/providers/stt-volcengine.js`,
