@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { planFromProject, planFromRecipe, planById, planSteps } from '../../sim/plan.js';
+import { planFromProject, planFromRecipe, planById, planSteps, planId } from '../../sim/plan.js';
 import { projectById } from '../../sim/projects.js';
 import { emptyBench } from '../../sim/bench.js';
 import { startBench, applyStep } from '../../sim/recipes.js';
@@ -45,4 +45,16 @@ test('plan steps for a new project place parts, wire links and plug in USB', () 
   assert.ok(steps.some(step => step.kind === 'part' && step.part === 'button-module'));
   assert.equal(steps.filter(step => step.kind === 'wire').length, plan.links.length);
   assert.equal(steps.at(-1)?.kind, 'usb');
+});
+
+test('plan identity keeps recipe variants distinct', () => {
+  const a = planById('screen', { screenId: 'st7735-160', wand: false });
+  const b = planById('screen', { screenId: 'st7735-160', wand: true });
+  const c = planById('screen', { screenId: 'ili9341-ips', wand: false });
+  if (!a || !b || !c) throw new Error('missing plan');
+  assert.notEqual(planId(a), planId(b));
+  assert.notEqual(planId(a), planId(c));
+  const power = planById('power-a-rail');
+  assert.ok(power);
+  assert.equal(planId(power), 'power-a-rail');
 });

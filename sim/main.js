@@ -89,10 +89,10 @@ const runtime = { servo: {}, motor: {}, strip: {}, display: {}, buttons: {} };
 /** @type {import('./plan.js').Plan|import('./projects.js').Project|null} */
 let activeProject = null;
 const panels = createPanels({
-  hint: (projectId) => (bench.placed.some((p) => p.burnt)
+  hint: (projectId, options) => (bench.placed.some((p) => p.burnt)
     ? document.documentElement.lang === 'zh' ? simText('zh', 'hint.burnt') : 'A part burnt out; drag it to the bin and take a new one from Parts.'
     : projectId
-      ? nextPlanHint(bench, planById(projectId), document.documentElement.lang)?.text ?? (document.documentElement.lang === 'zh' ? simText('zh', 'hint.ready') : 'Looks complete — plug in USB.')
+      ? nextPlanHint(bench, planById(projectId, options), document.documentElement.lang)?.text ?? (document.documentElement.lang === 'zh' ? simText('zh', 'hint.ready') : 'Looks complete — plug in USB.')
       : null),
   reset,
   follow: effects.follow,
@@ -114,10 +114,10 @@ const panels = createPanels({
     if (!deviceByPart(part)) return panels.status('Unknown device; select one from the catalogue.');
     location.href = `./lab.html?part=${encodeURIComponent(part)}`;
   },
-  projectState: id => {
+  projectState: (id, options) => {
     const plan = activeProject?.id === id
       ? ('goalKey' in activeProject ? activeProject : planFromProject(activeProject))
-      : planById(id);
+      : planById(id, options);
     const selection = describeSelection(bench, hands.selection(), document.documentElement.lang);
     if (plan) return { mode: 'guided', project: plan, progress: connectionProgress(bench, plan), selection, diagnoses: [] };
     // Independent DC supplies can energize an LED circuit without USB.

@@ -77,6 +77,11 @@ export function planById(id, options) {
   return project ? planFromProject(project) : null;
 }
 
+/** A plan's identity, including a recipe's screen/wand variant. @param {Plan} plan */
+export function planId(plan) {
+  return plan.legacy ? `${plan.id}:${plan.legacy.screenId ?? ''}:${plan.legacy.wand ? 'wand' : 'nowand'}` : plan.id;
+}
+
 /** @param {Plan} plan @returns {import('./recipes.js').Step[]} */
 export function planSteps(plan) {
   if (plan.legacy?.steps) return plan.legacy.steps;

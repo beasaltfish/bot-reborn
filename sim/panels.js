@@ -67,14 +67,14 @@ function pointName(point) {
 
 /**
  * @param {{
- *   hint(projectId?: string): string|null,
+ *   hint(projectId?: string, options?: {screenId?: string, wand?: boolean}): string|null,
  *   reset(): void,
  *   follow(el: HTMLElement, id: string): void,
  *   add(part: string): void,
  *   carry(part: string, e: PointerEvent): void,
  *   learn?(part: string): void,
  *   changeLanguage?(lang:'en'|'zh'): boolean,
- *   projectState?(id: string): import('./ui/project-panel.js').State,
+ *   projectState?(id: string, options?: {screenId?: string, wand?: boolean}): import('./ui/project-panel.js').State,
  *   focusProject?(points: string[]): void,
  *   build?(id: string): void,
  *   clearProjectFocus?(): void,
@@ -176,7 +176,7 @@ export function createPanels(opts) {
   ]);
   function refreshProject() {
     if (projectPanel.hidden) return;
-    const state = opts.projectState?.(projectSelect.value);
+    const state = opts.projectState?.(projectSelect.value, planOptions());
     const free = opts.projectState?.('');
     if (state) projectView.render(state, free ?? state);
   }
@@ -205,11 +205,11 @@ export function createPanels(opts) {
     if (r.id === 'screen') input.setAttribute('checked', '');
     return input;
   });
-  const screenSel = el('select', { 'aria-label': t('screen') }, SCREENS.map((s) => {
+  const screenSel = /** @type {HTMLSelectElement} */ (el('select', { 'aria-label': t('screen') }, SCREENS.map((s) => {
     const o = el('option', { value: s.id }, [s.label]);
     if (s.id === DEFAULT_SCREEN) o.setAttribute('selected', '');
     return o;
-  }));
+  })));
   const wandBox = /** @type {HTMLInputElement} */ (el('input', { type: 'checkbox', name: 'wand' }));
   const watchBtn = el('button', { type: 'button', class: 'pill' }, [t('watch')]);
   const stepBtn = el('button', { type: 'button', class: 'pill' }, [t('step')]);
@@ -227,6 +227,10 @@ export function createPanels(opts) {
   const syncScreen = () => { screenSel.hidden = chosen()?.value !== 'screen'; };
   for (const b of recipeBoxes) b.addEventListener('change', syncScreen);
   syncScreen();
+  /** @returns {{screenId?: string, wand?: boolean}} */
+  function planOptions() { return { screenId: screenSel.value || DEFAULT_SCREEN, wand: wandBox.checked }; }
+  screenSel.addEventListener('change', () => refreshProject());
+  wandBox.addEventListener('change', () => refreshProject());
   const showWire = (/** @type {boolean} */ on) => { wirePanel.hidden = !on; };
   wireBtn.addEventListener('click', () => { hideHint(); showParts(false); showProject(false); showDiagram(false); showWire(Boolean(wirePanel.hidden)); });
   wireClose.addEventListener('click', () => showWire(false));
@@ -284,7 +288,7 @@ export function createPanels(opts) {
   const showDiagram = (/** @type {boolean} */ on) => { panel.hidden = !on; };
   diagramBtn.addEventListener('click', () => {
     if (!projectSelect.value) { explainNeedsPlan(); return; }
-    const plan = planById(projectSelect.value);
+    const plan = planById(projectSelect.value, planOptions());
     if (plan) {
       const view = createWiringOverview(plan);
       diagramHost.replaceChildren(view);
@@ -313,7 +317,7 @@ export function createPanels(opts) {
     if (!bubble.hidden) return hideHint();
     if (!projectSelect.value) { explainNeedsPlan(); return; }
     showDiagram(false);
-    bubble.textContent = opts.hint(projectSelect.value || undefined) ?? '';
+    bubble.textContent = opts.hint(projectSelect.value || undefined, planOptions()) ?? '';
     bubble.hidden = false;
     hintTimer = setTimeout(hideHint, HINT_MS);
   });
