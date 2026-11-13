@@ -13,7 +13,14 @@ import { WS2812_LESSON } from './ws2812.js';
 /** @type {import('./schema.js').Lesson[]} */
 export const LESSONS = [LED_LESSON, BME280_LESSON, POWER_LESSON, BUTTON_LESSON, HC_SR04_LESSON, SSD1306_LESSON, SG90_LESSON, TB6612_LESSON, DC_MOTOR_LESSON, WS2812_LESSON];
 
+/** Parts taught inside a related family lesson. */
+const ALIASES = /** @type {Record<string,string>} */ ({
+  'usb-5v-source': 'battery-4xaa', 'bench-supply': 'battery-4xaa', 'breadboard-regulator': 'battery-4xaa',
+  resistor: 'led-5mm', 'push-button': 'button-module',
+});
+
 /** @param {string} partId @returns {import('./schema.js').Lesson|null} */
 export function lessonByPart(partId) {
-  return LESSONS.find(lesson => lesson.part === partId) ?? null;
+  const id = ALIASES[partId] ?? partId;
+  return LESSONS.find(lesson => lesson.part === id) ?? null;
 }

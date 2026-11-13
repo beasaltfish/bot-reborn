@@ -13,6 +13,7 @@ import { createLabActions } from './ui/lab-actions.js';
 import { createLedLessonPanel } from './ui/led-lesson-panel.js';
 import { createBme280Panel } from './ui/bme280-panel.js';
 import { createBme280LessonPanel } from './ui/bme280-lesson-panel.js';
+import { createLessonPanel } from './ui/lesson-panel.js';
 import { createButtonLabPanel } from './ui/button-lab-panel.js';
 import { createSonarLabPanel } from './ui/hc-sr04-panel.js';
 import { createBme280LabExample } from './lessons/bme280-example.js';
@@ -56,6 +57,9 @@ summary.after(actions.element);
 try { lessonStore = localStorage; } catch { /* Lessons remain usable without storage. */ }
 const lessonPanel = id === 'led-5mm' ? createLedLessonPanel({ store: lessonStore, lang }) : null;
 if (lessonPanel) actions.element.after(lessonPanel.element);
+const contentLesson = id === 'led-5mm' || id === 'bme280-i2c' ? null : lessonByPart(id);
+const genericLesson = contentLesson ? createLessonPanel({ lesson: contentLesson, store: lessonStore, lang }) : null;
+if (genericLesson) actions.element.after(genericLesson.element);
 let environment = defaultStimuli();
 const example = id === 'bme280-i2c' ? createBme280LabExample() : null;
 const exampleLabel = document.createElement('p');
@@ -86,6 +90,7 @@ function updateCopy() {
   lessonPanel?.setLanguage(lang);
   bmePanel?.setLanguage(lang);
   bmeLesson?.setLanguage(lang);
+  genericLesson?.setLanguage(lang);
   buttonPanel?.setLanguage(lang);
   sonarPanel?.setLanguage(lang);
   exampleLabel.textContent = simText(lang, 'bme.example');
