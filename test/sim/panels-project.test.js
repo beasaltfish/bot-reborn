@@ -76,8 +76,12 @@ test('guidance explains why it needs a project', () => {
     const button = label => /** @type {HTMLButtonElement} */ ([...dom.window.document.querySelectorAll('#tools button')].find(b => b.textContent === label));
     button('Next hint').click();
     assert.match(dom.window.document.querySelector('#hint')?.textContent ?? '', /Choose a project first/);
+    button('Next hint').click();
+    assert.equal(/** @type {HTMLElement} */ (dom.window.document.querySelector('#hint')).hidden, true);
     button('Wiring overview').click();
     assert.match(dom.window.document.querySelector('#hint')?.textContent ?? '', /Choose a project first/);
+    button('Wiring overview').click();
+    assert.equal(/** @type {HTMLElement} */ (dom.window.document.querySelector('#hint')).hidden, true);
     assert.ok(panels);
   } finally { globalThis.document = previous.document; globalThis.window = previous.window; globalThis.addEventListener = previous.addEventListener; dom.window.close(); }
 });

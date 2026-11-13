@@ -300,7 +300,12 @@ export function createPanels(opts) {
   diagramBtn.addEventListener('click', () => {
     // Closing always wins, even if the project selection changed while open.
     if (!panel.hidden) { showDiagram(false); return; }
-    if (!projectSelect.value) { explainNeedsPlan(); return; }
+    if (!projectSelect.value) {
+      // A second press on the same button dismisses its own explanation.
+      if (!bubble.hidden) { hideHint(); return; }
+      explainNeedsPlan();
+      return;
+    }
     const plan = planById(projectSelect.value, planChoice());
     if (!plan) { explainNeedsPlan(); return; }
     const view = createWiringOverview(plan);
@@ -320,7 +325,6 @@ export function createPanels(opts) {
   };
   /** Put a one-line reason in the existing hint bubble. */
   function explainNeedsPlan() {
-    hideHint();
     bubble.textContent = simText(lang, 'guidance.needsPlan');
     bubble.hidden = false;
     hintTimer = setTimeout(hideHint, HINT_MS);
