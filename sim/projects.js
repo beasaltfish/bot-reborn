@@ -214,6 +214,14 @@ export const TAROT_PROJECT = {
 
 const GUIDED = [LED_PROJECT, BME280_PROJECT, POWER_PROJECT, BUTTON_PROJECT, SONAR_PROJECT, DISPLAY_PROJECT, SERVO_PROJECT, MOTOR_PROJECT, STRIP_PROJECT, TAROT_PROJECT];
 
+/** Dropdown groups; a project not listed falls through to the end. */
+export const PROJECT_GROUPS = [
+  { id: 'demo', key: 'project.group.demo', ids: ['audio', 'screen', 'toy', 'tarot'] },
+  { id: 'basics', key: 'project.group.basics', ids: ['led-basics', 'power-a-rail', 'button-led'] },
+  { id: 'sensing', key: 'project.group.sensing', ids: ['bme280-readings', 'distance-reader', 'environment-display'] },
+  { id: 'actuator', key: 'project.group.actuator', ids: ['proximity-servo', 'motor-driver-basics', 'status-light-strip'] },
+];
+
 /** @type {Project[]} */
 export const PROJECTS = [...RECIPES.map(recipe => adapt(recipe)), ...GUIDED];
 

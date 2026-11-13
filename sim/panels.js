@@ -14,7 +14,7 @@ import { createProjectPanel } from './ui/project-panel.js';
 import { simText } from './ui/strings.js';
 import { createLanguageControl } from './ui/language-control.js';
 import { RECIPES, DEFAULT_SCREEN } from './recipes.js';
-import { PROJECTS } from './projects.js';
+import { PROJECTS, PROJECT_GROUPS } from './projects.js';
 import { WIRE_PALETTE } from './wire-color.js';
 import { createPropertyEditor } from './ui/property-editor.js';
 import { createBme280Panel } from './ui/bme280-panel.js';
@@ -170,10 +170,24 @@ export function createPanels(opts) {
   } });
   const projectSelect = /** @type {HTMLSelectElement} */ (el('select', { 'aria-label': simText(lang, 'project.choosePlaceholder') }));
   projectSelect.append(el('option', { value: '', disabled: '' }, [simText(lang, 'project.choosePlaceholder')]));
-  for (const project of PROJECTS) {
+  const byId = new Map(PROJECTS.map(project => [project.id, project]));
+  const listed = new Set();
+  /** @param {import('./projects.js').Project} project */
+  const optionFor = project => {
     const label = simText(lang, `project.${project.id}`);
-    projectSelect.append(el('option', { value: project.id }, [label === `project.${project.id}` ? project.name : label]));
+    return el('option', { value: project.id }, [label === `project.${project.id}` ? project.name : label]);
+  };
+  for (const group of PROJECT_GROUPS) {
+    const optgroup = el('optgroup', { label: simText(lang, group.key) });
+    for (const id of group.ids) {
+      const project = byId.get(id);
+      if (!project || listed.has(id)) continue;
+      listed.add(id);
+      optgroup.append(optionFor(project));
+    }
+    if (optgroup.children.length) projectSelect.append(optgroup);
   }
+  for (const project of PROJECTS) if (!listed.has(project.id)) projectSelect.append(optionFor(project));
   projectSelect.selectedIndex = 0;
   projectSelect.required = true;
   const projectClose = el('button', { type: 'button', class: 'close', 'aria-label': simText(lang, 'project.close') }, ['×']);

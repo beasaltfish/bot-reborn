@@ -32,6 +32,8 @@ test('project panel switches modes, focuses connections and yields to Parts', ()
     const select = /** @type {HTMLSelectElement} */ (panel.querySelector('select'));
     const options = [...select.options].map(option => option.value);
     assert.equal(options.length, PROJECTS.length + 1);
+    assert.deepEqual([...select.querySelectorAll('optgroup')].map(group => group.getAttribute('label')), ['Demo builds', 'Basics', 'Sensing and displays', 'Actuators']);
+    assert.equal(select.querySelector('optgroup')?.firstElementChild?.getAttribute('value'), 'audio');
     assert.ok(options.includes('power-a-rail') && options.includes('environment-display'));
     select.value = 'audio'; select.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
     select.value = 'screen'; select.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
