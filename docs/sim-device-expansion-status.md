@@ -274,7 +274,7 @@ five-stage bilingual lesson, at least one guided project and focused tests. A
 `test/sim/first-pack.test.js` registry asserts parts, catalogue rows, firmware
 contracts, round-trip persistence, lesson shape and project use.
 
-Remaining acceptance work is explicit: the real-browser Chrome/Edge matrix
+The browser acceptance checklist is `docs/sim-first-pack-acceptance.md`. Remaining acceptance work is explicit: the real-browser Chrome/Edge matrix
 (both languages, touch and accessibility, roughly 20 devices, 60/30 fps and
 LOD fallback) has not been run; the power/button/sonar/OLED/servo/motor/strip
 lessons are registered content but do not yet have dedicated lab stage panels;
