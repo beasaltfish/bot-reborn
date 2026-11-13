@@ -3,7 +3,8 @@ import { projectReason } from './project-copy.js';
 
 /** @typedef {ReturnType<typeof import('../project-progress.js').connectionProgress>[number]} Progress */
 /** @typedef {ReturnType<typeof import('../selection.js').describeSelection>} SelectionInfo */
-/** @typedef {{mode:'guided'|'free', project:import('../projects.js').Project|null, progress:Progress[], selection:SelectionInfo, diagnoses:import('../diagnose.js').Hint[]}} State */
+/** @typedef {{id:string,name:string,links:import('../target.js').Link[],ignoredFaultCodes?:string[]}} ProjectView */
+/** @typedef {{mode:'guided'|'free', project:ProjectView|null, progress:Progress[], selection:SelectionInfo, diagnoses:import('../diagnose.js').Hint[]}} State */
 /** @typedef {'project'|'diagnostics'} Tab */
 
 /** @param {{lang:string, focus(points:string[]):void, leave?():void}} opts */

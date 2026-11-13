@@ -3,7 +3,7 @@ import { evaluateBench } from './devices/evaluate.js';
 
 /** Derive checklist state from the actual nets, not from wire endpoints.
  * @param {import('./bench.js').Bench} bench
- * @param {import('./projects.js').Project} project
+ * @param {{ id: string, links: import('./target.js').Link[], ignoredFaultCodes?: string[] }} project
  */
 export function connectionProgress(bench, project) {
   const network = nets(bench);

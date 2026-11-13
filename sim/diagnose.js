@@ -249,7 +249,7 @@ function partName(id) {
  * @param {string} [lang]
  * @returns {Hint[]}
  */
-function hanging(b, lang = 'en') {
+export function hanging(b, lang = 'en') {
   /** @type {Hint[]} */
   const out = [];
   for (const p of b.placed) {

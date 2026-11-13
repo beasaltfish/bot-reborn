@@ -48,6 +48,7 @@ const COPY = {
     'lesson.power.try.title': 'Try it', 'lesson.power.try.body': 'Change chemistry and charge and compare the loaded rail voltage. Lower charge raises internal resistance and lowers voltage.',
     'lesson.power.fault.title': 'Break and explain', 'lesson.power.fault.body': 'Join two sources on one rail, then lower the regulator input until it drops out. Separate the sources and restore adequate headroom.',
     'lesson.power.reviewed': 'I inspected the battery holder',
+    'hint.missingParts': 'Place {parts} first.',
     'project.power-a-rail': 'Power a rail',
     'lesson.button.title': 'Button input basics',
     'lesson.button.recognize.title': 'Recognize', 'lesson.button.recognize.body': 'The KY-004 carries a tactile switch and a pull-up resistor. Its signal is high at rest and low while the button is held.',
@@ -152,6 +153,7 @@ const COPY = {
   zh: {
     'power.reconnect': '电源安全保护已停止会话；纠正电路后，请拔出并重新插入 USB。',
     'tools.wire': '自动布线', 'tools.parts': '元件', 'tools.diagram': '接线图', 'tools.hint': '提示', 'tools.reset': '重置工作台', 'tools.confirmReset': '清空整个工作台？', 'tools.confirm': '重置', 'tools.keep': '保留', 'tools.close': '关闭', 'tools.screen': '屏幕', 'tools.wand': '添加塔罗手杖（MPU6050）', 'tools.watch': '观看演示', 'tools.step': '逐步操作',
+    'hint.missingParts': '请先放置 {parts}。',
     'hint.swapped': '{a} 与 {b} 看起来接反了：{a} 应接到 {toA}，{b} 应接到 {toB}。',
     'hint.neighbour': '{other} 接到了 {actual}，它位于目标引脚 {wanted} 旁边。',
     'hint.offColumn': '{other} 的导线接在第 {actual} 列，但 {wanted} 位于第 {expected} 列。',

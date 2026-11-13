@@ -13,6 +13,8 @@ import { applyLedDamage, evaluateLedBench } from './electrical/led-bench.js';
 import { evaluateBench } from './devices/evaluate.js';
 import { formatReadings } from './devices/ssd1306.js';
 import { createRuntimePanel } from './ui/device-runtime-panel.js';
+import { planById, planFromProject } from './plan.js';
+import { nextPlanHint } from './guidance.js';
 import { defaultStimuli, setStimulus } from './stimuli.js';
 import { motorLevels, toyAction } from './car.js';
 import { createWandFeed } from './wand-feed.js';
@@ -21,7 +23,7 @@ import { PARTS } from './parts.js';
 import { spotForNew } from './snap.js';
 import { targetFor } from './target.js';
 import { screenById } from '../core/screens.js';
-import { diagnose, nextHint } from './diagnose.js';
+import { diagnose } from './diagnose.js';
 import { liveDiagnosis } from './live-diagnosis.js';
 import { isViewPeekShortcut } from './view-shortcut.js';
 import { characterChoices, chooseCharacter, chooseLine, startBody, faultText, adminLink, keepsFault } from './body.js';
@@ -87,9 +89,11 @@ const runtime = { servo: {}, motor: {}, strip: {}, display: {}, buttons: {} };
 /** @type {import('./projects.js').Project | null} */
 let activeProject = null;
 const panels = createPanels({
-  hint: () => (bench.placed.some((p) => p.burnt)
+  hint: (projectId) => (bench.placed.some((p) => p.burnt)
     ? document.documentElement.lang === 'zh' ? simText('zh', 'hint.burnt') : 'A part burnt out; drag it to the bin and take a new one from Parts.'
-    : nextHint(bench, document.documentElement.lang)?.text ?? (document.documentElement.lang === 'zh' ? simText('zh', 'hint.ready') : 'Looks complete — plug in USB.')),
+    : projectId
+      ? nextPlanHint(bench, planById(projectId), document.documentElement.lang)?.text ?? (document.documentElement.lang === 'zh' ? simText('zh', 'hint.ready') : 'Looks complete — plug in USB.')
+      : null),
   reset,
   follow: effects.follow,
   add: (part) => addFromBin(part),
@@ -111,9 +115,9 @@ const panels = createPanels({
     location.href = `./lab.html?part=${encodeURIComponent(part)}`;
   },
   projectState: id => {
-    const project = activeProject?.id === id ? activeProject : projectById(id);
+    const plan = activeProject?.id === id ? planFromProject(activeProject) : planById(id);
     const selection = describeSelection(bench, hands.selection(), document.documentElement.lang);
-    if (project) return { mode: 'guided', project, progress: connectionProgress(bench, project), selection, diagnoses: [] };
+    if (plan) return { mode: 'guided', project: plan, progress: connectionProgress(bench, plan), selection, diagnoses: [] };
     // Independent DC supplies can energize an LED circuit without USB.
     const result = bench.usb || bench.placed.some(part => part.part === 'dc-source' && !part.burnt) ? evaluateBench(bench) : null;
     const diagnoses = result ? rankedDiagnoses(bench, result, document.documentElement.lang) : [];

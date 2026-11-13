@@ -139,7 +139,7 @@ function diagram() {
 
 /**
  * @param {{
- *   hint(): string,
+ *   hint(projectId?: string): string|null,
  *   reset(): void,
  *   follow(el: HTMLElement, id: string): void,
  *   add(part: string): void,
@@ -417,7 +417,7 @@ export function createPanels(opts) {
   hintBtn.addEventListener('click', () => {
     if (!bubble.hidden) return hideHint();
     showDiagram(false);
-    bubble.textContent = opts.hint();
+    bubble.textContent = opts.hint(projectSelect.value || undefined) ?? '';
     bubble.hidden = false;
     hintTimer = setTimeout(hideHint, HINT_MS);
   });
