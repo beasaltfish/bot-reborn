@@ -36,7 +36,14 @@ export function createProjectPanel(opts) {
     if (state.mode === 'guided' && state.project) {
       const project = state.project;
       const title = text(project.id);
-      element.append(child('h2', title === `project.${project.id}` ? project.name : title));
+      const completed = state.progress.filter(link => link.status === 'complete').length;
+      const heading = document.createElement('div');
+      heading.className = 'project-heading';
+      heading.append(child('h2', title === `project.${project.id}` ? project.name : title));
+      heading.append(child('span', text('progress').replace('{done}', String(completed)).replace('{total}', String(state.progress.length))));
+      element.append(heading);
+      const next = state.progress.find(link => link.status !== 'complete');
+      if (next) element.append(child('p', `${text('next')}: ${next.a} → ${next.b}`));
       const list = document.createElement('ol');
       for (const link of state.progress) {
         const row = document.createElement('li');

@@ -72,7 +72,6 @@ export function catalogueView({ query = '', categories = [], tags = [], required
     const entry = catalogueEntry(id, lang);
     return entry ? [{ ...entry, required: required.includes(id), recent: recent.includes(id), favourite: favourites.includes(id) }] : [];
   });
-  const requiredEntries = entries.filter(entry => entry.required);
   const term = normalize(query);
   const filtered = entries.filter(entry => {
     const search = [entry.part, entry.name, entry.summary, entry.category, ...entry.tags, ...entry.interfaces].map(normalize);
@@ -80,11 +79,16 @@ export function catalogueView({ query = '', categories = [], tags = [], required
       && (!categories.length || categories.some(category => normalize(category) === normalize(entry.category)))
       && tags.every(tag => entry.tags.some(value => normalize(value) === normalize(tag)));
   });
+  const favouritesOnly = !term && !categories.length && !tags.length;
+  const favouriteEntries = favouritesOnly ? filtered.filter(entry => entry.favourite) : [];
+  const remaining = favouriteEntries.length ? filtered.filter(entry => !entry.favourite) : filtered;
+  const requiredEntries = entries.filter(entry => entry.required && !(favouritesOnly && entry.favourite));
   const order = ['controller', 'audio', 'sensor', 'actuator', 'display'];
-  const categoriesPresent = [...new Set(filtered.map(entry => entry.category))];
+  const categoriesPresent = [...new Set(remaining.map(entry => entry.category))];
   categoriesPresent.sort((a, b) => (order.indexOf(a) < 0 ? order.length : order.indexOf(a)) - (order.indexOf(b) < 0 ? order.length : order.indexOf(b)) || a.localeCompare(b));
   /** @type {CatalogueSection[]} */
-  const sections = categoriesPresent.map(id => ({ id, label: simText(lang, id), entries: filtered.filter(entry => entry.category === id) }));
+  const sections = categoriesPresent.map(id => ({ id, label: simText(lang, id), entries: remaining.filter(entry => entry.category === id) }));
+  if (favouriteEntries.length) sections.unshift({ id: 'favourites', label: simText(lang, 'favourites'), entries: favouriteEntries });
   if (requiredEntries.length) sections.unshift({ id: 'required', label: simText(lang, 'required'), entries: requiredEntries });
   return sections;
 }

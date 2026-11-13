@@ -53,3 +53,15 @@ test('catalogue filtering is normalized and required parts stay surfaced', () =>
   assert.equal(sections[1].entries[0].part, 'mpu6050');
   assert.equal(sections[1].entries[0].recent, true);
 });
+
+test('favourites are pinned in their own group and leave the categories', () => {
+  const view = catalogueView({ favourites: ['led-5mm', 'battery-4xaa'] });
+  assert.equal(view[0].id, 'favourites');
+  assert.deepEqual(view[0].entries.map(entry => entry.part).sort(), ['battery-4xaa', 'led-5mm']);
+  const fundamental = view.find(section => section.id === 'fundamental');
+  assert.ok(fundamental);
+  assert.ok(!fundamental.entries.some(entry => entry.part === 'led-5mm'));
+  const searched = catalogueView({ query: 'led', favourites: ['led-5mm'] });
+  assert.ok(!searched.some(section => section.id === 'favourites'));
+  assert.ok(searched.some(section => section.entries.some(entry => entry.part === 'led-5mm')));
+});

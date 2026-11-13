@@ -15,6 +15,7 @@ import { createProjectPanel } from './ui/project-panel.js';
 import { simText } from './ui/strings.js';
 import { createLanguageControl } from './ui/language-control.js';
 import { RECIPES, DEFAULT_SCREEN } from './recipes.js';
+import { PROJECTS } from './projects.js';
 import { WIRE_PALETTE } from './wire-color.js';
 import { createPropertyEditor } from './ui/property-editor.js';
 import { createBme280Panel } from './ui/bme280-panel.js';
@@ -278,7 +279,10 @@ export function createPanels(opts) {
   } });
   const projectSelect = /** @type {HTMLSelectElement} */ (el('select', { 'aria-label': simText(lang, 'project.choose') }));
   projectSelect.append(el('option', { value: '' }, [simText(lang, 'project.free')]));
-  for (const id of [...RECIPES.map(recipe => recipe.id), 'led-basics', 'bme280-readings']) projectSelect.append(el('option', { value: id }, [simText(lang, `project.${id}`)]));
+  for (const project of PROJECTS) {
+    const label = simText(lang, `project.${project.id}`);
+    projectSelect.append(el('option', { value: project.id }, [label === `project.${project.id}` ? project.name : label]));
+  }
   const projectClose = el('button', { type: 'button', class: 'close', 'aria-label': simText(lang, 'project.close') }, ['×']);
   const projectPanel = el('div', { id: 'project-panel', role: 'region', 'aria-label': simText(lang, 'project.button'), hidden: '' }, [
     el('header', {}, [el('h2', {}, [simText(lang, 'project.button')]), projectClose]), projectSelect, projectView.element,

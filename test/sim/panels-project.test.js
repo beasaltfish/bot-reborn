@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 // @ts-expect-error jsdom has no bundled declarations
 import { JSDOM } from 'jsdom';
 import { createPanels } from '../../sim/panels.js';
-import { projectById } from '../../sim/projects.js';
+import { PROJECTS, projectById } from '../../sim/projects.js';
 import { connectionProgress } from '../../sim/project-progress.js';
 import { emptyBench } from '../../sim/bench.js';
 
@@ -23,10 +23,15 @@ test('project panel switches modes, focuses connections and yields to Parts', ()
     assert.equal(panel.hidden, false);
     assert.match(panel.textContent ?? '', /Free workbench/);
     const select = /** @type {HTMLSelectElement} */ (panel.querySelector('select'));
+    const options = [...select.options].map(option => option.value);
+    assert.equal(options.length, PROJECTS.length + 1);
+    assert.ok(options.includes('power-a-rail') && options.includes('environment-display'));
     select.value = 'audio'; select.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
     assert.ok(panel.querySelector('[data-status="missing"]'));
     /** @type {HTMLButtonElement} */ (panel.querySelector('[data-status] button')).click();
     assert.deepEqual(focused, [['mic:VDD', 'esp:3V3']]);
+    panels.selectProject('power-a-rail');
+    assert.match(panel.textContent ?? '', /0\/5 complete/);
     panels.selectProject('toy');
     assert.equal(select.value, 'toy');
     const parts = [...dom.window.document.querySelectorAll('#tools button')].find(b => b.textContent === 'Parts');

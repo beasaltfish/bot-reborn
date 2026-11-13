@@ -71,7 +71,8 @@ export function createCataloguePanel(opts) {
         meta.textContent = entry.structural ? '' : [...entry.interfaces, ...(entry.voltage ? [entry.voltage] : []), ...(entry.onBoard ? [text('board')] : []), text(simulation), text(firmware)].join(' · ');
         const add = actionButton(text('add'), entry.name, 'add', () => opts.add(entry.part));
         const learn = actionButton(text('learn'), entry.name, 'learn', () => opts.learn(entry.part));
-        const favourite = actionButton(text('favourite'), entry.name, 'favourite', () => opts.toggleFavourite(entry.part));
+        const favourite = actionButton(entry.favourite ? '★' : '☆', entry.name, 'favourite', () => opts.toggleFavourite(entry.part));
+        favourite.classList.add('star');
         favourite.setAttribute('aria-pressed', String(entry.favourite));
         card.append(name, summary, meta, add);
         if (!entry.structural) card.append(learn);
