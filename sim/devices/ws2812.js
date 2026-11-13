@@ -49,7 +49,7 @@ export function evaluateWs2812(bench, profile, { controllerPowered = false, elec
     const rail = electrical?.rails?.[network.netOf(vcc)];
     const overcurrent = rail?.currentLimitMa !== undefined && currentMa > rail.currentLimitMa;
     if (powered && overcurrent) { state = 'brownout'; addFault('rail-brownout', 'warning', [strip.id], [vcc, gnd], { currentMa, currentLimitMa: rail?.currentLimitMa ?? 0 }); }
-    parts[strip.id] = { state, pixels: pixels.length, currentMa, supplyVoltage: powered ? voltage : 0, supplyNet };
+    parts[strip.id] = { state, pixels: pixels.length, colors: pixels, currentMa, supplyVoltage: powered ? voltage : 0, supplyNet };
   }
   return { parts, faults };
 }

@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { PARTS } from './parts.js';
 import { catalogueEntry } from './ui/catalogue-model.js';
-import { buildPart, dispose } from './scene/meshes.js';
+import { buildPart, dispose, paintOled } from './scene/meshes.js';
 import { pinDescription } from './pin-info.js';
 import { ledGuide } from './led-guide.js';
 import { evaluateLedLabExperiment } from './lessons/led-circuit.js';
@@ -18,6 +18,7 @@ import { createButtonLabPanel } from './ui/button-lab-panel.js';
 import { createSonarLabPanel } from './ui/hc-sr04-panel.js';
 import { createBme280LabExample } from './lessons/bme280-example.js';
 import { defaultStimuli, setStimulus } from './stimuli.js';
+import { formatReadings, textFrame } from './devices/ssd1306.js';
 import { simText } from './ui/strings.js';
 
 const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById('stage'));
@@ -58,7 +59,8 @@ try { lessonStore = localStorage; } catch { /* Lessons remain usable without sto
 const lessonPanel = id === 'led-5mm' ? createLedLessonPanel({ store: lessonStore, lang }) : null;
 if (lessonPanel) actions.element.after(lessonPanel.element);
 const contentLesson = id === 'led-5mm' || id === 'bme280-i2c' ? null : lessonByPart(id);
-const genericLesson = contentLesson ? createLessonPanel({ lesson: contentLesson, store: lessonStore, lang }) : null;
+/** @type {Record<string,string>} */ const deviceControls = { temperature: '25', humidity: '50', pressure: '1013', angle: '90', direction: 'coast', speed: '0.5', color: 'white', pixels: '8' };
+const genericLesson = contentLesson ? createLessonPanel({ lesson: contentLesson, store: lessonStore, lang, onControl: (name, value) => applyDeviceVisual(name, value) }) : null;
 if (genericLesson) actions.element.after(genericLesson.element);
 let environment = defaultStimuli();
 const example = id === 'bme280-i2c' ? createBme280LabExample() : null;
@@ -142,6 +144,68 @@ function updateExperiment() {
 }
 /** @type {THREE.Group | undefined} */ let sceneGroup;
 /** @type {(() => void) | undefined} */ let renderScene;
+let motorLoop = false;
+const LED_COLORS = /** @type {Record<string,[number,number,number]>} */ ({ off: [0, 0, 0], red: [255, 0, 0], green: [0, 255, 0], blue: [0, 0, 255], white: [255, 255, 255] });
+function paintInitialDevice() {
+  if (!sceneGroup) return;
+  if (id === 'ssd1306') {
+    const screen = sceneGroup.getObjectByName('oled-screen');
+    if (screen) paintOled(screen, formatReadings({ temperatureC: 25, humidityPct: 50, pressureHpa: 1013 }).frame);
+  }
+  if (id === 'sg90') {
+    const horn = sceneGroup.getObjectByName('servo-horn');
+    if (horn) horn.rotation.y = -THREE.MathUtils.degToRad(Number(deviceControls.angle));
+  }
+  if (id === 'ws2812-strip') paintStrip();
+  renderScene?.();
+}
+function paintStrip() {
+  if (!sceneGroup) return;
+  const color = LED_COLORS[deviceControls.color] ?? LED_COLORS.off;
+  const lit = Math.max(1, Math.min(8, Number(deviceControls.pixels) || 1));
+  for (let i = 0; i < 8; i++) {
+    const led = /** @type {any} */ (sceneGroup.getObjectByName(`strip-led-${i}`));
+    if (!led?.material?.color) continue;
+    const rgb = i < lit ? color : [0, 0, 0];
+    led.material.color.setRGB(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255);
+    led.material.emissive?.setRGB(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255);
+  }
+}
+function spinMotor() {
+  if (motorLoop) return;
+  motorLoop = true;
+  const step = () => {
+    const running = id === 'dc-motor-small' && !['coast', 'brake'].includes(deviceControls.direction) && Number(deviceControls.speed) > 0;
+    if (!running || !sceneGroup) { motorLoop = false; return; }
+    const rotor = sceneGroup.getObjectByName('motor-rotor');
+    if (rotor) rotor.rotation.x += (deviceControls.direction === 'reverse' ? -1 : 1) * Math.max(0.03, Number(deviceControls.speed)) * 0.25;
+    renderScene?.();
+    requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+function applyDeviceVisual(/** @type {string} */ name, /** @type {string} */ value) {
+  deviceControls[name] = value;
+  if (!sceneGroup) return;
+  if (id === 'sg90' && name === 'angle') {
+    const horn = sceneGroup.getObjectByName('servo-horn');
+    if (horn) horn.rotation.y = -THREE.MathUtils.degToRad(Number(value));
+    renderScene?.();
+  } else if (id === 'button-module' && name === 'pressed') {
+    const cap = sceneGroup.getObjectByName('button-cap');
+    if (cap) cap.position.y = Number(cap.userData.baseY) - (value === 'true' ? 0.35 : 0);
+    renderScene?.();
+  } else if (id === 'dc-motor-small' && (name === 'direction' || name === 'speed')) {
+    spinMotor();
+  } else if (id === 'ws2812-strip' && (name === 'color' || name === 'pixels')) {
+    paintStrip();
+    renderScene?.();
+  } else if (id === 'ssd1306' && ['temperature', 'humidity', 'pressure'].includes(name)) {
+    const screen = sceneGroup.getObjectByName('oled-screen');
+    if (screen) paintOled(screen, formatReadings({ temperatureC: Number(deviceControls.temperature), humidityPct: Number(deviceControls.humidity), pressureHpa: Number(deviceControls.pressure) }).frame);
+    renderScene?.();
+  }
+}
 for (const input of [voltage, resistance, reversed]) input.addEventListener('input', () => {
   updateExperiment();
   if (voltage.checkValidity() && resistance.checkValidity() && (input === voltage || input === resistance)) lessonPanel?.controlChanged(input.id);
@@ -170,6 +234,7 @@ if (!part || !entry) {
   const { group, anchors } = buildPart(part, { onBoard: false, burnt: false });
   sceneGroup = group;
   scene.add(group);
+  paintInitialDevice();
   const bounds = new THREE.Box3().setFromObject(group);
   const center = bounds.getCenter(new THREE.Vector3());
   const size = bounds.getSize(new THREE.Vector3());

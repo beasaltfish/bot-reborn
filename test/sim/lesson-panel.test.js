@@ -14,12 +14,19 @@ function store() {
   const data = new Map();
   return { getItem: (/** @type {string} */ key) => data.get(key) ?? null, setItem: (/** @type {string} */ key, /** @type {string} */ value) => data.set(key, value) };
 }
-/** @param {import('../../sim/lessons/schema.js').Lesson} lesson */
-function panel(lesson) {
+/** @param {import('../../sim/lessons/schema.js').Lesson} lesson @param {(name:string,value:string)=>void} [onControl] */
+function panel(lesson, onControl) {
   const dom = new JSDOM('<!doctype html><body></body>');
   const previous = globalThis.document;
   globalThis.document = dom.window.document;
-  return { dom, previous, made: createLessonPanel({ lesson, store: store(), lang: 'en' }) };
+  return { dom, previous, made: createLessonPanel({ lesson, store: store(), lang: 'en', onControl }) };
+}
+/** @param {any} element @param {string} selector */
+function change(element, selector) {
+  const found = element.querySelector(selector);
+  assert.ok(found, selector);
+  found.checked = true;
+  found.dispatchEvent(new (/** @type {any} */ (found).ownerDocument.defaultView).Event('change', { bubbles: true }));
 }
 /** @param {any} element @param {string} selector */
 function click(element, selector) {
@@ -29,7 +36,8 @@ function click(element, selector) {
 }
 
 test('the generic panel walks the five button-module stages', () => {
-  const { dom, previous, made } = panel(BUTTON_LESSON);
+  /** @type {[string,string][]} */ const seen = [];
+  const { dom, previous, made } = panel(BUTTON_LESSON, (name, value) => seen.push([name, value]));
   try {
     const root = made.element;
     assert.match(root.querySelector('h2')?.textContent ?? '', /^1\/5/);
@@ -42,7 +50,8 @@ test('the generic panel walks the five button-module stages', () => {
     assert.ok(project);
     for (let i = 0; i < project.links.length; i++) click(root, `button[data-wire="${i}"]`);
     click(root, 'button[data-action="next"]');
-    click(root, '[data-control="pressed"]');
+    change(root, '[data-control="pressed"]');
+    assert.equal(seen.at(-1)?.[0], 'pressed');
     click(root, 'button[data-action="next"]');
     click(root, 'button[data-fault="logic-level-incompatible"]');
     click(root, 'button[data-fault="floating-input"]');

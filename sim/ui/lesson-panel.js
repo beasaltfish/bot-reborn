@@ -23,7 +23,7 @@ const CONTROLS = {
 };
 
 /** A generic five-stage panel for lessons without a bespoke circuit panel. */
-export function createLessonPanel(/** @type {{lesson: import('../lessons/schema.js').Lesson, store: import('../lessons/progress.js').Store|null, lang: string}} */ opts) {
+export function createLessonPanel(/** @type {{lesson: import('../lessons/schema.js').Lesson, store: import('../lessons/progress.js').Store|null, lang: string, onControl?: (name: string, value: string) => void}} */ opts) {
   const element = document.createElement('section');
   element.className = 'lesson-panel';
   const heading = document.createElement('h2');
@@ -60,6 +60,7 @@ export function createLessonPanel(/** @type {{lesson: import('../lessons/schema.
   /** @param {string} name @param {string} value */
   function controlChanged(name, value) {
     controlValues[name] = value;
+    opts.onControl?.(name, value);
     dispatch({ type: 'observe', action: { type: 'control-change', value: name } });
   }
   function renderControl(/** @type {string} */ name) {

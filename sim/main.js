@@ -11,6 +11,7 @@ import { emptyBench, load, serialize, addPart, addBoard, park, setWireColor, rem
 import { deviceByPart } from './devices/catalog.js';
 import { applyLedDamage, evaluateLedBench } from './electrical/led-bench.js';
 import { evaluateBench } from './devices/evaluate.js';
+import { formatReadings } from './devices/ssd1306.js';
 import { defaultStimuli, setStimulus } from './stimuli.js';
 import { motorLevels, toyAction } from './car.js';
 import { createWandFeed } from './wand-feed.js';
@@ -141,6 +142,18 @@ function showContext(selection) {
   context.show({ selection, info, color });
 }
 
+/** Push evaluated device state (OLED frames, servo, motor, strip) into the scene. */
+function refreshDeviceVisuals() {
+  const base = evaluateBench(bench, { stimuli: environment }).engineering;
+  const readings = Object.values(base.bme280 ?? {}).find(state => state?.telemetry)?.telemetry;
+  if (readings && Object.keys(base.display ?? {}).length) {
+    const displays = Object.fromEntries(Object.keys(base.display).map(id => [id, { lines: formatReadings(readings).lines }]));
+    world.devices(evaluateBench(bench, { stimuli: { ...environment, displays } }).engineering);
+  } else {
+    world.devices(base);
+  }
+}
+
 /** @param {import('./bench.js').Bench} b */
 function setBench(b) {
   const result = applyLedDamage(b);
@@ -155,6 +168,7 @@ function setBench(b) {
   if (!context.element.hidden) showContext(hands.selection());
   write(BENCH_KEY, serialize(bench));
   world.show(bench);
+  refreshDeviceVisuals();
   // The body normally uses a power-on snapshot; unsafe board power changes
   // instead stop the session and latch until USB is cycled.
   if (bench.usb && powered) {
@@ -215,6 +229,7 @@ const hands = attachInteraction(world, () => bench, setBench, {
         const current = bench.placed.find(item => item.id === id);
         const state = evaluateBench(bench, { stimuli: environment }).engineering.bme280[id];
         panels.refreshPart(id, current?.properties ?? null, state, environment);
+        refreshDeviceVisuals();
       },
     } : undefined;
     if (Object.keys(schema).length || led || bme) panels.partMenu(id, x, y, schema, part.properties, led,

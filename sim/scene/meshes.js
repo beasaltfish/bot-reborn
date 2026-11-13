@@ -797,6 +797,18 @@ const LOOKS = {
  * `anchors`, in the group's frame: where a wire's end sits on each pin.
  */
 
+/** Paint a 1-bit 128x64 frame onto an SSD1306 glass texture. @param {any} screen @param {Uint8Array} frame */
+export function paintOled(screen, frame) {
+  const { ctx, texture } = screen.userData;
+  if (!ctx) return;
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 128, 64);
+  ctx.fillStyle = '#fff';
+  for (let y = 0; y < 64; y++) for (let x = 0; x < 128; x++) {
+    if (frame[y * 16 + (x >> 3)] & (1 << (x & 7))) ctx.fillRect(x, y, 1, 1);
+  }
+  texture.needsUpdate = true;
+}
+
 /**
  * A part as a group whose origin is its first pin, at the height of whatever
  * it stands on (board top or table). On the table it stands on its header
@@ -830,31 +842,55 @@ export function buildPart(def, state) {
       cap.position.set(1, height + 1.05, 0);
       g.add(cap);
     } else if (def.id === 'ws2812-strip') {
-      // A short flexible strip with a row of addressable LEDs.
+      // A short flexible strip with individually colourable addressable LEDs.
       g.add(box(18, 0.35, 3, mat('matte', 0x1b1b1b), 1, height, 0));
-      for (let i = 0; i < 8; i++) g.add(box(0.8, 0.25, 0.8, mat('gloss', 0xe8e8e2), 2 + i * 2, height + 0.35, 0));
+      for (let i = 0; i < 8; i++) {
+        const led = box(0.8, 0.25, 0.8, new THREE.MeshPhongMaterial({ color: 0x222222, emissive: 0x000000 }), 2 + i * 2, height + 0.35, 0);
+        led.name = `strip-led-${i}`;
+        g.add(led);
+      }
     } else if (def.id === 'tb6612fng') {
       // The driver breakout and its black chip.
       g.add(box(8, 0.6, 8, mat('matte', 0x8a1c1c), 1, height, 0));
       g.add(box(3, 0.8, 3, mat('matte', 0x18181a), 1, height + 0.6, 0));
     } else if (def.id === 'dc-motor-small') {
-      // A cylindrical motor with a shaft and two terminals.
+      // A cylindrical motor with a shaft and a rotor marker that spins.
       const body = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 4, 24), mat('metal', STEEL));
       body.rotation.z = Math.PI / 2;
       body.position.set(1, height + 1.5, 0);
       g.add(body);
+      const rotor = new THREE.Group();
+      rotor.name = 'motor-rotor';
+      rotor.position.set(1, height + 1.5, 0);
+      rotor.add(box(3.4, 0.18, 0.18, mat('gloss', 0x1a1a1a), 0, 0, 0));
       const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 1.2, 16), mat('metal', GOLD));
       shaft.rotation.z = Math.PI / 2;
-      shaft.position.set(3.6, height + 1.5, 0);
-      g.add(shaft);
+      shaft.position.set(2.5, 0, 0);
+      rotor.add(shaft);
+      g.add(rotor);
     } else if (def.id === 'sg90') {
-      // A blue servo case with a white horn.
+      // A blue servo case with a horn that turns with the commanded angle.
       g.add(box(5, 6, 3, mat('matte', 0x1d4d8f), 1, height, 0));
-      g.add(box(4, 1, 2, mat('gloss', 0xe8e8e2), 1, height + 6, 0));
+      const horn = new THREE.Group();
+      horn.name = 'servo-horn';
+      horn.position.set(1, height + 6, 0);
+      horn.add(box(4, 1, 2, mat('gloss', 0xe8e8e2), 0, 0, 0));
+      g.add(horn);
     } else if (def.id === 'ssd1306') {
-      // A four-pin breakout with a dark glass panel.
+      // A four-pin breakout with a dark glass panel and a drawable screen.
       g.add(box(10, 0.6, 10, mat('matte', 0x1b1f24), 1, height, 0));
       g.add(box(8, 0.25, 7, mat('gloss', 0x080b0e), 1, height + 0.6, 0));
+      const canvas = document.createElement('canvas');
+      canvas.width = 128; canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      if (ctx) { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 128, 64); }
+      const texture = new THREE.CanvasTexture(canvas);
+      const screen = new THREE.Mesh(new THREE.PlaneGeometry(8, 4), new THREE.MeshBasicMaterial({ map: texture }));
+      screen.name = 'oled-screen';
+      screen.rotation.x = -Math.PI / 2;
+      screen.position.set(1, height + 0.86, 0);
+      screen.userData = { canvas, ctx, texture };
+      g.add(screen);
     } else if (def.id === 'button-module') {
       // The KY-004 board, with its cap visibly lower while the button is held.
       g.add(box(7, 0.5, 5, mat('matte', 0x1d4d8f), 1, height, 0));
@@ -862,6 +898,7 @@ export function buildPart(def, state) {
       const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.75, 0.55, 24), mat('gloss', 0xc7372e));
       cap.name = 'button-cap';
       cap.position.set(1, height + 1.15 - (state.pressed ? 0.35 : 0), 0);
+      cap.userData.baseY = height + 1.15;
       g.add(cap);
     } else if (def.id === 'usb-5v-source') {
       // A small USB power breakout with a metal socket and two solder pads.

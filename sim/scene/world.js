@@ -18,7 +18,7 @@ import { PARTS, BOARD_OUTLINE, holeXY } from '../parts.js';
 import { pinPoints, isHole } from '../bench.js';
 import { boardToTable } from '../parts.js';
 import {
-  BOARD_TOP, MM, MAT_THICK, BIN_COLORS, buildBreadboard, buildBin, buildMat, buildPart, buildTable, buildWire, drawScreen, dispose,
+  BOARD_TOP, MM, MAT_THICK, BIN_COLORS, buildBreadboard, buildBin, buildMat, buildPart, buildTable, buildWire, drawScreen, paintOled, dispose,
 } from './meshes.js';
 import { BIN } from '../layout.js';
 import { createWandState } from '../wand-state.js';
@@ -726,6 +726,57 @@ export function createWorld(canvas) {
   }
 
   /**
+   * Apply evaluated device state to the built meshes: OLED frames, servo
+   * angle, motor spin and strip colours.
+   * @param {{ display?: Record<string, any>, servo?: Record<string, any>, motor?: Record<string, any>, strip?: Record<string, any> }} [runtime]
+   */
+  function devices(runtime = {}) {
+    for (const p of current?.placed ?? []) {
+      const g = built.get(p);
+      if (!g) continue;
+      if (p.part === 'ssd1306') {
+        const screen = g.getObjectByName('oled-screen');
+        const frame = runtime.display?.[p.id]?.frame;
+        if (screen && frame) paintOled(screen, frame);
+      } else if (p.part === 'sg90') {
+        const horn = g.getObjectByName('servo-horn');
+        const angle = runtime.servo?.[p.id]?.angle;
+        if (horn) horn.rotation.y = angle === null || angle === undefined ? 0 : -THREE.MathUtils.degToRad(angle);
+      } else if (p.part === 'dc-motor-small') {
+        const rotor = g.getObjectByName('motor-rotor');
+        if (rotor) rotor.userData.spin = runtime.motor?.[p.id]?.rpmRatio ?? 0;
+      } else if (p.part === 'ws2812-strip') {
+        const colors = runtime.strip?.[p.id]?.colors ?? [];
+        for (let i = 0; i < 8; i++) {
+          const led = g.getObjectByName(`strip-led-${i}`);
+          const material = /** @type {any} */ (/** @type {any} */ (led)?.material);
+          if (!material?.color) continue;
+          const pixel = colors[i];
+          if (pixel) {
+            material.color.setRGB(pixel[0] / 255, pixel[1] / 255, pixel[2] / 255);
+            material.emissive?.setRGB(pixel[0] / 255, pixel[1] / 255, pixel[2] / 255);
+          } else {
+            material.color.setHex(0x222222);
+            material.emissive?.setHex(0x000000);
+          }
+        }
+      }
+    }
+    requestRender();
+  }
+
+  // Spin running motor rotors; only asks for frames while something turns.
+  tickers.add(() => {
+    let any = false;
+    for (const g of built.values()) {
+      const rotor = g.getObjectByName('motor-rotor');
+      const spin = rotor?.userData.spin ?? 0;
+      if (rotor && spin > 0) { rotor.rotation.x += spin * 0.25; any = true; }
+    }
+    return any;
+  });
+
+  /**
    * The brain sent a frame: every screen that is ready shows it. They all get
    * the same picture, because the firmware drives one panel.
    * @param {ImageBitmap} img
@@ -865,6 +916,7 @@ export function createWorld(canvas) {
     show,
     screens,
     imu,
+    devices,
     drive,
     onPark,
     shake,
