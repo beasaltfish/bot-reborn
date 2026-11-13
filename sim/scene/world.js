@@ -454,7 +454,7 @@ export function createWorld(canvas) {
       let g = built.get(p);
       if (!g) {
         const def = PARTS[p.part];
-        const made = buildPart(def, { onBoard: p.seated, burnt: p.burnt });
+        const made = buildPart(def, { onBoard: p.seated, burnt: p.burnt, pressed: p.properties.pressed === true });
         g = made.group;
         g.name = `part:${p.id}`;
         g.userData = { kind: 'part', id: p.id, anchors: made.anchors, screen: made.screen ?? null };

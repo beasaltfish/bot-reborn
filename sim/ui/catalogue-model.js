@@ -17,6 +17,7 @@ function voltageLabel(partId, lang) {
   if (partId === 'bme280-i2c') return text('bme280');
   if (partId === 'hc-sr04') return text('hcSr04');
   if (partId === 'usb-5v-source') return text('usb');
+  if (partId === 'button-module') return text('button');
   if (partId === 'battery-4xaa') return text('battery', { full: BATTERY_CHEMISTRIES.alkaline.fullVoltage, empty: BATTERY_CHEMISTRIES.alkaline.emptyVoltage });
   if (partId === 'bench-supply') return text('bench');
   if (partId === 'breadboard-regulator') return text('regulator');

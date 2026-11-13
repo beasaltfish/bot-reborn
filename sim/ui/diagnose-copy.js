@@ -23,6 +23,7 @@ const ZH = {
   'floating-input': 'GPIO 输入没有确定的电平；请根据电路配置合适的上拉或下拉。',
   'gpio-contention': 'GPIO 输出或电源轨正在驱动相反电平；请断电并分开冲突的驱动端。',
   'logic-level-incompatible': '连接的信号可能高于配置的 GPIO 逻辑电压；请断电并使用合适的电平转换。',
+  'hc-sr04-swapped': 'HC-SR04 的 TRIG 和 ECHO 接反；请将 TRIG 接到控制器输出，ECHO 接到输入。',
   'i2c-address-conflict': '同一 I2C 总线上有设备使用相同地址；请修改地址或分开总线。',
   'i2c-unpowered': 'I2C 器件未供电；请检查电源和地线。',
   'i2c-controller-unpowered': '尚未确认 I2C 控制器已供电；请先检查控制器电源。',

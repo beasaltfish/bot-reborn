@@ -27,7 +27,7 @@ import { SCREENS } from '../core/screens.js';
  * `prefix` is the stem of its instance ids: mic, mic2, mic3…
  * `model` is the screen table row a screen part is built from.
  * @typedef {{
- *   id: 'esp32' | 'inmp441' | 'max98357a' | 'speaker' | 'mpu6050' | 'toy' | 'led-5mm' | 'resistor' | 'dc-source' | 'push-button' | 'bme280-i2c' | 'hc-sr04' | 'usb-5v-source' | 'battery-4xaa' | 'bench-supply' | 'breadboard-regulator' | `screen-${string}`,
+ *   id: 'esp32' | 'inmp441' | 'max98357a' | 'speaker' | 'mpu6050' | 'toy' | 'led-5mm' | 'resistor' | 'dc-source' | 'push-button' | 'button-module' | 'bme280-i2c' | 'hc-sr04' | 'usb-5v-source' | 'battery-4xaa' | 'bench-supply' | 'breadboard-regulator' | `screen-${string}`,
  *   label: string,
  *   prefix: string,
  *   model?: string,
@@ -73,6 +73,8 @@ const FIXED = {
   'hc-sr04': { id: 'hc-sr04', label: 'HC-SR04 (5 V)', prefix: 'sonar', size: { w: 45, d: 20, h: 15 }, pins: ['VCC', 'TRIG', 'ECHO', 'GND'].map((name, x) => ({ name, x, y: 0 })), internal: [], onBoard: true },
   'bme280-i2c': { id: 'bme280-i2c', label: 'BME280 (Adafruit 2652)', prefix: 'env', size: { w: 25.2, d: 18, h: 4.6 }, pins: ['VIN', '3Vo', 'GND', 'SCK', 'SDO', 'SDI', 'CS'].map((name, x) => ({ name, x, y: 0 })), internal: [], onBoard: true },
   'push-button': { id: 'push-button', label: 'Push button', prefix: 'button', size: { w: 6, d: 6, h: 5 }, pins: [{ name: '1', x: 0, y: 0 }, { name: '2', x: 2, y: 0 }], internal: [], onBoard: true },
+  // KY-004: S, VCC, GND from left to right on most boards; 18.5 x 15 mm.
+  'button-module': { id: 'button-module', label: 'KY-004 button module', prefix: 'btn', size: { w: 18.5, d: 15, h: 6 }, pins: ['S', 'VCC', 'GND'].map((name, x) => ({ name, x, y: 0 })), internal: [], onBoard: true },
   'led-5mm': { id: 'led-5mm', label: '5 mm LED', prefix: 'led', size: { w: 5, d: 5, h: 9 }, pins: [{ name: 'A', x: 0, y: 0 }, { name: 'K', x: 1, y: 0 }], internal: [], onBoard: true },
   resistor: { id: 'resistor', label: 'Resistor', prefix: 'r', size: { w: 10, d: 3, h: 3 }, pins: [{ name: '1', x: 0, y: 0 }, { name: '2', x: 4, y: 0 }], internal: [], onBoard: true },
   'dc-source': { id: 'dc-source', label: 'DC power supply', prefix: 'src', size: { w: 35, d: 25, h: 12 }, pins: [{ name: '+', x: 0, y: 0, wireOnly: true }, { name: '-', x: 3, y: 0, wireOnly: true }], internal: [], onBoard: false },

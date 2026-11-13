@@ -6,6 +6,7 @@ import { boardGpioSafety } from '../electrical/board-gpio-safety.js';
 import { poweredOutputSafety } from '../electrical/powered-output-safety.js';
 import { blockingBoardPowerFault } from '../board-power-gate.js';
 import { evaluateBme280Bench } from './bme280-evaluate.js';
+import { evaluateDigitalInputs } from './digital-inputs.js';
 import { powerOn } from '../power.js';
 import { DEVICES } from './catalog.js';
 import { PROFILES, checkResources } from './profiles.js';
@@ -64,14 +65,17 @@ export function evaluateDevices(bench, { profile = PROFILES[0], mode = 'idle', s
   const boardGpioFaults = devices.esp32 === DEVICES.esp32 ? boardGpioSafety(bench, profile) : [];
   const sonarFaults = devices['hc-sr04'] === DEVICES['hc-sr04'] ? poweredOutputSafety(bench, profile, { part: 'hc-sr04', supplyPin: 'VCC', signalPins: ['ECHO'], directCode: 'logic-level-incompatible' }) : [];
   const basicFaults = [...electrical.faults, ...resources, ...ledFaults, ...sourceFaults, ...pullupFaults, ...boardGpioFaults, ...sonarFaults];
-  const board = devices['bme280-i2c'] === DEVICES['bme280-i2c'] && bench.placed.some(part => part.part === 'bme280-i2c') ? powerOn(bench) : null;
+  const board = bench.placed.some(part => ['bme280-i2c', 'button-module', 'hc-sr04'].includes(part.part)) ? powerOn(bench) : null;
   const controllerPowered = !!board && board.esp === 'ok' && !blockingBoardPowerFault(bench, { faults: [...board.faults, ...basicFaults] });
-  const sensor = board ? evaluateBme280Bench(bench, profile, controllerPowered, stimuli) : null;
-  const faults = uniqueFaults([...basicFaults, ...(sensor?.faults ?? [])]);
+  const sensor = board && devices['bme280-i2c'] === DEVICES['bme280-i2c'] && bench.placed.some(part => part.part === 'bme280-i2c')
+    ? evaluateBme280Bench(bench, profile, controllerPowered, stimuli)
+    : null;
+  const digital = board ? evaluateDigitalInputs(bench, profile, { controllerPowered, electrical }, stimuli, devices) : { parts: {}, gpio: {}, faults: [] };
+  const faults = uniqueFaults([...basicFaults, ...(sensor?.faults ?? []), ...digital.faults]);
   const bme280 = sensor?.parts ?? {};
   const parts = Object.fromEntries(Object.entries(electrical.devices).map(([id, state]) => [id, { electrical: state }]));
   const burns = [...new Set([...electrical.burns, ...ledResults.filter(({ outcome }) => outcome.state === 'overcurrent').map(({ id }) => id)])].sort();
-  return { electrical, resources, parts, faults, burns, bme280 };
+  return { electrical, resources, parts, faults, burns, bme280, digital: digital.parts, gpio: digital.gpio };
 }
 
 /**

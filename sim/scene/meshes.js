@@ -802,11 +802,12 @@ const LOOKS = {
  * it stands on (board top or table). On the table it stands on its header
  * pins; in the board the pins have gone into the holes, so it sits lower.
  * @param {PartDef} def
- * @param {{ onBoard: boolean, burnt: boolean }} state
+ * @param {{ onBoard: boolean, burnt: boolean, pressed?: boolean }} state
  * @returns {PartMesh}
  */
 export function buildPart(def, state) {
   if (def.id === 'led-5mm' || def.id === 'resistor' || def.id === 'dc-source' || def.id === 'push-button'
+    || def.id === 'button-module'
     || def.id === 'usb-5v-source' || def.id === 'battery-4xaa' || def.id === 'bench-supply' || def.id === 'breadboard-regulator') {
     const g = new THREE.Group();
     /** @type {Map<string, THREE.Vector3>} */
@@ -827,6 +828,14 @@ export function buildPart(def, state) {
       g.add(box(2.4, 0.8, 2.4, mat('matte', 0x303030), 1, height, 0));
       const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.5, 24), mat('gloss', 0xc7372e));
       cap.position.set(1, height + 1.05, 0);
+      g.add(cap);
+    } else if (def.id === 'button-module') {
+      // The KY-004 board, with its cap visibly lower while the button is held.
+      g.add(box(7, 0.5, 5, mat('matte', 0x1d4d8f), 1, height, 0));
+      g.add(box(2.4, 0.8, 2.4, mat('matte', 0x18181a), 1, height, 0));
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.75, 0.55, 24), mat('gloss', 0xc7372e));
+      cap.name = 'button-cap';
+      cap.position.set(1, height + 1.15 - (state.pressed ? 0.35 : 0), 0);
       g.add(cap);
     } else if (def.id === 'usb-5v-source') {
       // A small USB power breakout with a metal socket and two solder pads.

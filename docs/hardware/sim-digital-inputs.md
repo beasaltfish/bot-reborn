@@ -24,5 +24,15 @@ Sources: [SparkFun SEN-15569](https://www.sparkfun.com/ultrasonic-distance-senso
 [ElecFreaks HC-SR04 sheet](https://cdn.sparkfun.com/datasheets/Sensors/Proximity/HCSR04.pdf),
 and [Adafruit's 5 V ECHO warning](https://learn.adafruit.com/distance-measurement-ultrasound-hcsr04/overview).
 
-The separate three-pin button-module variant has not yet been selected or
-sourced; the existing two-terminal push-button is an idealized passive switch.
+The separate three-pin button-module variant is the Joy-IT KY-004: three 2.54 mm
+pins labelled S, VCC (middle) and GND, an 18.5 × 15 mm board, a FZ1713 tactile
+switch and a 10 kΩ resistor. The selected Joy-IT datasheet describes a pull-up
+arrangement: S rests high and is pulled to ground while the button is held. Some
+clones use the opposite pull-down arrangement and drive S high when pressed, so
+the resting level must be measured on the real module. The simulator models the
+selected pull-up variant at 3.3 V or 5 V; the signal follows VCC, so powering it
+from 5 V makes S a 5 V signal.
+
+Sources: [Joy-IT KY-004 datasheet](https://joy-it.net/files/files/Produkte/COM-KY004TM/COM-KY004TM-Datasheet-20200408.pdf),
+[Joy-IT KY-004 manual](https://www.joy-it.net/files/files/Produkte/COM-KY004TM/COM-KY004TM_Manual_2024-05-06.pdf),
+[KY-004 module notes](https://arduinomodules.info/ky-004-key-switch-module/).
