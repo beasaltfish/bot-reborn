@@ -6,6 +6,7 @@ import { PROJECTS } from './projects.js';
 import { targetFor } from './target.js';
 import { LESSONS } from './lessons/index.js';
 import { PARTS } from './parts.js';
+import { wireEnd } from './snap.js';
 
 /**
  * @typedef {{ id: string, part: string, at: { x: number, z: number }, rot: number, seated: boolean }} PlanPart
@@ -145,8 +146,20 @@ export function planId(plan) {
 export function planSteps(plan) {
   if (plan.legacy?.steps) return plan.legacy.steps;
   if (plan.steps) {
-    const steps = plan.steps.some(step => step.kind === 'board') ? plan.steps : [...benchSetupSteps(), ...plan.steps];
-    return seatSteps(steps).filter(step => step.kind !== 'usb');
+    const setup = plan.steps.some(step => step.kind === 'board') ? plan.steps : [...benchSetupSteps(), ...plan.steps];
+    const parts = seatSteps(setup).filter(step => step.kind === 'board' || step.kind === 'part');
+    const bench = parts.reduce(applyStep, startBench(emptyBench()));
+    const taken = new Set();
+    const wires = plan.links.map(link => {
+      // A pin seated in the board is under its part, so the jumper goes into a
+      // free hole on its strip, exactly as the recipe builds do.
+      const a = wireEnd(bench, link.a, taken) ?? link.a;
+      taken.add(a);
+      const b = wireEnd(bench, link.b, taken) ?? link.b;
+      taken.add(b);
+      return /** @type {import('./recipes.js').Step} */ ({ kind: 'wire', a, b, named: [link.a, link.b], say: link.why });
+    });
+    return [...parts, ...wires];
   }
   return derivedSteps(plan.parts, plan.links);
 }

@@ -48,6 +48,7 @@ test('plan steps for a new project place parts and wire links but stay unplugged
   assert.ok(steps.some(step => step.kind === 'board'));
   assert.ok(steps.some(step => step.kind === 'part' && step.part === 'button-module'));
   assert.equal(steps.filter(step => step.kind === 'wire').length, plan.links.length);
+  assert.ok(steps.filter(step => step.kind === 'wire').some(step => step.a.startsWith('bb') || step.b.startsWith('bb')));
   assert.equal(steps.at(-1)?.kind, 'wire');
   assert.ok(!steps.some(step => step.kind === 'usb'));
 });
