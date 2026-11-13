@@ -16,6 +16,9 @@ function device(part, category, capabilities) {
 export const DEVICES = {
   'hc-sr04': { ...device('hc-sr04', 'sensor', [{ kind: 'supply', positive: 'VCC', ground: 'GND' }, { kind: 'gpio', pin: 'TRIG' }, { kind: 'gpio', pin: 'ECHO' }]),
     firmware: { libraries: ['hc-sr04'], resources: [{ kind: 'gpio', pin: 'TRIG', direction: 'output', gpio: 'GPIO4' }, { kind: 'gpio', pin: 'ECHO', direction: 'input', gpio: 'GPIO5' }], init: {}, actions: ['measure'], telemetry: ['distanceCm'] } },
+  tb6612fng: { ...device('tb6612fng', 'actuator', [{ kind: 'supply', positive: 'VCC', ground: 'GND' }, { kind: 'supply', positive: 'VM', ground: 'GND2' }, { kind: 'driver', inputs: ['AIN1', 'AIN2', 'PWMA', 'STBY'] }]),
+    firmware: { libraries: ['tb6612fng'], resources: [{ kind: 'gpio', pin: 'AIN1', direction: 'output' }, { kind: 'gpio', pin: 'AIN2', direction: 'output' }, { kind: 'gpio', pin: 'PWMA', direction: 'output' }, { kind: 'gpio', pin: 'STBY', direction: 'output' }], init: {}, actions: ['drive', 'brake', 'coast'], telemetry: ['duty'] } },
+  'dc-motor-small': device('dc-motor-small', 'actuator', [{ kind: 'load', positive: '+', negative: '-' }]),
   sg90: { ...device('sg90', 'actuator', [{ kind: 'supply', positive: 'VCC', ground: 'GND' }, { kind: 'pwm', pin: 'SIG' }]),
     firmware: { libraries: ['servo'], resources: [{ kind: 'gpio', pin: 'SIG', direction: 'output' }], init: {}, actions: ['setAngle'], telemetry: ['angle'] } },
   ssd1306: { ...device('ssd1306', 'display', [{ kind: 'supply', positive: 'VCC', ground: 'GND', minVoltage: 2.7, maxVoltage: 3.6 }, { kind: 'i2c', sda: 'SDA', scl: 'SCL' }]),
@@ -74,7 +77,7 @@ for (const screen of SCREENS) {
 }
 
 /** Passive resistance, standalone supplies and regulator modules need no firmware driver. */
-const FIRMWARE_INDEPENDENT = new Set(['resistor', 'dc-source', 'usb-5v-source', 'battery-4xaa', 'bench-supply', 'breadboard-regulator']);
+const FIRMWARE_INDEPENDENT = new Set(['resistor', 'dc-source', 'usb-5v-source', 'battery-4xaa', 'bench-supply', 'breadboard-regulator', 'dc-motor-small']);
 /** @param {string} partId */
 export function firmwareIndependent(partId) { return FIRMWARE_INDEPENDENT.has(partId); }
 

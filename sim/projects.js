@@ -159,8 +159,33 @@ export const SERVO_PROJECT = {
   ],
 };
 
+/** @type {import('./target.js').Link[]} */
+const MOTOR_LINKS = [
+  { a: 'drv:VM', b: 'esp:5V', why: 'VM is the motor supply.' },
+  { a: 'drv:VCC', b: 'esp:3V3', why: 'VCC is the logic supply.' },
+  { a: 'drv:GND2', b: 'esp:GND', why: 'The driver and controller need a common ground.' },
+  { a: 'drv:STBY', b: 'esp:3V3', why: 'STBY must be high for the bridge to operate.' },
+  { a: 'drv:AIN1', b: 'esp:GPIO4', why: 'AIN1 sets one direction input.' },
+  { a: 'drv:AIN2', b: 'esp:GPIO5', why: 'AIN2 sets the other direction input.' },
+  { a: 'drv:PWMA', b: 'esp:GPIO6', why: 'PWMA sets the motor speed.' },
+  { a: 'motor:+', b: 'drv:AO1', why: 'Connect one motor terminal to AO1.' },
+  { a: 'motor:-', b: 'drv:AO2', why: 'Connect the other motor terminal to AO2.' },
+];
+/** @type {Project} */
+export const MOTOR_PROJECT = {
+  id: 'motor-driver-basics', name: 'Motor driver basics', needs: 'any', ending: 'Spin the motor',
+  ignoredFaultCodes: ['firmware-unsupported', 'device-unpowered'],
+  links: MOTOR_LINKS,
+  steps: [
+    { kind: 'part', id: 'drv', part: 'tb6612fng', at: { x: -20, z: 40 }, rot: 0, seated: false, say: 'Place the TB6612FNG driver.' },
+    { kind: 'part', id: 'motor', part: 'dc-motor-small', at: { x: 15, z: 40 }, rot: 0, seated: false, say: 'Place the small DC motor.' },
+    ...MOTOR_LINKS.map(link => /** @type {import('./recipes.js').Step} */ ({ kind: 'wire', a: link.a, b: link.b, named: [link.a, link.b], say: link.why })),
+    { kind: 'usb', say: 'Plug in USB and drive the motor.' },
+  ],
+};
+
 /** @type {Project[]} */
-export const PROJECTS = [...RECIPES.map(recipe => adapt(recipe)), LED_PROJECT, BME280_PROJECT, POWER_PROJECT, BUTTON_PROJECT, SONAR_PROJECT, DISPLAY_PROJECT, SERVO_PROJECT];
+export const PROJECTS = [...RECIPES.map(recipe => adapt(recipe)), LED_PROJECT, BME280_PROJECT, POWER_PROJECT, BUTTON_PROJECT, SONAR_PROJECT, DISPLAY_PROJECT, SERVO_PROJECT, MOTOR_PROJECT];
 
 /** @param {string} id @param {{screenId?:string, wand?:boolean}} [options] */
 export function projectById(id, options) {
@@ -171,6 +196,7 @@ export function projectById(id, options) {
   if (id === SONAR_PROJECT.id) return SONAR_PROJECT;
   if (id === DISPLAY_PROJECT.id) return DISPLAY_PROJECT;
   if (id === SERVO_PROJECT.id) return SERVO_PROJECT;
+  if (id === MOTOR_PROJECT.id) return MOTOR_PROJECT;
   const recipe = RECIPES.find(candidate => candidate.id === id);
   if (!recipe) return null;
   if (options?.screenId || options?.wand) return adapt(recipe, options.screenId, options.wand);

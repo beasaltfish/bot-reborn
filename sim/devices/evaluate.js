@@ -9,6 +9,7 @@ import { evaluateBme280Bench } from './bme280-evaluate.js';
 import { evaluateDigitalInputs } from './digital-inputs.js';
 import { evaluateSsd1306 } from './ssd1306.js';
 import { evaluateServo } from './servo.js';
+import { evaluateMotorDriver } from './motor-driver.js';
 import { powerOn } from '../power.js';
 import { DEVICES } from './catalog.js';
 import { PROFILES, checkResources } from './profiles.js';
@@ -67,7 +68,7 @@ export function evaluateDevices(bench, { profile = PROFILES[0], mode = 'idle', s
   const boardGpioFaults = devices.esp32 === DEVICES.esp32 ? boardGpioSafety(bench, profile) : [];
   const sonarFaults = devices['hc-sr04'] === DEVICES['hc-sr04'] ? poweredOutputSafety(bench, profile, { part: 'hc-sr04', supplyPin: 'VCC', signalPins: ['ECHO'], directCode: 'logic-level-incompatible' }) : [];
   const basicFaults = [...electrical.faults, ...resources, ...ledFaults, ...sourceFaults, ...pullupFaults, ...boardGpioFaults, ...sonarFaults];
-  const board = bench.placed.some(part => ['bme280-i2c', 'button-module', 'hc-sr04', 'ssd1306', 'sg90'].includes(part.part)) ? powerOn(bench) : null;
+  const board = bench.placed.some(part => ['bme280-i2c', 'button-module', 'hc-sr04', 'ssd1306', 'sg90', 'tb6612fng'].includes(part.part)) ? powerOn(bench) : null;
   const controllerPowered = !!board && board.esp === 'ok' && !blockingBoardPowerFault(bench, { faults: [...board.faults, ...basicFaults] });
   const sensor = board && devices['bme280-i2c'] === DEVICES['bme280-i2c'] && bench.placed.some(part => part.part === 'bme280-i2c')
     ? evaluateBme280Bench(bench, profile, controllerPowered, stimuli)
@@ -75,11 +76,12 @@ export function evaluateDevices(bench, { profile = PROFILES[0], mode = 'idle', s
   const digital = board ? evaluateDigitalInputs(bench, profile, { controllerPowered, electrical }, stimuli, devices) : { parts: {}, gpio: {}, faults: [] };
   const display = board ? evaluateSsd1306(bench, profile, { controllerPowered, electrical }, stimuli, devices) : { parts: {}, faults: [] };
   const servo = board ? evaluateServo(bench, profile, { controllerPowered, electrical }, stimuli) : { parts: {}, faults: [] };
-  const faults = uniqueFaults([...basicFaults, ...(sensor?.faults ?? []), ...digital.faults, ...display.faults, ...servo.faults]);
+  const motor = board ? evaluateMotorDriver(bench, profile, { controllerPowered, electrical }, stimuli) : { parts: {}, faults: [] };
+  const faults = uniqueFaults([...basicFaults, ...(sensor?.faults ?? []), ...digital.faults, ...display.faults, ...servo.faults, ...motor.faults]);
   const bme280 = sensor?.parts ?? {};
   const parts = Object.fromEntries(Object.entries(electrical.devices).map(([id, state]) => [id, { electrical: state }]));
   const burns = [...new Set([...electrical.burns, ...ledResults.filter(({ outcome }) => outcome.state === 'overcurrent').map(({ id }) => id)])].sort();
-  return { electrical, resources, parts, faults, burns, bme280, digital: digital.parts, gpio: digital.gpio, display: display.parts, servo: servo.parts };
+  return { electrical, resources, parts, faults, burns, bme280, digital: digital.parts, gpio: digital.gpio, display: display.parts, servo: servo.parts, motor: motor.parts };
 }
 
 /**

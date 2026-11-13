@@ -23,6 +23,8 @@ function voltageLabel(partId, lang) {
   if (partId === 'breadboard-regulator') return text('regulator');
   if (partId === 'ssd1306') return text('oled');
   if (partId === 'sg90') return text('servo');
+  if (partId === 'tb6612fng') return text('tb6612');
+  if (partId === 'dc-motor-small') return text('motor');
   if (partId === 'led-5mm') return text('led', { voltage: DEFAULT_LED_FORWARD_VOLTAGE });
   if (partId === 'dc-source') {
     const spec = DEVICES[partId]?.properties.voltage;
