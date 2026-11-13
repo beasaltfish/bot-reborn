@@ -22,6 +22,7 @@ function voltageLabel(partId, lang) {
   if (partId === 'bench-supply') return text('bench');
   if (partId === 'breadboard-regulator') return text('regulator');
   if (partId === 'ssd1306') return text('oled');
+  if (partId === 'sg90') return text('servo');
   if (partId === 'led-5mm') return text('led', { voltage: DEFAULT_LED_FORWARD_VOLTAGE });
   if (partId === 'dc-source') {
     const spec = DEVICES[partId]?.properties.voltage;

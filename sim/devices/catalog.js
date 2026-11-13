@@ -16,6 +16,8 @@ function device(part, category, capabilities) {
 export const DEVICES = {
   'hc-sr04': { ...device('hc-sr04', 'sensor', [{ kind: 'supply', positive: 'VCC', ground: 'GND' }, { kind: 'gpio', pin: 'TRIG' }, { kind: 'gpio', pin: 'ECHO' }]),
     firmware: { libraries: ['hc-sr04'], resources: [{ kind: 'gpio', pin: 'TRIG', direction: 'output', gpio: 'GPIO4' }, { kind: 'gpio', pin: 'ECHO', direction: 'input', gpio: 'GPIO5' }], init: {}, actions: ['measure'], telemetry: ['distanceCm'] } },
+  sg90: { ...device('sg90', 'actuator', [{ kind: 'supply', positive: 'VCC', ground: 'GND' }, { kind: 'pwm', pin: 'SIG' }]),
+    firmware: { libraries: ['servo'], resources: [{ kind: 'gpio', pin: 'SIG', direction: 'output' }], init: {}, actions: ['setAngle'], telemetry: ['angle'] } },
   ssd1306: { ...device('ssd1306', 'display', [{ kind: 'supply', positive: 'VCC', ground: 'GND', minVoltage: 2.7, maxVoltage: 3.6 }, { kind: 'i2c', sda: 'SDA', scl: 'SCL' }]),
     properties: { address: { kind: 'enum', default: '0x3c', values: ['0x3c', '0x3d'] } },
     firmware: { libraries: ['ssd1306'], resources: [{ kind: 'i2c', addressProperty: 'address' }], init: { addressProperty: 'address' }, actions: ['drawFrame'], telemetry: [] } },
