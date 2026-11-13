@@ -52,4 +52,5 @@ test('removed project parts do not make a connection complete', () => {
   b = removed;
   assert.equal(entry(b, 'mic:VDD').status, 'missing');
   assert.equal(entry(b, 'mic:VDD').present, false);
+  assert.deepEqual(entry(b, 'mic:VDD').missing, ['mic']);
 });

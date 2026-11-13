@@ -57,8 +57,17 @@ export function createProjectPanel(opts) {
         if (why) row.append(child('p', why));
         if (link.faultCodes.length) row.append(child('div', link.faultCodes.join(', ')));
         const show = showButton([link.a, link.b]);
-        if (!link.present) { show.disabled = true; show.title = text('notOnBench'); }
+        if (!link.present) {
+          show.disabled = true;
+          show.title = text('notOnBench');
+          row.dataset.missing = 'true';
+        }
         row.append(show);
+        if (!link.present) {
+          const note = child('span', text('missingParts').replace('{parts}', link.missing.join(', ')));
+          note.className = 'missing';
+          row.append(note);
+        }
         list.append(row);
       }
       element.append(list);

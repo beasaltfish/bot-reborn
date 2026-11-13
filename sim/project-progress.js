@@ -13,6 +13,7 @@ export function connectionProgress(bench, project) {
     const [aId, aPin] = link.a.split(':');
     const [bId, bPin] = link.b.split(':');
     const present = instances.has(aId) && instances.has(bId);
+    const missing = [...new Set([...(instances.has(aId) ? [] : [aId]), ...(instances.has(bId) ? [] : [bId])])];
     // The amplifier is bridged: either speaker orientation works, but both
     // terminals must reach opposite outputs before accepting the crossed case.
     const speaker = aId.startsWith('spk') && bId.startsWith('amp') && ['+', '-'].includes(aPin) && ['+', '-'].includes(bPin);
@@ -25,6 +26,7 @@ export function connectionProgress(bench, project) {
     return {
       id: `${project.id}:${link.a}:${link.b}`,
       present,
+      missing,
       a: link.a,
       b: link.b,
       whyKey: `project.${project.id}.link.${encodeURIComponent(link.a)}.${encodeURIComponent(link.b)}.why`,

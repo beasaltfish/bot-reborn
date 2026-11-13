@@ -94,5 +94,7 @@ test('a connection with a missing part cannot be focused', () => {
     const button = /** @type {HTMLButtonElement} */ (row.querySelector('button'));
     assert.equal(button.disabled, true);
     assert.equal(button.title, 'Place the parts first');
+    assert.equal(row.getAttribute('data-missing'), 'true');
+    assert.match(row.textContent ?? '', /Missing: toy/);
   } finally { globalThis.document = previous; dom.window.close(); }
 });
