@@ -52,6 +52,21 @@
     .link:hover { text-decoration: underline; }
     .link.danger { color: #ff8a76; }
 
+
+    #runtime {
+      position: fixed; right: 14px; bottom: 14px; width: min(300px, calc(100vw - 28px)); box-sizing: border-box;
+      padding: 12px 14px; border-radius: 12px; display: flex; flex-direction: column; gap: 10px;
+      font: 500 13px/1.35 var(--font); color: var(--ink);
+      background: var(--glass-strong); border: 1px solid var(--edge);
+      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    }
+    #runtime h2 { margin: 0; font: 600 13px/1.2 var(--font); }
+    #runtime label { display: grid; grid-template-columns: 88px 1fr auto; align-items: center; gap: 8px; }
+    #runtime input[type="range"] { width: 100%; }
+    #runtime input[type="checkbox"] { justify-self: start; }
+    #runtime select { font: 500 12px var(--font); color: var(--ink); background: #40362d; border: 1px solid var(--edge); border-radius: 6px; padding: 3px; }
+    #runtime output { min-width: 38px; text-align: right; color: var(--ink-dim); }
+
     #hint {
       position: fixed; top: 52px; left: 14px; max-width: min(420px, calc(100vw - 28px));
       padding: 10px 14px; border-radius: 12px;

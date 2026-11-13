@@ -12,6 +12,7 @@ import { deviceByPart } from './devices/catalog.js';
 import { applyLedDamage, evaluateLedBench } from './electrical/led-bench.js';
 import { evaluateBench } from './devices/evaluate.js';
 import { formatReadings } from './devices/ssd1306.js';
+import { createRuntimePanel } from './ui/device-runtime-panel.js';
 import { defaultStimuli, setStimulus } from './stimuli.js';
 import { motorLevels, toyAction } from './car.js';
 import { createWandFeed } from './wand-feed.js';
@@ -80,6 +81,9 @@ const effects = createEffects(world);
 const savedBench = load(read(BENCH_KEY));
 let bench = { ...savedBench, usb: false, placed: savedBench.placed.map(p => p.part === 'push-button' ? { ...p, properties: { ...p.properties, pressed: false } } : p) };
 let environment = defaultStimuli();
+/** Runtime device stimuli, keyed by part id. */
+/** @type {{servo:Record<string, any>, motor:Record<string, any>, strip:Record<string, any>, display:Record<string, any>, buttons:Record<string, boolean>}} */
+const runtime = { servo: {}, motor: {}, strip: {}, display: {}, buttons: {} };
 /** @type {import('./projects.js').Project | null} */
 let activeProject = null;
 const panels = createPanels({
@@ -134,6 +138,11 @@ const context = createContextPanel({
   removeWire: id => setBench(removeWire(bench, id)),
 });
 document.body.append(context.element);
+const runtimePanel = createRuntimePanel({
+  lang: document.documentElement.lang === 'zh' ? 'zh' : 'en',
+  change: (target, values) => applyRuntime(target, values),
+});
+document.body.append(runtimePanel.element);
 /** @param {import('./selection.js').Selection} selection */
 function showContext(selection) {
   if (!selection || selection.kind === 'part') { context.hide(); return; }
@@ -142,16 +151,50 @@ function showContext(selection) {
   context.show({ selection, info, color });
 }
 
+/** The stimuli the bench and its runtime controls currently request. */
+function simulationStimuli() {
+  return { ...environment, buttons: runtime.buttons, servo: runtime.servo, motor: runtime.motor, strip: runtime.strip, displays: runtime.display };
+}
+
 /** Push evaluated device state (OLED frames, servo, motor, strip) into the scene. */
 function refreshDeviceVisuals() {
-  const base = evaluateBench(bench, { stimuli: environment }).engineering;
-  const readings = Object.values(base.bme280 ?? {}).find(state => state?.telemetry)?.telemetry;
-  if (readings && Object.keys(base.display ?? {}).length) {
-    const displays = Object.fromEntries(Object.keys(base.display).map(id => [id, { lines: formatReadings(readings).lines }]));
-    world.devices(evaluateBench(bench, { stimuli: { ...environment, displays } }).engineering);
-  } else {
-    world.devices(base);
+  const stimuli = simulationStimuli();
+  let engineering = evaluateBench(bench, { stimuli }).engineering;
+  const readings = Object.values(engineering.bme280 ?? {}).find(state => state?.telemetry)?.telemetry;
+  if (readings) {
+    const displays = { ...(stimuli.displays ?? {}) };
+    let added = false;
+    for (const id of Object.keys(engineering.display ?? {})) if (!displays[id]) { displays[id] = { lines: formatReadings(readings).lines }; added = true; }
+    if (added) engineering = evaluateBench(bench, { stimuli: { ...stimuli, displays } }).engineering;
   }
+  world.devices(engineering);
+}
+
+/** @param {string} partId @param {string} instanceId @returns {import('./ui/device-runtime-panel.js').RuntimeTarget|null} */
+function runtimeTarget(partId, instanceId) {
+  const id = instanceId;
+  if (partId === 'sg90') return { kind: 'servo', id };
+  if (partId === 'tb6612fng') return { kind: 'driver', id };
+  if (partId === 'dc-motor-small') return { kind: 'motor', id, driverId: bench.placed.find(other => other.part === 'tb6612fng')?.id ?? id };
+  if (partId === 'ws2812-strip') return { kind: 'strip', id };
+  if (partId === 'ssd1306') return { kind: 'display', id };
+  if (partId === 'button-module') return { kind: 'button', id };
+  return null;
+}
+
+/** @param {import('./ui/device-runtime-panel.js').RuntimeTarget} target @param {Record<string, any>} values */
+function applyRuntime(target, values) {
+  if (target.kind === 'servo') runtime.servo[target.id] = { angle: Number(values.angle) };
+  else if (target.kind === 'driver' || target.kind === 'motor') runtime.motor[target.id] = { direction: values.direction, speed: Number(values.speed), load: values.load };
+  else if (target.kind === 'strip') {
+    /** @type {Record<string, [number, number, number]>} */
+    const colors = { off: [0, 0, 0], red: [255, 0, 0], green: [0, 255, 0], blue: [0, 0, 255], white: [255, 255, 255] };
+    const rgb = colors[values.color] ?? colors.off;
+    runtime.strip[target.id] = { pixels: Array.from({ length: Math.max(1, Math.min(60, Number(values.pixels) || 1)) }, () => [...rgb]) };
+  } else if (target.kind === 'display') {
+    runtime.display[target.id] = { lines: [`T ${Number(values.temperature).toFixed(1)} C`, `H ${Math.round(Number(values.humidity))} %`, `P ${Math.round(Number(values.pressure))} HPA`] };
+  } else if (target.kind === 'button') runtime.buttons[target.id] = Boolean(values.pressed);
+  refreshDeviceVisuals();
 }
 
 /** @param {import('./bench.js').Bench} b */
@@ -210,6 +253,9 @@ const hands = attachInteraction(world, () => bench, setBench, {
     context.element.style.top = '';
     context.element.style.right = '';
     showContext(selection);
+    const selectedPart = selection?.kind === 'part' ? bench.placed.find(item => item.id === selection.id) : undefined;
+    const target = selectedPart ? runtimeTarget(selectedPart.part, selectedPart.id) : null;
+    if (target) runtimePanel.show(target); else runtimePanel.hide();
     panels.refreshProject();
   },
   selectWire: (id, x, y) => {

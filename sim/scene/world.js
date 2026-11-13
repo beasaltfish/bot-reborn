@@ -728,7 +728,7 @@ export function createWorld(canvas) {
   /**
    * Apply evaluated device state to the built meshes: OLED frames, servo
    * angle, motor spin and strip colours.
-   * @param {{ display?: Record<string, any>, servo?: Record<string, any>, motor?: Record<string, any>, strip?: Record<string, any> }} [runtime]
+   * @param {{ display?: Record<string, any>, servo?: Record<string, any>, motor?: Record<string, any>, strip?: Record<string, any>, buttons?: Record<string, boolean> }} [runtime]
    */
   function devices(runtime = {}) {
     for (const p of current?.placed ?? []) {
@@ -745,6 +745,9 @@ export function createWorld(canvas) {
       } else if (p.part === 'dc-motor-small') {
         const rotor = g.getObjectByName('motor-rotor');
         if (rotor) rotor.userData.spin = runtime.motor?.[p.id]?.rpmRatio ?? 0;
+      } else if (p.part === 'button-module') {
+        const cap = g.getObjectByName('button-cap');
+        if (cap) cap.position.y = Number(cap.userData.baseY) - (runtime.buttons?.[p.id] ? 0.35 : 0);
       } else if (p.part === 'ws2812-strip') {
         const colors = runtime.strip?.[p.id]?.colors ?? [];
         for (let i = 0; i < 8; i++) {
