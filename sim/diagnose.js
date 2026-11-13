@@ -291,7 +291,8 @@ function unmetLinks(b) {
 }
 
 /**
- * For the Hint button: the first link still to make, in TARGET order, with why.
+ * Legacy target hint, kept for the old recipe tests. The UI now uses
+ * nextPlanHint() from sim/guidance.js.
  * @param {import('./bench.js').Bench} b
  * @param {string} [lang]
  * @returns {Hint | null}

@@ -31,6 +31,10 @@ For each page: workbench (`/sim/`) and lab (`/sim/lab.html?part=<id>`).
 
 - [ ] Toolbar, catalogue, project panel, context panel, runtime panel and status
       line are readable in both languages; no clipped or overlapping copy.
+- [ ] The project selector has no “Free workbench” entry; not choosing a project
+      is the free build, and Diagnostics is the default tab there.
+- [ ] Selecting a project switches to Project; Diagnostics stays one click away;
+      Leave project clears the selection without changing the bench.
 - [ ] Chinese text does not overflow buttons or panels at 100% zoom.
 - [ ] Language change confirms, saves the bench and reloads; a cancelled change
       leaves the bench and language untouched.
@@ -118,6 +122,12 @@ Complete each project in both languages; every checklist item should reach
 - [ ] `status-light-strip` (data-level risk may remain visible)
 - [ ] `led-basics`, `bme280-readings` and the original audio/screen/toy recipes
       still start and finish unchanged.
+- [ ] Build it for me applies the selected plan, keeps the previous bench for
+      Back to my bench, and does not merge into the old circuit.
+- [ ] The wiring overview draws the legacy schematic for audio/toy and a link
+      list for new devices; it never invents a wrong drawing.
+- [ ] Next hint names the selected plan's first missing part or link, not the
+      original recipe target.
 
 ## 5. Touch and small screens
 

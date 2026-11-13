@@ -284,6 +284,25 @@ standalone; and the real firmware still implements only the original
 audio/screen/toy build. Do not describe the pack as fully accepted or
 firmware-supported.
 
+## Guidance realignment (2026-11-13)
+
+The simulator now has one target model for guidance. `sim/plan.js` adapts an
+authored project or recipe into a plan; checklists, the next-step hint, the
+wiring overview, camera focus and project autowire read that plan. Free building
+is the absence of a plan and is no longer a pseudo-project in the selector.
+
+The project panel has Project and Diagnostics tabs. Diagnostics are available
+while a project is selected and show an empty state when the bench cannot be
+evaluated. Selecting a project switches to Project; leaving it switches back to
+Diagnostics. The wiring overview uses the familiar schematic only when every
+endpoint has a legacy position; otherwise it lists the plan links and never
+draws a guessed schematic. "Build it for me" applies a plan onto a fresh bench
+and keeps the previous bench for "Back to my bench".
+
+`targetFor` remains as the legacy link generator used by the plan adapter,
+recipes and power tests; the duplicated presentation copies of the target and
+layout are gone. The real-browser acceptance checklist still governs sign-off.
+
 ## Last verification
 
 At implementation commit `485cb85`, `npm test` passed: 1,154 Node tests passed,
