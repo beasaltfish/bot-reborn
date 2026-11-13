@@ -124,8 +124,9 @@ Complete each project in both languages; every checklist item should reach
       still start and finish unchanged.
 - [ ] Build it for me applies the selected plan, keeps the previous bench for
       Back to my bench, and does not merge into the old circuit.
-- [ ] The wiring overview draws the legacy schematic for audio/toy and a link
-      list for new devices; it never invents a wrong drawing.
+- [ ] The wiring overview draws the legacy schematic for audio/toy and an
+      automatic part/link graph for new devices; a plan without links shows an
+      empty list, never a guessed drawing.
 - [ ] Next hint names the selected plan's first missing part or link, not the
       original recipe target.
 

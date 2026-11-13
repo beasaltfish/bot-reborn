@@ -294,9 +294,10 @@ is the absence of a plan and is no longer a pseudo-project in the selector.
 The project panel has Project and Diagnostics tabs. Diagnostics are available
 while a project is selected and show an empty state when the bench cannot be
 evaluated. Selecting a project switches to Project; leaving it switches back to
-Diagnostics. The wiring overview uses the familiar schematic only when every
-endpoint has a legacy position; otherwise it lists the plan links and never
-draws a guessed schematic. "Build it for me" applies a plan onto a fresh bench
+Diagnostics. The wiring overview uses the familiar schematic when every endpoint has a
+legacy position; otherwise it draws an automatic left-to-right graph of the
+plan's parts and links. A plan with no links falls back to an empty list, so a
+wrong schematic is never drawn. "Build it for me" applies a plan onto a fresh bench
 and keeps the previous bench for "Back to my bench".
 
 `targetFor` remains as the legacy link generator used by the plan adapter,

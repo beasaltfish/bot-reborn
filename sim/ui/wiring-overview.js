@@ -84,6 +84,120 @@ function schematic(links) {
   return root;
 }
 
+
+const NODE_W = 150;
+const NODE_GAP_X = 72;
+const NODE_GAP_Y = 18;
+const PIN_H = 16;
+const TITLE_H = 24;
+const MARGIN = 24;
+
+/** Lay a plan out as a left-to-right graph without knowing physical positions. @param {import('../plan.js').Plan} plan */
+function autoLayout(plan) {
+  /** @type {Map<string, { pins: string[], first: number, links: number[] }>} */
+  const nodes = new Map();
+  const ensure = (/** @type {string} */ id) => {
+    if (!nodes.has(id)) nodes.set(id, { pins: [], first: Infinity, links: [] });
+    return /** @type {{pins:string[],first:number,links:number[]}} */ (nodes.get(id));
+  };
+  /** @type {Map<string, Set<string>>} */
+  const neighbours = new Map();
+  plan.links.forEach((/** @type {import('../target.js').Link} */ link, /** @type {number} */ index) => {
+    for (const point of [link.a, link.b]) {
+      const [id, pin] = point.split(':');
+      const node = ensure(id);
+      if (!node.pins.includes(pin)) node.pins.push(pin);
+      node.first = Math.min(node.first, index);
+      node.links.push(index);
+      if (!neighbours.has(id)) neighbours.set(id, new Set());
+    }
+    const [aId] = link.a.split(':');
+    const [bId] = link.b.split(':');
+    neighbours.get(aId)?.add(bId);
+    neighbours.get(bId)?.add(aId);
+  });
+  const partById = new Map(plan.parts.map((/** @type {import('../plan.js').PlanPart} */ part) => [part.id, part.part]));
+  const label = (/** @type {string} */ id) => id === 'esp' ? 'ESP32-S3' : PARTS[partById.get(id) ?? '']?.label ?? id;
+
+  /** @type {Map<string, number>} */
+  const layer = new Map();
+  const walk = (/** @type {string} */ start, /** @type {number} */ base) => {
+    const queue = [start];
+    layer.set(start, base);
+    for (let i = 0; i < queue.length; i++) {
+      for (const next of neighbours.get(queue[i]) ?? []) {
+        if (layer.has(next)) continue;
+        layer.set(next, /** @type {number} */ (layer.get(queue[i])) + 1);
+        queue.push(next);
+      }
+    }
+  };
+  if (nodes.has('esp')) walk('esp', 0);
+  let nextLayer = layer.size ? Math.max(...layer.values()) + 1 : 0;
+  for (const id of nodes.keys()) if (!layer.has(id)) { walk(id, nextLayer); nextLayer = Math.max(...layer.values()) + 1; }
+
+  /** @type {string[][]} */
+  const columns = [];
+  for (const id of nodes.keys()) {
+    const index = /** @type {number} */ (layer.get(id));
+    (columns[index] ??= []).push(id);
+  }
+  for (const column of columns) column?.sort((a, b) => (nodes.get(a)?.first ?? 0) - (nodes.get(b)?.first ?? 0));
+
+  let maxHeight = 0;
+  columns.forEach((column, index) => {
+    let y = MARGIN;
+    for (const id of column ?? []) {
+      const node = /** @type {{pins:string[],first:number,links:number[]}} */ (nodes.get(id));
+      node.pins.sort((a, b) => {
+        const at = (/** @type {string} */ pin) => node.links.find(linkIndex => [plan.links[linkIndex].a, plan.links[linkIndex].b].some(point => point === `${id}:${pin}`)) ?? 0;
+        return at(a) - at(b);
+      });
+      const height = TITLE_H + node.pins.length * PIN_H + 8;
+      /** @type {any} */ (node).x = MARGIN + index * (NODE_W + NODE_GAP_X);
+      /** @type {any} */ (node).y = y;
+      /** @type {any} */ (node).height = height;
+      y += height + NODE_GAP_Y;
+    }
+    maxHeight = Math.max(maxHeight, y);
+  });
+  const width = MARGIN * 2 + columns.length * NODE_W + Math.max(0, columns.length - 1) * NODE_GAP_X;
+  const height = Math.max(maxHeight + MARGIN, 180);
+  const root = svg('svg', { viewBox: `0 0 ${width} ${height}`, role: 'img', 'aria-label': 'Wiring overview' });
+  /** @param {string} id @param {string} pin @param {'left'|'right'} side */
+  const pinPoint = (id, pin, side) => {
+    const node = /** @type {any} */ (nodes.get(id));
+    const index = node.pins.indexOf(pin);
+    return { x: side === 'right' ? node.x + NODE_W : node.x, y: node.y + TITLE_H + index * PIN_H + PIN_H / 2 };
+  };
+  for (const [id, node] of nodes) {
+    const any = /** @type {any} */ (node);
+    root.append(svg('rect', { x: any.x, y: any.y, width: NODE_W, height: any.height, rx: 6, class: 'chip' }));
+    const title = svg('text', { x: any.x + NODE_W / 2, y: any.y + 16, class: 'title' });
+    title.textContent = label(id);
+    root.append(title);
+    node.pins.forEach((pin, index) => {
+      const y = any.y + TITLE_H + index * PIN_H + PIN_H / 2;
+      const text = svg('text', { x: any.x + NODE_W - 8, y: y + 3.5, class: 'pin', 'text-anchor': 'end' });
+      text.textContent = pin;
+      root.append(text, svg('circle', { cx: any.x + NODE_W, cy: y, r: 2.4, class: 'dot' }), svg('circle', { cx: any.x, cy: y, r: 2.4, class: 'dot' }));
+    });
+  }
+  plan.links.forEach((/** @type {import('../target.js').Link} */ link, /** @type {number} */ index) => {
+    const [aId, aPin] = link.a.split(':');
+    const [bId, bPin] = link.b.split(':');
+    const a = pinPoint(aId, aPin, 'right');
+    const b = pinPoint(bId, bPin, 'left');
+    const bend = Math.max(30, Math.abs(b.x - a.x) / 2);
+    const d = `M${a.x} ${a.y} C${a.x + bend} ${a.y}, ${b.x - bend} ${b.y}, ${b.x} ${b.y}`;
+    root.append(svg('path', { d, class: `wire ${kindOf(link)}`, 'data-link': index }));
+    const number = svg('text', { x: a.x + 6, y: a.y - 4, class: 'num' });
+    number.textContent = String(index + 1);
+    root.append(number);
+  });
+  return root;
+}
+
 /** @param {import('../plan.js').Plan} plan */
 function list(plan) {
   /** @type {[string, string][]} */ const entries = [['esp', 'ESP32-S3'], ...plan.parts.map(part => /** @type {[string, string]} */ ([part.id, PARTS[part.part]?.label ?? part.part]))];
@@ -116,6 +230,12 @@ function list(plan) {
  */
 export function createWiringOverview(plan) {
   const fits = plan.links.length > 0 && plan.links.every(link => hasPosition(link.a) && hasPosition(link.b));
+  if (!fits && plan.links.length > 0) {
+    const host = document.createElement('div');
+    host.dataset.layout = 'auto';
+    host.append(autoLayout(plan));
+    return host;
+  }
   const element = fits ? schematic(plan.links) : list(plan);
   if (element.namespaceURI === SVG) {
     const host = document.createElement('div');
