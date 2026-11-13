@@ -177,7 +177,7 @@ export function createPanels(opts) {
   projectSelect.required = true;
   const projectClose = el('button', { type: 'button', class: 'close', 'aria-label': simText(lang, 'project.close') }, ['×']);
   const projectPanel = el('div', { id: 'project-panel', role: 'region', 'aria-label': simText(lang, 'project.button'), hidden: '' }, [
-    el('header', {}, [el('h2', {}, [simText(lang, 'project.button')]), projectClose]), projectSelect, projectView.element,
+    el('header', {}, [el('h2', {}, [simText(lang, 'project.panelTitle')]), projectClose]), projectSelect, projectView.element,
   ]);
   function refreshProject() {
     if (projectPanel.hidden) return;
