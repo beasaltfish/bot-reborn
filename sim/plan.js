@@ -20,11 +20,13 @@ import { PARTS } from './parts.js';
 /** @param {import('./recipes.js').Step} step @returns {step is Extract<import('./recipes.js').Step, {kind:'part'}>} */
 const isPartStep = step => step.kind === 'part';
 
-// Fixed on-board holes for project parts: rows are centred across the board so
-// a handful of modules sit together in the middle instead of clustering at an edge.
-const SEAT_ROWS = [-6, -4, -2, 15, 18];
+// Fixed on-board holes for project parts, following the recipe layout: the
+// ESP32 occupies columns 6-27, so project modules start at x -1 (column 31)
+// and use the right of the ESP32's body (x 9, like the recipe amp), one row
+// per group, never sharing the ESP's strips.
+const SEAT_ROWS = [-4, -2, -6, 15, 17];
 const SEAT_GAP = 2;
-const BOARD_LEFT = -28;
+const BOARD_LEFT = 9;
 const BOARD_RIGHT = 28;
 /** @param {import('./recipes.js').Step[]} steps @returns {import('./recipes.js').Step[]} */
 function seatSteps(steps) {
@@ -33,7 +35,7 @@ function seatSteps(steps) {
   steps.forEach((step, index) => {
     if (step.kind !== 'part') return;
     const def = PARTS[step.part];
-    if (!def?.onBoard || def.pins.every(pin => pin.wireOnly)) return;
+    if (!def?.onBoard || def.id === 'esp32' || def.pins.every(pin => pin.wireOnly)) return;
     seats.push({ index, width: Math.max(...def.pins.map(pin => pin.x)) + 1 });
   });
   /** @type {Map<number, { x: number, z: number }>} */
@@ -51,7 +53,7 @@ function seatSteps(steps) {
       used += needed;
       cursor += 1;
     }
-    let x = Math.round(BOARD_LEFT + (BOARD_RIGHT - BOARD_LEFT - used) / 2);
+    let x = BOARD_LEFT;
     const z = SEAT_ROWS[rowIndex] ?? SEAT_ROWS[SEAT_ROWS.length - 1];
     for (const seat of row) {
       positions.set(seat.index, { x, z });
