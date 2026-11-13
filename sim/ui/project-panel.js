@@ -7,7 +7,7 @@ import { projectReason } from './project-copy.js';
 /** @typedef {{mode:'guided'|'free', project:ProjectView|null, progress:Progress[], selection:SelectionInfo, diagnoses:import('../diagnose.js').Hint[]}} State */
 /** @typedef {'project'|'diagnostics'} Tab */
 
-/** @param {{lang:string, focus(points:string[]):void, leave?():void}} opts */
+/** @param {{lang:string, focus(points:string[]):void, leave?():void, build?(id:string):void}} opts */
 export function createProjectPanel(opts) {
   const element = document.createElement('section');
   element.className = 'project-panel';
@@ -87,11 +87,18 @@ export function createProjectPanel(opts) {
         list.append(row);
       }
       element.append(list);
+      const actions = document.createElement('div');
+      actions.className = 'project-actions';
+      const build = /** @type {HTMLButtonElement} */ (child('button', text('build')));
+      build.type = 'button';
+      build.dataset.action = 'build';
+      build.addEventListener('click', () => opts.build?.(project.id));
       const leave = /** @type {HTMLButtonElement} */ (child('button', text('leave')));
       leave.type = 'button';
       leave.dataset.action = 'leave';
       leave.addEventListener('click', () => opts.leave?.());
-      element.append(leave);
+      actions.append(build, leave);
+      element.append(actions);
       return;
     }
     element.append(child('h2', text('free')), child('p', text('choosePrompt')));

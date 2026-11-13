@@ -13,7 +13,7 @@ import { applyLedDamage, evaluateLedBench } from './electrical/led-bench.js';
 import { evaluateBench } from './devices/evaluate.js';
 import { formatReadings } from './devices/ssd1306.js';
 import { createRuntimePanel } from './ui/device-runtime-panel.js';
-import { planById, planFromProject } from './plan.js';
+import { planById, planFromProject, planSteps } from './plan.js';
 import { nextPlanHint } from './guidance.js';
 import { defaultStimuli, setStimulus } from './stimuli.js';
 import { motorLevels, toyAction } from './car.js';
@@ -86,6 +86,7 @@ let environment = defaultStimuli();
 /** @type {{servo:Record<string, any>, motor:Record<string, any>, strip:Record<string, any>, display:Record<string, any>, buttons:Record<string, boolean>}} */
 const runtime = { servo: {}, motor: {}, strip: {}, display: {}, buttons: {} };
 /** @type {import('./projects.js').Project | null} */
+/** @type {import('./plan.js').Plan|import('./projects.js').Project|null} */
 let activeProject = null;
 const panels = createPanels({
   hint: (projectId) => (bench.placed.some((p) => p.burnt)
@@ -114,7 +115,9 @@ const panels = createPanels({
     location.href = `./lab.html?part=${encodeURIComponent(part)}`;
   },
   projectState: id => {
-    const plan = activeProject?.id === id ? planFromProject(activeProject) : planById(id);
+    const plan = activeProject?.id === id
+      ? ('goalKey' in activeProject ? activeProject : planFromProject(activeProject))
+      : planById(id);
     const selection = describeSelection(bench, hands.selection(), document.documentElement.lang);
     if (plan) return { mode: 'guided', project: plan, progress: connectionProgress(bench, plan), selection, diagnoses: [] };
     // Independent DC supplies can energize an LED circuit without USB.
@@ -130,6 +133,7 @@ const panels = createPanels({
   },
   clearProjectFocus: () => hands.highlightGuidance([]),
   start: (recipeId, screenId, mode, hooks, wand, speed) => startRun(recipeId, screenId, mode, hooks, wand, speed),
+  build: id => startPlan(id),
   speed: speedFactor(Number(read(SPEED_KEY))),
   rememberSpeed: (/** @type {number} */ x) => write(SPEED_KEY, String(speedFactor(x))),
 });
@@ -759,6 +763,39 @@ export function startRun(recipeId, screenId, mode, hooks = {}, wand = false, spe
   runner = controls;
   return controls;
 }
+/**
+ * Build a plan onto a fresh bench, keeping the previous one for Back to my bench.
+ * Project plans have no body demo, so this returns inert run controls.
+ * @param {string} planId
+ * @param {{ onEnd?(): void }} [hooks]
+ */
+export function startPlan(planId, hooks = {}) {
+  const plan = planById(planId);
+  if (!plan || running) return null;
+  running = true;
+  panels.status(null);
+  if (usb.plugged) {
+    usb.pullOut();
+    unplug();
+  }
+  const hasWork = bench.boards.length > 0 || bench.wires.length > 0 || bench.placed.length > 1;
+  if (hasWork && !keptBench(store())) keepBench(store(), bench);
+  recipeOn = null;
+  activeProject = plan;
+  panels.selectProject(plan.id);
+  let built = startBench(bench);
+  for (const step of planSteps(plan)) built = applyStep(built, step);
+  setBench(built);
+  world.view(view, built);
+  running = false;
+  runner = null;
+  const lang = document.documentElement.lang === 'zh' ? 'zh' : 'en';
+  const projectLabel = simText(lang, `project.${plan.id}`);
+  panels.status(simText(lang, 'project.built', { name: projectLabel === `project.${plan.id}` ? plan.name : projectLabel }));
+  hooks.onEnd?.();
+  return { next() {}, finish() {}, skip() {}, stop() {}, speed() {} };
+}
+
 // A bench kept before a reload is still there to go back to.
 showLine();
 

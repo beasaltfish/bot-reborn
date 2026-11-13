@@ -76,6 +76,7 @@ function pointName(point) {
  *   changeLanguage?(lang:'en'|'zh'): boolean,
  *   projectState?(id: string): import('./ui/project-panel.js').State,
  *   focusProject?(points: string[]): void,
+ *   build?(id: string): void,
  *   clearProjectFocus?(): void,
  *   start(recipeId: string, screenId: string | undefined, mode: 'watch' | 'step',
  *     hooks: { onSay(text: string): void, onEnd(): void }, wand: boolean, speed: number): { next(): void, finish(): void, skip(): void, stop(): void, speed(x: number): void } | null,
@@ -157,7 +158,7 @@ export function createPanels(opts) {
     // On a phone the sidebar leaves too little bench visible to frame two pins.
     if (window.innerWidth < 600) showProject(false);
     opts.focusProject?.(points);
-  }, leave: () => {
+  }, build: id => opts.build?.(id), leave: () => {
     projectSelect.value = '';
     projectView.showProject('');
     opts.clearProjectFocus?.();

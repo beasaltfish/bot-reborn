@@ -13,9 +13,11 @@ test('project panel switches modes, focuses connections and yields to Parts', ()
   globalThis.document = dom.window.document; globalThis.window = dom.window; globalThis.addEventListener = dom.window.addEventListener.bind(dom.window);
   try {
     /** @type {string[][]} */ const focused = [];
+    /** @type {string[]} */ const built = [];
     const panels = createPanels(/** @type {any} */ ({ hint() {}, reset() {}, follow() {}, add() {}, carry() {}, start() {}, speed: 1, rememberSpeed() {},
       projectState: (/** @type {string} */ id) => { const project = projectById(id); return { mode: project ? 'guided' : 'free', project, progress: project ? connectionProgress(emptyBench(), project) : [], selection: null, diagnoses: [] }; },
       focusProject: (/** @type {string[]} */ points) => focused.push(points), clearProjectFocus() {},
+      build: (/** @type {string} */ id) => built.push(id),
     }));
     const button = [...dom.window.document.querySelectorAll('#tools button')].find(b => b.textContent === 'Projects');
     assert.ok(button); button.click();
@@ -32,6 +34,8 @@ test('project panel switches modes, focuses connections and yields to Parts', ()
     assert.deepEqual(focused, [['mic:VDD', 'esp:3V3']]);
     panels.selectProject('power-a-rail');
     assert.match(panel.textContent ?? '', /0\/5 complete/);
+    /** @type {HTMLButtonElement} */ (panel.querySelector('[data-action="build"]')).click();
+    assert.deepEqual(built, ['power-a-rail']);
     const leave = /** @type {HTMLButtonElement} */ (panel.querySelector('[data-action="leave"]'));
     assert.ok(leave); leave.click();
     assert.equal(select.value, '');

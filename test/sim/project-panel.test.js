@@ -105,9 +105,10 @@ test('project and diagnostics are separate tabs and leaving clears the plan', ()
   globalThis.document = dom.window.document;
   try {
     let leaves = 0;
+    /** @type {string|null} */ let built = null;
     const project = projectById('power-a-rail');
     assert.ok(project);
-    const panel = createProjectPanel({ lang: 'en', focus() {}, leave: () => { leaves += 1; } });
+    const panel = createProjectPanel({ lang: 'en', focus() {}, leave: () => { leaves += 1; }, build: id => { built = id; } });
     /** @type {any} */ const guided = { mode: 'guided', project, progress: connectionProgress(emptyBench(), project), selection: null, diagnoses: [] };
     /** @type {any} */ const free = { mode: 'free', project: null, progress: [], selection: null, diagnoses: [{ kind: 'fault', text: 'A free-mode fault', points: [] }] };
     panel.render(guided, free);
@@ -118,6 +119,10 @@ test('project and diagnostics are separate tabs and leaving clears the plan', ()
     assert.match(panel.element.textContent ?? '', /A free-mode fault/);
     assert.equal(panel.element.querySelector('[data-status]'), null);
     tabs[0].dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    const build = /** @type {HTMLButtonElement} */ (panel.element.querySelector('[data-action="build"]'));
+    assert.ok(build);
+    build.click();
+    assert.equal(built, 'power-a-rail');
     const leave = /** @type {HTMLButtonElement} */ (panel.element.querySelector('[data-action="leave"]'));
     assert.ok(leave);
     leave.click();
