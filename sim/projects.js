@@ -2,6 +2,8 @@
 import { emptyBench } from './bench.js';
 import { RECIPES, recipeSteps, startBench, applyStep } from './recipes.js';
 import { targetFor } from './target.js';
+import { PARTS } from './parts.js';
+import { DEFAULT_SCREEN } from './recipes.js';
 
 /** @typedef {Omit<import('./recipes.js').Recipe, 'id'> & {id:string, steps: import('./recipes.js').Step[], links: import('./target.js').Link[], ignoredFaultCodes?:string[]}} Project */
 
@@ -202,8 +204,18 @@ export const STRIP_PROJECT = {
   ],
 };
 
+const tarotSource = adapt(/** @type {import('./recipes.js').Recipe} */ (RECIPES.find(recipe => recipe.id === 'screen')), DEFAULT_SCREEN, true);
+/** @type {Project} */
+export const TAROT_PROJECT = {
+  ...tarotSource,
+  id: 'tarot', name: 'Tarot wand',
+  steps: tarotSource.steps,
+};
+
+const GUIDED = [LED_PROJECT, BME280_PROJECT, POWER_PROJECT, BUTTON_PROJECT, SONAR_PROJECT, DISPLAY_PROJECT, SERVO_PROJECT, MOTOR_PROJECT, STRIP_PROJECT, TAROT_PROJECT];
+
 /** @type {Project[]} */
-export const PROJECTS = [...RECIPES.map(recipe => adapt(recipe)), LED_PROJECT, BME280_PROJECT, POWER_PROJECT, BUTTON_PROJECT, SONAR_PROJECT, DISPLAY_PROJECT, SERVO_PROJECT, MOTOR_PROJECT, STRIP_PROJECT];
+export const PROJECTS = [...RECIPES.map(recipe => adapt(recipe)), ...GUIDED];
 
 /** @param {string} id @param {{screenId?:string, wand?:boolean}} [options] */
 export function projectById(id, options) {
@@ -216,6 +228,7 @@ export function projectById(id, options) {
   if (id === SERVO_PROJECT.id) return SERVO_PROJECT;
   if (id === MOTOR_PROJECT.id) return MOTOR_PROJECT;
   if (id === STRIP_PROJECT.id) return STRIP_PROJECT;
+  if (id === TAROT_PROJECT.id) return TAROT_PROJECT;
   const recipe = RECIPES.find(candidate => candidate.id === id);
   if (!recipe) return null;
   if (options?.screenId || options?.wand) return adapt(recipe, options.screenId, options.wand);

@@ -80,8 +80,8 @@ function pointName(point) {
  *   focusProject?(points: string[]): void,
  *   build?(id: string, options?: {screenId?: string, wand?: boolean}): void,
  *   clearProjectFocus?(): void,
- *   start(recipeId: string, screenId: string | undefined, mode: 'watch' | 'step',
- *     hooks: { onSay(text: string): void, onEnd(): void }, wand: boolean, speed: number): { next(): void, finish(): void, skip(): void, stop(): void, speed(x: number): void } | null,
+ *   start(id: string, mode: 'watch' | 'step',
+ *     hooks: { onSay(text: string): void, onEnd(): void }, speed: number): { next(): void, finish(): void, skip(): void, stop(): void, speed(x: number): void } | null,
  *   speed: number,
  *   rememberSpeed(x: number): void,
  * }} opts
@@ -160,7 +160,7 @@ export function createPanels(opts) {
     // On a phone the sidebar leaves too little bench visible to frame two pins.
     if (window.innerWidth < 600) showProject(false);
     opts.focusProject?.(points);
-  }, demo: id => openDemo(id), build: (id) => opts.build?.(id, planChoice()), leave: () => {
+  }, demo: id => runDemo(id, 'watch'), step: id => runDemo(id, 'step'), build: (id) => opts.build?.(id, planChoice()), leave: () => {
     projectSelect.value = '';
     projectView.showProject('');
     showDiagram(false);
@@ -195,75 +195,36 @@ export function createPanels(opts) {
   };
   projectSelect.addEventListener('change', () => { opts.clearProjectFocus?.(); projectView.showProject(projectSelect.value); refreshProject(); });
   projectClose.addEventListener('click', () => showProject(false));
-  projectBtn.addEventListener('click', () => { showParts(false); showDiagram(false); showWire(false); showProject(Boolean(projectPanel.hidden)); });
+  projectBtn.addEventListener('click', () => { showParts(false); showDiagram(false); showProject(Boolean(projectPanel.hidden)); });
   const showParts = (/** @type {boolean} */ on) => {
     if (on && !thumbnails) { thumbnails = createPartThumbnails(); renderCatalogue(); }
     if (on) catalogue.open(); else catalogue.close();
   };
-  partsBtn.addEventListener('click', () => { showProject(false); showDiagram(false); showWire(false); showParts(Boolean(partsPanel.hidden)); });
+  partsBtn.addEventListener('click', () => { showProject(false); showDiagram(false); showParts(Boolean(partsPanel.hidden)); });
   document.body.append(bar, bubble, status, picker, panel, partsPanel, projectPanel);
 
-  // ---- Wire it for me ----
-  const recipeBoxes = RECIPES.map((r, i) => {
-    const input = /** @type {HTMLInputElement} */ (el('input', { type: 'radio', name: 'recipe', value: r.id }));
-    if (r.id === 'screen') input.setAttribute('checked', '');
-    return input;
-  });
-  const screenSel = /** @type {HTMLSelectElement} */ (el('select', { 'aria-label': t('screen') }, SCREENS.map((s) => {
-    const o = el('option', { value: s.id }, [s.label]);
-    if (s.id === DEFAULT_SCREEN) o.setAttribute('selected', '');
-    return o;
-  })));
-  const wandBox = /** @type {HTMLInputElement} */ (el('input', { type: 'checkbox', name: 'wand' }));
-  const watchBtn = el('button', { type: 'button', class: 'pill' }, [t('watch')]);
-  const stepBtn = el('button', { type: 'button', class: 'pill' }, [t('step')]);
-  const wireClose = el('button', { type: 'button', class: 'close', 'aria-label': t('close') }, ['×']);
-  const wirePanel = el('div', { id: 'wire', role: 'dialog', 'aria-label': t('wire'), hidden: '' }, [
-    el('header', {}, [el('h2', {}, [t('wire')]), wireClose]),
-    ...RECIPES.map((r, i) => el('label', { class: 'opt' }, [recipeBoxes[i], simText(lang, `project.${r.id}`)])),
-    screenSel,
-    el('label', { class: 'opt' }, [wandBox, t('wand')]),
-    el('div', { class: 'go' }, [watchBtn, stepBtn]),
-  ]);
   const runBar = el('div', { id: 'runbar', role: 'status', hidden: '' });
-  document.body.append(wirePanel, runBar);
-  const chosen = () => recipeBoxes.find((b) => b.checked);
-  const syncScreen = () => { screenSel.hidden = chosen()?.value !== 'screen'; };
-  for (const b of recipeBoxes) b.addEventListener('change', syncScreen);
-  syncScreen();
-  /** @returns {{screenId?: string, wand?: boolean}} */
-  function planOptions() { return { screenId: screenSel.value || DEFAULT_SCREEN, wand: wandBox.checked }; }
+  document.body.append(runBar);
   /** Options after the bench's placed screen model has had its say. */
-  function planChoice() { return opts.planOptions?.(planOptions()) ?? planOptions(); }
-  screenSel.addEventListener('change', () => refreshProject());
-  wandBox.addEventListener('change', () => refreshProject());
-  const showWire = (/** @type {boolean} */ on) => { wirePanel.hidden = !on; };
-  /** Open the demo chooser with the selected recipe ticked. @param {string} id */
-  function openDemo(id) {
-    const box = recipeBoxes.find(item => item.value === id);
-    if (box) { box.checked = true; syncScreen(); }
-    hideHint(); showParts(false); showProject(false); showDiagram(false); showWire(true);
-  }
-  wireClose.addEventListener('click', () => showWire(false));
+  function planChoice() { return opts.planOptions?.({}) ?? {}; }
 
   /**
    * The bar while a run is on: the step's words (step by step) and the controls.
    * @param {'watch' | 'step'} mode
    */
-  function go(mode) {
-    const id = chosen()?.value;
+  /** @param {string} id @param {'watch'|'step'} mode */
+  function runDemo(id, mode) {
     if (!id) return;
     runBar.replaceChildren();
     const words = el('span', { class: 'say' });
     // The remembered pace, if it is one of the buttons; 1× otherwise.
     let speed = [1, 2, 3, 4].includes(opts.speed) ? opts.speed : 1;
     /** @type {ReturnType<typeof opts.start>} */
-    const run = opts.start(id, id === 'screen' ? /** @type {HTMLSelectElement} */ (screenSel).value : undefined, mode, {
+    const run = opts.start(id, mode, {
       onSay: (text) => { words.textContent = text; },
       onEnd: () => { runBar.hidden = true; runBar.replaceChildren(); },
-    }, wandBox.checked, speed);
+    }, speed);
     if (!run) return;
-    showWire(false);
     /** @param {string} label @param {() => void} f */
     const button = (label, f) => {
       const b = el('button', { type: 'button', class: 'link' }, [label]);
@@ -292,8 +253,6 @@ export function createPanels(opts) {
     else runBar.append(words, paces, button('Skip', run.skip), button('Stop', run.stop));
     runBar.hidden = false;
   }
-  watchBtn.addEventListener('click', () => go('watch'));
-  stepBtn.addEventListener('click', () => go('step'));
 
   // ---- Wiring diagram ----
   const showDiagram = (/** @type {boolean} */ on) => { panel.hidden = !on; };
@@ -311,7 +270,7 @@ export function createPanels(opts) {
     const view = createWiringOverview(plan);
     diagramHost.replaceChildren(view);
     diagramNote.hidden = view.dataset.layout !== 'true';
-    hideHint(); showParts(false); showProject(false); showWire(false); showDiagram(true);
+    hideHint(); showParts(false); showProject(false); showDiagram(true);
   });
   close.addEventListener('click', () => showDiagram(false));
 
@@ -351,7 +310,7 @@ export function createPanels(opts) {
   addEventListener('keydown', (e) => {
     if (e.code !== 'Escape') return;
     showDiagram(false);
-    showWire(false);
+    
     showParts(false);
     showProject(false);
     hideHint();
@@ -508,5 +467,5 @@ export function createPanels(opts) {
       if (state && environment) activePart.sensor?.update(state, environment);
     }
   }
-  return { status: setStatus, pick, closePicker, wireMenu, partMenu, refreshPart, openPartId: () => activePart?.id ?? null, refreshProject, selectProject, openProject: (/** @type {string} */ id) => { selectProject(id); showParts(false); showDiagram(false); showWire(false); showProject(true); } };
+  return { status: setStatus, pick, closePicker, wireMenu, partMenu, refreshPart, openPartId: () => activePart?.id ?? null, refreshProject, selectProject, openProject: (/** @type {string} */ id) => { selectProject(id); showParts(false); showDiagram(false); showProject(true); } };
 }

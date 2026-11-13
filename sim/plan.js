@@ -13,12 +13,30 @@ import { PARTS } from './parts.js';
  * @typedef {{
  *   id: string, name: string, goalKey: string, needs?: string, ending?: string,
  *   parts: PlanPart[], links: import('./target.js').Link[],
- *   ignoredFaultCodes?: string[], lessonId?: string, legacy?: PlanLegacy,
+ *   ignoredFaultCodes?: string[], lessonId?: string, legacy?: PlanLegacy, steps?: import('./recipes.js').Step[],
  * }} Plan
  */
 
 /** @param {import('./recipes.js').Step} step @returns {step is Extract<import('./recipes.js').Step, {kind:'part'}>} */
 const isPartStep = step => step.kind === 'part';
+
+/** Fixed on-board holes for project parts: pack rows from the left, never overlap. */
+const SEAT_ROWS = [-6, -4, -2, 15, 18];
+/** @param {import('./recipes.js').Step[]} steps @returns {import('./recipes.js').Step[]} */
+function seatSteps(steps) {
+  let x = -26;
+  let row = 0;
+  return steps.map(step => {
+    if (step.kind !== 'part') return step;
+    const def = PARTS[step.part];
+    if (!def?.onBoard || def.pins.every(pin => pin.wireOnly)) return step;
+    const width = Math.max(...def.pins.map(pin => pin.x)) + 1;
+    if (x + width > 29) { row += 1; x = -26; }
+    const at = { x, z: SEAT_ROWS[row] ?? 18 };
+    x += width + 2;
+    return { ...step, at, seated: true };
+  });
+}
 
 /** @param {PlanPart[]} parts @param {import('./target.js').Link[]} links @returns {import('./recipes.js').Step[]} */
 function derivedSteps(parts, links) {
@@ -47,6 +65,7 @@ export function planFromProject(project) {
     parts,
     links: project.links,
     ignoredFaultCodes: project.ignoredFaultCodes,
+    steps: project.steps,
     ...(lesson ? { lessonId: lesson.id } : {}),
   };
 }
@@ -96,5 +115,9 @@ export function planId(plan) {
 /** @param {Plan} plan @returns {import('./recipes.js').Step[]} */
 export function planSteps(plan) {
   if (plan.legacy?.steps) return plan.legacy.steps;
+  if (plan.steps) {
+    const steps = plan.steps.some(step => step.kind === 'board') ? plan.steps : [...benchSetupSteps(), ...plan.steps];
+    return seatSteps(steps).filter(step => step.kind !== 'usb');
+  }
   return derivedSteps(plan.parts, plan.links);
 }

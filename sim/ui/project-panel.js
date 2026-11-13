@@ -7,7 +7,7 @@ import { projectReason } from './project-copy.js';
 /** @typedef {{mode:'guided'|'free', evaluated?:boolean, project:ProjectView|null, progress:Progress[], selection:SelectionInfo, diagnoses:import('../diagnose.js').Hint[]}} State */
 /** @typedef {'project'|'diagnostics'} Tab */
 
-/** @param {{lang:string, focus(points:string[]):void, leave?():void, build?(id:string):void, demo?(id:string):void}} opts */
+/** @param {{lang:string, focus(points:string[]):void, leave?():void, build?(id:string):void, demo?(id:string):void, step?(id:string):void}} opts */
 export function createProjectPanel(opts) {
   const element = document.createElement('section');
   element.className = 'project-panel';
@@ -90,6 +90,14 @@ export function createProjectPanel(opts) {
       element.append(list);
       const actions = document.createElement('div');
       actions.className = 'project-actions';
+      const demo = /** @type {HTMLButtonElement} */ (child('button', text('demo')));
+      demo.type = 'button';
+      demo.dataset.action = 'demo';
+      demo.addEventListener('click', () => opts.demo?.(project.id));
+      const step = /** @type {HTMLButtonElement} */ (child('button', text('step')));
+      step.type = 'button';
+      step.dataset.action = 'step';
+      step.addEventListener('click', () => opts.step?.(project.id));
       const build = /** @type {HTMLButtonElement} */ (child('button', text('build')));
       build.type = 'button';
       build.dataset.action = 'build';
@@ -98,14 +106,7 @@ export function createProjectPanel(opts) {
       leave.type = 'button';
       leave.dataset.action = 'leave';
       leave.addEventListener('click', () => opts.leave?.());
-      if (project.legacy?.recipeId) {
-        const demo = /** @type {HTMLButtonElement} */ (child('button', text('demo')));
-        demo.type = 'button';
-        demo.dataset.action = 'demo';
-        demo.addEventListener('click', () => opts.demo?.(project.id));
-        actions.append(demo);
-      }
-      actions.append(build, leave);
+      actions.append(build, demo, step, leave);
       element.append(actions);
       return;
     }

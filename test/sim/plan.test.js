@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { planFromProject, planFromRecipe, planById, planSteps, planId, planOptionsFor } from '../../sim/plan.js';
-import { addPart } from '../../sim/bench.js';
+import { addPart, pinPoints } from '../../sim/bench.js';
+import { PROJECTS } from '../../sim/projects.js';
+import { PARTS } from '../../sim/parts.js';
 import { projectById } from '../../sim/projects.js';
 import { emptyBench } from '../../sim/bench.js';
 import { startBench, applyStep } from '../../sim/recipes.js';
@@ -69,4 +71,26 @@ test('the placed screen model overrides the chooser default', () => {
   const plan = planById('screen', options);
   assert.ok(plan);
   assert.ok(plan.links.some(link => link.a === 'scr:SDA' || link.b === 'scr:SDA'));
+});
+
+test('every guided project seats its on-board parts in fixed holes', () => {
+  for (const project of PROJECTS.filter(item => !['audio', 'screen', 'toy'].includes(item.id))) {
+    const plan = planById(project.id);
+    assert.ok(plan, project.id);
+    const bench = planSteps(plan).reduce(applyStep, startBench(emptyBench()));
+    for (const step of plan.steps ?? []) {
+      if (step.kind !== 'part' || !PARTS[step.part]?.onBoard) continue;
+      const placed = bench.placed.find(item => item.id === step.id);
+      assert.ok(placed?.seated, `${project.id}: ${step.id} seated`);
+      assert.ok(pinPoints(bench, placed).some(point => point.hole), `${project.id}: ${step.id} in a hole`);
+    }
+  }
+});
+
+test('the tarot wand is its own project with the wand wired in', () => {
+  const plan = planById('tarot');
+  assert.ok(plan);
+  assert.ok(plan.links.some(link => link.a.startsWith('imu:') || link.b.startsWith('imu:')));
+  assert.ok(plan.links.some(link => link.a.startsWith('scr:') || link.b.startsWith('scr:')));
+  assert.ok(!plan.id.includes('wand'));
 });

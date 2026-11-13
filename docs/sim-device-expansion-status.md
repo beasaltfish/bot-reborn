@@ -301,10 +301,12 @@ wrong schematic is never drawn. "Build it for me" applies any selected plan onto
 starting a body demo or plugging in USB; the toolbar's "Demo build" keeps the
 animated recipe demos.
 
-The two entry points live together in the project panel: recipe projects show
-Demo build (the animated watch/step body demo), while every project shows Build
-it for me (applied at once, left unplugged). Project builds now lay the joined
-breadboards and seat the ESP32 first, then place the project parts and wires.
+Every project now exposes the same actions: Build it for me, Demo and Step.
+Demo and Step replay the plan's own steps (recipes also run their body demo);
+no separate recipe chooser remains. The tarot wand is its own project instead
+of an add-on checkbox. Project builds lay the joined breadboards and seat the
+ESP32, then seat on-board parts at fixed holes; off-board parts stay on the
+table.
 
 `targetFor` remains as the legacy link generator used by the plan adapter,
 recipes and power tests; the duplicated presentation copies of the target and

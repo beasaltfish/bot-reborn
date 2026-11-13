@@ -122,6 +122,8 @@ test('project and diagnostics are separate tabs and leaving clears the plan', ()
     assert.match(panel.element.textContent ?? '', /A free-mode fault/);
     assert.equal(panel.element.querySelector('[data-status]'), null);
     tabs[0].dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    assert.ok(panel.element.querySelector('[data-action="demo"]'));
+    assert.ok(panel.element.querySelector('[data-action="step"]'));
     const build = /** @type {HTMLButtonElement} */ (panel.element.querySelector('[data-action="build"]'));
     assert.ok(build);
     build.click();
