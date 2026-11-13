@@ -5,6 +5,7 @@ import { JSDOM } from 'jsdom';
 import { createPanels } from '../../sim/panels.js';
 import { PROJECTS, projectById } from '../../sim/projects.js';
 import { connectionProgress } from '../../sim/project-progress.js';
+import { planById } from '../../sim/plan.js';
 import { emptyBench } from '../../sim/bench.js';
 
 test('project panel switches modes, focuses connections and yields to Parts', () => {
@@ -78,5 +79,28 @@ test('guidance explains why it needs a project', () => {
     button('Wiring overview').click();
     assert.match(dom.window.document.querySelector('#hint')?.textContent ?? '', /Choose a project first/);
     assert.ok(panels);
+  } finally { globalThis.document = previous.document; globalThis.window = previous.window; globalThis.addEventListener = previous.addEventListener; dom.window.close(); }
+});
+
+test('the overview button toggles closed even after the project selection clears', () => {
+  const dom = new JSDOM('<!doctype html><html lang="en"><body></body></html>', { url: 'https://example.test/sim/' });
+  const previous = { document: globalThis.document, window: globalThis.window, addEventListener: globalThis.addEventListener };
+  globalThis.document = dom.window.document; globalThis.window = dom.window; globalThis.addEventListener = dom.window.addEventListener.bind(dom.window);
+  try {
+    createPanels(/** @type {any} */ ({ hint: () => null, reset() {}, follow() {}, add() {}, carry() {}, start() {}, speed: 1, rememberSpeed() {},
+      projectState: (/** @type {string} */ id) => { const plan = planById(id); return { mode: plan ? 'guided' : 'free', evaluated: true, project: plan, progress: [], selection: null, diagnoses: [] }; },
+      planOptions: (/** @type {any} */ options) => options, clearProjectFocus() {}, focusProject() {},
+    }));
+    const select = /** @type {HTMLSelectElement} */ (dom.window.document.querySelector('#project-panel select'));
+    const button = /** @type {HTMLButtonElement} */ ([...dom.window.document.querySelectorAll('#tools button')].find(item => item.textContent === 'Wiring overview'));
+    const panel = /** @type {HTMLElement} */ (dom.window.document.querySelector('#diagram'));
+    select.value = 'audio'; select.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+    button.click();
+    assert.equal(panel.hidden, false);
+    select.value = ''; select.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+    button.click();
+    assert.equal(panel.hidden, true);
+    button.click();
+    assert.equal(panel.hidden, true, 'no project keeps the overview closed');
   } finally { globalThis.document = previous.document; globalThis.window = previous.window; globalThis.addEventListener = previous.addEventListener; dom.window.close(); }
 });

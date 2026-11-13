@@ -163,6 +163,7 @@ export function createPanels(opts) {
   }, demo: id => openDemo(id), build: (id) => opts.build?.(id, planChoice()), leave: () => {
     projectSelect.value = '';
     projectView.showProject('');
+    showDiagram(false);
     opts.leaveProject?.();
     opts.clearProjectFocus?.();
     refreshProject();
@@ -297,14 +298,15 @@ export function createPanels(opts) {
   // ---- Wiring diagram ----
   const showDiagram = (/** @type {boolean} */ on) => { panel.hidden = !on; };
   diagramBtn.addEventListener('click', () => {
+    // Closing always wins, even if the project selection changed while open.
+    if (!panel.hidden) { showDiagram(false); return; }
     if (!projectSelect.value) { explainNeedsPlan(); return; }
     const plan = planById(projectSelect.value, planChoice());
-    if (plan) {
-      const view = createWiringOverview(plan);
-      diagramHost.replaceChildren(view);
-      diagramNote.hidden = view.dataset.layout !== 'true';
-    }
-    hideHint(); showParts(false); showProject(false); showWire(false); showDiagram(Boolean(panel.hidden));
+    if (!plan) { explainNeedsPlan(); return; }
+    const view = createWiringOverview(plan);
+    diagramHost.replaceChildren(view);
+    diagramNote.hidden = view.dataset.layout !== 'true';
+    hideHint(); showParts(false); showProject(false); showWire(false); showDiagram(true);
   });
   close.addEventListener('click', () => showDiagram(false));
 
