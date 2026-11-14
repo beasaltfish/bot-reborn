@@ -19,6 +19,8 @@ import {
 import { place, moveBoard, trash, addPart, addBoard, addWire, removeWire, pinPoints, isHole } from '../bench.js';
 import { nets } from '../netlist.js';
 import { wireColor } from '../wire-color.js';
+import { createSelection } from '../selection.js';
+import { createDiagnosticWires } from './diagnostic-wires.js';
 import { snapPart, snapBoard, freeSpot, partFootprint } from '../snap.js';
 import { CAR, centreOf } from '../car.js';
 import { BOARD_TOP, buildWire, dispose } from './meshes.js';
@@ -106,17 +108,27 @@ export function beginCarry(part, e) {
  * @param {World} world
  * @param {() => Bench} getBench
  * @param {(b: Bench) => void} setBench  saves and redraws
- * @param {{ say(text: string): void }} opts  the page's status line, for what a drop refused
- * @returns {{ enable(on: boolean): void }}
+ * @param {{ say(text: string): void, selectWire(id: string, x: number, y: number): void, selectPart(id: string, x: number, y: number): void, selectPin?(point: string, x: number, y: number): void, onSelect(selection: import('../selection.js').Selection): void }} opts
+ * @returns {{ enable(on: boolean): void, selection(): import('../selection.js').Selection, refreshSelection(): void, clearSelection(): void, startWire(point: string): void, highlightPoints(points: string[]): void, highlightGuidance(points: string[]): void, refreshHighlights(): void }}
  */
 export function attachInteraction(world, getBench, setBench, opts) {
   const { canvas, scene } = world;
+  const selected = createSelection(getBench, opts.onSelect);
   const raycaster = new THREE.Raycaster();
   const boardTop = new THREE.Plane(new THREE.Vector3(0, 1, 0), -BOARD_TOP);
 
   const lit = markers(0xffb547, 0.5);
   const aim = markers(0xfffbe8, 0.62);
-  scene.add(lit.mesh, aim.mesh);
+  const diagnostic = markers(0xff492e, 0.82);
+  const guidance = markers(0x66cfff, 1.05);
+  const diagnosticWires = createDiagnosticWires(scene);
+  diagnostic.mesh.name = 'diagnostic-points';
+  guidance.mesh.name = 'guidance-points';
+  scene.add(lit.mesh, aim.mesh, diagnostic.mesh, guidance.mesh);
+  /** @type {string[]} */
+  let diagnosticPoints = [];
+  /** @type {string[]} */
+  let guidancePoints = [];
 
   const tip = document.createElement('div');
   tip.style.cssText = [
@@ -168,11 +180,11 @@ export function attachInteraction(world, getBench, setBench, opts) {
     litWire = id;
     const now = id ? scene.getObjectByName(`wire:${id}`) : undefined;
     now?.traverse((/** @type {THREE.Object3D} */ o) => {
-      if (!(o instanceof THREE.Mesh) || o.userData.lit) return;
+      if (!(o instanceof THREE.Mesh) || o.userData.lit || o.userData.diagnosticOutline) return;
       o.userData.lit = o.material;
       o.material = LIT;
     });
-    say(id ? 'Click to pull this wire out' : null);
+    say(id ? 'Click for wire options' : null);
     world.requestRender();
   }
 
@@ -198,7 +210,7 @@ export function attachInteraction(world, getBench, setBench, opts) {
    * }} BoardDrag
    * @typedef {{
    *   kind: 'wire', from: string, fromPos: THREE.Vector3, x: number, y: number,
-   *   moved: boolean, armed: boolean, target: string | null, preview: THREE.Object3D | null,
+   *   moved: boolean, armed: boolean, target: string | null, preview: THREE.Object3D | null, selectionPoint: string | null,
    * }} WireDrag
    * @typedef {{ kind: 'pull', id: string, x: number, y: number }} WirePull
    */
@@ -589,7 +601,7 @@ export function attachInteraction(world, getBench, setBench, opts) {
       d.group.position.set(d.at.x, BOARD_TOP + HOVER, d.at.z);
       // Ring the holes the pins would go into, so the user sees which strips before letting go.
       /** @type {Placed} */
-      const trial = { id: d.id, part: d.def.id, at: d.at, rot: d.rot, seated: true, burnt: false };
+      const trial = { id: d.id, part: d.def.id, at: d.at, rot: d.rot, seated: true, burnt: false, properties: {} };
       aim.set(pinPoints(getBench(), trial).flatMap((q) => (q.hole ? [/** @type {THREE.Vector3} */ (position(getBench(), q.hole))] : [])));
     } else {
       d.group.position.set(x, BOARD_TOP + HOVER, z);
@@ -991,11 +1003,12 @@ export function attachInteraction(world, getBench, setBench, opts) {
     }
     const t = pick(e, false);
     if (t?.kind !== 'wire') lightWire(null);
-    if (!t) return;
+    if (!t) { selected.select(null); return; }
     e.stopImmediatePropagation();
     canvas.setPointerCapture(e.pointerId);
     if (t.kind === 'point') {
-      drag = { kind: 'wire', from: t.point, fromPos: t.pos, x: e.clientX, y: e.clientY, moved: false, armed: false, target: null, preview: null };
+      const pin = nearestPin(e);
+      drag = { kind: 'wire', from: t.point, fromPos: t.pos, x: e.clientX, y: e.clientY, moved: false, armed: false, target: null, preview: null, selectionPoint: pin?.kind === 'point' ? pin.point : null };
       light(t.point);
       aim.set([t.pos]);
       world.requestRender();
@@ -1089,6 +1102,8 @@ export function attachInteraction(world, getBench, setBench, opts) {
     if (d.kind === 'wire') {
       if (!d.armed && !d.moved && !wandered(e, d)) {
         // A click (or a tap) on a pin starts a wire whose end is the next click.
+        selected.select(d.selectionPoint ? { kind: 'pin', point: d.selectionPoint } : null);
+        if (d.selectionPoint) opts.selectPin?.(d.selectionPoint, e.clientX, e.clientY);
         d.armed = true;
         say('Click a pin or a hole to end the wire · Esc to cancel');
         return;
@@ -1109,7 +1124,7 @@ export function attachInteraction(world, getBench, setBench, opts) {
       aim.set([]);
       canvas.style.cursor = '';
       if (wasLifted) drop(d);
-      else putBack(d);
+      else { putBack(d); selected.select({ kind: 'part', id: d.id }); opts.selectPart(d.id, e.clientX, e.clientY); }
       world.requestRender();
       return;
     }
@@ -1127,12 +1142,9 @@ export function attachInteraction(world, getBench, setBench, opts) {
     }
     drag = null;
     if (wandered(e, d)) return;
-    const gone = scene.getObjectByName(`wire:${d.id}`);
     lightWire(null);
-    if (gone) world.fadeAway(gone);
-    pop();
-    setBench(removeWire(getBench(), d.id));
-    // What was lit was the net with that wire in it.
+    selected.select({ kind: 'wire', id: d.id });
+    opts.selectWire(d.id, e.clientX, e.clientY);
     light(null);
   });
 
@@ -1153,7 +1165,49 @@ export function attachInteraction(world, getBench, setBench, opts) {
   });
   addEventListener('blur', () => cancel());
 
+  /** Refresh independent diagnostic rings after the bench is redrawn. */
+  function refreshHighlights() {
+    const b = getBench();
+    diagnosticWires.show(b, diagnosticPoints);
+    diagnostic.set(diagnosticPoints.flatMap(point => {
+      const pos = position(b, point);
+      return pos ? [pos] : [];
+    }));
+    guidance.set(guidancePoints.flatMap(point => {
+      const pos = position(b, point);
+      return pos ? [pos] : [];
+    }));
+    world.requestRender();
+  }
+
   return {
+    highlightPoints(points) {
+      diagnosticPoints = [...new Set(points)];
+      refreshHighlights();
+    },
+    highlightGuidance(points) {
+      guidancePoints = [...new Set(points)];
+      refreshHighlights();
+    },
+    refreshHighlights,
+    /** Begin the same click-to-click wire gesture as a direct pin click. */
+    startWire(point) {
+      if (!enabled) return;
+      const pin = pins(getBench()).find(p => p.point === point);
+      if (!pin) return;
+      const target = jumperFor(getBench(), pin, pin.pos);
+      if (!target || target.kind !== 'point') return;
+      cancel();
+      drag = { kind: 'wire', from: target.point, fromPos: target.pos, x: 0, y: 0, moved: false, armed: true, target: null, preview: null, selectionPoint: point };
+      selected.select({ kind: 'pin', point });
+      light(target.point);
+      aim.set([target.pos]);
+      say('Click a pin or a hole to end the wire · Esc to cancel');
+      world.requestRender();
+    },
+    selection: selected.selection,
+    refreshSelection: selected.refresh,
+    clearSelection: () => selected.select(null),
     /** Hands work in every view; this only pauses them (nothing calls it off today). */
     enable(on) {
       if (!on) cancel();

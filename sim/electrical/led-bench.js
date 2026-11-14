@@ -1,0 +1,86 @@
+import { nets } from '../netlist.js';
+import { DEFAULT_LED_FORWARD_VOLTAGE, evaluateLed } from './led.js';
+
+/** Evaluate a single unbranched source–resistor–LED loop from actual nets.
+ * @param {import('../bench.js').Bench} bench
+ * @param {string} ledId
+ */
+export function evaluateLedBench(bench, ledId) {
+  const led = bench.placed.find(p => p.id === ledId && p.part === 'led-5mm');
+  if (!led) throw new RangeError('unknown LED');
+  if (led.burnt) return { state: 'burnt', currentMa: 0 };
+  const n = nets(bench);
+  const sources = bench.placed.filter(p => p.part === 'dc-source' && !p.burnt);
+  const resistors = bench.placed.filter(p => p.part === 'resistor' && !p.burnt);
+  const anode = `${ledId}:A`, cathode = `${ledId}:K`;
+  // Reachability through other modeled passive elements detects closed loops
+  // beyond the one-resistor model. It does not estimate their current.
+  /** @type {Map<string, Set<string>>} */
+  const paths = new Map();
+  /** @param {string} a @param {string} b */
+  const join = (a, b) => {
+    const x = n.netOf(a), y = n.netOf(b);
+    if (!paths.has(x)) paths.set(x, new Set());
+    if (!paths.has(y)) paths.set(y, new Set());
+    paths.get(x)?.add(y); paths.get(y)?.add(x);
+  };
+  for (const resistor of resistors) join(`${resistor.id}:1`, `${resistor.id}:2`);
+  for (const other of bench.placed.filter(p => p.part === 'led-5mm' && p.id !== ledId && !p.burnt)) join(`${other.id}:A`, `${other.id}:K`);
+  /** @param {string} a @param {string} b @param {string} excludedSource */
+  const reaches = (a, b, excludedSource) => {
+    const target = n.netOf(b), seen = new Set([n.netOf(a)]), queue = [...seen];
+    for (let i = 0; i < queue.length; i++) {
+      if (queue[i] === target) return true;
+      const neighbours = [...(paths.get(queue[i]) ?? [])];
+      // Another source in the path is not solved; it only tells us the
+      // network is outside the one-source approximation.
+      for (const other of sources) {
+        if (other.id === excludedSource) continue;
+        const positive = n.netOf(`${other.id}:+`), negative = n.netOf(`${other.id}:-`);
+        if (queue[i] === positive) neighbours.push(negative);
+        if (queue[i] === negative) neighbours.push(positive);
+      }
+      for (const next of neighbours) if (!seen.has(next)) { seen.add(next); queue.push(next); }
+    }
+    return false;
+  };
+  for (const source of sources) {
+    const positive = `${source.id}:+`, negative = `${source.id}:-`;
+    if (n.same(positive, negative) && (n.same(anode, positive) || n.same(cathode, positive))) return { state: 'short', currentMa: 0 };
+    if (n.same(anode, negative)) {
+      const reversed = n.same(cathode, positive) || resistors.some(r => (n.same(`${r.id}:1`, positive) && n.same(`${r.id}:2`, cathode)) || (n.same(`${r.id}:2`, positive) && n.same(`${r.id}:1`, cathode)));
+      if (reversed) return { state: 'reversed', currentMa: 0 };
+    }
+    const direct = n.same(anode, positive) && n.same(cathode, negative);
+    const matching = resistors.filter(r => {
+      const joins = (/** @type {string} */ a, /** @type {string} */ b) => (n.same(`${r.id}:1`, a) && n.same(`${r.id}:2`, b)) || (n.same(`${r.id}:2`, a) && n.same(`${r.id}:1`, b));
+      return (n.same(cathode, negative) && joins(positive, anode)) || (n.same(anode, positive) && joins(cathode, negative));
+    });
+    if (!direct && matching.length !== 1) {
+      const closed = (reaches(positive, anode, source.id) && reaches(negative, cathode, source.id)) || (reaches(positive, cathode, source.id) && reaches(negative, anode, source.id));
+      if (closed) return { state: 'unsupported', currentMa: 0 };
+      continue;
+    }
+    const allowed = new Set([positive, negative, anode, cathode, ...(direct ? [] : [`${matching[0].id}:1`, `${matching[0].id}:2`])]);
+    for (const button of bench.placed.filter(p => p.part === 'push-button' && p.properties.pressed === true)) {
+      allowed.add(`${button.id}:1`);
+      allowed.add(`${button.id}:2`);
+    }
+    const extra = [positive, negative, anode, cathode].some(point => n.members(point).some(member => !member.startsWith('bb') && !allowed.has(member)));
+    if (extra || (direct && matching.length)) return { state: 'unsupported', currentMa: 0 };
+    const resistance = direct ? 0 : Number(matching[0].properties.ohms);
+    return evaluateLed({ voltage: Number(source.properties.voltage), resistance: resistance + Number(source.properties.internalResistanceOhm), forwardVoltage: DEFAULT_LED_FORWARD_VOLTAGE, maxCurrentMa: 20, maxPowerMw: 60, currentLimitMa: Number(source.properties.currentLimitMa) });
+  }
+  return { state: 'off', currentMa: 0 };
+}
+
+/** Mark LEDs damaged by a modeled excessive current. Unsupported circuits are
+ * left untouched because their current has not been determined.
+ * @param {import('../bench.js').Bench} bench
+ * @returns {{bench: import('../bench.js').Bench, burns: string[]}}
+ */
+export function applyLedDamage(bench) {
+  const burns = bench.placed.filter(p => p.part === 'led-5mm' && !p.burnt && evaluateLedBench(bench, p.id).state === 'overcurrent').map(p => p.id);
+  if (!burns.length) return { bench, burns };
+  return { bench: { ...bench, placed: bench.placed.map(p => burns.includes(p.id) ? { ...p, burnt: true } : p) }, burns };
+}

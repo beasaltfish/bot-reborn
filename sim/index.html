@@ -43,12 +43,29 @@
 
     #tools { position: fixed; top: 14px; left: 14px; display: flex; gap: 8px; flex-wrap: wrap; max-width: calc(100vw - 120px); }
     .pill.confirm { display: inline-flex; align-items: center; gap: 10px; background: var(--glass-strong); }
+    .language-control { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 999px; color: var(--ink); background: var(--glass); border: 1px solid var(--edge); font: 600 12px var(--font); }
+    .language-control select { color: var(--ink); background: #40362d; border: 1px solid var(--edge); border-radius: 5px; padding: 3px; }
     .link {
       padding: 0; border: 0; background: none; cursor: pointer;
       font: 600 13px/1 var(--font); color: var(--accent);
     }
     .link:hover { text-decoration: underline; }
     .link.danger { color: #ff8a76; }
+
+
+    #runtime {
+      position: fixed; right: 14px; bottom: 14px; width: min(300px, calc(100vw - 28px)); box-sizing: border-box;
+      padding: 12px 14px; border-radius: 12px; display: flex; flex-direction: column; gap: 10px;
+      font: 500 13px/1.35 var(--font); color: var(--ink);
+      background: var(--glass-strong); border: 1px solid var(--edge);
+      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    }
+    #runtime h2 { margin: 0; font: 600 13px/1.2 var(--font); }
+    #runtime label { display: grid; grid-template-columns: 88px 1fr auto; align-items: center; gap: 8px; }
+    #runtime input[type="range"] { width: 100%; }
+    #runtime input[type="checkbox"] { justify-self: start; }
+    #runtime select { font: 500 12px var(--font); color: var(--ink); background: #40362d; border: 1px solid var(--edge); border-radius: 6px; padding: 3px; }
+    #runtime output { min-width: 38px; text-align: right; color: var(--ink-dim); }
 
     #hint {
       position: fixed; top: 52px; left: 14px; max-width: min(420px, calc(100vw - 28px));
@@ -136,7 +153,42 @@
     #partsbin .close { border: 0; background: none; color: var(--ink-dim); font: 400 22px/1 var(--font); cursor: pointer; padding: 2px 6px; }
     #partsbin .close:hover { color: var(--ink); }
     #partsbin .items { display: grid; gap: 6px; }
+    #wire-menu { position: fixed; z-index: 5; display: flex; flex-wrap: wrap; box-sizing: border-box; max-width: calc(100vw - 16px); max-height: calc(100dvh - 16px); overflow-y: auto; align-items: center; gap: 7px; padding: 8px 10px; border-radius: 12px; color: var(--ink); background: var(--glass-strong); border: 1px solid var(--edge); font: 12px var(--font); }
+    #wire-menu .swatch { width: 20px; height: 20px; border: 2px solid #aaa; border-radius: 50%; cursor: pointer; }
+    #selection-context { position: fixed; z-index: 5; top: 64px; right: 16px; display: flex; flex-wrap: wrap; box-sizing: border-box; overflow: auto; align-items: center; gap: 7px; max-width: min(290px, calc(100vw - 16px)); max-height: calc(100vh - 16px); padding: 10px; border-radius: 12px; color: var(--ink); background: var(--glass-strong); border: 1px solid var(--edge); font: 12px var(--font); }
+    #selection-context strong, #selection-context div { flex-basis: 100%; }
+    #selection-context button[data-color] { width: 24px; height: 24px; border: 2px solid #aaa; border-radius: 50%; cursor: pointer; }
+    #selection-context button[data-color][aria-pressed="true"] { outline: 3px solid var(--ink); outline-offset: 2px; }
+    #wire-menu .bme280-panel { flex-basis: 100%; max-width: 300px; }
+    #wire-menu .bme280-panel label { display: flex; justify-content: space-between; gap: 8px; margin: 6px 0; }
+    #wire-menu input[type="number"] { width: 76px; padding: 4px; color: var(--ink); background: #40362d; border: 1px solid var(--edge); border-radius: 5px; }
+    #partsbin input[type="search"] { box-sizing: border-box; width: 100%; margin-bottom: 10px; padding: 8px 10px; color: var(--ink); background: rgba(255,240,220,0.06); border: 1px solid var(--edge); border-radius: 8px; font: inherit; }
+    #partsbin header button { border: 0; background: none; color: var(--ink-dim); font: 400 22px var(--font); cursor: pointer; }
+    #partsbin [role="group"] { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+    #partsbin button:not(.close) { cursor: pointer; color: var(--ink); background: rgba(255,240,220,0.06); border: 1px solid var(--edge); border-radius: 6px; padding: 4px 7px; }
+    #partsbin button[aria-pressed="true"] { border-color: var(--accent); background: rgba(240,180,106,0.2); }
+    #partsbin article { display: flex; align-items: flex-start; gap: 10px; padding: 8px; margin: 6px 0; border: 1px solid var(--edge); border-radius: 8px; }
+    #partsbin article .card-body { flex: 1 1 auto; min-width: 0; }
+    #partsbin article img.thumb { flex: none; width: 64px; height: 64px; object-fit: contain; border-radius: 8px; background: rgba(255,240,220,0.06); }
+    #partsbin article h4, #partsbin article p { margin: 0 0 5px; }
+    #partsbin article p { color: var(--ink-dim); font-size: 12px; }
+    #partsbin article button { margin-right: 4px; }
+    #partsbin article button.star { border: 0; background: none; color: var(--accent); font-size: 17px; line-height: 1; padding: 2px 6px; }
+    #partsbin article button.star[aria-pressed="false"] { color: var(--ink-dim); }
+    #project-panel .project-tabs { display: flex; gap: 4px; margin-bottom: 8px; }
+    #project-panel .project-tabs button { flex: 1; padding: 5px 8px; border: 1px solid var(--edge); border-radius: 7px; color: var(--ink-dim); background: rgba(255,240,220,0.06); font: 600 12px var(--font); cursor: pointer; }
+    #project-panel .project-tabs button[aria-selected="true"] { color: var(--ink); border-color: var(--accent); background: rgba(240,180,106,0.18); }
+    #project-panel .project-actions { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; padding: 8px 0 2px; background: #1f1913; border-top: 1px solid var(--edge); }
+    #project-panel [data-action="build"], #project-panel [data-action="leave"] { padding: 5px 9px; border: 1px solid var(--edge); border-radius: 7px; background: none; font: 600 12px var(--font); cursor: pointer; }
+    #project-panel [data-action="build"] { color: var(--accent); border-color: var(--accent); }
+    #project-panel [data-action="leave"] { padding: 5px 9px; border: 1px solid var(--edge); border-radius: 7px; color: var(--accent); background: none; font: 600 12px var(--font); cursor: pointer; }
+    #project-panel .project-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+    #project-panel .project-heading span { color: var(--ink-dim); font: 600 11px/1.2 var(--font); white-space: nowrap; }
+    #project-panel [data-missing="true"] { opacity: 0.75; }
+    #project-panel .missing { display: block; margin-top: 4px; color: #ffb28a; font: 600 11px/1.3 var(--font); }
+    #partsbin h3 { margin: 12px 0 4px; font-size: 13px; }
     #partsbin .section { margin: 10px 0 2px; color: var(--ink-dim); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; }
+    #partsbin .learn { color: var(--accent); font-size: 12px; margin: 0 0 4px 45px; }
     #partsbin button.part {
       display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
       padding: 7px 9px; border-radius: 10px; cursor: grab; touch-action: none;
@@ -148,11 +200,29 @@
     #partsbin button.part svg { flex: none; width: 26px; height: 18px; }
     #partsbin button.part svg rect, #partsbin button.part svg circle { fill: #2c5d3f; stroke: rgba(240, 240, 235, 0.5); stroke-width: 0.8; }
     #partsbin button.part .name { flex: 1 1 auto; }
-    #partsbin button.part .note { flex: none; color: var(--ink-dim); font-size: 11.5px; white-space: nowrap; }
+    #partsbin button.part .note { color: var(--ink-dim); font-size: 11.5px; max-width: 48%; }
 
+    #project-panel {
+      position: fixed; top: 56px; left: 14px; z-index: 2;
+      width: min(340px, calc(100vw - 28px)); box-sizing: border-box; max-height: calc(100vh - 70px); overflow: auto;
+      padding: 14px 16px 18px; border-radius: 14px; color: var(--ink);
+      background: #1f1913; border: 1px solid var(--edge); font: 500 13px/1.4 var(--font);
+    }
+    #project-panel header { display: flex; align-items: center; justify-content: space-between; }
+    #project-panel select { width: 100%; box-sizing: border-box; margin-bottom: 8px; padding: 6px 8px; color: var(--ink); background: #40362d; border: 1px solid var(--edge); border-radius: 8px; font: 500 13px var(--font); }
+    #project-panel select:invalid { color: var(--ink-dim); }
+    #project-panel h2 { font-size: 15px; margin: 8px 0; }
+    #project-panel h3 { font-size: 13px; margin: 10px 0 5px; }
+    #project-panel select, #project-panel button { color: var(--ink); background: #40362d; border: 1px solid var(--edge); border-radius: 6px; padding: 5px 8px; }
+    #project-panel button { cursor: pointer; }
+    #project-panel ol { margin: 0; padding-left: 24px; }
+    #project-panel li { padding: 8px 0; border-bottom: 1px solid var(--edge); }
+    #project-panel li p { color: var(--ink-dim); margin: 4px 0; }
+    #project-panel li[data-status="fault"] > span { color: #ff9788; }
+    #project-panel li[data-status="complete"] > span { color: #96d9a6; }
     #diagram {
-      position: fixed; top: 56px; left: 14px; bottom: 14px;
-      width: min(700px, calc(100vw - 28px)); box-sizing: border-box; overflow: auto;
+      position: fixed; top: 56px; left: 14px;
+      width: min(700px, calc(100vw - 28px)); box-sizing: border-box; max-height: calc(100vh - 70px); overflow: auto;
       padding: 14px 18px 18px; border-radius: 14px;
       font: 500 13px/1.45 var(--font); color: var(--ink);
       background: #1f1913; border: 1px solid var(--edge);
@@ -182,6 +252,15 @@
     #diagram li .num { flex: none; width: 18px; color: var(--ink-dim); font-weight: 600; text-align: right; }
     #diagram li b { display: block; font-weight: 600; }
     #diagram li .why { color: var(--ink-dim); }
+
+    @media (max-width: 600px) {
+      #tools { max-width: calc(100vw - 28px); }
+      #viewbox { top: auto; bottom: 58px; right: 14px; }
+      #peek { display: none; }
+      #runbar { top: 54px; align-items: flex-start; }
+      #runbar .say { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+      body.demo-running #tools { display: none; }
+    }
   </style>
 </head>
 <body>

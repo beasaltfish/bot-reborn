@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 
 import {
   emptyBench, addPart, addBoard, place, moveBoard, trash,
-  addWire, removeWire, pinPoints, isHole, serialize, load, park,
+  addWire, removeWire, pinPoints, isHole, serialize, load, park, setPartProperty, setWireColor, propertiesFor,
 } from '../../sim/bench.js';
+import { DEVICES } from '../../sim/devices/catalog.js';
 import { boardToTable } from '../../sim/parts.js';
 
 /** @typedef {import('../../sim/bench.js').Bench} Bench */
@@ -45,7 +46,7 @@ test('anything unreadable or from version 1 is an empty bench', () => {
 
 test('the opening bench is one of each part, and one board, on the table', () => {
   const b = emptyBench();
-  assert.equal(b.v, 2);
+  assert.equal(b.v, 3);
   assert.deepEqual(b.placed.map((p) => p.id), ['esp', 'mic', 'amp', 'spk']);
   assert.ok(b.placed.every((p) => p.seated === false && !p.burnt));
   assert.deepEqual(b.placed.map((p) => p.at), [
@@ -246,4 +247,51 @@ test('a toy let go at an angle keeps that facing, not the nearest quarter turn',
   // And a drop with no angle given still faces the quarter turn it was put down at.
   const plain = place(b, 'toy', { x: -50, z: -50 }, 180, false);
   assert.equal(/** @type {Placed} */ (plain.placed.find((p) => p.id === 'toy')).heading, 180);
+});
+
+
+test('version 2 migrates losslessly and fills property defaults', () => {
+  let b = place(emptyBench(), 'mic', { x: -12, z: -4 }, 90, true);
+  b = addWire(b, 'mic:VDD', 'esp:3V3', 'red');
+  const old = { ...b, v: 2, usb: true, placed: b.placed.map(({ properties, ...p }) => ({ ...p, burnt: p.id === 'mic' })) };
+  assert.deepEqual(load(JSON.stringify(old)), { ...old, v: 3, placed: old.placed.map((p) => ({ ...p, properties: propertiesFor(p.part) })) });
+});
+
+test('instance properties and recoloured wires survive save and load', () => {
+  const schema = DEVICES.inmp441.properties;
+  DEVICES.inmp441.properties = { gain: { kind: 'number', default: 1, min: 0, max: 5 }, mode: { kind: 'enum', default: 'a', values: ['a', 'b'] }, enabled: { kind: 'boolean', default: true } };
+  try {
+    let b = addWire(emptyBench(), 'mic:VDD', 'esp:3V3', 'red');
+    b = setPartProperty(b, 'mic', 'gain', 3);
+    b = setWireColor(b, 'w1', 'navy');
+    assert.deepEqual(load(serialize(b)), b);
+    assert.deepEqual(part(b, 'mic').properties, { gain: 3, mode: 'a', enabled: true });
+    assert.equal(b.wires[0].color, 'navy');
+    for (const invalid of [{ extra: 1 }, { gain: '3' }, { gain: null }, { gain: 6 }, { mode: 'c' }, { enabled: 0 }]) {
+      const raw = JSON.parse(serialize(b));
+      raw.placed.find((/** @type {Placed} */ p) => p.id === 'mic').properties = invalid;
+      assert.deepEqual(load(JSON.stringify(raw)), emptyBench());
+    }
+    assert.throws(() => propertiesFor('inmp441', { gain: NaN }), RangeError);
+    assert.throws(() => setPartProperty(b, 'mic', 'gain', Infinity), RangeError);
+  } finally { DEVICES.inmp441.properties = schema; }
+});
+
+test('property and wire changes are immutable and reject unknown ids', () => {
+  const schema = DEVICES.inmp441.properties;
+  DEVICES.inmp441.properties = { enabled: { kind: 'boolean', default: false } };
+  try {
+    const b = addWire(emptyBench(), 'mic:VDD', 'esp:3V3', 'red');
+    const changed = setPartProperty(b, 'mic', 'enabled', true);
+    const recoloured = setWireColor(changed, 'w1', 'blue');
+    assert.equal(part(b, 'mic').properties.enabled, false);
+    assert.equal(b.wires[0].color, 'red');
+    assert.notEqual(changed, b);
+    assert.notEqual(part(changed, 'mic'), part(b, 'mic'));
+    assert.notEqual(recoloured.wires[0], b.wires[0]);
+    assert.throws(() => setPartProperty(b, 'missing', 'enabled', true), RangeError);
+    assert.throws(() => setPartProperty(b, 'mic', 'unknown', true), RangeError);
+    assert.throws(() => setWireColor(b, 'missing', 'red'), RangeError);
+    assert.throws(() => setWireColor(b, 'w1', ''), RangeError);
+  } finally { DEVICES.inmp441.properties = schema; }
 });

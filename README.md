@@ -77,6 +77,16 @@ Each GIF links to its Short, with sound.
   name, voice, providers and keys, all set up from an admin page in your
   browser, in English or Chinese.
 
+### In the simulator
+
+The first device pack covers the LED and resistor, a two-terminal and a KY-004
+button, the HC-SR04, BME280, SSD1306 OLED, SG90 servo, TB6612FNG with a small
+DC motor, a WS2812 strip, and USB / 4×AA / bench / MB102 power. Each family has
+a bilingual five-stage lab lesson and at least one guided project; free mode
+can place any of them. Power, current, level and bus checks are bounded models,
+not SPICE: firmware support is reported separately and the current real
+firmware still implements only the original audio/screen/toy build.
+
 ## What you need
 
 Every build needs the brain, a computer on the same Wi-Fi as the body, plus

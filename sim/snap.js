@@ -33,7 +33,7 @@ export function snapPart(b, def, x, z, rot) {
   // Ask the bench which holes the pins would be in, so the drop and the
   // netlist turn and count pins the same way.
   /** @type {import('./bench.js').Placed} */
-  const trial = { id: 'trial', part: def.id, at, rot, seated: true, burnt: false };
+  const trial = { id: 'trial', part: def.id, at, rot, seated: true, burnt: false, properties: {} };
   return pinPoints(b, trial).some((p) => p.hole !== null) ? at : null;
 }
 

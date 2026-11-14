@@ -3,6 +3,19 @@
 
 /** @typedef {import('./bench.js').Bench} Bench */
 
+/** Manual jumper colours; auto uses the existing role-based recommendation. */
+export const WIRE_PALETTE = [
+  { id: 'auto', color: null, labelKey: 'wire.auto' },
+  { id: 'red', color: '#d23a2e', labelKey: 'wire.red' },
+  { id: 'black', color: '#1d1d1f', labelKey: 'wire.black' },
+  { id: 'yellow', color: '#f2c230', labelKey: 'wire.yellow' },
+  { id: 'green', color: '#2e9e57', labelKey: 'wire.green' },
+  { id: 'blue', color: '#2f6fd0', labelKey: 'wire.blue' },
+  { id: 'orange', color: '#e9782b', labelKey: 'wire.orange' },
+  { id: 'white', color: '#f2f0ea', labelKey: 'wire.white' },
+  { id: 'purple', color: '#8b54c9', labelKey: 'wire.purple' },
+];
+
 /** Wires that are not power or ground take these in turn, like a bundle of jumpers. */
 const PALETTE = ['#f2c230', '#2e9e57', '#2f6fd0', '#e9782b', '#8b54c9', '#f2f0ea'];
 const RED = '#d23a2e';
@@ -30,10 +43,13 @@ export function role(point) {
  * @param {string} a
  * @param {string} z
  */
-export function wireColor(b, a, z) {
+export function recommendedWireColor(b, a, z) {
   const roles = [role(a), role(z)];
   if (roles.includes('power')) return RED;
   if (roles.includes('ground')) return BLACK;
   const signals = b.wires.filter((w) => w.color !== RED && w.color !== BLACK).length;
   return PALETTE[signals % PALETTE.length];
 }
+
+// Existing recipe and interaction callers keep their public API.
+export { recommendedWireColor as wireColor };

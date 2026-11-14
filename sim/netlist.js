@@ -69,6 +69,7 @@ export function nets(b) {
     for (const group of PARTS[placed.part].internal) {
       for (const name of group) join(`${placed.id}:${group[0]}`, `${placed.id}:${name}`);
     }
+    if (placed.part === 'push-button' && placed.properties.pressed === true) join(`${placed.id}:1`, `${placed.id}:2`);
   }
   for (const w of b.wires) join(w.a, w.b);
 

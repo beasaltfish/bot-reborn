@@ -746,8 +746,18 @@ export function buildBin() {
  * }} BoardLook
  */
 
-/** @type {Record<'esp32' | 'inmp441' | 'max98357a', BoardLook>} */
+/** @type {Record<'esp32' | 'inmp441' | 'max98357a' | 'bme280-i2c' | 'hc-sr04', BoardLook>} */
 const LOOKS = {
+  'hc-sr04': {
+    color: 0x1769a5, w: 45 * MM, d: 20 * MM, cx: 1.5, cz: 2.8, t: 1.6 * MM,
+    labelDz: () => 0.65, labelSize: 0.32,
+    silk: (ctx) => label(ctx, 'HC-SR04', 1.5, 5.8, 0.48),
+  },
+  'bme280-i2c': {
+    color: 0x1769a5, w: 25.2 * MM, d: 18 * MM, cx: 3, cz: 2.7, t: 1.6 * MM,
+    labelDz: () => 0.7, labelSize: 0.35,
+    silk: (ctx) => label(ctx, 'BME280', 3, 3.8, 0.55),
+  },
   // The two rows are 10 pitches apart and the board 70 mm long, its USB end
   // (pins GND, 5V) at x = 0 and its module and antenna at the far end.
   esp32: {
@@ -787,15 +797,143 @@ const LOOKS = {
  * `anchors`, in the group's frame: where a wire's end sits on each pin.
  */
 
+/** Paint a 1-bit 128x64 frame onto an SSD1306 glass texture. @param {any} screen @param {Uint8Array} frame */
+export function paintOled(screen, frame) {
+  const { ctx, texture } = screen.userData;
+  if (!ctx) return;
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 128, 64);
+  ctx.fillStyle = '#fff';
+  for (let y = 0; y < 64; y++) for (let x = 0; x < 128; x++) {
+    if (frame[y * 16 + (x >> 3)] & (1 << (x & 7))) ctx.fillRect(x, y, 1, 1);
+  }
+  texture.needsUpdate = true;
+}
+
 /**
  * A part as a group whose origin is its first pin, at the height of whatever
  * it stands on (board top or table). On the table it stands on its header
  * pins; in the board the pins have gone into the holes, so it sits lower.
  * @param {PartDef} def
- * @param {{ onBoard: boolean, burnt: boolean }} state
+ * @param {{ onBoard: boolean, burnt: boolean, pressed?: boolean }} state
  * @returns {PartMesh}
  */
 export function buildPart(def, state) {
+  if (def.id === 'led-5mm' || def.id === 'resistor' || def.id === 'dc-source' || def.id === 'push-button'
+    || def.id === 'button-module' || def.id === 'ssd1306' || def.id === 'sg90' || def.id === 'tb6612fng' || def.id === 'dc-motor-small' || def.id === 'ws2812-strip'
+    || def.id === 'usb-5v-source' || def.id === 'battery-4xaa' || def.id === 'bench-supply' || def.id === 'breadboard-regulator') {
+    const g = new THREE.Group();
+    /** @type {Map<string, THREE.Vector3>} */
+    const anchors = new Map();
+    const height = state.onBoard ? COLLAR : PIN_LEN;
+    for (const pin of def.pins) {
+      g.add(box(0.25, height, 0.25, mat('metal', STEEL), pin.x, 0, pin.y));
+      anchors.set(pin.name, new THREE.Vector3(pin.x, height, pin.y));
+    }
+    if (def.id === 'led-5mm') {
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), new THREE.MeshPhongMaterial({ color: state.burnt ? 0x281b19 : 0xd82a26, shininess: 60 }));
+      bulb.position.set(0.5, height + 1, 0);
+      bulb.name = 'led-bulb';
+      g.add(bulb);
+    } else if (def.id === 'resistor') {
+      g.add(box(3, 1, 1, mat('matte', 0xd8b882), 2, height, 0));
+    } else if (def.id === 'push-button') {
+      g.add(box(2.4, 0.8, 2.4, mat('matte', 0x303030), 1, height, 0));
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.5, 24), mat('gloss', 0xc7372e));
+      cap.position.set(1, height + 1.05, 0);
+      g.add(cap);
+    } else if (def.id === 'ws2812-strip') {
+      // A short flexible strip with individually colourable addressable LEDs.
+      g.add(box(18, 0.35, 3, mat('matte', 0x1b1b1b), 1, height, 0));
+      for (let i = 0; i < 8; i++) {
+        const led = box(0.8, 0.25, 0.8, new THREE.MeshPhongMaterial({ color: 0x222222, emissive: 0x000000 }), 2 + i * 2, height + 0.35, 0);
+        led.name = `strip-led-${i}`;
+        g.add(led);
+      }
+    } else if (def.id === 'tb6612fng') {
+      // The driver breakout and its black chip.
+      g.add(box(8, 0.6, 8, mat('matte', 0x8a1c1c), 1, height, 0));
+      g.add(box(3, 0.8, 3, mat('matte', 0x18181a), 1, height + 0.6, 0));
+    } else if (def.id === 'dc-motor-small') {
+      // A cylindrical motor with a shaft and a rotor marker that spins.
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 4, 24), mat('metal', STEEL));
+      body.rotation.z = Math.PI / 2;
+      body.position.set(1, height + 1.5, 0);
+      g.add(body);
+      const rotor = new THREE.Group();
+      rotor.name = 'motor-rotor';
+      rotor.position.set(1, height + 1.5, 0);
+      rotor.add(box(3.4, 0.18, 0.18, mat('gloss', 0x1a1a1a), 0, 0, 0));
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 1.2, 16), mat('metal', GOLD));
+      shaft.rotation.z = Math.PI / 2;
+      shaft.position.set(2.5, 0, 0);
+      rotor.add(shaft);
+      g.add(rotor);
+    } else if (def.id === 'sg90') {
+      // A blue servo case with a horn that turns with the commanded angle.
+      g.add(box(5, 6, 3, mat('matte', 0x1d4d8f), 1, height, 0));
+      const horn = new THREE.Group();
+      horn.name = 'servo-horn';
+      horn.position.set(1, height + 6, 0);
+      horn.add(box(4, 1, 2, mat('gloss', 0xe8e8e2), 0, 0, 0));
+      g.add(horn);
+    } else if (def.id === 'ssd1306') {
+      // A four-pin breakout with a dark glass panel and a drawable screen.
+      g.add(box(10, 0.6, 10, mat('matte', 0x1b1f24), 1, height, 0));
+      g.add(box(8, 0.25, 7, mat('gloss', 0x080b0e), 1, height + 0.6, 0));
+      const canvas = document.createElement('canvas');
+      canvas.width = 128; canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      if (ctx) { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 128, 64); }
+      const texture = new THREE.CanvasTexture(canvas);
+      const screen = new THREE.Mesh(new THREE.PlaneGeometry(8, 4), new THREE.MeshBasicMaterial({ map: texture }));
+      screen.name = 'oled-screen';
+      screen.rotation.x = -Math.PI / 2;
+      screen.position.set(1, height + 0.86, 0);
+      screen.userData = { canvas, ctx, texture };
+      g.add(screen);
+    } else if (def.id === 'button-module') {
+      // The KY-004 board, with its cap visibly lower while the button is held.
+      g.add(box(7, 0.5, 5, mat('matte', 0x1d4d8f), 1, height, 0));
+      g.add(box(2.4, 0.8, 2.4, mat('matte', 0x18181a), 1, height, 0));
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.75, 0.55, 24), mat('gloss', 0xc7372e));
+      cap.name = 'button-cap';
+      cap.position.set(1, height + 1.15 - (state.pressed ? 0.35 : 0), 0);
+      cap.userData.baseY = height + 1.15;
+      g.add(cap);
+    } else if (def.id === 'usb-5v-source') {
+      // A small USB power breakout with a metal socket and two solder pads.
+      g.add(box(7, 2, 4, mat('matte', 0x2b2f33), 1.5, height, 0));
+      g.add(box(1.6, 0.9, 1.4, mat('metal', STEEL), 3.2, height + 2, 0));
+      g.add(box(0.8, 0.2, 0.8, mat('metal', GOLD), 0, height + 2, 0));
+      g.add(box(0.8, 0.2, 0.8, mat('metal', GOLD), 3, height + 2, 0));
+    } else if (def.id === 'battery-4xaa') {
+      // Four AA cells in a holder, seen from above.
+      g.add(box(20, 1.2, 9, mat('matte', 0x25282b), 1.5, height, 0));
+      for (let i = 0; i < 4; i++) {
+        const cell = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 3.2, 16), mat('gloss', i % 2 ? 0x2f6a3a : 0x1d4d8f));
+        cell.rotation.z = Math.PI / 2;
+        cell.position.set(3.5 + i * 4, height + 2.1, 0);
+        g.add(cell);
+      }
+    } else if (def.id === 'bench-supply') {
+      // A bench unit: body, dark display and one control knob.
+      g.add(box(20, 5, 10, mat('matte', 0x3a3f44), 1.5, height, 0));
+      g.add(box(5, 2, 0.2, mat('gloss', 0x1d2a1d), 4, height + 3, -2));
+      const knob = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.8, 20), mat('gloss', 0x1a1a1a));
+      knob.rotation.x = Math.PI / 2;
+      knob.position.set(13, height + 3, 0);
+      g.add(knob);
+    } else if (def.id === 'breadboard-regulator') {
+      // The MB102-style board: green PCB with two jumper blocks.
+      g.add(box(18, 1.2, 11, mat('matte', 0x225522), 1.5, height, 0));
+      g.add(box(2, 1, 3, mat('matte', 0x18181a), 4, height + 1.2, -2));
+      g.add(box(2, 1, 3, mat('matte', 0x18181a), 9, height + 1.2, -2));
+      g.add(box(1, 0.4, 1, mat('gloss', 0x33cc55), 14, height + 1.2, 2));
+    } else {
+      g.add(box(10, 4, 7, mat('matte', 0x34383c), 1.5, height, 2));
+    }
+    return { group: g, anchors };
+  }
   if (def.id === 'speaker') return buildSpeaker(state.burnt);
   if (def.id === 'mpu6050') return buildImu(state.burnt);
   if (def.id === 'toy') return buildCar(state);
@@ -840,6 +978,19 @@ export function buildPart(def, state) {
 
   if (def.id === 'esp32') addEspDetails(g, top, state.burnt);
   if (def.id === 'max98357a') addTerminal(g, top, state.burnt, anchors);
+  if (def.id === 'hc-sr04') {
+    for (const [name, x] of /** @type {const} */ ([['sonar-transmitter', -3.5], ['sonar-receiver', 6.5]])) {
+      const can = new THREE.Mesh(new THREE.CylinderGeometry(2.75, 2.75, 4.2, 32), mat('metal', state.burnt ? 0x3a332c : STEEL));
+      can.position.set(x, top + 2.1, 3.8); can.name = name; g.add(can);
+      const face = new THREE.Mesh(new THREE.CircleGeometry(2.3, 32), mat('matte', state.burnt ? 0x1c1916 : 0x555b5d));
+      face.rotation.x = -Math.PI / 2; face.position.set(x, top + 4.21, 3.8); g.add(face);
+    }
+  }
+  if (def.id === 'bme280-i2c') {
+    g.add(box(1.0, 0.4, 1.0, mat('metal', state.burnt ? 0x3a332c : STEEL), 3, top, 2.5));
+    g.add(box(0.45, 0.2, 0.65, mat('matte', 0x252525), 4.5, top, 3));
+    g.add(box(0.45, 0.2, 0.65, mat('matte', 0xb7a88c), 1.5, top, 3));
+  }
   g.add(contactShadow(look.w + 3, look.d + 3, look.cx, 0.03, look.cz + 0.4));
   return { group: g, anchors };
 }

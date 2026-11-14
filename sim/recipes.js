@@ -95,6 +95,17 @@ export function startBench(b) {
   };
 }
 
+/** The two joined boards and the ESP32 across the seam, for any build. */
+export function benchSetupSteps() {
+  /** @type {Step[]} */
+  const steps = [
+    { kind: 'board', id: 'bb1', at: BB1, rot: 0, say: 'A breadboard to build on' },
+    { kind: 'board', id: 'bb2', at: BB2, rot: 0, say: 'A second board: the ESP32 is too wide for one, so it sits across the seam' },
+    { kind: 'part', id: 'esp', part: 'esp32', at: ESP_SEAT, rot: 0, seated: true, say: 'The ESP32 goes in across the seam, a row of pins on each board' },
+  ];
+  return steps;
+}
+
 /**
  * The steps that build a working bench, in the order a person would: boards,
  * the ESP32 across them, the other parts, one wire per target link, USB.
@@ -108,9 +119,7 @@ export function startBench(b) {
 export function recipeSteps(recipeId, screenId = DEFAULT_SCREEN, wand = false) {
   /** @type {Step[]} */
   const steps = [
-    { kind: 'board', id: 'bb1', at: BB1, rot: 0, say: 'A breadboard to build on' },
-    { kind: 'board', id: 'bb2', at: BB2, rot: 0, say: 'A second board: the ESP32 is too wide for one, so it sits across the seam' },
-    { kind: 'part', id: 'esp', part: 'esp32', at: ESP_SEAT, rot: 0, seated: true, say: 'The ESP32 goes in across the seam, a row of pins on each board' },
+    ...benchSetupSteps(),
     { kind: 'part', id: 'mic', part: 'inmp441', at: MIC_SEAT, rot: 0, seated: true, say: 'The microphone, which hears you, clicks into the board' },
     { kind: 'part', id: 'amp', part: 'max98357a', at: AMP_SEAT, rot: 0, seated: true, say: 'The amplifier, which drives the speaker, clicks into the board' },
     { kind: 'part', id: 'spk', part: 'speaker', at: LOOSE.spk.at, rot: 0, seated: false, say: 'The speaker, which talks back' },

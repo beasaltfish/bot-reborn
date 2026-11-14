@@ -18,11 +18,13 @@ import { PARTS, BOARD_OUTLINE, holeXY } from '../parts.js';
 import { pinPoints, isHole } from '../bench.js';
 import { boardToTable } from '../parts.js';
 import {
-  BOARD_TOP, MM, MAT_THICK, BIN_COLORS, buildBreadboard, buildBin, buildMat, buildPart, buildTable, buildWire, drawScreen, dispose,
+  BOARD_TOP, MM, MAT_THICK, BIN_COLORS, buildBreadboard, buildBin, buildMat, buildPart, buildTable, buildWire, drawScreen, paintOled, dispose,
 } from './meshes.js';
 import { BIN } from '../layout.js';
 import { createWandState } from '../wand-state.js';
 import { CAR, actionAt, obstacles, stepCar } from '../car.js';
+import { evaluateLedBench } from '../electrical/led-bench.js';
+import { focusFrame } from './focus-frame.js';
 
 /** @typedef {import('../bench.js').Bench} Bench */
 /** @typedef {import('../bench.js').Placed} Placed */
@@ -121,7 +123,7 @@ export function createWorld(canvas) {
   const screenLook = new Map();
 
   let pending = false;
-  /** @type {{ from: Pose, to: Pose, start: number } | null} */
+  /** @type {{ from: Pose, to: Pose, start: number, resolve?: () => void } | null} */
   let move = null;
   /**
    * Called before each frame is drawn, with the camera already where it will
@@ -143,9 +145,11 @@ export function createWorld(canvas) {
     if (move) {
       const t = Math.min(1, (now - move.start) / MOVE_MS);
       if (t >= 1) {
-        apply(move.to);
+        const completed = move;
+        apply(completed.to);
         move = null;
         settleControls();
+        completed.resolve?.();
       } else {
         apply(blend(move.from, move.to, ease(t)));
         requestRender();
@@ -320,6 +324,7 @@ export function createWorld(canvas) {
     framing = frameFor ?? null;
     touched = false;
     controls.enabled = false;
+    move?.resolve?.();
     move = { from: currentPose(), to: poseFor(m), start: performance.now() };
     requestRender();
   }
@@ -358,6 +363,31 @@ export function createWorld(canvas) {
     if (!g || !anchor) return null;
     g.updateMatrixWorld();
     return g.localToWorld(anchor.clone());
+  }
+
+  /**
+   * Frame the points that still exist. A later view or focus settles an
+   * interrupted promise too, so callers never wait for a superseded move.
+   * @param {string[]} points
+   * @param {{left?:number, right?:number}} [occlusion]
+   * @returns {Promise<void>}
+   */
+  function focusPoints(points, occlusion = {}) {
+    if (!current) return Promise.resolve();
+    const from = currentPose();
+    const positions = points.map(point => pointPosition(/** @type {Bench} */ (current), point));
+    // A connection with one end missing cannot be framed: framing the remaining
+    // end alone would zoom onto a single pin. Leave the camera where it is.
+    if (positions.some(position => !position)) return Promise.resolve();
+    const frame = focusFrame(positions, aspect, from, { width: canvas.clientWidth || 1, ...occlusion });
+    if (!frame) return Promise.resolve();
+    touched = true;
+    controls.enabled = false;
+    move?.resolve?.();
+    return new Promise(resolve => {
+      move = { from, to: { ...from, ...frame }, start: performance.now(), resolve };
+      requestRender();
+    });
   }
 
   /**
@@ -428,7 +458,7 @@ export function createWorld(canvas) {
       let g = built.get(p);
       if (!g) {
         const def = PARTS[p.part];
-        const made = buildPart(def, { onBoard: p.seated, burnt: p.burnt });
+        const made = buildPart(def, { onBoard: p.seated, burnt: p.burnt, pressed: p.properties.pressed === true });
         g = made.group;
         g.name = `part:${p.id}`;
         g.userData = { kind: 'part', id: p.id, anchors: made.anchors, screen: made.screen ?? null };
@@ -453,6 +483,14 @@ export function createWorld(canvas) {
     }
     for (const g of next.values()) if (g.parent !== parts) parts.add(g);
     built = next;
+
+    for (const p of b.placed.filter(part => part.part === 'led-5mm')) {
+      const bulb = /** @type {THREE.Mesh | undefined} */ (built.get(p)?.getObjectByName('led-bulb'));
+      if (bulb && bulb.material instanceof THREE.MeshPhongMaterial) {
+        const state = evaluateLedBench(b, p.id).state;
+        bulb.material.emissive.setHex(state === 'on' || state === 'limited' ? 0x9e0800 : 0x000000);
+      }
+    }
 
     refreshWires();
   }
@@ -692,6 +730,60 @@ export function createWorld(canvas) {
   }
 
   /**
+   * Apply evaluated device state to the built meshes: OLED frames, servo
+   * angle, motor spin and strip colours.
+   * @param {{ display?: Record<string, any>, servo?: Record<string, any>, motor?: Record<string, any>, strip?: Record<string, any>, buttons?: Record<string, boolean> }} [runtime]
+   */
+  function devices(runtime = {}) {
+    for (const p of current?.placed ?? []) {
+      const g = built.get(p);
+      if (!g) continue;
+      if (p.part === 'ssd1306') {
+        const screen = g.getObjectByName('oled-screen');
+        const frame = runtime.display?.[p.id]?.frame;
+        if (screen && frame) paintOled(screen, frame);
+      } else if (p.part === 'sg90') {
+        const horn = g.getObjectByName('servo-horn');
+        const angle = runtime.servo?.[p.id]?.angle;
+        if (horn) horn.rotation.y = angle === null || angle === undefined ? 0 : -THREE.MathUtils.degToRad(angle);
+      } else if (p.part === 'dc-motor-small') {
+        const rotor = g.getObjectByName('motor-rotor');
+        if (rotor) rotor.userData.spin = runtime.motor?.[p.id]?.rpmRatio ?? 0;
+      } else if (p.part === 'button-module') {
+        const cap = g.getObjectByName('button-cap');
+        if (cap) cap.position.y = Number(cap.userData.baseY) - (runtime.buttons?.[p.id] ? 0.35 : 0);
+      } else if (p.part === 'ws2812-strip') {
+        const colors = runtime.strip?.[p.id]?.colors ?? [];
+        for (let i = 0; i < 8; i++) {
+          const led = g.getObjectByName(`strip-led-${i}`);
+          const material = /** @type {any} */ (/** @type {any} */ (led)?.material);
+          if (!material?.color) continue;
+          const pixel = colors[i];
+          if (pixel) {
+            material.color.setRGB(pixel[0] / 255, pixel[1] / 255, pixel[2] / 255);
+            material.emissive?.setRGB(pixel[0] / 255, pixel[1] / 255, pixel[2] / 255);
+          } else {
+            material.color.setHex(0x222222);
+            material.emissive?.setHex(0x000000);
+          }
+        }
+      }
+    }
+    requestRender();
+  }
+
+  // Spin running motor rotors; only asks for frames while something turns.
+  tickers.add(() => {
+    let any = false;
+    for (const g of built.values()) {
+      const rotor = g.getObjectByName('motor-rotor');
+      const spin = rotor?.userData.spin ?? 0;
+      if (rotor && spin > 0) { rotor.rotation.x += spin * 0.25; any = true; }
+    }
+    return any;
+  });
+
+  /**
    * The brain sent a frame: every screen that is ready shows it. They all get
    * the same picture, because the firmware drives one panel.
    * @param {ImageBitmap} img
@@ -831,6 +923,7 @@ export function createWorld(canvas) {
     show,
     screens,
     imu,
+    devices,
     drive,
     onPark,
     shake,
@@ -844,6 +937,7 @@ export function createWorld(canvas) {
     fadeAway,
     tableBounds: TABLE_BOUNDS,
     view,
+    focusPoints,
     requestRender,
     /**
      * @param {(now: number) => boolean} fn  true while it wants more frames

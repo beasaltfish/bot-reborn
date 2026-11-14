@@ -9,6 +9,7 @@
 // integer grid; which hole a pin is in is worked out from the boards under it,
 // which is what lets a part straddle two joined boards.
 
+import { deviceByPart } from './devices/catalog.js';
 import { PARTS, holeXY, boardToTable, tableToBoard, holeOnTable, boardGroups } from './parts.js';
 
 /**
@@ -18,11 +19,11 @@ import { PARTS, holeXY, boardToTable, tableToBoard, holeOnTable, boardGroups } f
  * @typedef {{
  *   id: string, part: PartId,
  *   at: { x: number, z: number },      // the origin pin's table position
- *   rot: Rot, seated: boolean, burnt: boolean,
+ *   rot: Rot, seated: boolean, burnt: boolean, properties: Record<string, number|string|boolean>,
  *   heading?: number,                  // degrees, any angle: a driven toy's facing (absent = rot)
  * }} Placed
  * @typedef {{ id: string, a: string, b: string, color: string }} Wire
- * @typedef {{ v: 2, boards: Board[], placed: Placed[], wires: Wire[], usb: boolean }} Bench
+ * @typedef {{ v: 3, boards: Board[], placed: Placed[], wires: Wire[], usb: boolean }} Bench
  */
 
 /** @type {Rot[]} */
@@ -36,17 +37,57 @@ const ROTS = [0, 90, 180, 270];
  */
 export function emptyBench() {
   return {
-    v: 2,
+    v: 3,
     boards: [{ id: 'bb1', x: -31, z: -9, rot: 0 }],
     placed: [
-      { id: 'esp', part: 'esp32', at: { x: -10.5, z: 16 }, rot: 0, seated: false, burnt: false },
-      { id: 'mic', part: 'inmp441', at: { x: 29, z: 17.5 }, rot: 0, seated: false, burnt: false },
-      { id: 'amp', part: 'max98357a', at: { x: 18, z: 15.5 }, rot: 0, seated: false, burnt: false },
-      { id: 'spk', part: 'speaker', at: { x: -34, z: 15.5 }, rot: 0, seated: false, burnt: false },
+      { id: 'esp', part: 'esp32', properties: propertiesFor('esp32'), at: { x: -10.5, z: 16 }, rot: 0, seated: false, burnt: false },
+      { id: 'mic', part: 'inmp441', properties: propertiesFor('inmp441'), at: { x: 29, z: 17.5 }, rot: 0, seated: false, burnt: false },
+      { id: 'amp', part: 'max98357a', properties: propertiesFor('max98357a'), at: { x: 18, z: 15.5 }, rot: 0, seated: false, burnt: false },
+      { id: 'spk', part: 'speaker', properties: propertiesFor('speaker'), at: { x: -34, z: 15.5 }, rot: 0, seated: false, burnt: false },
     ],
     wires: [],
     usb: false,
   };
+}
+
+/**
+ * Validate instance values and supply any omitted schema defaults.
+ * @param {string} partId
+ * @param {unknown} [raw]
+ * @returns {Record<string, number|string|boolean>}
+ */
+export function propertiesFor(partId, raw = {}) {
+  const device = deviceByPart(partId);
+  if (!device || !isObject(raw) || Array.isArray(raw)) throw new RangeError('invalid properties');
+  const schema = device.properties;
+  if (Object.keys(raw).some((key) => !Object.hasOwn(schema, key))) throw new RangeError('unknown property');
+  /** @type {Record<string, number|string|boolean>} */
+  const result = {};
+  for (const [key, def] of Object.entries(schema)) {
+    const value = Object.hasOwn(raw, key) ? raw[key] : def.default;
+    const valid = def.kind === 'number'
+      ? typeof value === 'number' && Number.isFinite(value) && (def.min === undefined || value >= def.min) && (def.max === undefined || value <= def.max)
+      : def.kind === 'enum' ? typeof value === 'string' && def.values.includes(value)
+        : typeof value === 'boolean';
+    if (!valid) throw new RangeError(`invalid property ${key}`);
+    result[key] = value;
+  }
+  return result;
+}
+
+/** @param {Bench} b @param {string} id @param {string} key @param {number|string|boolean} value @returns {Bench} */
+export function setPartProperty(b, id, key, value) {
+  const target = b.placed.find((p) => p.id === id);
+  if (!target) throw new RangeError(`no part ${id}`);
+  const properties = propertiesFor(target.part, { ...target.properties, [key]: value });
+  return { ...b, placed: b.placed.map((p) => p === target ? { ...p, properties } : p) };
+}
+
+/** @param {Bench} b @param {string} wireId @param {string} color @returns {Bench} */
+export function setWireColor(b, wireId, color) {
+  const target = b.wires.find((w) => w.id === wireId);
+  if (!target || typeof color !== 'string' || !color) throw new RangeError('invalid wire or color');
+  return { ...b, wires: b.wires.map((w) => w === target ? { ...w, color } : w) };
 }
 
 /**
@@ -73,7 +114,7 @@ export function addPart(b, part, at) {
   // one: a second would be a bench that cannot be read back.
   if (PARTS[part].prefix === 'esp') throw new Error('the bench has one ESP32');
   const id = nextId(b, PARTS[part].prefix);
-  const placed = { id, part, at: { x: at.x, z: at.z }, rot: /** @type {Rot} */ (0), seated: false, burnt: false };
+  const placed = { id, part, properties: propertiesFor(part), at: { x: at.x, z: at.z }, rot: /** @type {Rot} */ (0), seated: false, burnt: false };
   return { bench: { ...b, placed: [...b.placed, placed] }, id };
 }
 
@@ -343,8 +384,7 @@ function isWire(w) {
 }
 
 /**
- * Read a saved bench. Only version 2 is understood: an old layout is a
- * different bench and is started over rather than migrated (spec §5.6).
+ * Read a saved bench. Versions 2 and 3 are understood; version 2 receives property defaults.
  *
  * A bench that is not whole is not half-loaded: exactly one ESP32, unique ids,
  * every wire end on a real hole or a real pin, seated parts on the grid.
@@ -356,13 +396,13 @@ function isWire(w) {
 export function load(text) {
   try {
     const raw = JSON.parse(text ?? '');
-    if (!isObject(raw) || raw.v !== 2 || typeof raw.usb !== 'boolean') return emptyBench();
+    if (!isObject(raw) || (raw.v !== 2 && raw.v !== 3) || typeof raw.usb !== 'boolean') return emptyBench();
     if (!Array.isArray(raw.boards) || !raw.boards.every(isBoard)) return emptyBench();
     if (!Array.isArray(raw.placed) || !raw.placed.every(isPlaced)) return emptyBench();
     if (!Array.isArray(raw.wires) || !raw.wires.every(isWire)) return emptyBench();
 
     const boards = /** @type {Board[]} */ (raw.boards);
-    const placed = /** @type {Placed[]} */ (raw.placed);
+    const placed = /** @type {Placed[]} */ (raw.placed.map((p) => ({ ...p, properties: raw.v === 2 ? propertiesFor(p.part) : propertiesFor(p.part, p.properties === undefined ? null : p.properties) })));
     const wires = /** @type {Wire[]} */ (raw.wires);
     if (new Set(boards.map((bd) => bd.id)).size !== boards.length) return emptyBench();
     if (new Set(placed.map((p) => p.id)).size !== placed.length) return emptyBench();
@@ -371,7 +411,7 @@ export function load(text) {
     if (placed.some((p) => boards.some((bd) => bd.id === p.id))) return emptyBench();
     if (placed.filter((p) => p.part === 'esp32').length !== 1) return emptyBench();
 
-    const bench = /** @type {Bench} */ ({ v: 2, boards, placed, wires, usb: raw.usb });
+    const bench = /** @type {Bench} */ ({ v: 3, boards, placed, wires, usb: raw.usb });
     /** @param {string} point */
     const realPin = (point) => {
       const i = point.indexOf(':');

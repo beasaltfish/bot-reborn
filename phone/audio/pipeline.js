@@ -132,29 +132,43 @@ export class AudioPipeline {
   /** @type {AudioContext | null} */ #ctx = null;
   /** @type {AudioWorkletNode | null} */ #node = null;
   /** @type {MediaStream | null} */ #stream = null;
+  #stopped = false;
 
   /** @param {{ onRate?: (hz: number) => void, echoCancellation?: boolean,
-   *            noiseSuppression?: boolean }} [opts] */
+   *            noiseSuppression?: boolean, signal?: AbortSignal }} [opts] */
   static async start(opts = {}) {
     const p = new AudioPipeline();
-    p.#stream = await navigator.mediaDevices.getUserMedia(micConstraints(opts));
-    const ctx = makeContext();
-    p.#ctx = ctx;
-    await ctx.audioWorklet.addModule(new URL('./capture-worklet.js', import.meta.url));
-    const node = new AudioWorkletNode(ctx, 'capture');
-    p.#node = node;
+    const check = () => { if (opts.signal?.aborted) throw new DOMException('Audio startup aborted', 'AbortError'); };
+    const abort = () => { if (p.#stream || p.#ctx || p.#node) p.stop(); };
+    opts.signal?.addEventListener('abort', abort, { once: true });
+    try {
+      check();
+      p.#stream = await navigator.mediaDevices.getUserMedia(micConstraints(opts));
+      check();
+      const ctx = makeContext();
+      p.#ctx = ctx;
+      await ctx.audioWorklet.addModule(new URL('./capture-worklet.js', import.meta.url));
+      check();
+      const node = new AudioWorkletNode(ctx, 'capture');
+      p.#node = node;
 
-    const onRate = opts.onRate ?? (() => {});
-    // The worklet's first message is a hello carrying the rate it actually got.
-    // Handling it by replacing the handler puts "exactly once, before any
-    // frame" into the control flow rather than into a comment.
-    node.port.onmessage = (ev) => {
-      onRate(ev.data.sampleRate);
-      node.port.onmessage = (e) => p.#deliver(e.data.frame);
-    };
-    ctx.createMediaStreamSource(p.#stream).connect(node);
-    p.#startedAt = Date.now();
-    return p;
+      const onRate = opts.onRate ?? (() => {});
+      // The worklet's first message is a hello carrying the rate it actually got.
+      // Handling it by replacing the handler puts "exactly once, before any
+      // frame" into the control flow rather than into a comment.
+      node.port.onmessage = (ev) => {
+        onRate(ev.data.sampleRate);
+        node.port.onmessage = (e) => p.#deliver(e.data.frame);
+      };
+      ctx.createMediaStreamSource(p.#stream).connect(node);
+      p.#startedAt = Date.now();
+      return p;
+    } catch (error) {
+      p.stop();
+      throw error;
+    } finally {
+      opts.signal?.removeEventListener('abort', abort);
+    }
   }
 
   /** @param {Float32Array} frame */
@@ -208,9 +222,11 @@ export class AudioPipeline {
   }
 
   stop() {
+    if (this.#stopped) return;
+    this.#stopped = true;
     this.#node?.disconnect();
     this.#stream?.getTracks().forEach((t) => t.stop());
-    this.#ctx?.close();
+    void this.#ctx?.close().catch(() => {});
   }
 }
 
