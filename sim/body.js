@@ -77,7 +77,7 @@ export function characterChoices(list) {
  * the reason is told in this order: a right-kind one in use, a ready one of
  * the wrong kind, nothing set up.
  * @param {{ id: string, name: string, ready: boolean, online: boolean, motion: string | null }[]} list
- * @param {'any' | 'pet' | 'car'} need
+ * @param {'any' | 'pet' | 'car' | 'tarot'} need
  * @returns {{ kind: 'connect', id: string, name: string }
  *   | { kind: 'pick', choices: { id: string, name: string, note: string | null }[] }
  *   | { kind: 'wrong-body', id: string, name: string, motion: string | null }
@@ -102,20 +102,24 @@ export function chooseCharacter(list, need) {
  * outcome of chooseCharacter except connect and pick), with the link to go
  * and fix it.
  * @param {ReturnType<typeof chooseCharacter>} chosen
- * @param {'any' | 'pet' | 'car'} need
+ * @param {'any' | 'pet' | 'car' | 'tarot'} need
  * @returns {{ text: string, link?: { href: string, label: string } } | null}
  */
 export function chooseLine(chosen, need) {
   switch (chosen.kind) {
-    case 'wrong-body':
+    case 'wrong-body': {
+      const label = /** @type {Record<string,string>} */ ({ pet: 'Pet', car: 'Car', tarot: 'Tarot' })[need] ?? need;
       return {
-        text: `${chosen.name} is a ${chosen.motion} body, not a ${need} — set its body to ${need === 'pet' ? 'Pet' : 'Car'}`,
+        text: `${chosen.name} is a ${chosen.motion} body, not a ${need} — set its body to ${label}`,
         link: { href: adminLink(chosen.id), label: 'on the admin page' },
       };
+    }
     case 'busy':
       return { text: `${chosen.name} is in use by another body — disconnect it there and plug in again` };
-    case 'none':
-      return { text: need === 'pet' ? 'No pet character yet —' : 'No characters on this brain yet —', link: { href: '/', label: 'set one up on the admin page' } };
+    case 'none': {
+      const missing = /** @type {Record<string,string>} */ ({ pet: 'No pet character yet —', car: 'No car character yet —', tarot: 'No tarot character yet —' })[need];
+      return { text: missing ?? 'No characters on this brain yet —', link: { href: '/', label: 'set one up on the admin page' } };
+    }
     default:
       return null;
   }
