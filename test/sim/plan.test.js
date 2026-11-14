@@ -98,4 +98,7 @@ test('the tarot wand is its own project with the wand wired in', () => {
   const screen = tarotBench.placed.find(part => part.part.startsWith('screen-'));
   assert.ok(screen);
   assert.equal(screen.seated, false);
+  const wand = tarotBench.placed.find(part => part.part === 'mpu6050');
+  assert.ok(wand);
+  assert.deepEqual({ x: wand.at.x, z: wand.at.z }, { x: 10, z: 36 });
 });

@@ -209,7 +209,11 @@ const tarotSource = adapt(/** @type {import('./recipes.js').Recipe} */ (RECIPES.
 export const TAROT_PROJECT = {
   ...tarotSource,
   id: 'tarot', name: 'Tarot wand',
-  steps: tarotSource.steps,
+  // Keep the wand beside the screen, not a further row down, so its jumpers
+  // do not cross the whole bench.
+  steps: tarotSource.steps.map(step => step.kind === 'part' && step.id === 'imu'
+    ? { ...step, at: { x: 10, z: 36 } }
+    : step),
 };
 
 const GUIDED = [LED_PROJECT, BME280_PROJECT, POWER_PROJECT, BUTTON_PROJECT, SONAR_PROJECT, DISPLAY_PROJECT, SERVO_PROJECT, MOTOR_PROJECT, STRIP_PROJECT, TAROT_PROJECT];
