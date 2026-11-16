@@ -7,7 +7,7 @@
 /** @typedef {{ kind: 'supply'|'load', positive: string, ground?: string, negative?: string, currentsMa: Partial<Record<OperatingMode, NumericValue>>, minVoltage?: NumericValue, maxVoltage?: NumericValue, maxPowerMw?: NumericValue }} LoadModel */
 /** @typedef {{ voltage: number, requestedCurrentMa: number, currentLimitMa?: number, deliveredCurrentMa: number, sourceInstances: string[], status: 'off'|'ok'|'dropout'|'limited'|'contended'|'reversed' }} RailState */
 /** @typedef {{ voltage: number, currentMa: number, status: 'ok'|'unpowered'|'brownout'|'reversed'|'overvoltage'|'overpower' }} DeviceElectricalState */
-/** @typedef {{ code: string, severity: 'info'|'warning'|'error'|'destructive', instances: string[], points: string[], values: Record<string, number> }} ElectricalFault */
+/** @typedef {{ code: string, severity: 'info'|'warning'|'error'|'destructive', instances: string[], points: string[], values: Record<string, number>, origin?: 'supply'|'signal'|'firmware'|'device' }} ElectricalFault */
 /** @typedef {{ rails: Record<string, RailState>, devices: Record<string, DeviceElectricalState>, faults: ElectricalFault[], burns: string[] }} ElectricalOutcome */
 /** @typedef {{ capabilities: object[] }} ElectricalDevice */
 

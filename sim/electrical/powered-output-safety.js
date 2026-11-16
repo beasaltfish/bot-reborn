@@ -34,7 +34,7 @@ export function poweredOutputSafety(bench, profile, model) {
     const unknownVoltage = !Number.isFinite(profile.rails['5V']) || !Number.isFinite(profile.gpioVoltage);
     if (bench.usb && boardSupply !== undefined && (unknownVoltage || profile.rails['5V'] > profile.gpioVoltage)) {
       const indirect = unknownVoltage || boardSupply.length > 0 || signalViaResistor;
-      faults.push({ code: indirect ? 'unsupported-electrical-network' : model.directCode, severity: 'warning', instances: [board.id, device.id].sort(), points: [vin, `${board.id}:5V`, ...boardSupply, ...signalPoints].sort(), values: indirect ? {} : { supplyVoltage: profile.rails['5V'] } });
+      faults.push({ code: indirect ? 'unsupported-electrical-network' : model.directCode, severity: 'warning', origin: 'signal', instances: [board.id, device.id].sort(), points: [vin, `${board.id}:5V`, ...boardSupply, ...signalPoints].sort(), values: indirect ? {} : { supplyVoltage: profile.rails['5V'] } });
     }
     for (const source of sources) {
       const positive = `${source.id}:+`, negative = `${source.id}:-`;
@@ -49,7 +49,7 @@ export function poweredOutputSafety(bench, profile, model) {
       const indirect = !Number.isFinite(voltage) || !Number.isFinite(profile.gpioVoltage) || supplyPins.length > 0 || signalViaResistor;
       if (common && !indirect && voltage <= profile.gpioVoltage) continue;
       const code = common && !indirect ? model.directCode : 'unsupported-electrical-network';
-      faults.push({ code, severity: 'warning', instances: [board.id, device.id, source.id].sort(), points: [vin, positive, negative, ...supplyPins, ...signalPoints].sort(), values: {} });
+      faults.push({ code, severity: 'warning', origin: 'signal', instances: [board.id, device.id, source.id].sort(), points: [vin, positive, negative, ...supplyPins, ...signalPoints].sort(), values: {} });
     }
   }
   return faults;

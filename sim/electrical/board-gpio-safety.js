@@ -22,7 +22,7 @@ export function boardGpioSafety(bench, profile) {
       const pins = paths.get(network.netOf(point));
       if (pins === undefined) continue;
       const unsupported = invalid || pins.length > 0;
-      faults.push({ code: unsupported ? 'unsupported-electrical-network' : 'logic-level-incompatible', severity: 'warning', instances: [board.id], points: [supply, point, ...pins], values: unsupported ? {} : { supplyVoltage: profile.rails['5V'], logicVoltage: profile.gpioVoltage } });
+      faults.push({ code: unsupported ? 'unsupported-electrical-network' : 'logic-level-incompatible', severity: 'warning', origin: 'signal', instances: [board.id], points: [supply, point, ...pins], values: unsupported ? {} : { supplyVoltage: profile.rails['5V'], logicVoltage: profile.gpioVoltage } });
     }
   }
   return faults;

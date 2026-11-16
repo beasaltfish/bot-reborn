@@ -19,12 +19,12 @@ import { PROFILES, checkResources } from './profiles.js';
 
 /** Deduplicate global findings by code and affected instances. */
 /** @param {{code:string, instances:string[], points:string[]}[]} faults */
-function uniqueFaults(faults) {
+export function uniqueFaults(faults) {
   const sorted = faults.map(f => ({ ...f, instances: [...f.instances].sort(), points: [...f.points].sort() }))
     .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
   const merged = new Map();
   for (const f of sorted) {
-    const key = JSON.stringify([f.code, f.instances]);
+    const key = JSON.stringify([f.code, f.instances, f.origin ?? '']);
     const previous = merged.get(key);
     if (previous) previous.points = [...new Set([...previous.points, ...f.points])].sort();
     else merged.set(key, f);

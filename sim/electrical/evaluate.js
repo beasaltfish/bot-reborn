@@ -21,7 +21,8 @@ export function evaluateElectrical(bench, { profile, mode, stimuli, devices = DE
   /** @param {import('../bench.js').Placed} p @param {string} pin */
   const point = (p, pin) => `${p.id}:${pin}`;
   /** @param {string} code @param {import('./supply.js').ElectricalFault['severity']} severity @param {string[]} instances @param {string[]} points @param {Record<string, number>} values */
-  const fault = (code, severity, instances, points, values = {}) => outcome.faults.push({ code, severity, instances, points, values });
+  const SUPPLY_CODES = new Set(['source-contention', 'reverse-polarity', 'regulator-dropout', 'source-current-limit', 'rail-brownout']);
+  const fault = (code, severity, instances, points, values = {}) => outcome.faults.push({ code, severity, instances, points, values, ...(SUPPLY_CODES.has(code) ? { origin: 'supply' } : {}) });
   /** @param {...unknown} xs */
   const finite = (...xs) => xs.every(x => typeof x === 'number' && Number.isFinite(x));
   for (const p of bench.placed) {
