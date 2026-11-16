@@ -26,7 +26,7 @@ export function screenHello(token, model) {
  * until stop(); a `reject` means no retry will help, so it stops and says why
  * in the console. Browser only.
  * @param {{
- *   token: string, model: Screen,
+ *   token: string, model: Screen, url?: string,
  *   onFrame(img: ImageBitmap): void,
  *   log?: (line: string) => void,
  * }} o
@@ -50,7 +50,7 @@ export function openScreenFeed(o) {
   const connect = () => {
     if (stopped) return;
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const socket = new WebSocket(`${proto}://${location.host}${SCREEN_PATH}`);
+    const socket = new WebSocket(o.url || `${proto}://${location.host}${SCREEN_PATH}`);
     ws = socket;
     // Binary frames are JPEGs; a Blob is what createImageBitmap wants.
     socket.binaryType = 'blob';
