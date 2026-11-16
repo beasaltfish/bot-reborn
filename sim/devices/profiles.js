@@ -6,7 +6,7 @@ import { DEVICES, firmwareIndependent } from './catalog.js';
 import { bme280Wiring } from './bme280-wiring.js';
 
 /** @typedef {{ code: string, instances: string[], points: string[], detail: Record<string, unknown> }} ResourceIssue */
-/** @typedef {{ id: string, rails: Record<string, number>, gpioVoltage: number, adcPins: string[], i2cBuses: {id:string,sda:string,scl:string}[], spiBuses: {id:string,sck:string,mosi:string,miso:string}[], pwmPins: string[], pwmChannels: number, endpoints: Record<string, Record<string, string|number>>, supportedParts: string[] }} Profile */
+/** @typedef {{ id: string, rails: Record<string, number>, gpioVoltage: number, adcPins: string[], i2cBuses: {id:string,sda:string,scl:string}[], spiBuses: {id:string,sck:string,mosi:string,miso:string}[], pwmPins: string[], pwmChannels: number, gpioSourceMa: number, gpioAbsMaxMa: number, endpoints: Record<string, Record<string, string|number>>, supportedParts: string[] }} Profile */
 // Exclude strapping pins and GPIO46 (input-only); GPIO19/20 are USB pins.
 const exposed = PARTS.esp32.pins.map((p) => p.name).filter((p) => /^GPIO\d+$/.test(p));
 const reserved = new Set(['GPIO0', 'GPIO3', 'GPIO19', 'GPIO20', 'GPIO45', 'GPIO46']);
@@ -16,7 +16,7 @@ export const PROFILES = [{
   adcPins: exposed.filter((pin) => Number(pin.slice(4)) >= 1 && Number(pin.slice(4)) <= 20),
   i2cBuses: [{ id: 'i2c0', sda: 'GPIO1', scl: 'GPIO2' }],
   spiBuses: [{ id: 'spi2', sck: 'GPIO11', mosi: 'GPIO10', miso: 'GPIO17' }],
-  pwmPins: exposed.filter((pin) => !reserved.has(pin)), pwmChannels: 8,
+  pwmPins: exposed.filter((pin) => !reserved.has(pin)), pwmChannels: 8, gpioSourceMa: 20, gpioAbsMaxMa: 40,
   endpoints: {
     audio: { bclk: 'GPIO12', ws: 'GPIO13', dout: 'GPIO14', din: 'GPIO15' },
     screen: { sck: 'GPIO11', mosi: 'GPIO10', cs: 'GPIO9', dc: 'GPIO8', rst: 'GPIO18', miso: 'GPIO17' },
