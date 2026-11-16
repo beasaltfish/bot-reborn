@@ -28,6 +28,8 @@ import { liveDiagnosis } from './live-diagnosis.js';
 import { isViewPeekShortcut } from './view-shortcut.js';
 import { characterChoices, chooseCharacter, chooseLine, startBody, faultText, adminLink, keepsFault } from './body.js';
 import { createBoardRuntime, bootMode } from './firmware/runtime.js';
+import { createBodyAudio, shapeDownlink } from './body.js';
+import { PcmPlayer } from '../phone/audio/player.js';
 import { firmwareById } from './firmware/index.js';
 import { ledPattern } from './firmware/led.js';
 import { createSerialPanel } from './ui/serial-panel.js';
@@ -381,6 +383,8 @@ let session = null;
 /** The board runtime: boot events, the brain link and the screen feed. */
 /** @type {ReturnType<typeof createBoardRuntime> | null} */
 let boardRuntime = null;
+const bodyAudio = createBodyAudio();
+/** @type {PcmPlayer | null} */ let bodyPlayer = null;
 /** @type {AbortController | null} */
 let pendingStart = null;
 /** Reads the wand into the shake detector while a body is plugged in. @type {ReturnType<typeof createWandFeed> | null} */
@@ -529,8 +533,8 @@ function stopUnsafeSession() {
   world.imu(/** @type {any} */ (off));
 }
 
-/** The output AudioContext is unlocked from the first real gesture; Task 11 fills this in. */
-function unlockAudio() {}
+/** The output AudioContext is unlocked from the first real gesture. */
+function unlockAudio() { void bodyAudio.resume(); }
 
 /**
  * @param {{ ending?: string | null, pendingFlash?: string | null }} [meta]
@@ -641,71 +645,6 @@ async function plugIn(meta = {}) {
   boardRuntime.start();
 }
 
-/**
- * @param {number} mine
- * @param {string} id
- * @param {string} name
- * @param {import('./power.js').Outcome} outcome
- * @param {string | null} [ending] what to say to try the bench, when a recipe built it
- */
-async function connect(mine, id, name, outcome, ending = null) {
-  if (mine !== plugs) return;
-  startLock.begin(mine);
-  const abort = new AbortController();
-  pendingStart = abort;
-  line.who = name;
-  line.state = 'connecting…';
-  showLine();
-  wiringView = view === 'orbit' ? wiringView : view;
-  view = 'orbit';
-  peeking = null;
-  go(view);
-  effects.setAlive(true);
-  // Every callback checks it still belongs to the current plug-in: a session
-  // unplugged while starting (Reset bench during the mic prompt) can still
-  // end, or report state, before its late stop() runs.
-  const live = () => mine === plugs;
-  try {
-    const started = await startBody({
-      id,
-      outcome,
-      isCurrent: live,
-      signal: abort.signal,
-      // The brain names its states in capitals (LISTENING); the line reads as a sentence.
-      onState: (s) => {
-        if (!live()) return;
-        // A fault stays up until the user speaks again: the brain voices its own apology (SPEAKING) right after one.
-        if (!keepsFault(s)) line.api = null;
-        line.state = s.toLowerCase(); line.lost = false; showLine();
-      },
-      onFault: (msg) => { if (!live()) return; apiFor = id; line.api = faultText(msg); showLine(); },
-      onLevel: (up, down) => { if (live()) effects.levels(up, down); },
-      // A stale session must not stop the toys of the one that replaced it.
-      onEnd: (msg) => { if (!live()) return; driveStop(); line.end = msg; effects.setAlive(false); showLine(); },
-      onLost: () => { if (!live()) return; driveStop(); line.lost = true; showLine(); },
-      onMove: (msg) => { if (live()) driveMove(msg); },
-      onStop: () => { if (live()) driveStop(); },
-      onWelcome: () => { if (!live()) return; line.lost = false; line.ending = ending; if (line.state === 'connecting…') line.state = 'connected'; showLine(); },
-      // The bench's screens connect the way the firmware does, with their own
-      // size; a character that is not a pet leaves them black (spec §5.5).
-      screen: outcome.screenModel
-        ? { model: /** @type {any} */ (screenById(outcome.screenModel)), onFrame: (img) => { if (live()) world.paintScreens(img); } }
-        : undefined,
-    });
-    // Reset bench can pull the plug while this was starting.
-    if (live()) {
-      session = started;
-      wandFeed = createWandFeed({ detector: createShakeDetector(), send: () => started.sendShake(), now: () => performance.now() });
-      world.onWandLevel((_id, level) => wandFeed?.level(level));
-      clearInterval(wandTimer);
-      wandTimer = setInterval(() => wandFeed?.tick(), 50);
-    } else started.stop();
-  } finally {
-    if (pendingStart === abort) pendingStart = null;
-    startLock.release(mine);
-  }
-}
-
 function unplug() {
   hands.highlightPoints([]);
   plugs++;
@@ -717,6 +656,9 @@ function unplug() {
   powered = null;
   boardRuntime?.stop();
   boardRuntime = null;
+  bodyPlayer?.hush();
+  bodyPlayer = null;
+  bodyAudio.close();
   serial.show(false);
   session?.stop();
   session = null;

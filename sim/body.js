@@ -134,6 +134,27 @@ function level(samples) {
   return Math.sqrt(sum / s.length) / 32768;
 }
 
+/** The speaker's own AudioContext: created/resumed from a real gesture, closed on power off. */
+/** @param {() => AudioContext} [create] */
+export function createBodyAudio(create) {
+  /** @type {AudioContext | null} */
+  let ctx = null;
+  const make = create ?? (() => new (/** @type {any} */ (globalThis).AudioContext)());
+  return {
+    async resume() {
+      if (!ctx) ctx = make();
+      const context = /** @type {AudioContext} */ (ctx);
+      if (context.state === 'suspended') await context.resume?.();
+      return context;
+    },
+    get context() { return ctx; },
+    close() {
+      ctx?.close?.();
+      ctx = null;
+    },
+  };
+}
+
 const REJECTS = {
   token: 'The brain no longer accepts this character’s token — open the admin page and check the character.',
   unconfigured: 'This character is not set up yet — open the admin page and finish its setup.',
@@ -192,11 +213,11 @@ export function adminLink(id) {
 
 /**
  * @param {{
- *   id: string, outcome: Outcome,
+ *   token: string, outcome: Outcome, audioContext?: AudioContext,
  *   isCurrent?(): boolean,
  *   signal?: AbortSignal,
  *   onState(s: string): void, onLevel(up: number, down: number): void,
- *   onEnd(msg: string): void,
+ *   onEnd(msg: string): void, onMicBlocked?(): void,
  *   onLost?(): void, onWelcome?(): void,
  *   onFault?(msg: { part: string, status: number | null, kind: string }): void,
  *   onMove?(msg: any): void, onStop?(): void,
@@ -204,6 +225,8 @@ export function adminLink(id) {
  * }} o
  * onLost: the brain dropped and the link is retrying by itself; onWelcome:
  * the brain took this body in (first time or again after a drop).
+ * The microphone is optional: a refused or missing one silences the uplink
+ * and leaves the link (and the downlink) running.
  * @returns {Promise<{ stop(): void, sendShake(): void }>}
  */
 export async function startBody(o) {
@@ -212,7 +235,7 @@ export async function startBody(o) {
   /** @type {ReturnType<typeof connectBody> | null} */ let link = null;
   /** @type {ReturnType<typeof openScreenFeed> | null} */ let feed = null;
   /** @type {PcmPlayer | null} */ let player = null;
-  const name = `sim-${o.id}`;
+  const name = `sim-${o.token.slice(0, 8)}`;
   let up = 0;
   let down = 0;
 
@@ -224,40 +247,29 @@ export async function startBody(o) {
     stopped = true;
     link?.close();
     feed?.stop();
-    pipeline?.unsubscribe(name);
+    if (pipeline) pipeline.unsubscribe(name);
     player?.hush();
   };
   /** Ends the session for a reason the page should show. */
   const end = (/** @type {string} */ msg) => { if (!stopped) { stop(); o.onEnd(msg); } };
   const current = () => !stopped && !o.signal?.aborted && (o.isCurrent?.() ?? true);
 
-  /** @type {{ token: string, config: { bargeIn: boolean } }} */
-  let character;
-  try {
-    const res = await fetch(`/api/characters/${encodeURIComponent(o.id)}`, { signal: o.signal });
-    if (!res.ok) throw new Error(String(res.status));
-    character = await res.json();
-  } catch {
-    if (current()) end('Could not reach the brain — is it running?'); else stop();
-    return { stop, sendShake };
-  }
-  if (!current()) { stop(); return { stop, sendShake }; }
-
-  /** @type {Awaited<ReturnType<typeof pipelines.acquire>>} */
+  /** @type {Awaited<ReturnType<typeof pipelines.acquire>> | undefined} */
   let lease;
   try {
-    lease = await pipelines.acquire(Boolean(character.config.bargeIn), current, o.signal);
+    lease = await pipelines.acquire(true, current, o.signal);
   } catch {
-    if (current()) end('Microphone blocked — allow it in the address bar and plug in again.'); else stop();
-    return { stop, sendShake };
+    lease = undefined;
   }
-  if (!lease || !current()) { lease?.cancel(); stop(); return { stop, sendShake }; }
-  pipeline = lease.pipeline;
+  if (!current()) { lease?.cancel(); stop(); return { stop, sendShake }; }
+  pipeline = lease?.pipeline ?? null;
+
   try {
-    player = new PcmPlayer(pipeline.audioContext);
+    const output = o.audioContext ?? pipeline?.audioContext;
+    if (output) player = new PcmPlayer(output);
     link = connectBody({
       url: `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/body`,
-      token: character.token,
+      token: o.token,
       onWelcome() { if (!stopped) o.onWelcome?.(); },
       onMessage(msg) {
         if (msg.type === 'hush') player?.hush();
@@ -278,18 +290,23 @@ export async function startBody(o) {
 
     // One feed for the bench's screens: the firmware drives one panel, and every
     // glass of that model shows what it shows (spec §5.5).
-    if (o.screen) feed = openScreenFeed({ token: character.token, model: o.screen.model, onFrame: o.screen.onFrame });
+    if (o.screen) feed = openScreenFeed({ token: o.token, model: o.screen.model, onFrame: o.screen.onFrame });
 
-    pipeline.subscribe(name, (frame) => {
-      const shaped = shapeUplink(toInt16(frame), o.outcome.mic);
-      up = level(shaped);
-      o.onLevel(up, down);
-      link?.sendAudio(shaped);
-    });
-    lease.commit();
+    if (pipeline) {
+      const mic = pipeline;
+      mic.subscribe(name, (frame) => {
+        const shaped = shapeUplink(toInt16(frame), o.outcome.mic);
+        up = level(shaped);
+        o.onLevel(up, down);
+        link?.sendAudio(shaped);
+      });
+      lease?.commit();
+    } else {
+      o.onMicBlocked?.();
+    }
   } catch (error) {
     stop();
-    lease.cancel();
+    lease?.cancel();
     throw error;
   }
 
