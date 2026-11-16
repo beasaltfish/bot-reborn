@@ -77,8 +77,9 @@ export function ownershipOf(bench) {
     const device = DEVICES[part.part];
     if (!device) continue;
     const points = terminals(device, part.id);
+    if (points.length === 0) continue;
     const netsOf = points.map(net);
-    const hasControl = netsOf.some((n) => control.has(n));
+    const hasControl = netsOf.some((n) => control.has(n)) || (part.part === 'speaker' && netsOf.some((n) => (network.members(n) ?? []).some((m) => m.startsWith('amp:'))));
     const hasPower = netsOf.some((n) => power.has(n));
     const conflict = netsOf.some((n) => control.has(n) && power.has(n));
     if (conflict) result[part.id] = 'unknown';
@@ -110,6 +111,9 @@ export function ownershipOf(bench) {
   return result;
 }
 
+/** @param {any} network @param {string} point */
+function netOfSafe(network, point) { try { return network.netOf(point); } catch { return ''; } }
+
 /**
  * @param {import('../bench.js').Bench} bench
  * @returns {{ code: 'ownership-unknown', severity: 'info', instances: string[], points: string[] }[]}
@@ -118,11 +122,18 @@ export function ownershipIssues(bench) {
   const verdicts = ownershipOf(bench);
   /** @type {{ code: 'ownership-unknown', severity: 'info', instances: string[], points: string[] }[]} */
   const issues = [];
+  const network = nets(bench);
   for (const part of bench.placed) {
     if (verdicts[part.id] !== 'unknown') continue;
     const device = DEVICES[part.part];
     if (!device) continue;
-    issues.push({ code: 'ownership-unknown', severity: 'info', instances: [part.id], points: terminals(device, part.id) });
+    const points = terminals(device, part.id);
+    const wired = points.some((point) => {
+      const members = network.members(netOfSafe(network, point)) ?? [];
+      return members.some((m) => !m.startsWith(`${part.id}:`) && !m.startsWith('bb'));
+    });
+    if (!wired) continue;
+    issues.push({ code: 'ownership-unknown', severity: 'info', instances: [part.id], points });
   }
   return issues;
 }

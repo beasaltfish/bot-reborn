@@ -35,7 +35,7 @@ test('the SSD1306 has the documented pins, address property and firmware contrac
 test('frames are 128x64 monochrome and text drawing is deterministic', () => {
   const blank = emptyFrame();
   assert.equal(blank.length, SSD1306_WIDTH * SSD1306_HEIGHT / 8);
-  assert.ok(blank.every(byte => byte === 0));
+  assert.ok(blank.every((/** @type {number} */ byte) => byte === 0));
   setPixel(blank, 0, 0);
   assert.equal(pixel(blank, 0, 0), true);
   assert.equal(pixel(blank, 1, 0), false);
@@ -44,23 +44,23 @@ test('frames are 128x64 monochrome and text drawing is deterministic', () => {
   const first = textFrame(['T 24.5 C']);
   const second = textFrame(['T 24.5 C']);
   assert.deepEqual([...first.frame], [...second.frame]);
-  assert.ok(first.frame.some(byte => byte !== 0));
+  assert.ok(first.frame.some((/** @type {number} */ byte) => byte !== 0));
   assert.equal(first.lines[0], 'T 24.5 C');
 });
 
 test('readings format into three bounded display lines', () => {
   const view = formatReadings({ temperatureC: 24.53, humidityPct: 50.4, pressureHpa: 1013.2 });
   assert.deepEqual(view.lines, ['T 24.5 C', 'H 50 %', 'P 1013 HPA']);
-  assert.ok(view.frame.some(byte => byte !== 0));
+  assert.ok(view.frame.some((/** @type {number} */ byte) => byte !== 0));
 });
 
 test('a wired display is ready with a blank frame and draws only on request', () => {
   let result = evaluateDevices(displayBench());
   assert.equal(result.display.oled.state, 'ready');
-  assert.ok(result.display.oled.frame.every(byte => byte === 0));
+  assert.ok(result.display.oled.frame.every((/** @type {number} */ byte) => byte === 0));
   result = evaluateDevices(displayBench(), { stimuli: { displays: { oled: { lines: ['T 24.5 C', 'H 50 %'] } } } });
   assert.deepEqual(result.display.oled.lines, ['T 24.5 C', 'H 50 %']);
-  assert.ok(result.display.oled.frame.some(byte => byte !== 0));
+  assert.ok(result.display.oled.frame.some((/** @type {number} */ byte) => byte !== 0));
 });
 
 test('an unpowered display is off', () => {

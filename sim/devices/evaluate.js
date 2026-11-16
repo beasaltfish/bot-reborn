@@ -14,11 +14,12 @@ import { evaluateWs2812 } from './ws2812.js';
 import { powerOn } from '../power.js';
 import { DEVICES } from './catalog.js';
 import { PROFILES, checkResources } from './profiles.js';
+import { ownershipIssues } from '../firmware/ownership.js';
 
-/** @typedef {{ profile?: import('./profiles.js').Profile, mode?: import('../electrical/supply.js').OperatingMode, stimuli?: object, devices?: Record<string, any> }} Options */
+/** @typedef {{ profile?: import('./profiles.js').Profile, mode?: import('../electrical/supply.js').OperatingMode, stimuli?: object, devices?: Record<string, any>, ownership?: Record<string, 'board'|'circuit'|'unknown'>, deviceStates?: Record<string, string> }} Options */
 
 /** Deduplicate global findings by code and affected instances. */
-/** @param {{code:string, instances:string[], points:string[]}[]} faults */
+/** @param {{code:string, instances:string[], points:string[], origin?:string}[]} faults */
 export function uniqueFaults(faults) {
   const sorted = faults.map(f => ({ ...f, instances: [...f.instances].sort(), points: [...f.points].sort() }))
     .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
@@ -37,7 +38,7 @@ export function uniqueFaults(faults) {
  * @param {import('../bench.js').Bench} bench
  * @param {Options} [options]
  */
-export function evaluateDevices(bench, { profile = PROFILES[0], mode = 'idle', stimuli, devices = DEVICES } = {}) {
+export function evaluateDevices(bench, { profile = PROFILES[0], mode = 'idle', stimuli, devices = DEVICES, ownership = {}, deviceStates = {} } = {}) {
   const electrical = evaluateElectrical(bench, { profile, mode, stimuli, devices });
   const resources = checkResources(bench, profile, devices).filter(f => {
     if (f.code !== 'spi-chip-select-conflict' || f.instances.length !== 2) return true;
@@ -94,11 +95,27 @@ export function evaluateDevices(bench, { profile = PROFILES[0], mode = 'idle', s
       aggregateFaults.push({ code: 'rail-brownout', severity: 'warning', instances: rail.sourceInstances, points: [net], values: { requestedCurrentMa: rail.requestedCurrentMa, currentLimitMa: rail.currentLimitMa } });
     }
   }
-  const faults = uniqueFaults([...basicFaults, ...(sensor?.faults ?? []), ...digital.faults, ...display.faults, ...servo.faults, ...motor.faults, ...strip.faults, ...aggregateFaults]);
+  const faults = uniqueFaults([...basicFaults, ...(sensor?.faults ?? []), ...digital.faults, ...display.faults, ...servo.faults, ...motor.faults, ...strip.faults, ...aggregateFaults, ...ownershipIssues(bench)]);
   const bme280 = sensor?.parts ?? {};
   const parts = Object.fromEntries(Object.entries(electrical.devices).map(([id, state]) => [id, { electrical: state }]));
   const burns = [...new Set([...electrical.burns, ...ledResults.filter(({ outcome }) => outcome.state === 'overcurrent').map(({ id }) => id)])].sort();
-  return { electrical, resources, parts, faults, burns, bme280, digital: digital.parts, gpio: digital.gpio, display: display.parts, servo: servo.parts, motor: motor.parts, strip: strip.parts };
+  /** A board device only speaks when its firmware initialised it; circuit devices always do. */
+  /** @param {Record<string, any>} record */
+  const gate = (record) => Object.fromEntries(Object.entries(record).filter(([id]) => {
+    const own = ownership[id];
+    if (!own || own === 'circuit') return true;
+    return deviceStates[id] === 'active';
+  }));
+  return {
+    electrical, resources, parts, faults, burns, deviceStates, ownership,
+    bme280: gate(bme280),
+    digital: gate(digital.parts),
+    gpio: digital.gpio,
+    display: gate(display.parts),
+    servo: gate(servo.parts),
+    motor: gate(motor.parts),
+    strip: gate(strip.parts),
+  };
 }
 
 /**

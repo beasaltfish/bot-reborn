@@ -11,10 +11,10 @@ import { emptyBench, load, serialize, addPart, addBoard, park, setWireColor, rem
 import { deviceByPart } from './devices/catalog.js';
 import { applyLedDamage, evaluateLedBench } from './electrical/led-bench.js';
 import { evaluateBench } from './devices/evaluate.js';
-import { formatReadings } from './devices/ssd1306.js';
+import { ownershipOf } from './firmware/ownership.js';
 import { createRuntimePanel } from './ui/device-runtime-panel.js';
 import { planById, planOptionsFor, planSteps } from './plan.js';
-import { previewStates, previewText } from './project-preview.js';
+import { previewText } from './project-preview.js';
 import { nextPlanHint } from './guidance.js';
 import { defaultStimuli, setStimulus } from './stimuli.js';
 import { motorLevels, toyAction } from './car.js';
@@ -185,14 +185,11 @@ function simulationStimuli() {
 /** Push evaluated device state (OLED frames, servo, motor, strip) into the scene. */
 function refreshDeviceVisuals() {
   const stimuli = simulationStimuli();
-  let engineering = evaluateBench(bench, { stimuli }).engineering;
-  const readings = Object.values(engineering.bme280 ?? {}).find(state => state?.telemetry)?.telemetry;
-  if (readings) {
-    const displays = { ...(stimuli.displays ?? {}) };
-    let added = false;
-    for (const id of Object.keys(engineering.display ?? {})) if (!displays[id]) { displays[id] = { lines: formatReadings(readings).lines }; added = true; }
-    if (added) engineering = evaluateBench(bench, { stimuli: { ...stimuli, displays } }).engineering;
-  }
+  const engineering = evaluateBench(bench, {
+    stimuli,
+    ownership: ownershipOf(bench),
+    deviceStates: boardRuntime?.deviceStates() ?? {},
+  }).engineering;
   world.devices(engineering);
 }
 
@@ -877,8 +874,6 @@ export function startPlan(planId, options = {}, mode = 'build', hooks = {}, spee
           const text = previewText(plan.id, document.documentElement.lang);
           if (text) panels.status(text);
         }
-        const preview = previewStates(plan.id, environment);
-        if (preview) world.devices(preview);
       }
     },
   });
