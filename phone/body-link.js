@@ -32,6 +32,7 @@ const RETRY_MS = [500, 1000, 2000, 5000];
  *   onAudio: (bytes: ArrayBuffer) => void,
  *   onLost: () => void,
  *   onReject: (reason: string) => void,
+ *   retryOnReject?: (reason: string) => boolean,
  *   watchdogMs?: number, heartbeatMs?: number, retryMs?: number[],
  * }} opts
  */
@@ -73,6 +74,12 @@ export function connectBody(opts) {
       if (!msg) return;
       if (!welcomed) {
         if (msg.type === 'reject') {
+          // A firmware body may retry a busy reject; the phone treats every
+          // reject as final, which is the default.
+          if (opts.retryOnReject?.(msg.reason)) {
+            socket.close();
+            return;
+          }
           finished = true;
           socket.close();
           opts.onReject(msg.reason);

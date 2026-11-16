@@ -175,3 +175,20 @@ test('the watchdog does not wait for a dead brain to answer the close', async ()
   assert.equal(r.events.filter((e) => e === 'lost').length, lost);
   r.link.close();
 });
+
+test('a retryable reject reconnects instead of ending the link', async () => {
+  let seen = 0;
+  const r = rig({ retryOnReject: (why) => { seen += 1; return why === 'busy' && seen < 3; } });
+  r.socket(0).open();
+  r.socket(0).text({ type: 'reject', reason: 'busy' });
+  await until(() => FakeSocket.all.length === 2);
+  r.socket(1).open();
+  r.socket(1).text({ type: 'reject', reason: 'busy' });
+  await until(() => FakeSocket.all.length === 3);
+  r.socket(2).open();
+  r.socket(2).text({ type: 'reject', reason: 'busy' });
+  await until(() => r.events.includes('reject busy'));
+  assert.ok(seen >= 3);
+  assert.ok(!r.events.includes('welcome undefined'));
+  r.link.close();
+});
