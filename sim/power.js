@@ -82,7 +82,7 @@ export function powerOn(b) {
   const shorted = RAILS.filter((p, i) => RAILS.some((q, j) => j > i && n.same(p, q)));
   if (shorted.length) {
     const points = RAILS.filter((p) => RAILS.some((q) => q !== p && n.same(p, q)));
-    return { esp: 'brownout', mic: 'silent', amp: 'silent', burns: [], faults: [{ code: 'short-rails', origin: 'supply', points }], parts, screenModel: null, toys: {} };
+    return { esp: 'brownout', mic: 'silent', amp: 'silent', burns: [], faults: [/** @type {any} */ ({ code: 'short-rails', origin: 'supply', points })], parts, screenModel: null, toys: {} };
   }
 
   /** @type {Outcome['faults']} */

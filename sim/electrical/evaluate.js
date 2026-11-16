@@ -22,6 +22,7 @@ export function evaluateElectrical(bench, { profile, mode, stimuli, devices = DE
   const point = (p, pin) => `${p.id}:${pin}`;
   /** @param {string} code @param {import('./supply.js').ElectricalFault['severity']} severity @param {string[]} instances @param {string[]} points @param {Record<string, number>} values */
   const SUPPLY_CODES = new Set(['source-contention', 'reverse-polarity', 'regulator-dropout', 'source-current-limit', 'rail-brownout']);
+  /** @param {string} code @param {'info'|'warning'|'error'|'destructive'} severity @param {string[]} instances @param {string[]} points @param {Record<string, number>} [values] */
   const fault = (code, severity, instances, points, values = {}) => outcome.faults.push({ code, severity, instances, points, values, ...(SUPPLY_CODES.has(code) ? { origin: 'supply' } : {}) });
   /** @param {...unknown} xs */
   const finite = (...xs) => xs.every(x => typeof x === 'number' && Number.isFinite(x));

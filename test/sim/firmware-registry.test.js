@@ -14,7 +14,7 @@ test('every firmware is well formed and unique', () => {
 });
 
 test('the body firmware is mirrored from firmware/main', () => {
-  const body = firmwareById('body');
+  const body = /** @type {any} */ (firmwareById('body'));
   assert.equal(body.provenance.kind, 'mirrored');
   assert.equal(body.provenance.source, 'firmware/main');
   for (const part of ['esp32', 'inmp441', 'max98357a', 'speaker', 'mpu6050', 'toy']) {
@@ -25,7 +25,7 @@ test('the body firmware is mirrored from firmware/main', () => {
 });
 
 test('the body firmware lists every screen model it can drive', () => {
-  const body = firmwareById('body');
+  const body = /** @type {any} */ (firmwareById('body'));
   for (const screen of SCREENS) assert.ok(body.drivers.includes(`screen-${screen.id}`), screen.id);
 });
 

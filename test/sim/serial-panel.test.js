@@ -11,8 +11,8 @@ function setup(over = {}) {
   const previous = globalThis.document;
   const previousFetch = globalThis.fetch;
   globalThis.document = dom.window.document;
-  const changes = [];
-  const reboots = [];
+  const changes = /** @type {any[]} */ ([]);
+  const reboots = /** @type {any[]} */ ([]);
   const panel = createSerialPanel({
     lang: 'en',
     firmware: BODY,

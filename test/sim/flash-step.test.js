@@ -25,17 +25,17 @@ test('a burnt board cannot be flashed', () => {
 
 test('a supply-origin fault blocks flashing, a signal-origin fault does not', () => {
   const bench = emptyBench();
-  const supply = { faults: [{ code: 'source-contention', origin: 'supply', instances: ['esp'], points: ['esp:3V3'] }], legacy: { faults: [] } };
-  const signal = { faults: [{ code: 'unsupported-electrical-network', origin: 'signal', instances: ['sonar', 'esp'], points: ['sonar:ECHO', 'esp:GPIO5', 'src:-'] }], legacy: { faults: [] } };
+  const supply = /** @type {any} */ ({ faults: [{ code: 'source-contention', origin: 'supply', instances: ['esp'], points: ['esp:3V3'] }], legacy: { faults: [] } });
+  const signal = /** @type {any} */ ({ faults: [{ code: 'unsupported-electrical-network', origin: 'signal', instances: ['sonar', 'esp'], points: ['sonar:ECHO', 'esp:GPIO5', 'src:-'] }], legacy: { faults: [] } });
   assert.notEqual(flashPowerFault(bench, supply), null);
   assert.equal(flashPowerFault(bench, signal), null);
 });
 
 test('uniqueFaults keeps supply and signal faults with the same code and instances', () => {
-  const merged = uniqueFaults([
+  const merged = uniqueFaults(/** @type {any} */ ([
     { code: 'unsupported-electrical-network', origin: 'supply', instances: ['esp'], points: ['esp:3V3'] },
     { code: 'unsupported-electrical-network', origin: 'signal', instances: ['esp'], points: ['esp:GPIO5'] },
-  ]);
+  ]));
   assert.deepEqual(merged.map((f) => f.origin).sort(), ['signal', 'supply']);
 });
 
@@ -77,19 +77,19 @@ test('an external-source sonar signal path does not block flashing', () => {
 });
 
 test('a missing manifest leaves firmware unchanged', async () => {
-  const r = await runFlash(BOARD(), 'body', { fetchImpl: async () => ({ ok: false, status: 404 }), isCurrent: () => true });
+  const r = await runFlash(BOARD(), 'body', { fetchImpl: /** @type {any} */ (async () => ({ ok: false, status: 404 })), isCurrent: () => true });
   assert.equal(r.ok, false);
   assert.equal(r.board.firmware, 'sketch-bme280');
 });
 
 test('an aborted or stale flash does not commit', async () => {
-  const r = await runFlash(BOARD(), 'body', { fetchImpl: okFetch, isCurrent: () => false });
+  const r = await runFlash(BOARD(), 'body', { fetchImpl: /** @type {any} */ (okFetch), isCurrent: () => false });
   assert.equal(r.ok, false);
   assert.equal(r.board.firmware, 'sketch-bme280');
 });
 
 test('flashing keeps NVS settings and changes firmware', async () => {
-  const r = await runFlash(BOARD(), 'body', { fetchImpl: okFetch, isCurrent: () => true });
+  const r = await runFlash(BOARD(), 'body', { fetchImpl: /** @type {any} */ (okFetch), isCurrent: () => true });
   assert.equal(r.ok, true);
   assert.equal(r.board.firmware, 'body');
   assert.equal(r.board.settings.token, 'a'.repeat(32));

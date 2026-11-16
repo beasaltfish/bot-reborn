@@ -51,7 +51,7 @@ export async function loadManifest(url, fetchImpl = fetch) {
   if (!res.ok) throw new Error('image-not-found');
   const manifest = await res.json();
   if (!manifest || !Array.isArray(manifest.files) || manifest.files.length === 0
-    || manifest.files.some((f) => !Number.isInteger(f.offset) || typeof f.path !== 'string')) {
+    || manifest.files.some((/** @type {any} */ f) => !Number.isInteger(f.offset) || typeof f.path !== 'string')) {
     throw new Error('image-not-found');
   }
   return manifest;
@@ -75,7 +75,7 @@ export async function runFlash(board, firmwareId, o = {}) {
   if (!firmware) return { ok: false, reason: 'unknown-firmware', board };
   if (firmware.image.kind === 'release') {
     try {
-      await loadManifest(firmware.image.manifest, o.fetchImpl);
+      await loadManifest(/** @type {string} */ (firmware.image.manifest), o.fetchImpl);
     } catch {
       return { ok: false, reason: 'image-not-found', board };
     }

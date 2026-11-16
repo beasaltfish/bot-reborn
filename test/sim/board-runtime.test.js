@@ -9,14 +9,14 @@ const board = { ...bench.board, settings: { ...bench.board.settings, token: 'a'.
 const OUTCOME = { esp: 'ok', mic: 'ok', amp: 'ok', screenModel: null, parts: {} };
 
 function harness(over = {}) {
-  const lines = [];
-  const links = [];
+  const lines = /** @type {string[]} */ ([]);
+  const links = /** @type {string[]} */ ([]);
   const runtime = createBoardRuntime({
     board, bench, outcome: OUTCOME, profile: {},
     brainUrl: 'ws://brain/body',
-    connect: (opts) => { links.push(opts.url); return { close() { links.push('closed'); }, send() {} }; },
+    connect: (/** @type {any} */ opts) => { links.push(opts.url); return { close() { links.push('closed'); }, send() {} }; },
     openScreen: () => ({ stop() { links.push('screen-closed'); } }),
-    onLine: (l) => lines.push(l),
+    onLine: (/** @type {string} */ l) => lines.push(l),
     onLed: () => {},
     onDevice: () => {},
     ...over,
@@ -55,11 +55,11 @@ test('a flash session is a bootloader, not a boot', () => {
 
 test('busy rejects retry until the runtime budget ends, then are final', (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  let reject;
+  /** @type {any} */ let reject;
   const lines = [];
   const h = harness({
-    connect: (opts) => { reject = opts.retryOnReject; return { close() {}, send() {} }; },
-    onLine: (l) => lines.push(l),
+    connect: (/** @type {any} */ opts) => { reject = opts.retryOnReject; return { close() {}, send() {} }; },
+    onLine: (/** @type {string} */ l) => lines.push(l),
   });
   h.runtime.start();
   t.mock.timers.tick(1000);

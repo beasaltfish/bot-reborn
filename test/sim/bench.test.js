@@ -287,7 +287,7 @@ test('version 2 migrates losslessly and fills property defaults', () => {
   let b = place(emptyBench(), 'mic', { x: -12, z: -4 }, 90, true);
   b = addWire(b, 'mic:VDD', 'esp:3V3', 'red');
   const old = { ...b, v: 2, usb: true, placed: b.placed.map(({ properties, ...p }) => ({ ...p, burnt: p.id === 'mic' })) };
-  delete old.board;
+  delete (/** @type {any} */ (old)).board;
   assert.deepEqual(load(JSON.stringify(old)), { ...old, v: 4, board: emptyBoard(), placed: old.placed.map((p) => ({ ...p, properties: propertiesFor(p.part) })) });
 });
 

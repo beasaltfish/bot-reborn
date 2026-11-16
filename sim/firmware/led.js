@@ -1,5 +1,6 @@
 // The one status light, with the firmware's own duty table
 // (firmware/components/body_logic/led_table.c). `onMs: 1` means steady.
+/** @type {Record<string, { onMs: number, offMs: number } | 'solid'>} */
 const PATTERNS = {
   NO_WIFI: { onMs: 100, offMs: 100 },
   CONNECTING: { onMs: 100, offMs: 900 },

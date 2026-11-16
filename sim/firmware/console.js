@@ -44,7 +44,7 @@ export function consoleCommand(state, line) {
   if (state.firmware.id !== 'body') return { settings: state.settings, lines: ['no console on this firmware'] };
   const [command, ...args] = words(line);
   const settings = state.settings;
-  const out = [];
+  /** @type {string[]} */ const out = [];
   const save = (/** @type {string} */ what) => out.push(what ? `${what} saved` : 'saved');
   const rebootHint = () => out.push('type reboot to use it');
 
