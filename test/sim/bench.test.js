@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  emptyBench, addPart, addBoard, place, moveBoard, trash,
+  emptyBench, emptyBoard, addPart, addBoard, place, moveBoard, trash,
   addWire, removeWire, pinPoints, isHole, serialize, load, park, setPartProperty, setWireColor, propertiesFor,
 } from '../../sim/bench.js';
 import { DEVICES } from '../../sim/devices/catalog.js';
@@ -27,6 +27,39 @@ function straddling() {
 /** @param {Bench} b @param {string} id */
 const part = (b, id) => /** @type {Placed} */ (b.placed.find((p) => p.id === id));
 
+/** A whole v3 bench, with a non-default resistor so a silent fallback is visible. */
+function v3Fixture() {
+  const b = JSON.parse(serialize(emptyBench()));
+  delete b.board;
+  b.v = 3;
+  b.placed.push({ id: 'r', part: 'resistor', properties: { ohms: 220 }, at: { x: 3, z: 5 }, rot: 0, seated: false, burnt: false });
+  return JSON.stringify(b);
+}
+
+test('a valid v3 bench migrates to a v4 board without losing its parts', () => {
+  const b = load(v3Fixture());
+  assert.equal(b.v, 4);
+  assert.equal(part(b, 'r').properties.ohms, 220);
+  assert.deepEqual(part(b, 'r').at, { x: 3, z: 5 });
+  assert.deepEqual(b.board, emptyBoard());
+});
+
+test('a corrupt board state resets only the board', () => {
+  const good = JSON.parse(serialize(load(v3Fixture())));
+  const b = load(JSON.stringify({ ...good, board: { firmware: 'nope' } }));
+  assert.equal(b.placed.length, 5);
+  assert.deepEqual(b.board, emptyBoard());
+});
+
+test('v4 round-trips the board settings', () => {
+  const settings = {
+    ssid: 'bench', pass: '', token: 'f'.repeat(32), url: '', screen: 'ili9341-ips',
+    calib: { driveSwapped: true, steerSwapped: false },
+  };
+  const b = load(JSON.stringify({ ...JSON.parse(serialize(emptyBench())), board: { firmware: 'body', settings } }));
+  assert.deepEqual(b.board, { firmware: 'body', settings });
+});
+
 test('a bench survives being written down and read back', () => {
   let b = place(emptyBench(), 'mic', { x: -12, z: -4 }, 90, true);
   b = addWire(b, 'mic:VDD', 'esp:3V3', 'red');
@@ -46,7 +79,7 @@ test('anything unreadable or from version 1 is an empty bench', () => {
 
 test('the opening bench is one of each part, and one board, on the table', () => {
   const b = emptyBench();
-  assert.equal(b.v, 3);
+  assert.equal(b.v, 4);
   assert.deepEqual(b.placed.map((p) => p.id), ['esp', 'mic', 'amp', 'spk']);
   assert.ok(b.placed.every((p) => p.seated === false && !p.burnt));
   assert.deepEqual(b.placed.map((p) => p.at), [
@@ -254,7 +287,8 @@ test('version 2 migrates losslessly and fills property defaults', () => {
   let b = place(emptyBench(), 'mic', { x: -12, z: -4 }, 90, true);
   b = addWire(b, 'mic:VDD', 'esp:3V3', 'red');
   const old = { ...b, v: 2, usb: true, placed: b.placed.map(({ properties, ...p }) => ({ ...p, burnt: p.id === 'mic' })) };
-  assert.deepEqual(load(JSON.stringify(old)), { ...old, v: 3, placed: old.placed.map((p) => ({ ...p, properties: propertiesFor(p.part) })) });
+  delete old.board;
+  assert.deepEqual(load(JSON.stringify(old)), { ...old, v: 4, board: emptyBoard(), placed: old.placed.map((p) => ({ ...p, properties: propertiesFor(p.part) })) });
 });
 
 test('instance properties and recoloured wires survive save and load', () => {
