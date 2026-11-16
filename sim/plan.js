@@ -12,7 +12,7 @@ import { wireEnd } from './snap.js';
  * @typedef {{ id: string, part: string, at: { x: number, z: number }, rot: number, seated: boolean }} PlanPart
  * @typedef {{ recipeId: string, screenId?: string, wand?: boolean, steps?: import('./recipes.js').Step[] }} PlanLegacy
  * @typedef {{
- *   id: string, name: string, goalKey: string, needs?: string, connection?: 'body' | null, ending?: string,
+ *   id: string, name: string, goalKey: string, needs?: string[], connection?: 'body' | null, ending?: string,
  *   parts: PlanPart[], links: import('./target.js').Link[],
  *   ignoredFaultCodes?: string[], lessonId?: string, legacy?: PlanLegacy, steps?: import('./recipes.js').Step[],
  * }} Plan

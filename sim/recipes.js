@@ -28,14 +28,14 @@ import { wireEnd } from './snap.js';
  * What a recipe is: `needs` says what the character has to be able to do
  * ('pet' = it has a screen to show, 'car' = it drives), `ending` is what to say
  * to try the finished bench.
- * @typedef {{ id: 'audio' | 'screen' | 'toy', name: string, needs: 'any' | 'pet' | 'car', connection: 'body' | null, ending: string }} Recipe
+ * @typedef {{ id: 'audio' | 'screen' | 'toy', name: string, needs: string[], connection: 'body' | null, ending: string }} Recipe
  */
 
 /** @type {Recipe[]} */
 export const RECIPES = [
-  { id: 'audio', name: 'Audio only', needs: 'any', connection: 'body', ending: 'Say hello' },
-  { id: 'screen', name: 'Audio + screen', needs: 'pet', connection: 'body', ending: 'Say "Sit"' },
-  { id: 'toy', name: 'Audio + toy robot', needs: 'car', connection: 'body', ending: 'Say "go forward"' },
+  { id: 'audio', name: 'Audio only', needs: [], connection: 'body', ending: 'Say hello' },
+  { id: 'screen', name: 'Audio + screen', needs: ['pose'], connection: 'body', ending: 'Say "Sit"' },
+  { id: 'toy', name: 'Audio + toy robot', needs: ['move'], connection: 'body', ending: 'Say "go forward"' },
 ];
 
 /** The screen a recipe wires when the character has not named a model. */

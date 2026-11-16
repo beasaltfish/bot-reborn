@@ -426,7 +426,7 @@ let running = false;
  * What the recipe now being played needs of the character and what to say to
  * try the result. Read once by the plug-in the run itself causes, so a plug
  * the user pushes in later chooses a character by hand again.
- * @type {{ need: 'any' | 'pet' | 'car' | 'tarot', ending: string } | null}
+ * @type {{ need: string[], ending: string } | null}
  */
 let recipeOn = null;
 /** The run's controls while one is on the table. */
