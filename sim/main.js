@@ -26,7 +26,7 @@ import { screenById } from '../core/screens.js';
 import { diagnose } from './diagnose.js';
 import { liveDiagnosis } from './live-diagnosis.js';
 import { isViewPeekShortcut } from './view-shortcut.js';
-import { characterChoices, chooseCharacter, chooseLine, startBody, faultText, adminLink, keepsFault } from './body.js';
+import { startBody, faultText, adminLink, keepsFault } from './body.js';
 import { createBoardRuntime, bootMode } from './firmware/runtime.js';
 import { createBodyAudio, shapeDownlink } from './body.js';
 import { PcmPlayer } from '../phone/audio/player.js';

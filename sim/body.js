@@ -2,7 +2,7 @@
 // applied to real microphone and speaker audio, and the brain is none the
 // wiser — it sees an ordinary phone-style body on /body.
 //
-// shapeUplink / shapeDownlink / characterChoices are pure and tested;
+// shapeUplink / shapeDownlink are pure and tested;
 // startBody touches the browser (microphone, WebSocket, AudioContext) and is
 // only exercised on the page.
 
@@ -51,78 +51,6 @@ export function shapeDownlink(bytes, amp) {
   // Little-endian explicitly, as PcmPlayer reads it, whatever this CPU is.
   for (let i = 0; i < n; i++) out[i] = view.getInt16(i * 2, true) >> 1;
   return /** @type {ArrayBuffer} */ (out.buffer);
-}
-
-/**
- * Characters you could plug into, best first: free and set up, then busy,
- * then not set up. A stable sort keeps the brain's order within each group.
- * @param {{ id: string, name: string, ready: boolean, online: boolean }[]} list
- * @returns {{ id: string, name: string, note: string | null }[]}
- */
-export function characterChoices(list) {
-  /** @param {{ ready: boolean, online: boolean }} c */
-  const rank = (c) => (!c.ready ? 2 : c.online ? 1 : 0);
-  return [...list]
-    .sort((a, b) => rank(a) - rank(b))
-    .map((c) => ({
-      id: c.id,
-      name: c.name,
-      note: !c.ready ? 'Not set up — open the admin page' : c.online ? 'In use by another body' : null,
-    }));
-}
-
-/**
- * What the bench does about characters, for a recipe that needs any body or
- * a pet's. One suitable character connects, several are a pick; with none,
- * the reason is told in this order: a right-kind one in use, a ready one of
- * the wrong kind, nothing set up.
- * @param {{ id: string, name: string, ready: boolean, online: boolean, motion: string | null }[]} list
- * @param {'any' | 'pet' | 'car' | 'tarot'} need
- * @returns {{ kind: 'connect', id: string, name: string }
- *   | { kind: 'pick', choices: { id: string, name: string, note: string | null }[] }
- *   | { kind: 'wrong-body', id: string, name: string, motion: string | null }
- *   | { kind: 'busy', id: string, name: string }
- *   | { kind: 'none' }}
- */
-export function chooseCharacter(list, need) {
-  /** @param {{ motion: string | null }} c */
-  const rightKind = (c) => need === 'any' || c.motion === need;
-  const suitable = list.filter((c) => c.ready && !c.online && rightKind(c));
-  if (suitable.length === 1) return { kind: 'connect', id: suitable[0].id, name: suitable[0].name };
-  if (suitable.length > 1) return { kind: 'pick', choices: characterChoices(suitable) };
-  const busy = list.find((c) => c.ready && c.online && rightKind(c));
-  if (busy) return { kind: 'busy', id: busy.id, name: busy.name };
-  const wrong = need === 'any' ? undefined : list.find((c) => c.ready && (c.motion !== need));
-  if (wrong) return { kind: 'wrong-body', id: wrong.id, name: wrong.name, motion: wrong.motion };
-  return { kind: 'none' };
-}
-
-/**
- * What the status line says when a recipe cannot connect a character (every
- * outcome of chooseCharacter except connect and pick), with the link to go
- * and fix it.
- * @param {ReturnType<typeof chooseCharacter>} chosen
- * @param {'any' | 'pet' | 'car' | 'tarot'} need
- * @returns {{ text: string, link?: { href: string, label: string } } | null}
- */
-export function chooseLine(chosen, need) {
-  switch (chosen.kind) {
-    case 'wrong-body': {
-      const label = /** @type {Record<string,string>} */ ({ pet: 'Pet', car: 'Car', tarot: 'Tarot' })[need] ?? need;
-      return {
-        text: `${chosen.name} is a ${chosen.motion} body, not a ${need} — set its body to ${label}`,
-        link: { href: adminLink(chosen.id), label: 'on the admin page' },
-      };
-    }
-    case 'busy':
-      return { text: `${chosen.name} is in use by another body — disconnect it there and plug in again` };
-    case 'none': {
-      const missing = /** @type {Record<string,string>} */ ({ pet: 'No pet character yet —', car: 'No car character yet —', tarot: 'No tarot character yet —' })[need];
-      return { text: missing ?? 'No characters on this brain yet —', link: { href: '/', label: 'set one up on the admin page' } };
-    }
-    default:
-      return null;
-  }
 }
 
 /** @param {Int16Array | ArrayBuffer} samples @returns {number} 0..1 RMS */
