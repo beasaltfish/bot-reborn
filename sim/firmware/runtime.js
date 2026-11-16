@@ -18,6 +18,14 @@ export function screenUrl(bodyUrl) {
   }
 }
 
+/** What a USB insert should do. `pendingFlash` wins over a normal boot. */
+/** @param {{ blocked?: boolean, pendingFlash?: string | null }} [intent] */
+export function bootMode(intent = {}) {
+  if (intent.blocked) return 'blocked';
+  if (intent.pendingFlash) return 'bootloader';
+  return 'boot';
+}
+
 /**
  * @param {{
  *   board: import('../bench.js').BoardState,
@@ -41,13 +49,11 @@ export function createBoardRuntime(o) {
   /** @type {ReturnType<typeof setTimeout>[]} */ let timers = [];
   /** @type {ReturnType<typeof o.connect> | null} */ let conn = null;
   /** @type {ReturnType<NonNullable<typeof o.openScreen>> | null} */ let feed = null;
-  let busySince = null;
+  /** @type {number | null} */ let busySince = null;
 
   /** @param {{ blocked?: boolean, pendingFlash?: string | null }} [intent] */
   function mode(intent = {}) {
-    if (intent.blocked) return 'blocked';
-    if (intent.pendingFlash) return 'bootloader';
-    return 'boot';
+    return bootMode(intent);
   }
 
   function stop() {

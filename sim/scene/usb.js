@@ -86,7 +86,7 @@ function buildPlug() {
 
 /**
  * @param {World} world
- * @param {{ onPlug(on: boolean): void, locked(): boolean, bench(): import('../bench.js').Bench }} opts
+ * @param {{ onPlug(on: boolean, meta?: { pendingFlash?: string | null }): void, onRequest?(): void, locked(): boolean, bench(): import('../bench.js').Bench }} opts
  *   onPlug: the plug went into a port (true) or came out of one (false);
  *   locked: while true the plug cannot be picked up;
  *   bench: what is on the table, so the plug never lies under it.
@@ -285,7 +285,7 @@ export function attachUsb(world, opts) {
       rest();
     }
     if (plugged !== was) {
-      if (plugged) usbIn(); else usbOut();
+      if (plugged) { opts.onRequest?.(); usbIn(); } else usbOut();
       opts.onPlug(plugged);
     }
   }
@@ -312,15 +312,25 @@ export function attachUsb(world, opts) {
      * The plug travels from where it lies to the nearest port, arching over
      * the table, then seats exactly as a released drag does (sound and onPlug
      * included). Resolves once seated, or at once if there is nowhere to go.
+     * `meta.instant` skips the animation for Build it for me; `meta.pendingFlash`
+     * is passed to onPlug so the board can enter the bootloader.
+     * @param {{ instant?: boolean, pendingFlash?: string | null }} [meta]
      * @returns {Promise<void>}
      */
-    insert() {
+    insert(meta = {}) {
       const port = ports().sort((a, b) => a.mouth.distanceTo(plug.position) - b.mouth.distanceTo(plug.position))[0];
       if (!port || plugged || drag) return Promise.resolve();
       cancelInsert?.();
       const from = plug.position.clone();
       const fromYaw = plug.rotation.y;
       const toYaw = Math.atan2(-port.inward.z, port.inward.x);
+      if (meta.instant) {
+        plugged = true;
+        pose(port.mouth, toYaw);
+        usbIn();
+        opts.onPlug(true, meta);
+        return Promise.resolve();
+      }
       // Turn the short way round.
       const turn = ((toYaw - fromYaw + 3 * Math.PI) % (2 * Math.PI)) - Math.PI;
       return new Promise((resolve) => {
@@ -340,7 +350,7 @@ export function attachUsb(world, opts) {
           plugged = true;
           pose(port.mouth, toYaw);
           usbIn();
-          opts.onPlug(true);
+          opts.onPlug(true, meta);
           resolve();
           return false;
         });

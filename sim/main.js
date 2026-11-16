@@ -27,6 +27,12 @@ import { diagnose } from './diagnose.js';
 import { liveDiagnosis } from './live-diagnosis.js';
 import { isViewPeekShortcut } from './view-shortcut.js';
 import { characterChoices, chooseCharacter, chooseLine, startBody, faultText, adminLink, keepsFault } from './body.js';
+import { createBoardRuntime, bootMode } from './firmware/runtime.js';
+import { firmwareById } from './firmware/index.js';
+import { ledPattern } from './firmware/led.js';
+import { createSerialPanel } from './ui/serial-panel.js';
+import { connectBody } from '../phone/body-link.js';
+import { openScreenFeed } from './screen-feed.js';
 import { keptBench, keepBench, dropKept } from './keep.js';
 import { RECIPES, startBench, recipeSteps, applyStep } from './recipes.js';
 import { projectById } from './projects.js';
@@ -151,6 +157,18 @@ const runtimePanel = createRuntimePanel({
   change: (target, values) => applyRuntime(target, values),
 });
 document.body.append(runtimePanel.element);
+const serial = createSerialPanel({
+  lang: document.documentElement.lang === 'zh' ? 'zh' : 'en',
+  firmware: /** @type {any} */ (firmwareById(bench.board.firmware) ?? firmwareById('body')),
+  settings: bench.board.settings,
+  characters: [],
+  onChange: (settings) => {
+    bench = { ...bench, board: { ...bench.board, settings } };
+    setBench(bench);
+  },
+  onReboot: () => { if (usb.plugged) { usb.pullOut(); plugIn(); } },
+});
+document.body.append(serial.element);
 /** @param {import('./selection.js').Selection} selection */
 function showContext(selection) {
   if (!selection || selection.kind === 'part') { context.hide(); return; }
@@ -291,7 +309,12 @@ const hands = attachInteraction(world, () => bench, setBench, {
 });
 const startLock = createStartLock();
 const powerInterlock = createPowerInterlock(stopUnsafeSession);
-const usb = attachUsb(world, { onPlug: (on) => (on ? plugIn(recipeOn) : unplug()), locked: () => startLock.locked(), bench: () => bench });
+const usb = attachUsb(world, {
+  onPlug: (on, meta) => (on ? plugIn(meta) : unplug()),
+  onRequest: () => unlockAudio(),
+  locked: () => startLock.locked(),
+  bench: () => bench,
+});
 
 // #view=top opens in that view without saving it: handy for a screenshot.
 const asked = new URLSearchParams(location.hash.slice(1)).get('view');
@@ -358,6 +381,9 @@ addEventListener('blur', unpeek);
 /** The running body, if the bench is one. */
 /** @type {{ stop(): void } | null} */
 let session = null;
+/** The board runtime: boot events, the brain link and the screen feed. */
+/** @type {ReturnType<typeof createBoardRuntime> | null} */
+let boardRuntime = null;
 /** @type {AbortController | null} */
 let pendingStart = null;
 /** Reads the wand into the shake detector while a body is plugged in. @type {ReturnType<typeof createWandFeed> | null} */
@@ -506,11 +532,15 @@ function stopUnsafeSession() {
   world.imu(/** @type {any} */ (off));
 }
 
+/** The output AudioContext is unlocked from the first real gesture; Task 11 fills this in. */
+function unlockAudio() {}
+
 /**
- * @param {{ need: 'any' | 'pet' | 'car' | 'tarot', ending: string } | null} [recipe] set when
- *   a recipe run plugged in: the character is then chosen for it, not picked by hand
+ * @param {{ ending?: string | null, pendingFlash?: string | null }} [meta]
+ *   `pendingFlash` puts the board in the ROM bootloader instead of booting the
+ *   firmware that is already there.
  */
-async function plugIn(recipe = null) {
+async function plugIn(meta = {}) {
   recipeOn = null;
   const mine = ++plugs;
   bench = { ...bench, usb: true };
@@ -557,44 +587,61 @@ async function plugIn(recipe = null) {
   if (outcome.esp !== 'ok' || blocked) return;
 
   // A bench that came alive is watched, not wired: the orbit view shows the
-  // robot at an angle beside the bench. It used to happen only when a
-  // character connected, so a run with no character to connect to stayed flat.
+  // robot at an angle beside the bench.
   wiringView = view === 'orbit' ? wiringView : view;
   view = 'orbit';
   peeking = null;
   go(view);
 
-  /** @type {{ id: string, name: string, ready: boolean, online: boolean, motion: string | null }[]} */
-  let list;
-  try {
-    const res = await fetch('/api/characters');
-    if (!res.ok) throw new Error(String(res.status));
-    list = await res.json();
-  } catch {
-    if (mine !== plugs) return;
-    line.end = 'Could not reach the brain — is it running?';
-    return showLine();
+  if (bootMode({ blocked: Boolean(blocked), pendingFlash: meta.pendingFlash }) === 'bootloader') {
+    const target = firmwareById(meta.pendingFlash ?? '');
+    serial.show(true);
+    serial.setFirmware(/** @type {any} */ (target ?? firmwareById('body')));
+    serial.append(`esptool: ${target?.image?.label ?? 'firmware'} ready for flashing`);
+    return;
   }
-  if (mine !== plugs) return;
-  if (!list.length) {
-    return panels.status('No characters on this brain yet —', { href: '/', label: 'set one up on the admin page' });
+
+  const firmware = firmwareById(bench.board.firmware);
+  if (!firmware) {
+    panels.status('No firmware on this board — flash one.');
+    return;
   }
-  const ending = recipe?.ending ?? null;
-  const pickFrom = (/** @type {ReturnType<typeof characterChoices>} */ choices) => panels.pick(choices, {
-    pick: (id, name) => connect(mine, id, name, outcome, ending),
-    cancel: () => { usb.pullOut(); unplug(); },
+  serial.setFirmware(firmware);
+  serial.setSettings(bench.board.settings);
+  serial.show(true);
+  line.ending = meta.ending ?? null;
+  boardRuntime = createBoardRuntime({
+    board: bench.board,
+    bench,
+    outcome,
+    brainUrl: `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/body`,
+    connect: (opts) => {
+      const link = connectBody({
+        url: opts.url, token: opts.token, retryOnReject: opts.retryOnReject,
+        onWelcome: opts.onWelcome, onMessage: opts.onMessage, onAudio: opts.onAudio,
+        onLost: opts.onLost, onReject: opts.onReject,
+      });
+      return { close: () => link.close(), send: (msg) => link.send(msg) };
+    },
+    openScreen: (/** @type {any} */ opts) => openScreenFeed(/** @type {any} */ ({
+      url: opts.url,
+      token: opts.token,
+      model: /** @type {any} */ (screenById(bench.board.settings.screen) ?? screenById('ili9341-ips')),
+      onFrame: (/** @type {any} */ img) => world.paintScreens(img),
+    })),
+    onLine: (text) => {
+      serial.append(text);
+      if (text.startsWith('welcomed as ')) line.state = 'connected';
+      showLine();
+    },
+    onLed: (mode) => effects.led(ledPattern(mode)),
+    onDevice: (msg) => {
+      if (msg.type === 'move') driveMove(msg);
+      else if (msg.type === 'stop') driveStop();
+      else if (msg.type === 'state') { line.state = String(msg.state).toLowerCase(); showLine(); }
+    },
   });
-  if (!recipe) return pickFrom(characterChoices(list));
-  // A recipe knows what it needs, so it does not ask when only one character fits.
-  const chosen = chooseCharacter(list, recipe.need);
-  switch (chosen.kind) {
-    case 'connect': return connect(mine, chosen.id, chosen.name, outcome, ending);
-    case 'pick': return pickFrom(chosen.choices);
-    default: {
-      const l = chooseLine(chosen, recipe.need);
-      if (l) panels.status(l.text, l.link);
-    }
-  }
+  boardRuntime.start();
 }
 
 /**
@@ -671,6 +718,9 @@ function unplug() {
   powerInterlock.reset();
   driveStop();
   powered = null;
+  boardRuntime?.stop();
+  boardRuntime = null;
+  serial.show(false);
   session?.stop();
   session = null;
   clearInterval(wandTimer);

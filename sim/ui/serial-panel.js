@@ -25,6 +25,7 @@ const el = (text = '') => {
  */
 export function createSerialPanel(o) {
   let settings = o.settings;
+  let firmware = o.firmware;
   /** @type {string[]} */ const lines = [];
 
   const root = document.createElement('section');
@@ -81,8 +82,8 @@ export function createSerialPanel(o) {
 
   form.addEventListener('submit', (event) => {
     event.preventDefault();
-    if (o.firmware.id !== 'body') return;
-    const result = consoleCommand({ settings, firmware: o.firmware }, input.value);
+    if (firmware.id !== 'body') return;
+    const result = consoleCommand({ settings, firmware }, input.value);
     for (const line of result.lines) append(line);
     settings = result.settings;
     o.onChange(settings);
@@ -105,7 +106,7 @@ export function createSerialPanel(o) {
     select.value = '';
   });
 
-  if (o.firmware.id !== 'body') {
+  if (firmware.id !== 'body') {
     input.disabled = true;
     send.disabled = true;
     append('no console on this firmware');
@@ -118,6 +119,13 @@ export function createSerialPanel(o) {
     append,
     /** @param {import('../bench.js').Settings} next */
     setSettings(next) { settings = next; },
+    /** @param {import('../firmware/index.js').Firmware} next */
+    setFirmware(next) {
+      if (next.id === firmware.id) return;
+      firmware = next;
+      input.disabled = next.id !== 'body';
+      send.disabled = next.id !== 'body';
+    },
     get log() { return [...lines]; },
   };
 }

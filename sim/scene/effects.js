@@ -102,29 +102,48 @@ export function createEffects(world) {
   // ---- The power LED ----------------------------------------------------
 
   const ledOn = new THREE.MeshBasicMaterial({ color: 0xff3a2a });
-  /** @type {'off' | 'on' | 'blink'} */
+  /** @type {'off' | 'on'} */
   let ledMode = 'off';
-  /** @type {ReturnType<typeof setInterval> | null} */
+  let ledLit = false;
+  /** @type {ReturnType<typeof setTimeout> | null} */
   let blinker = null;
-  let blinkLit = true;
+  /** @type {{ onMs: number, offMs: number } | null} */
+  let pattern = null;
 
   /** Apply the LED's look to whatever ESP32 mesh is in the scene now (it is rebuilt when moved). */
   function paintLed() {
     const led = part('esp')?.getObjectByName('led');
     if (!(led instanceof THREE.Mesh)) return;
     if (!led.userData.dark) led.userData.dark = led.material;
-    led.material = ledMode === 'on' || (ledMode === 'blink' && blinkLit) ? ledOn : led.userData.dark;
+    led.material = ledMode === 'on' && ledLit ? ledOn : led.userData.dark;
     world.requestRender();
   }
 
-  /** @param {'off' | 'on' | 'blink'} mode */
-  function led(mode) {
-    ledMode = mode;
-    if (blinker) clearInterval(blinker);
+  function stopBlink() {
+    if (blinker) clearTimeout(blinker);
     blinker = null;
-    blinkLit = true;
-    // A brown-out: the board resets, its LED dips with the supply, over and over.
-    if (mode === 'blink') blinker = setInterval(() => { blinkLit = !blinkLit; paintLed(); }, BLINK_MS);
+    pattern = null;
+    ledLit = false;
+  }
+
+  /** @param {'off' | 'on' | 'blink' | 'solid' | { onMs: number, offMs: number }} mode */
+  function led(mode) {
+    stopBlink();
+    ledMode = mode === 'off' ? 'off' : 'on';
+    if (mode === 'blink') pattern = { onMs: BLINK_MS, offMs: BLINK_MS };
+    else if (mode && typeof mode === 'object') pattern = mode;
+    if (pattern) {
+      ledLit = true;
+      const p = pattern;
+      const run = () => {
+        ledLit = !ledLit;
+        paintLed();
+        blinker = setTimeout(run, ledLit ? p.onMs : p.offMs);
+      };
+      blinker = setTimeout(run, p.onMs);
+    } else {
+      ledLit = ledMode === 'on';
+    }
     paintLed();
   }
 
