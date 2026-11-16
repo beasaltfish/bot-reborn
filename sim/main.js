@@ -35,7 +35,9 @@ import { PcmPlayer } from '../phone/audio/player.js';
 import { firmwareById } from './firmware/index.js';
 import { ledPattern } from './firmware/led.js';
 import { createSerialPanel } from './ui/serial-panel.js';
-import { runFlash } from './firmware/flash.js';
+import { runFlash, canFlash } from './firmware/flash.js';
+import { partsView } from './firmware/parts-view.js';
+import { createSketchRunner } from './firmware/sketch.js';
 import { connectBody } from '../phone/body-link.js';
 import { openScreenFeed } from './screen-feed.js';
 import { keptBench, keepBench, dropKept, mergeKeptBench } from './keep.js';
@@ -389,6 +391,7 @@ let session = null;
 let boardRuntime = null;
 const bodyAudio = createBodyAudio();
 /** @type {PcmPlayer | null} */ let bodyPlayer = null;
+/** @type {ReturnType<typeof createSketchRunner> | null} */ let sketchRunner = null;
 /** @type {AbortController | null} */
 let pendingStart = null;
 /** Reads the wand into the shake detector while a body is plugged in. @type {ReturnType<typeof createWandFeed> | null} */
@@ -521,6 +524,12 @@ function stopUnsafeSession() {
   pendingStart = null;
   startLock.clear();
   driveStop();
+  boardRuntime?.stop();
+  boardRuntime = null;
+  sketchRunner?.stop();
+  sketchRunner = null;
+  bodyPlayer?.hush();
+  bodyAudio.close();
   const old = session;
   session = null;
   old?.stop();
@@ -549,7 +558,7 @@ async function plugIn(meta = {}) {
   recipeOn = null;
   const mine = ++plugs;
   bench = { ...bench, usb: true };
-  const merged = evaluateBench(bench, { firmware: firmwareById(bench.board.firmware) });
+  const merged = evaluateBench(bench, { firmware: firmwareById(bench.board.firmware), ownership: ownershipOf(bench) });
   const outcome = merged.legacy;
   const blocked = blockingBoardPowerFault(bench, merged);
   // What burns is marked now, before anything else is shown, so a reload
@@ -624,7 +633,7 @@ async function plugIn(meta = {}) {
       const link = connectBody({
         url: opts.url, token: opts.token, retryOnReject: opts.retryOnReject,
         onWelcome: opts.onWelcome, onMessage: opts.onMessage, onAudio: opts.onAudio,
-        onLost: opts.onLost, onReject: opts.onReject,
+        onLost: () => { driveStop(); bodyPlayer?.hush(); opts.onLost?.(); }, onReject: opts.onReject,
       });
       return { close: () => link.close(), send: (msg) => link.send(msg) };
     },
@@ -653,14 +662,32 @@ async function plugIn(meta = {}) {
     onDevice: (msg) => {
       if (msg.type === 'move') driveMove(msg);
       else if (msg.type === 'stop') driveStop();
-      else if (msg.type === 'state') { line.state = String(msg.state).toLowerCase(); showLine(); }
+      else if (msg.type === 'state') { line.state = String(msg.state).toLowerCase(); effects.led(ledPattern(String(msg.state))); showLine(); }
+      else if (msg.type === 'fault') { line.api = faultText(msg); showLine(); }
+      else if (msg.type === 'hush') { bodyPlayer?.hush(); }
     },
   });
   boardRuntime.start();
+  if (!firmware.link) {
+    sketchRunner?.stop();
+    sketchRunner = createSketchRunner({
+      firmware,
+      ctx: () => ({
+        parts: partsView(bench, evaluateBench(bench, { firmware, ownership: ownershipOf(bench), deviceStates: boardRuntime?.deviceStates() ?? {} }).engineering, boardRuntime?.deviceStates() ?? {}),
+        pin: () => {},
+        measure: () => {},
+        device: () => {},
+      }),
+      render: refreshDeviceVisuals,
+    });
+    sketchRunner.start();
+  }
 }
 
 async function flashFirmwareNow(/** @type {string} */ id) {
-  const result = await runFlash(bench.board, id, { isCurrent: () => true });
+  if (!canFlash(bench, bench.board).ok) { panels.status('Cannot flash: plug in USB and clear any supply short.'); return; }
+  const before = bench.board;
+  const result = await runFlash(before, id, { isCurrent: () => bench.board === before && bench.usb });
   if (!result.ok) {
     panels.status(`Could not flash ${id}: ${result.reason}`);
     return;
@@ -669,6 +696,7 @@ async function flashFirmwareNow(/** @type {string} */ id) {
   setBench(bench);
   const firmware = firmwareById(id);
   if (firmware) serial.setFirmware(firmware);
+  if (usb.plugged) plugIn({ ending: line.ending });
 }
 
 function unplug() {
@@ -819,7 +847,11 @@ export function startPlan(planId, options = {}, mode = 'build', hooks = {}, spee
     for (const step of steps) if (step.kind !== 'usb' && step.kind !== 'flash') built = applyStep(built, step);
     setBench(built);
     world.view(view, built);
-    if (plan.firmware) void flashFirmwareNow(plan.firmware);
+    const firmwareId = plan.firmware;
+    if (firmwareId) void (async () => {
+      await usb.insert({ instant: true, pendingFlash: firmwareId });
+      await flashFirmwareNow(firmwareId);
+    })();
     running = false;
     runner = null;
     const lang = document.documentElement.lang === 'zh' ? 'zh' : 'en';
