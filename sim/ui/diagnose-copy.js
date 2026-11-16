@@ -20,6 +20,7 @@ const ZH = {
   'device-overvoltage': '供电电压超过设备额定值，设备可能已经损坏；请更换设备并使用合适的电压。',
   'device-overpower': '设备的功耗超过额定值，设备可能已经损坏；请更换设备并减小负载。',
   'firmware-unsupported': '所选固件不支持此设备；请选择受支持的设备或固件配置。',
+  'ownership-unknown': '看不出这个器件由谁驱动；请先把线接完整或移除它。',
   'floating-input': 'GPIO 输入没有确定的电平；请根据电路配置合适的上拉或下拉。',
   'gpio-contention': 'GPIO 输出或电源轨正在驱动相反电平；请断电并分开冲突的驱动端。',
   'logic-level-incompatible': '连接的信号可能高于配置的 GPIO 逻辑电压；请断电并使用合适的电平转换。',

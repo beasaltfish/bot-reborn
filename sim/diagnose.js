@@ -85,6 +85,7 @@ const FAULT_TEXT = {
   'device-overvoltage': 'The supply voltage exceeds the device rating and may have damaged it; replace the device and use a suitable voltage.',
   'device-overpower': 'The device dissipates more power than its rating and may have been damaged; replace it and reduce the load.',
   'firmware-unsupported': 'The selected firmware does not support this device; choose a supported device or firmware profile.',
+  'ownership-unknown': 'Cannot tell what drives this device; finish the wiring or remove it.',
   'floating-input': 'The GPIO input has no defined level; configure an appropriate pull-up or pull-down for the circuit.',
   'gpio-contention': 'GPIO outputs or a rail are driving opposite levels; disconnect power and separate the conflicting drivers.',
   'logic-level-incompatible': 'A connected signal may exceed the configured GPIO logic voltage; disconnect power and use suitable level shifting.',
