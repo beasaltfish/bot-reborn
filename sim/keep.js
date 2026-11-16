@@ -33,3 +33,20 @@ export function keptBench(store) {
 export function dropKept(store) {
   try { store.removeItem(KEEP_KEY); } catch { /* nothing to drop */ }
 }
+
+/**
+ * Put the user's wiring back but keep the board they have now: one physical
+ * board, so its firmware, NVS and damage do not roll back with the cables.
+ * @param {Bench} saved @param {Bench} current
+ * @returns {Bench}
+ */
+export function mergeKeptBench(saved, current) {
+  const now = current.placed.find((part) => part.part === 'esp32');
+  return {
+    ...saved,
+    v: 4,
+    usb: false,
+    board: current.board,
+    placed: saved.placed.map((part) => (part.part === 'esp32' && now ? { ...part, burnt: now.burnt } : part)),
+  };
+}

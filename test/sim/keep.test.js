@@ -57,3 +57,26 @@ test('a kept version 2 bench migrates and stays unplugged', () => {
   const store = storeOver(new Map([[KEEP_KEY, JSON.stringify(old)]]));
   assert.deepEqual(keptBench(store), { ...b, usb: false });
 });
+
+import { mergeKeptBench } from '../../sim/keep.js';
+import { startBench } from '../../sim/recipes.js';
+
+test('returning keeps the current firmware, token and board damage', () => {
+  const saved = sample();
+  let current = {
+    ...saved,
+    board: { ...saved.board, firmware: 'sketch-bme280', settings: { ...saved.board.settings, token: 'a'.repeat(32) } },
+  };
+  current = { ...current, placed: current.placed.map((p) => (p.part === 'esp32' ? { ...p, burnt: true } : p)) };
+  const merged = mergeKeptBench(saved, current);
+  assert.equal(merged.board.firmware, 'sketch-bme280');
+  assert.equal(merged.board.settings.token, 'a'.repeat(32));
+  assert.equal(merged.placed.find((p) => p.part === 'esp32')?.burnt, true);
+  assert.deepEqual(merged.wires, saved.wires);
+});
+
+test('starting a project does not repair a burnt board', () => {
+  const b = sample();
+  const burnt = { ...b, placed: b.placed.map((p) => (p.part === 'esp32' ? { ...p, burnt: true } : p)) };
+  assert.equal(startBench(burnt).placed[0].burnt, true);
+});

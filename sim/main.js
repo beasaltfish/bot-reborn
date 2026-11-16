@@ -35,7 +35,7 @@ import { ledPattern } from './firmware/led.js';
 import { createSerialPanel } from './ui/serial-panel.js';
 import { connectBody } from '../phone/body-link.js';
 import { openScreenFeed } from './screen-feed.js';
-import { keptBench, keepBench, dropKept } from './keep.js';
+import { keptBench, keepBench, dropKept, mergeKeptBench } from './keep.js';
 import { RECIPES, startBench, recipeSteps, applyStep } from './recipes.js';
 import { projectById } from './projects.js';
 import { consumeLabHandoff } from './lab-handoff.js';
@@ -457,7 +457,7 @@ function backToMine() {
   }
   activeProject = null;
   panels.selectProject('');
-  setBench(mine);
+  setBench(mergeKeptBench(mine, bench));
   dropKept(store());
   running = false;
   recipeOn = null;
@@ -684,6 +684,11 @@ function unplug() {
 }
 
 function reset() {
+  const zh = document.documentElement.lang === 'zh';
+  const ok = window.confirm(zh
+    ? '重置工作台会换一块新板：接线、固件、ssid/pass/token/url/屏幕、校准和损坏都会被清除。继续？'
+    : 'Reset bench replaces the board: wiring, firmware, ssid/pass/token/url/screen, calibration and any damage are cleared. Continue?');
+  if (!ok) return;
   activeProject = null;
   panels.selectProject('');
   hands.highlightGuidance([]);

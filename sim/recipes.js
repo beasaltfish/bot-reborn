@@ -89,7 +89,7 @@ export function startBench(b) {
   return {
     ...b,
     boards: [],
-    placed: [{ ...esp, at: { ...ESP_HOME }, rot: 0, seated: false, burnt: false }],
+    placed: [{ ...esp, at: { ...ESP_HOME }, rot: 0, seated: false, burnt: esp.burnt }],
     wires: [],
     usb: false,
   };
