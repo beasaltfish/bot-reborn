@@ -29,6 +29,8 @@ import { isViewPeekShortcut } from './view-shortcut.js';
 import { startBody, faultText, adminLink, keepsFault } from './body.js';
 import { createBoardRuntime, bootMode } from './firmware/runtime.js';
 import { createBodyAudio, shapeDownlink } from './body.js';
+import { demoSkips, lookupCharacter } from './capabilities.js';
+import { isRemote } from './provision.js';
 import { PcmPlayer } from '../phone/audio/player.js';
 import { firmwareById } from './firmware/index.js';
 import { ledPattern } from './firmware/led.js';
@@ -632,7 +634,17 @@ async function plugIn(meta = {}) {
     })),
     onLine: (text) => {
       serial.append(text);
-      if (text.startsWith('welcomed as ')) line.state = 'connected';
+      if (text.startsWith('welcomed as ')) {
+        line.state = 'connected';
+        const name = text.slice('welcomed as '.length);
+        const needs = activeProject?.needs ?? [];
+        if (needs.length) void fetch('/api/characters').then((r) => r.json()).then((list) => {
+          const remote = isRemote(bench.board.settings.url, location.origin);
+          const character = lookupCharacter(list, name, remote);
+          const zh = document.documentElement.lang === 'zh';
+          for (const skip of demoSkips(needs, character?.motion ?? 'none', zh ? 'zh' : 'en')) serial.append(skip.text);
+        }).catch(() => {});
+      }
       showLine();
     },
     onLed: (mode) => effects.led(ledPattern(mode)),
