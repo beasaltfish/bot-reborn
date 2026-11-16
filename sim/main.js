@@ -35,6 +35,7 @@ import { PcmPlayer } from '../phone/audio/player.js';
 import { firmwareById } from './firmware/index.js';
 import { ledPattern } from './firmware/led.js';
 import { createSerialPanel } from './ui/serial-panel.js';
+import { runFlash } from './firmware/flash.js';
 import { connectBody } from '../phone/body-link.js';
 import { openScreenFeed } from './screen-feed.js';
 import { keptBench, keepBench, dropKept, mergeKeptBench } from './keep.js';
@@ -193,6 +194,7 @@ function refreshDeviceVisuals() {
     stimuli,
     ownership: ownershipOf(bench),
     deviceStates: boardRuntime?.deviceStates() ?? {},
+    firmware: firmwareById(bench.board.firmware),
   }).engineering;
   world.devices(engineering);
 }
@@ -547,7 +549,7 @@ async function plugIn(meta = {}) {
   recipeOn = null;
   const mine = ++plugs;
   bench = { ...bench, usb: true };
-  const merged = evaluateBench(bench);
+  const merged = evaluateBench(bench, { firmware: firmwareById(bench.board.firmware) });
   const outcome = merged.legacy;
   const blocked = blockingBoardPowerFault(bench, merged);
   // What burns is marked now, before anything else is shown, so a reload
@@ -657,6 +659,18 @@ async function plugIn(meta = {}) {
   boardRuntime.start();
 }
 
+async function flashFirmwareNow(/** @type {string} */ id) {
+  const result = await runFlash(bench.board, id, { isCurrent: () => true });
+  if (!result.ok) {
+    panels.status(`Could not flash ${id}: ${result.reason}`);
+    return;
+  }
+  bench = { ...bench, board: result.board };
+  setBench(bench);
+  const firmware = firmwareById(id);
+  if (firmware) serial.setFirmware(firmware);
+}
+
 function unplug() {
   hands.highlightPoints([]);
   plugs++;
@@ -756,6 +770,7 @@ export function startRun(recipeId, screenId, mode, hooks = {}, wand = false, spe
     setBench,
     world,
     usb,
+    flash: flashFirmwareNow,
     hands,
     say: (text) => (hooks.onSay ? hooks.onSay(text) : panels.status(text)),
     onDone: () => {
@@ -801,9 +816,10 @@ export function startPlan(planId, options = {}, mode = 'build', hooks = {}, spee
   world.view(view, steps.reduce(applyStep, bench));
   if (mode === 'build') {
     let built = startBench(bench);
-    for (const step of steps) if (step.kind !== 'usb') built = applyStep(built, step);
+    for (const step of steps) if (step.kind !== 'usb' && step.kind !== 'flash') built = applyStep(built, step);
     setBench(built);
     world.view(view, built);
+    if (plan.firmware) void flashFirmwareNow(plan.firmware);
     running = false;
     runner = null;
     const lang = document.documentElement.lang === 'zh' ? 'zh' : 'en';
@@ -820,6 +836,7 @@ export function startPlan(planId, options = {}, mode = 'build', hooks = {}, spee
     setBench,
     world,
     usb,
+    flash: flashFirmwareNow,
     hands,
     say: (text) => (hooks.onSay ? hooks.onSay(text) : panels.status(text)),
     onDone: () => {

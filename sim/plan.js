@@ -12,7 +12,7 @@ import { wireEnd } from './snap.js';
  * @typedef {{ id: string, part: string, at: { x: number, z: number }, rot: number, seated: boolean }} PlanPart
  * @typedef {{ recipeId: string, screenId?: string, wand?: boolean, steps?: import('./recipes.js').Step[] }} PlanLegacy
  * @typedef {{
- *   id: string, name: string, goalKey: string, needs?: string[], connection?: 'body' | null, ending?: string,
+ *   id: string, name: string, goalKey: string, needs?: string[], connection?: 'body' | null, firmware?: string | null, ending?: string,
  *   parts: PlanPart[], links: import('./target.js').Link[],
  *   ignoredFaultCodes?: string[], lessonId?: string, legacy?: PlanLegacy, steps?: import('./recipes.js').Step[],
  * }} Plan
@@ -92,6 +92,7 @@ export function planFromProject(project) {
     goalKey: `goal.${project.id}`,
     needs: project.needs,
     connection: project.connection,
+    firmware: project.firmware,
     ending: project.ending,
     parts,
     links: project.links,
@@ -118,6 +119,7 @@ export function planFromRecipe(recipeId, options = {}) {
     goalKey: `goal.${recipe.id}`,
     needs: recipe.needs,
     connection: recipe.connection,
+    firmware: recipe.firmware,
     ending: recipe.ending,
     parts,
     links: targetFor(bench),
@@ -146,7 +148,9 @@ export function planId(plan) {
 
 /** @param {Plan} plan @returns {import('./recipes.js').Step[]} */
 export function planSteps(plan) {
-  if (plan.legacy?.steps) return plan.legacy.steps;
+  /** @param {import('./recipes.js').Step[]} steps */
+  const withFlash = (steps) => plan.firmware ? [...steps, /** @type {import('./recipes.js').Step} */ ({ kind: 'flash', firmware: plan.firmware })] : steps;
+  if (plan.legacy?.steps) return withFlash(plan.legacy.steps);
   if (plan.steps) {
     const setup = plan.steps.some(step => step.kind === 'board') ? plan.steps : [...benchSetupSteps(), ...plan.steps];
     const parts = seatSteps(setup).filter(step => step.kind === 'board' || step.kind === 'part');
@@ -161,7 +165,7 @@ export function planSteps(plan) {
       taken.add(b);
       return /** @type {import('./recipes.js').Step} */ ({ kind: 'wire', a, b, named: [link.a, link.b], say: link.why });
     });
-    return [...parts, ...wires];
+    return withFlash([...parts, ...wires]);
   }
-  return derivedSteps(plan.parts, plan.links);
+  return withFlash(derivedSteps(plan.parts, plan.links));
 }

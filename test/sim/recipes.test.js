@@ -96,7 +96,7 @@ test('every wire end is a place a hand could reach', () => {
 });
 
 test('the order is boards, parts, wires, usb', () => {
-  const rank = { board: 0, part: 1, wire: 2, usb: 3 };
+  const rank = { board: 0, part: 1, wire: 2, usb: 3, flash: 4 };
   for (const { name, recipe, screen } of CASES) {
     const steps = recipeSteps(/** @type {any} */ (recipe), screen);
     const ranks = steps.map((s) => rank[s.kind]);

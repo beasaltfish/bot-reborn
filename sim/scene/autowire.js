@@ -51,8 +51,9 @@ const easeOut = (t) => 1 - (1 - t) ** 3;
  *   getBench(): import('../bench.js').Bench,
  *   setBench(b: import('../bench.js').Bench): void,
  *   world: World,
- *   usb: { insert(): Promise<void> },
+ *   usb: { insert(meta?: { instant?: boolean, pendingFlash?: string | null }): Promise<void> },
  *   hands: { enable(on: boolean): void },
+ *   flash?(firmware: string): Promise<void>,
  *   say(text: string): void,
  *   onDone(): void,
  * }} o
@@ -137,6 +138,9 @@ export function runRecipe(o) {
       case 'usb':
         await o.usb.insert();
         break;
+      case 'flash':
+        await o.flash?.(s.firmware);
+        break;
     }
   }
 
@@ -147,6 +151,7 @@ export function runRecipe(o) {
         if (stopped) break;
         // Skipping lays everything down at once but leaves the plug to be pushed in.
         if (skipping && s.kind !== 'usb') {
+          if (s.kind === 'flash') { await o.flash?.(s.firmware); continue; }
           o.setBench(applyStep(o.getBench(), s));
           continue;
         }

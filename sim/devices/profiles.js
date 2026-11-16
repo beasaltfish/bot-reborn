@@ -5,7 +5,7 @@ import { nets } from '../netlist.js';
 import { DEVICES, firmwareIndependent } from './catalog.js';
 import { bme280Wiring } from './bme280-wiring.js';
 
-/** @typedef {{ code: string, instances: string[], points: string[], detail: Record<string, unknown> }} ResourceIssue */
+/** @typedef {{ code: string, instances: string[], points: string[], detail: Record<string, unknown>, origin?: string }} ResourceIssue */
 /** @typedef {{ id: string, rails: Record<string, number>, gpioVoltage: number, adcPins: string[], i2cBuses: {id:string,sda:string,scl:string}[], spiBuses: {id:string,sck:string,mosi:string,miso:string}[], pwmPins: string[], pwmChannels: number, gpioSourceMa: number, gpioAbsMaxMa: number, endpoints: Record<string, Record<string, string|number>>, supportedParts: string[] }} Profile */
 // Exclude strapping pins and GPIO46 (input-only); GPIO19/20 are USB pins.
 const exposed = PARTS.esp32.pins.map((p) => p.name).filter((p) => /^GPIO\d+$/.test(p));
@@ -41,7 +41,7 @@ function addressNumber(value) {
  * @param {Record<string, import('./catalog.js').DeviceDef>} devices
  * @returns {ResourceIssue[]}
  */
-export function checkResources(bench, profile, devices) {
+export function checkResources(bench, profile, devices, { ownership = {}, drivers = profile.supportedParts } = {}) {
   const net = nets(bench);
   /** @type {ResourceIssue[]} */ const issues = [];
   /** @type {{instance:string, sda:string, scl:string, address:number}[]} */ const i2c = [];
@@ -49,7 +49,7 @@ export function checkResources(bench, profile, devices) {
   /** @type {{instance:string, point:string, kind:string, direction:unknown}[]} */ const pins = [];
   for (const p of bench.placed.filter((p) => !p.burnt).sort((a, b) => a.id.localeCompare(b.id))) {
     const d = devices[p.part];
-    if (!firmwareIndependent(p.part) && !profile.supportedParts.includes(p.part)) issues.push({ code: 'firmware-unsupported', instances: [p.id], points: [], detail: { part: p.part } });
+    if (!firmwareIndependent(p.part) && /** @type {Record<string,string>} */ (ownership)[p.id] !== 'circuit' && !drivers.includes(p.part)) issues.push({ code: 'firmware-unsupported', origin: 'firmware', instances: [p.id], points: [], detail: { part: p.part } });
     if (!d) continue;
     for (const cap of d.capabilities) {
       const point = (/** @type {string} */ pin) => `${p.id}:${pin}`;

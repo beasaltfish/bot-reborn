@@ -22,8 +22,8 @@ const LED_LINKS = [
 ];
 /** @type {Project} */
 export const LED_PROJECT = {
-  id: 'led-basics', name: 'LED basics', needs: [], connection: null, ending: 'Observe the LED',
-  ignoredFaultCodes: ['firmware-unsupported'],
+  id: 'led-basics', firmware: null, name: 'LED basics', needs: [], connection: null, ending: 'Observe the LED',
+  ignoredFaultCodes: [],
   links: LED_LINKS,
   steps: [
     { kind: 'part', id: 'src', part: 'dc-source', at: { x: -30, z: 32 }, rot: 0, seated: false, say: 'Place the DC source.' },
@@ -42,7 +42,7 @@ const BME_LINKS = [
 ];
 /** @type {Project} */
 export const BME280_PROJECT = {
-  id: 'bme280-readings', name: 'BME280 readings', needs: [], connection: null, ending: 'Inspect simulated readings',
+  id: 'bme280-readings', firmware: 'sketch-bme280', name: 'BME280 readings', needs: [], connection: null, ending: 'Inspect simulated readings',
   links: BME_LINKS,
   steps: [
     { kind: 'part', id: 'env', part: 'bme280-i2c', at: { x: 25, z: 40 }, rot: 0, seated: false, say: 'Place the BME280 breakout.' },
@@ -60,8 +60,8 @@ const POWER_LINKS = [
 ];
 /** @type {Project} */
 export const POWER_PROJECT = {
-  id: 'power-a-rail', name: 'Power a rail', needs: [], connection: null, ending: 'Measure the regulated rail',
-  ignoredFaultCodes: ['firmware-unsupported'],
+  id: 'power-a-rail', firmware: null, name: 'Power a rail', needs: [], connection: null, ending: 'Measure the regulated rail',
+  ignoredFaultCodes: [],
   links: POWER_LINKS,
   steps: [
     { kind: 'part', id: 'bat', part: 'battery-4xaa', at: { x: -25, z: 32 }, rot: 0, seated: false, say: 'Place the 4×AA battery holder.' },
@@ -83,8 +83,8 @@ const BUTTON_LINKS = [
 ];
 /** @type {Project} */
 export const BUTTON_PROJECT = {
-  id: 'button-led', name: 'Button and LED', needs: [], connection: null, ending: 'Press the button',
-  ignoredFaultCodes: ['firmware-unsupported', 'device-unpowered', 'unsupported-electrical-network', 'led-reversed', 'led-overcurrent', 'led-burnt', 'led-current-limited'],
+  id: 'button-led', firmware: 'sketch-button-led', name: 'Button and LED', needs: [], connection: null, ending: 'Press the button',
+  ignoredFaultCodes: ['device-unpowered', 'unsupported-electrical-network', 'led-reversed', 'led-overcurrent', 'led-burnt', 'led-current-limited'],
   links: BUTTON_LINKS,
   steps: [
     { kind: 'part', id: 'btn', part: 'button-module', at: { x: -25, z: 32 }, rot: 0, seated: false, say: 'Place the KY-004 button module.' },
@@ -104,8 +104,8 @@ const SONAR_LINKS = [
 ];
 /** @type {Project} */
 export const SONAR_PROJECT = {
-  id: 'distance-reader', name: 'Distance reader', needs: [], connection: null, ending: 'Trigger a measurement',
-  ignoredFaultCodes: ['firmware-unsupported', 'device-unpowered'],
+  id: 'distance-reader', firmware: 'sketch-sonar', name: 'Distance reader', needs: [], connection: null, ending: 'Trigger a measurement',
+  ignoredFaultCodes: ['device-unpowered'],
   links: SONAR_LINKS,
   steps: [
     { kind: 'part', id: 'sonar', part: 'hc-sr04', at: { x: -15, z: 40 }, rot: 0, seated: false, say: 'Place the HC-SR04.' },
@@ -127,8 +127,8 @@ const DISPLAY_LINKS = [
 ];
 /** @type {Project} */
 export const DISPLAY_PROJECT = {
-  id: 'environment-display', name: 'Environment display', needs: [], connection: null, ending: 'Draw the readings',
-  ignoredFaultCodes: ['firmware-unsupported'],
+  id: 'environment-display', firmware: 'sketch-env-display', name: 'Environment display', needs: [], connection: null, ending: 'Draw the readings',
+  ignoredFaultCodes: [],
   links: DISPLAY_LINKS,
   steps: [
     { kind: 'part', id: 'env', part: 'bme280-i2c', at: { x: -25, z: 40 }, rot: 0, seated: false, say: 'Place the BME280 breakout.' },
@@ -150,8 +150,8 @@ const SERVO_LINKS = [
 ];
 /** @type {Project} */
 export const SERVO_PROJECT = {
-  id: 'proximity-servo', name: 'Proximity servo', needs: [], connection: null, ending: 'Move the servo with distance',
-  ignoredFaultCodes: ['firmware-unsupported', 'device-unpowered'],
+  id: 'proximity-servo', firmware: 'sketch-sonar-servo', name: 'Proximity servo', needs: [], connection: null, ending: 'Move the servo with distance',
+  ignoredFaultCodes: ['device-unpowered'],
   links: SERVO_LINKS,
   steps: [
     { kind: 'part', id: 'sonar', part: 'hc-sr04', at: { x: -30, z: 40 }, rot: 0, seated: false, say: 'Place the HC-SR04.' },
@@ -175,8 +175,8 @@ const MOTOR_LINKS = [
 ];
 /** @type {Project} */
 export const MOTOR_PROJECT = {
-  id: 'motor-driver-basics', name: 'Motor driver basics', needs: [], connection: null, ending: 'Spin the motor',
-  ignoredFaultCodes: ['firmware-unsupported', 'device-unpowered'],
+  id: 'motor-driver-basics', firmware: 'sketch-motor', name: 'Motor driver basics', needs: [], connection: null, ending: 'Spin the motor',
+  ignoredFaultCodes: ['device-unpowered'],
   links: MOTOR_LINKS,
   steps: [
     { kind: 'part', id: 'drv', part: 'tb6612fng', at: { x: -20, z: 40 }, rot: 0, seated: false, say: 'Place the TB6612FNG driver.' },
@@ -194,8 +194,8 @@ const STRIP_LINKS = [
 ];
 /** @type {Project} */
 export const STRIP_PROJECT = {
-  id: 'status-light-strip', name: 'Status light strip', needs: [], connection: null, ending: 'Light the strip',
-  ignoredFaultCodes: ['firmware-unsupported', 'device-unpowered'],
+  id: 'status-light-strip', firmware: 'sketch-strip', name: 'Status light strip', needs: [], connection: null, ending: 'Light the strip',
+  ignoredFaultCodes: ['device-unpowered'],
   links: STRIP_LINKS,
   steps: [
     { kind: 'part', id: 'strip', part: 'ws2812-strip', at: { x: -10, z: 40 }, rot: 0, seated: false, say: 'Place the WS2812 strip.' },
@@ -208,7 +208,7 @@ const tarotSource = adapt(/** @type {import('./recipes.js').Recipe} */ (RECIPES.
 /** @type {Project} */
 export const TAROT_PROJECT = {
   ...tarotSource,
-  id: 'tarot', name: 'Tarot wand', needs: ['draw'], connection: 'body',
+  id: 'tarot', name: 'Tarot wand', needs: ['draw'], connection: 'body', firmware: 'body',
   // Keep the wand beside the screen, not a further row down, so its jumpers
   // do not cross the whole bench.
   steps: tarotSource.steps.map(step => step.kind === 'part' && step.id === 'imu'

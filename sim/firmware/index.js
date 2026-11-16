@@ -1,6 +1,7 @@
 // Every firmware a board can run. The registry is the only place that knows
 // which firmware exists; projects and the board panel refer to ids.
 import { BODY } from './body.js';
+import { SKETCHES } from './sketches.js';
 
 /**
  * @typedef {{
@@ -19,7 +20,7 @@ import { BODY } from './body.js';
  */
 
 /** @type {Record<string, Firmware>} */
-export const FIRMWARES = { body: BODY };
+export const FIRMWARES = { body: BODY, ...Object.fromEntries(SKETCHES.map((s) => [s.id, s])) };
 
 /** @param {string} id @returns {Firmware | undefined} */
 export function firmwareById(id) {
