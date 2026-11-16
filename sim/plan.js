@@ -12,7 +12,7 @@ import { wireEnd } from './snap.js';
  * @typedef {{ id: string, part: string, at: { x: number, z: number }, rot: number, seated: boolean }} PlanPart
  * @typedef {{ recipeId: string, screenId?: string, wand?: boolean, steps?: import('./recipes.js').Step[] }} PlanLegacy
  * @typedef {{
- *   id: string, name: string, goalKey: string, needs?: string, ending?: string,
+ *   id: string, name: string, goalKey: string, needs?: string, connection?: 'body' | null, ending?: string,
  *   parts: PlanPart[], links: import('./target.js').Link[],
  *   ignoredFaultCodes?: string[], lessonId?: string, legacy?: PlanLegacy, steps?: import('./recipes.js').Step[],
  * }} Plan
@@ -91,6 +91,7 @@ export function planFromProject(project) {
     name: project.name,
     goalKey: `goal.${project.id}`,
     needs: project.needs,
+    connection: project.connection,
     ending: project.ending,
     parts,
     links: project.links,
@@ -116,6 +117,7 @@ export function planFromRecipe(recipeId, options = {}) {
     name: recipe.name,
     goalKey: `goal.${recipe.id}`,
     needs: recipe.needs,
+    connection: recipe.connection,
     ending: recipe.ending,
     parts,
     links: targetFor(bench),

@@ -22,7 +22,7 @@ const LED_LINKS = [
 ];
 /** @type {Project} */
 export const LED_PROJECT = {
-  id: 'led-basics', name: 'LED basics', needs: 'any', ending: 'Observe the LED',
+  id: 'led-basics', name: 'LED basics', needs: 'any', connection: null, ending: 'Observe the LED',
   ignoredFaultCodes: ['firmware-unsupported'],
   links: LED_LINKS,
   steps: [
@@ -42,7 +42,7 @@ const BME_LINKS = [
 ];
 /** @type {Project} */
 export const BME280_PROJECT = {
-  id: 'bme280-readings', name: 'BME280 readings', needs: 'any', ending: 'Inspect simulated readings',
+  id: 'bme280-readings', name: 'BME280 readings', needs: 'any', connection: null, ending: 'Inspect simulated readings',
   links: BME_LINKS,
   steps: [
     { kind: 'part', id: 'env', part: 'bme280-i2c', at: { x: 25, z: 40 }, rot: 0, seated: false, say: 'Place the BME280 breakout.' },
@@ -60,7 +60,7 @@ const POWER_LINKS = [
 ];
 /** @type {Project} */
 export const POWER_PROJECT = {
-  id: 'power-a-rail', name: 'Power a rail', needs: 'any', ending: 'Measure the regulated rail',
+  id: 'power-a-rail', name: 'Power a rail', needs: 'any', connection: null, ending: 'Measure the regulated rail',
   ignoredFaultCodes: ['firmware-unsupported'],
   links: POWER_LINKS,
   steps: [
@@ -83,7 +83,7 @@ const BUTTON_LINKS = [
 ];
 /** @type {Project} */
 export const BUTTON_PROJECT = {
-  id: 'button-led', name: 'Button and LED', needs: 'any', ending: 'Press the button',
+  id: 'button-led', name: 'Button and LED', needs: 'any', connection: null, ending: 'Press the button',
   ignoredFaultCodes: ['firmware-unsupported', 'device-unpowered', 'unsupported-electrical-network', 'led-reversed', 'led-overcurrent', 'led-burnt', 'led-current-limited'],
   links: BUTTON_LINKS,
   steps: [
@@ -104,7 +104,7 @@ const SONAR_LINKS = [
 ];
 /** @type {Project} */
 export const SONAR_PROJECT = {
-  id: 'distance-reader', name: 'Distance reader', needs: 'any', ending: 'Trigger a measurement',
+  id: 'distance-reader', name: 'Distance reader', needs: 'any', connection: null, ending: 'Trigger a measurement',
   ignoredFaultCodes: ['firmware-unsupported', 'device-unpowered'],
   links: SONAR_LINKS,
   steps: [
@@ -127,7 +127,7 @@ const DISPLAY_LINKS = [
 ];
 /** @type {Project} */
 export const DISPLAY_PROJECT = {
-  id: 'environment-display', name: 'Environment display', needs: 'any', ending: 'Draw the readings',
+  id: 'environment-display', name: 'Environment display', needs: 'any', connection: null, ending: 'Draw the readings',
   ignoredFaultCodes: ['firmware-unsupported'],
   links: DISPLAY_LINKS,
   steps: [
@@ -150,7 +150,7 @@ const SERVO_LINKS = [
 ];
 /** @type {Project} */
 export const SERVO_PROJECT = {
-  id: 'proximity-servo', name: 'Proximity servo', needs: 'any', ending: 'Move the servo with distance',
+  id: 'proximity-servo', name: 'Proximity servo', needs: 'any', connection: null, ending: 'Move the servo with distance',
   ignoredFaultCodes: ['firmware-unsupported', 'device-unpowered'],
   links: SERVO_LINKS,
   steps: [
@@ -175,7 +175,7 @@ const MOTOR_LINKS = [
 ];
 /** @type {Project} */
 export const MOTOR_PROJECT = {
-  id: 'motor-driver-basics', name: 'Motor driver basics', needs: 'any', ending: 'Spin the motor',
+  id: 'motor-driver-basics', name: 'Motor driver basics', needs: 'any', connection: null, ending: 'Spin the motor',
   ignoredFaultCodes: ['firmware-unsupported', 'device-unpowered'],
   links: MOTOR_LINKS,
   steps: [
@@ -194,7 +194,7 @@ const STRIP_LINKS = [
 ];
 /** @type {Project} */
 export const STRIP_PROJECT = {
-  id: 'status-light-strip', name: 'Status light strip', needs: 'any', ending: 'Light the strip',
+  id: 'status-light-strip', name: 'Status light strip', needs: 'any', connection: null, ending: 'Light the strip',
   ignoredFaultCodes: ['firmware-unsupported', 'device-unpowered'],
   links: STRIP_LINKS,
   steps: [
@@ -208,7 +208,7 @@ const tarotSource = adapt(/** @type {import('./recipes.js').Recipe} */ (RECIPES.
 /** @type {Project} */
 export const TAROT_PROJECT = {
   ...tarotSource,
-  id: 'tarot', name: 'Tarot wand',
+  id: 'tarot', name: 'Tarot wand', connection: 'body',
   // Keep the wand beside the screen, not a further row down, so its jumpers
   // do not cross the whole bench.
   steps: tarotSource.steps.map(step => step.kind === 'part' && step.id === 'imu'
