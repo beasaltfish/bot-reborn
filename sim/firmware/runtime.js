@@ -2,7 +2,10 @@
 // and a generation that makes stale timers harmless. No DOM; the caller
 // supplies the socket factory and the output callbacks.
 import { bodyBoot } from './body-boot.js';
-import { firmwareById } from './index.js';
+import { firmwareFor } from './index.js';
+import { compile } from './lang/index.js';
+import { createMachine } from './lang/index.js';
+import { createSketchRunner } from './sketch.js';
 import { rejectIsFinal } from './retry.js';
 
 /** The screen socket that belongs to the same brain as the body socket. */
@@ -41,6 +44,7 @@ export function bootMode(intent = {}) {
  *   ownership?: Record<string, 'board'|'circuit'|'unknown'>,
  *   initDevices?: (ids: string[]) => Record<string, 'active'|'init-failed'>,
  *   bootInitMs?: number,
+ *   sketch?: { ctx: () => any, render?: () => void, onTrace?: (records: any[]) => void, intervalMs?: number },
  *   onLine(line: string): void,
  *   onLed(mode: string): void,
  *   onDevice?(msg: any): void,
@@ -54,7 +58,7 @@ export function bootMode(intent = {}) {
  * }} o
  */
 export function createBoardRuntime(o) {
-  const firmware = o.board.firmware ? firmwareById(o.board.firmware) : undefined;
+  const firmware = o.board.firmware ? firmwareFor(o.board) : undefined;
   const dialed = o.board.settings.url || o.brainUrl || '';
   const now = o.now ?? (() => Date.now());
   let generation = 0;
@@ -65,6 +69,8 @@ export function createBoardRuntime(o) {
   let micStarted = false;
   /** @type {Record<string, 'uninitialized'|'active'|'init-failed'>} */
   let states = {};
+  /** @type {ReturnType<typeof createMachine> | null} */ let machine = null;
+  /** @type {ReturnType<typeof createSketchRunner> | null} */ let sketchRunner = null;
 
   /** @param {{ blocked?: boolean, pendingFlash?: string | null }} [intent] */
   function mode(intent = {}) {
@@ -89,6 +95,10 @@ export function createBoardRuntime(o) {
     timers = [];
     micStarted = false;
     states = {};
+    sketchRunner?.stop();
+    sketchRunner = null;
+    machine?.stop();
+    machine = null;
     conn?.close();
     conn = null;
     feed?.stop();
@@ -168,6 +178,32 @@ export function createBoardRuntime(o) {
         states = Object.fromEntries(ids.map((id) => [id, verdicts[id] ?? 'active']));
       }, o.bootInitMs ?? 1000));
     }
+    if (firmware && !firmware.link && o.sketch && o.outcome.esp === 'ok') {
+      let runnable = firmware;
+      if (firmware.id === 'custom') {
+        const source = o.board.custom?.flashed ?? '';
+        if (!source) {
+          o.onLine('no custom firmware');
+          return;
+        }
+        const { program, errors } = compile(source);
+        if (!program || errors.length) {
+          o.onLine(`custom firmware: ${errors[0]?.message ?? 'invalid source'}`);
+          return;
+        }
+        const created = createMachine({ program, now });
+        machine = created;
+        runnable = { ...firmware, tick: (ctx) => created.tick(ctx) };
+      }
+      sketchRunner = createSketchRunner({
+        firmware: runnable,
+        ctx: o.sketch.ctx,
+        render: o.sketch.render,
+        onTrace: o.sketch.onTrace,
+        intervalMs: o.sketch.intervalMs,
+      });
+      sketchRunner.start();
+    }
   }
 
   /** @returns {Record<string, string>} */
@@ -178,6 +214,7 @@ export function createBoardRuntime(o) {
 
   return {
     get generation() { return generation; },
+    get machine() { return machine; },
     mode,
     start,
     stop,

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createBoardRuntime } from '../../sim/firmware/runtime.js';
-import { emptyBench } from '../../sim/bench.js';
+import { emptyBench, emptyBoard } from '../../sim/bench.js';
 
 const bench = emptyBench();
 const board = { ...bench.board, settings: { ...bench.board.settings, token: 'a'.repeat(32) } };
@@ -126,4 +126,41 @@ test('a sketch firmware prints its own line, never the body boot', (t) => {
   assert.ok(!lines.some((l) => l.startsWith('not set up')));
   assert.deepEqual(h.links, []);
   h.runtime.stop();
+});
+
+const fakeCtx = () => ({ pin() {}, read: () => 'LOW', log() {}, measure() {}, device() {} });
+
+test('a custom boot creates exactly one machine and stops it', () => {
+  const board = { ...emptyBoard(), firmware: 'custom', custom: { name: 'm', draft: '', flashed: 'void loop(){}', updatedAt: 1 } };
+  const rt = createBoardRuntime({ board, bench, outcome: OUTCOME, connect: () => ({ close() {}, send() {}, sendAudio() {} }), onLine() {}, onLed() {}, sketch: { ctx: () => fakeCtx() } });
+  rt.start();
+  const first = rt.machine;
+  assert.ok(first);
+  rt.reboot();
+  assert.notEqual(rt.machine, first);
+  rt.stop();
+  assert.equal(rt.machine, null);
+});
+
+test('a custom board with no custom data boots empty without throwing', () => {
+  const empty = { ...emptyBoard(), firmware: 'custom', custom: null };
+  const rt = createBoardRuntime({ board: empty, bench, outcome: OUTCOME, connect: () => ({ close() {}, send() {}, sendAudio() {} }), onLine() {}, onLed() {}, sketch: { ctx: () => fakeCtx() } });
+  assert.doesNotThrow(() => rt.start());
+  assert.equal(rt.machine, null);
+  rt.stop();
+});
+
+test('a custom board with an empty flashed source boots empty', () => {
+  const empty = { ...emptyBoard(), firmware: 'custom', custom: { name: 'm', draft: '', flashed: '', updatedAt: 1 } };
+  const rt = createBoardRuntime({ board: empty, bench, outcome: OUTCOME, connect: () => ({ close() {}, send() {}, sendAudio() {} }), onLine() {}, onLed() {}, sketch: { ctx: () => fakeCtx() } });
+  assert.doesNotThrow(() => rt.start());
+  assert.equal(rt.machine, null);
+  rt.stop();
+});
+
+test('a body firmware creates no interpreter machine', () => {
+  const rt = createBoardRuntime({ board, bench, outcome: OUTCOME, connect: () => ({ close() {}, send() {}, sendAudio() {} }), onLine() {}, onLed() {}, sketch: { ctx: () => fakeCtx() } });
+  rt.start();
+  assert.equal(rt.machine, null);
+  rt.stop();
 });
