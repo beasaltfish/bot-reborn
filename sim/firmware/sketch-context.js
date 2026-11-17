@@ -14,9 +14,11 @@ import { partsView } from './parts-view.js';
  *   runtime: Record<string, Record<string, any>>,
  *   onPin?(name: string, level: 'high'|'low'|'high-z'): void,
  *   onMeasure?(id: string, on: boolean): void,
+ *   read?(pin: number): string,
+ *   onLog?(line: string): void,
  * }} o
  */
-export function createSketchContext({ bench, evaluation, deviceStates = {}, runtime, onPin, onMeasure }) {
+export function createSketchContext({ bench, evaluation, deviceStates = {}, runtime, onPin, onMeasure, read, onLog }) {
   return {
     parts: partsView(bench, evaluation, deviceStates),
     /** The next evaluation sees this level; a `{pwm}` value is not modeled. */
@@ -25,6 +27,10 @@ export function createSketchContext({ bench, evaluation, deviceStates = {}, runt
     /** Remembered until the sketch turns it off, the board stops or reboot. */
     /** @param {string} id @param {boolean} [on] */
     measure(id, on = true) { onMeasure?.(id, on); },
+    /** @param {number} pin */
+    read(pin) { return String(read?.(pin) ?? 'LOW').toUpperCase() === 'HIGH' ? 'HIGH' : 'LOW'; },
+    /** @param {string} line */
+    log(line) { onLog?.(line); },
     /** @param {string} kind @param {string} id @param {Record<string, any>} [values] */
     device(kind, id, values = {}) {
       if (kind === 'display') runtime.display[id] = { lines: Array.isArray(values.lines) ? values.lines.map(String) : [] };

@@ -25,3 +25,14 @@ test('stop ends the schedule', (t) => {
   t.mock.timers.tick(1000);
   assert.equal(ticks, 1);
 });
+
+test('the runner forwards machine records', (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  /** @type {any[]} */ const seen = [];
+  const runner = createSketchRunner({
+    firmware: /** @type {any} */ ({ id: 'x', tick: () => [{ kind: 'statement', line: 1, text: 'x' }] }),
+    ctx: () => ({}), onTrace: (r) => seen.push(...r),
+  });
+  runner.start(); t.mock.timers.tick(100); runner.stop();
+  assert.equal(seen[0].line, 1);
+});

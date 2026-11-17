@@ -102,3 +102,17 @@ test('a protocol device whose init was refused is not visible; a warning is', ()
   // A part with no protocol init (an LED) has nothing to fail.
   assert.equal(deviceInitialized(evaluation, { id: 'led', part: 'led-5mm' }), true);
 });
+
+test('the context reads an evaluated GPIO level', () => {
+  const bench = buttonBench();
+  const evaluation = evaluateBench(bench).engineering;
+  const runtime = { servo: {}, motor: {}, strip: {}, display: {}, buttons: {} };
+  /** @type {string[]} */ const logs = [];
+  const ctx = createSketchContext({
+    bench, evaluation, deviceStates: { btn: 'active' }, runtime,
+    onPin() {}, onMeasure() {}, read: () => 'low', onLog: (line) => logs.push(line),
+  });
+  assert.equal(ctx.read(4), 'LOW');
+  ctx.log('hello');
+  assert.deepEqual(logs, ['hello']);
+});
