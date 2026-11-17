@@ -140,7 +140,7 @@ export function createMachine({ program, now = () => performance.now(), budgetMs
         const args = expr.args.map((/** @type {any} */ arg) => evaluate(arg, env, local));
         if (expr.object === 'Serial') {
           if (expr.name === 'begin') return null;
-          if (expr.name === 'print') { const text = args.map(asText).join(''); print(text); traceRef.current({ line: expr.line, kind: 'log', text }); return null; }
+          if (expr.name === 'print') { print(args.map(asText).join('')); traceRef.current({ line: expr.line, kind: 'print' }); return null; }
           if (expr.name === 'println') { println(args.map(asText).join('')); return null; }
           throw new Error(`unknown Serial.${expr.name}`);
         }
@@ -150,13 +150,13 @@ export function createMachine({ program, now = () => performance.now(), budgetMs
             const pin = Number(args[0]);
             const level = Number(args[1]) ? 'high' : 'low';
             pinLevel(pin, level);
-            traceRef.current({ line: expr.line, kind: 'statement', writes: [{ target: `GPIO${pin}`, level }] });
+            traceRef.current({ line: expr.line, kind: 'statement', text: `digitalWrite(${pin}, ${level === 'high' ? 'HIGH' : 'LOW'}) \u2192 GPIO${pin}`, writes: [{ target: `GPIO${pin}`, level }] });
             return null;
           }
           case 'digitalRead': {
             const pin = Number(args[0]);
             const level = state.ctx?.read(pin) === 'LOW' ? 0 : 1;
-            traceRef.current({ line: expr.line, kind: 'statement', reads: [{ pin, level: level ? 'HIGH' : 'LOW' }] });
+            traceRef.current({ line: expr.line, kind: 'statement', text: `digitalRead(${pin}) \u2192 ${level ? 'HIGH' : 'LOW'}`, reads: [{ pin, level: level ? 'HIGH' : 'LOW' }] });
             return level;
           }
           case 'millis': return state.simTime;
@@ -186,20 +186,23 @@ export function createMachine({ program, now = () => performance.now(), budgetMs
         case 'VarDecl': {
           const value = statement.init ? evaluate(statement.init, env, { trace: traceRef }) : 0;
           env.declare(statement.name, value);
-          record({ kind: 'statement' });
+          record({ kind: 'statement', text: `${statement.name} = ${asText(value)}` });
           yield;
           return;
         }
-        case 'Assign':
-          env.set(statement.name, evaluate(statement.value, env, { trace: traceRef }));
-          record({ kind: 'statement' });
+        case 'Assign': {
+          const value = evaluate(statement.value, env, { trace: traceRef });
+          env.set(statement.name, value);
+          record({ kind: 'statement', text: `${statement.name} = ${asText(value)}` });
           yield;
           return;
+        }
         case 'ExprStmt':
-          record({ kind: 'statement' });
+          if (statement.expr.type !== 'Call') record({ kind: 'statement' });
           if (statement.expr.type === 'Call' && statement.expr.name === 'delay' && !statement.expr.object) {
             const ms = Number(evaluate(statement.expr.args[0], env, { trace: traceRef }));
             if (!Number.isFinite(ms) || ms < 0 || ms > 60000) throw new Error('delay must be 0..60000 ms');
+            record({ kind: 'statement', text: `delay(${ms})` });
             yield { waiting: ms };
             return;
           }
@@ -207,20 +210,20 @@ export function createMachine({ program, now = () => performance.now(), budgetMs
           yield;
           return;
         case 'If': {
-          record({ kind: 'statement' });
+          record({ kind: 'statement', text: 'if' });
           if (truthy(evaluate(statement.test, env, { trace: traceRef }))) yield* run(statement.then, env);
           else if (statement.else) yield* run(statement.else, env);
           return;
         }
         case 'While':
-          record({ kind: 'statement' });
+          record({ kind: 'statement', text: 'while' });
           while (truthy(evaluate(statement.test, env, { trace: traceRef }))) {
             yield;
             yield* run(statement.body, env);
           }
           return;
         case 'For': {
-          record({ kind: 'statement' });
+          record({ kind: 'statement', text: 'for' });
           const child = new Env(env);
           if (statement.init) yield* run({ ...statement.init, line: statement.line }, child);
           while (!statement.test || truthy(evaluate(statement.test, child, { trace: traceRef }))) {
@@ -231,7 +234,7 @@ export function createMachine({ program, now = () => performance.now(), budgetMs
           return;
         }
         case 'Return':
-          record({ kind: 'statement' });
+          record({ kind: 'statement', text: 'return' });
           throw new ReturnSignal();
         default:
           throw new Error(`unknown statement ${statement.type}`);

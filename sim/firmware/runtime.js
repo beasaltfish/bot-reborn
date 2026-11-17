@@ -44,7 +44,7 @@ export function bootMode(intent = {}) {
  *   ownership?: Record<string, 'board'|'circuit'|'unknown'>,
  *   initDevices?: (ids: string[]) => Record<string, 'active'|'init-failed'>,
  *   bootInitMs?: number,
- *   sketch?: { ctx: () => any, render?: () => void, onTrace?: (records: any[]) => void, intervalMs?: number },
+ *   sketch?: { ctx: () => any, render?: () => void, onTrace?: (records: any[]) => void, onTiming?: (ms: number) => void, intervalMs?: number },
  *   onLine(line: string): void,
  *   onLed(mode: string): void,
  *   onDevice?(msg: any): void,
@@ -200,6 +200,7 @@ export function createBoardRuntime(o) {
         ctx: o.sketch.ctx,
         render: o.sketch.render,
         onTrace: o.sketch.onTrace,
+        onTiming: o.sketch.onTiming,
         intervalMs: o.sketch.intervalMs,
       });
       sketchRunner.start();

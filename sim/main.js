@@ -32,13 +32,16 @@ import { createBodyAudio } from './body.js';
 import { createBodyAudioLink } from './firmware/audio-link.js';
 import { demoSkips, lookupCharacter } from './capabilities.js';
 import { isRemote, provisionSteps, screenMismatch, createProvisioning, tokenCandidates } from './provision.js';
-import { firmwareById } from './firmware/index.js';
+import { firmwareById, firmwareFor, FIRMWARES } from './firmware/index.js';
 import { ledPattern } from './firmware/led.js';
 import { createSerialPanel } from './ui/serial-panel.js';
 import { runFlash, canFlash } from './firmware/flash.js';
 import { deviceInitialized } from './firmware/parts-view.js';
 import { createSketchContext } from './firmware/sketch-context.js';
-import { createSketchRunner } from './firmware/sketch.js';
+import { createFirmwareStudio } from './ui/firmware-studio.js';
+import { runCustomFlash } from './firmware/flash.js';
+import { compile } from './firmware/lang/index.js';
+import { EXAMPLES } from './firmware/examples.js';
 import { connectBody } from '../phone/body-link.js';
 import { openScreenFeed } from './screen-feed.js';
 import { keptBench, keepBench, dropKept, mergeKeptBench } from './keep.js';
@@ -142,7 +145,7 @@ const panels = createPanels({
     if (plan) return { mode: 'guided', evaluated: true, project: plan, progress: connectionProgress(bench, plan), selection, diagnoses: [] };
     // Independent DC supplies can energize an LED circuit without USB.
     const result = bench.usb || bench.placed.some(part => part.part === 'dc-source' && !part.burnt)
-      ? evaluateBench(bench, { firmware: firmwareById(bench.board.firmware), ownership: ownershipOf(bench) })
+      ? evaluateBench(bench, { firmware: firmwareFor(bench.board), ownership: ownershipOf(bench) })
       : null;
     const diagnoses = result ? rankedDiagnoses(bench, result, document.documentElement.lang) : [];
     return { mode: 'free', evaluated: Boolean(result), project: null, progress: [], selection, diagnoses };
@@ -159,7 +162,7 @@ const panels = createPanels({
   planOptions: options => planOptionsFor(bench, options),
   leaveProject: () => { activeProject = null; },
   speed: speedFactor(Number(read(SPEED_KEY))),
-  firmwareDrivers: () => firmwareById(bench.board.firmware)?.drivers ?? null,
+  firmwareDrivers: () => firmwareFor(bench.board)?.drivers ?? null,
   rememberSpeed: (/** @type {number} */ x) => write(SPEED_KEY, String(speedFactor(x))),
 });
 
@@ -177,7 +180,7 @@ const runtimePanel = createRuntimePanel({
 document.body.append(runtimePanel.element);
 const serial = createSerialPanel({
   lang: document.documentElement.lang === 'zh' ? 'zh' : 'en',
-  firmware: /** @type {any} */ (firmwareById(bench.board.firmware) ?? firmwareById('body')),
+  firmware: /** @type {any} */ (firmwareFor(bench.board) ?? firmwareById('body')),
   settings: bench.board.settings,
   characters: [],
   onChange: (settings) => {
@@ -211,7 +214,7 @@ function refreshDeviceVisuals() {
     ownership: ownershipOf(bench),
     deviceStates: boardRuntime?.deviceStates() ?? {},
     gpioOutputs,
-    firmware: firmwareById(bench.board.firmware),
+    firmware: firmwareFor(bench.board),
   }).engineering;
   world.devices(engineering);
 }
@@ -251,7 +254,7 @@ function setBench(b) {
   if (openPart) {
     const selected = bench.placed.find(p => p.id === openPart);
     const sensor = selected?.part === 'bme280-i2c'
-      ? evaluateBench(bench, { stimuli: environment, firmware: firmwareById(bench.board.firmware), ownership: ownershipOf(bench), deviceStates: boardRuntime?.deviceStates() ?? {} }).engineering.bme280[openPart]
+      ? evaluateBench(bench, { stimuli: environment, firmware: firmwareFor(bench.board), ownership: ownershipOf(bench), deviceStates: boardRuntime?.deviceStates() ?? {} }).engineering.bme280[openPart]
       : undefined;
     panels.refreshPart(openPart, selected?.properties ?? null, sensor, environment);
   }
@@ -263,7 +266,7 @@ function setBench(b) {
   // The body normally uses a power-on snapshot; unsafe board power changes
   // instead stop the session and latch until USB is cycled.
   if (bench.usb && powered) {
-    const evaluated = evaluateBench(bench, { firmware: firmwareById(bench.board.firmware), ownership: ownershipOf(bench) });
+    const evaluated = evaluateBench(bench, { firmware: firmwareFor(bench.board), ownership: ownershipOf(bench) });
     const fault = powerInterlock.observe(bench, evaluated);
     const hint = fault
       ? diagnose(bench, { ...evaluated.legacy, faults: [fault], burns: evaluated.burns }, document.documentElement.lang).find(item => item.kind === 'fault') ?? null
@@ -279,6 +282,7 @@ function setBench(b) {
   if (result.burns.length) panels.status(simText(document.documentElement.lang, 'led.burnt'));
   usb.refresh();
   effects.refresh();
+  updateStudio();
 }
 
 /**
@@ -303,6 +307,7 @@ const hands = attachInteraction(world, () => bench, setBench, {
     const selectedPart = selection?.kind === 'part' ? bench.placed.find(item => item.id === selection.id) : undefined;
     const target = selectedPart ? runtimeTarget(selectedPart.part, selectedPart.id) : null;
     if (target) runtimePanel.show(target); else runtimePanel.hide();
+    updateStudio();
     panels.refreshProject();
   },
   selectWire: (id, x, y) => {
@@ -318,7 +323,7 @@ const hands = attachInteraction(world, () => bench, setBench, {
     const bme = part.part === 'bme280-i2c' ? {
       state: evaluateBench(bench, {
         stimuli: environment,
-        firmware: firmwareById(bench.board.firmware),
+        firmware: firmwareFor(bench.board),
         ownership: ownershipOf(bench),
         deviceStates: boardRuntime?.deviceStates() ?? {},
       }).engineering.bme280[id], environment,
@@ -327,7 +332,7 @@ const hands = attachInteraction(world, () => bench, setBench, {
         const current = bench.placed.find(item => item.id === id);
         const state = evaluateBench(bench, {
           stimuli: environment,
-          firmware: firmwareById(bench.board.firmware),
+          firmware: firmwareFor(bench.board),
           ownership: ownershipOf(bench),
           deviceStates: boardRuntime?.deviceStates() ?? {},
         }).engineering.bme280[id];
@@ -347,6 +352,164 @@ const usb = attachUsb(world, {
   locked: () => startLock.locked(),
   bench: () => bench,
 });
+
+
+// ---- Firmware studio ----------------------------------------------------
+
+/** @type {{ kind: 'body'|'sketch'|'custom', id?: string }} */
+let studioSelection = { kind: 'body' };
+/** @type {{ line: number, column: number, message: string }[]} */
+let studioErrors = [];
+let studioSource = '';
+const studioTimings = { interpreterMs: 0 };
+/** @type {ReturnType<typeof setTimeout> | undefined} */
+let studioDraftTimer;
+
+const studio = createFirmwareStudio({
+  lang: document.documentElement.lang === 'zh' ? 'zh' : 'en',
+  firmwares: [
+    { id: 'body', name: 'body' },
+    ...Object.keys(FIRMWARES).filter((id) => id.startsWith('sketch-')).map((id) => ({ id, name: id })),
+    { id: 'custom', name: simText(document.documentElement.lang, 'studio.mine') },
+  ],
+  onSelect: (selection) => { studioSelection = selection; studioErrors = []; void loadStudioSource(selection); updateStudio(); },
+  onDraft: (source) => saveStudioDraft(source),
+  onDownload: (selection) => void downloadStudioSource(selection),
+  onCopyExample: (selection) => copyStudioExample(selection),
+  onFlash: (selection) => flashStudio(selection),
+});
+document.body.append(studio.element);
+const studioTab = document.createElement('button');
+studioTab.id = 'firmware-tab';
+studioTab.type = 'button';
+studioTab.textContent = simText(document.documentElement.lang, 'studio.title');
+studioTab.addEventListener('click', () => {
+  // Opening the drawer starts from what is actually on the board (spec §11).
+  if (studio.element.hidden) {
+    studioSelection = selectionForFirmware(bench.board.firmware);
+    studioErrors = [];
+    void loadStudioSource(studioSelection);
+    updateStudio();
+  }
+  studio.toggle();
+});
+document.body.append(studioTab);
+
+function updateStudio() {
+  // The runtime panel keeps its corner; the drawer stops above it rather than
+  // covering it (spec §11).
+  const runtimeElement = /** @type {HTMLElement} */ (runtimePanel.element);
+  studio.element.style.bottom = runtimeElement.hidden
+    ? ''
+    : `${Math.round(runtimeElement.getBoundingClientRect().height) + 28}px`;
+  studio.update({
+    board: bench.board,
+    custom: bench.board.custom,
+    selection: studioSelection,
+    running: Boolean(usb.plugged),
+    usb: Boolean(usb.plugged),
+    errors: studioErrors,
+    timings: studioTimings,
+    source: studioSource,
+    exampleV1: studioSelection.kind === 'sketch' && Boolean(EXAMPLES[/** @type {string} */ (studioSelection.id)]?.v1),
+  });
+}
+
+/** @param {string} firmware @returns {{ kind: 'body'|'sketch'|'custom', id?: string }} */
+function selectionForFirmware(firmware) {
+  if (firmware === 'custom') return { kind: 'custom' };
+  if (firmware.startsWith('sketch-')) return { kind: 'sketch', id: firmware };
+  return { kind: 'body' };
+}
+
+/** @param {{ kind: string, id?: string }} selection */
+async function loadStudioSource(selection) {
+  studioSource = '';
+  try {
+    if (selection.kind === 'body') {
+      const response = await fetch('/api/firmware/sources/main.c');
+      if (response.ok) studioSource = await response.text();
+    } else if (selection.kind === 'sketch' && selection.id) {
+      studioSource = EXAMPLES[selection.id]?.source ?? '';
+    }
+  } catch { /* the source is reading material; a failed fetch leaves it blank */ }
+  updateStudio();
+}
+
+/** @param {string} source */
+function saveStudioDraft(source) {
+  clearTimeout(studioDraftTimer);
+  studioDraftTimer = setTimeout(() => {
+    const custom = bench.board.custom ?? { name: 'my-firmware', draft: '', flashed: '', updatedAt: 0 };
+    bench = { ...bench, board: { ...bench.board, custom: { ...custom, draft: source, updatedAt: Date.now() } } };
+    studioErrors = compile(source).errors;
+    setBench(bench);
+    updateStudio();
+  }, 250);
+}
+
+/** @param {{ kind: string, id?: string }} selection */
+async function downloadStudioSource(selection) {
+  let text = studioSource;
+  let name = 'firmware.ino';
+  if (selection.kind === 'custom') text = bench.board.custom?.draft ?? '';
+  else if (selection.kind === 'body') name = 'main.c';
+  else if (selection.kind === 'sketch') { text = EXAMPLES[/** @type {string} */ (selection.id)]?.source ?? ''; name = `${selection.id}.ino`; }
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url; link.download = name; link.click();
+  URL.revokeObjectURL(url);
+}
+
+/** @param {{ kind: string, id?: string }} selection */
+function copyStudioExample(selection) {
+  const example = selection.id ? EXAMPLES[selection.id] : undefined;
+  if (!example?.v1) return;
+  const custom = bench.board.custom ?? { name: 'my-firmware', draft: '', flashed: '', updatedAt: 0 };
+  bench = { ...bench, board: { ...bench.board, custom: { ...custom, draft: example.source, updatedAt: Date.now() } } };
+  studioSelection = { kind: 'custom' };
+  studioErrors = [];
+  studioSource = example.source;
+  setBench(bench);
+  updateStudio();
+  studio.update({ view: 'draft' });
+}
+
+/** @param {{ kind: string, id?: string }} selection */
+async function flashStudio(selection) {
+  const targetId = selection.kind === 'custom' ? 'custom' : selection.kind === 'body' ? 'body' : selection.id;
+  if (!targetId) return { ok: false };
+  if (selection.kind === 'custom') {
+    const source = bench.board.custom?.draft ?? '';
+    const { program, errors } = compile(source);
+    if (!program || errors.length) {
+      studioErrors = errors;
+      updateStudio();
+      return { ok: false, errors };
+    }
+    studioErrors = [];
+    if (!usb.plugged) await usb.insert({ instant: true, pendingFlash: targetId });
+    const boardBefore = bench.board;
+    const result = await runCustomFlash({ bench, board: boardBefore, source, isCurrent: () => bench.board === boardBefore && bench.usb });
+    if (!result.ok) {
+      panels.status(`${simText(document.documentElement.lang, 'studio.flashFailed')} (${result.reason})`);
+      updateStudio();
+      return { ok: false, errors: [] };
+    }
+    bench = { ...bench, board: result.board };
+    setBench(bench);
+    if (usb.plugged) plugIn({ ending: line.ending });
+    updateStudio();
+    studio.update({ view: 'run', highlight: 0 });
+    return { ok: true };
+  }
+  if (!usb.plugged) await usb.insert({ instant: true, pendingFlash: targetId });
+  await flashFirmwareNow(/** @type {string} */ (targetId));
+  updateStudio();
+  studio.update({ view: 'run', highlight: 0 });
+  return { ok: true };
+}
 
 // #view=top opens in that view without saving it: handy for a screenshot.
 const asked = new URLSearchParams(location.hash.slice(1)).get('view');
@@ -413,7 +576,6 @@ addEventListener('blur', unpeek);
 const bodyAudio = createBodyAudio();
 /** The microphone uplink and speaker downlink over the board's own link. */
 /** @type {ReturnType<typeof createBodyAudioLink> | null} */ let bodyAudioLink = null;
-/** @type {ReturnType<typeof createSketchRunner> | null} */ let sketchRunner = null;
 /** Reads the wand into the shake detector while a body is plugged in. @type {ReturnType<typeof createWandFeed> | null} */
 let wandFeed = null;
 /** @type {ReturnType<typeof setInterval> | undefined} */
@@ -567,8 +729,6 @@ function driveStop() {
 function stopBoard() {
   boardRuntime?.stop();
   boardRuntime = null;
-  sketchRunner?.stop();
-  sketchRunner = null;
   bodyAudioLink?.stop();
   bodyAudioLink = null;
   clearInterval(wandTimer);
@@ -582,7 +742,7 @@ function stopBoard() {
 function rebootBoard() {
   if (!usb.plugged) return;
   stopBoard();
-  void plugIn();
+  void plugIn({ keepSelection: true });
 }
 
 /** Invalidate pending starts before stopping so late callbacks cannot restart motion. */
@@ -635,9 +795,10 @@ function unlockAudio() {
 }
 
 /**
- * @param {{ ending?: string | null, pendingFlash?: string | null }} [meta]
+ * @param {{ ending?: string | null, pendingFlash?: string | null, keepSelection?: boolean }} [meta]
  *   `pendingFlash` puts the board in the ROM bootloader instead of booting the
- *   firmware that is already there.
+ *   firmware that is already there. `keepSelection` leaves the studio choice
+ *   alone across a reboot.
  */
 async function plugIn(meta = {}) {
   stopBoard();
@@ -646,7 +807,7 @@ async function plugIn(meta = {}) {
   sonar = null;
   const mine = ++plugs;
   bench = { ...bench, usb: true };
-  const merged = evaluateBench(bench, { firmware: firmwareById(bench.board.firmware), ownership: ownershipOf(bench) });
+  const merged = evaluateBench(bench, { firmware: firmwareFor(bench.board), ownership: ownershipOf(bench) });
   const outcome = merged.legacy;
   const blocked = blockingBoardPowerFault(bench, merged);
   // What burns is marked now, before anything else is shown, so a reload
@@ -699,7 +860,7 @@ async function plugIn(meta = {}) {
     return;
   }
 
-  const firmware = firmwareById(bench.board.firmware);
+  const firmware = firmwareFor(bench.board);
   if (!firmware) {
     panels.status(simText(document.documentElement.lang, 'board.noFirmware'));
     return;
@@ -742,6 +903,29 @@ async function plugIn(meta = {}) {
     },
     brainUrl: `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/body`,
     audio: bodyAudioLink ?? undefined,
+    sketch: {
+      ctx: () => {
+        const deviceStates = boardRuntime?.deviceStates() ?? {};
+        const evaluation = evaluateBench(bench, { firmware: firmwareFor(bench.board), ownership: ownershipOf(bench), deviceStates, gpioOutputs, stimuli: simulationStimuli() }).engineering;
+        return createSketchContext({
+          bench, evaluation, deviceStates, runtime,
+          onPin: (pin, level) => { gpioOutputs[pin] = level; },
+          onMeasure: (_id, on) => { sonar = { measure: on, distanceCm: 100 }; },
+          read: (pin) => evaluation.gpio?.[`esp:GPIO${pin}`] === 'low' ? 'LOW' : 'HIGH',
+          onLog: () => {},
+        });
+      },
+      render: refreshDeviceVisuals,
+      onTrace: (records) => {
+        const logs = records.filter((record) => record.kind === 'log' && record.text).map((record) => record.text);
+        if (logs.length) serial.appendLines(logs);
+        studio.pushTrace(records);
+      },
+      onTiming: (ms) => {
+        studioTimings.interpreterMs = ms;
+        studio.setTiming({ interpreterMs: ms });
+      },
+    },
     connect: (opts) => {
       const link = connectBody({
         url: opts.url, token: opts.token, retryOnReject: opts.retryOnReject,
@@ -797,6 +981,11 @@ async function plugIn(meta = {}) {
     },
   });
   boardRuntime.start();
+  if (!meta.keepSelection) {
+    studioSelection = selectionForFirmware(bench.board.firmware);
+    void loadStudioSource(studioSelection);
+  }
+  updateStudio();
   if (firmware.link) void maybeProvision(mine);
   // The firmware's own IMU check is the gate: no MPU-6050 awake, no shake sent.
   const imu = bench.placed.find((part) => part.part === 'mpu6050');
@@ -806,23 +995,7 @@ async function plugIn(meta = {}) {
     clearInterval(wandTimer);
     wandTimer = setInterval(() => wandFeed?.tick(), 50);
   }
-  if (!firmware.link) {
-    sketchRunner?.stop();
-    sketchRunner = createSketchRunner({
-      firmware,
-      ctx: () => {
-        const deviceStates = boardRuntime?.deviceStates() ?? {};
-        const evaluation = evaluateBench(bench, { firmware, ownership: ownershipOf(bench), deviceStates, gpioOutputs, stimuli: simulationStimuli() }).engineering;
-        return createSketchContext({
-          bench, evaluation, deviceStates, runtime,
-          onPin: (pin, level) => { gpioOutputs[pin] = level; },
-          onMeasure: (_id, on) => { sonar = { measure: on, distanceCm: 100 }; },
-        });
-      },
-      render: refreshDeviceVisuals,
-    });
-    sketchRunner.start();
-  }
+
 }
 
 async function flashFirmwareNow(/** @type {string} */ id) {
@@ -997,6 +1170,7 @@ function unplug() {
     view = wiringView;
     go(view);
   }
+  updateStudio();
 }
 
 function reset() {

@@ -163,3 +163,24 @@ test('a half-line print flushes capped at 512 chars', () => {
   assert.ok(ctx.logs.length > 0);
   assert.ok(ctx.logs.every((line) => line.length <= 512));
 });
+
+test('call traces carry readable text for the timeline', () => {
+  const { program } = compile('void loop(){ if (digitalRead(4) == LOW) { digitalWrite(5, HIGH); } }');
+  const m = createMachine({ program }); const ctx = fakeCtx(); m.start();
+  m.tick(ctx); // setup
+  const records = m.tick(ctx);
+  assert.ok(records.some((r) => r.text === 'digitalRead(4) → LOW'));
+  assert.ok(records.some((r) => r.text === 'digitalWrite(5, HIGH) → GPIO5'));
+  assert.equal(records.filter((r) => r.text === 'digitalWrite(5, HIGH) → GPIO5').length, 1);
+});
+
+test('print is a partial line; println is the record the console shows', () => {
+  const { program } = compile('void loop(){ Serial.print("a"); Serial.print("b"); Serial.println("c"); }');
+  const m = createMachine({ program }); const ctx = fakeCtx(); m.start();
+  m.tick(ctx); // setup
+  const records = m.tick(ctx);
+  assert.deepEqual(ctx.logs, ['abc']);
+  assert.ok(records.some((r) => r.kind === 'print'));
+  assert.equal(records.filter((r) => r.kind === 'log').length, 1);
+  assert.equal(records.find((r) => r.kind === 'log')?.text, 'abc');
+});

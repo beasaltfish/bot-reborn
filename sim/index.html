@@ -254,6 +254,100 @@
     #diagram li b { display: block; font-weight: 600; }
     #diagram li .why { color: var(--ink-dim); }
 
+    /* The firmware drawer: code, draft and the run timeline on one right edge.
+       Line numbers live in a sticky first column so both scroll together. */
+    #firmware-tab {
+      position: fixed; top: 50%; right: 0; transform: translateY(-50%); z-index: 6;
+      writing-mode: vertical-rl; padding: 12px 5px; border-radius: 9px 0 0 9px; cursor: pointer;
+      border: 1px solid var(--edge); border-right: 0;
+      font: 600 12px/1 var(--font); letter-spacing: 0.08em; color: var(--ink);
+      background: var(--glass-strong);
+      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    }
+    #firmware-tab:hover { color: #2a2018; background: var(--accent); }
+    #firmware-studio {
+      position: fixed; top: 56px; right: 14px; bottom: 58px; z-index: 7;
+      width: min(420px, calc(100vw - 28px)); box-sizing: border-box;
+      display: flex; flex-direction: column; gap: 10px; padding: 14px 16px 16px;
+      font: 500 13px/1.4 var(--font); color: var(--ink);
+      background: #1f1913; border: 1px solid var(--edge); border-radius: 14px;
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.42);
+    }
+    #firmware-studio .studio-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    #firmware-studio h2 { margin: 0 auto 0 0; font: 600 14px/1.2 var(--font); letter-spacing: 0.02em; }
+    #firmware-studio .studio-bar select {
+      max-width: 150px; padding: 5px 7px; color: var(--ink); background: #40362d;
+      border: 1px solid var(--edge); border-radius: 7px; font: 500 12px var(--font);
+    }
+    #firmware-studio .studio-bar button {
+      padding: 5px 9px; border: 1px solid var(--edge); border-radius: 7px; cursor: pointer;
+      color: var(--ink); background: rgba(255, 240, 220, 0.06); font: 600 12px var(--font);
+    }
+    #firmware-studio .studio-bar button:hover:not(:disabled) { background: rgba(240, 180, 106, 0.18); border-color: rgba(240, 180, 106, 0.5); }
+    #firmware-studio .studio-bar button:disabled { cursor: default; opacity: 0.45; }
+    #firmware-studio .studio-bar [data-role="toggle"] {
+      padding: 0 6px; border: 0; background: none; color: var(--ink-dim);
+      font: 400 20px/1.1 var(--font);
+    }
+    #firmware-studio .studio-bar [data-role="toggle"]:hover { color: var(--ink); background: none; }
+    #firmware-studio .studio-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--ink-dim); font-size: 11.5px; }
+    #firmware-studio [data-role="board"] { color: var(--ink); font-weight: 600; }
+    #firmware-studio .studio-mark { padding: 1px 7px; border-radius: 999px; color: #2a2018; background: var(--accent); font: 700 10px/1.6 var(--font); letter-spacing: 0.04em; }
+    #firmware-studio .studio-dirty { color: #ffb28a; font-weight: 600; }
+    #firmware-studio .studio-note { color: var(--ink-dim); font-size: 11.5px; }
+    #firmware-studio .studio-seg { display: inline-flex; padding: 2px; border-radius: 999px; background: rgba(255, 240, 220, 0.06); border: 1px solid var(--edge); }
+    #firmware-studio .studio-seg button { padding: 3px 10px; border: 0; border-radius: 999px; cursor: pointer; color: var(--ink-dim); background: transparent; font: 600 11.5px var(--font); }
+    #firmware-studio .studio-seg button[aria-pressed="true"] { color: #2a2018; background: var(--accent); }
+    #firmware-studio [data-role="timing"] { margin-left: auto; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    #firmware-studio .studio-code {
+      flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: auto minmax(0, 1fr);
+      align-content: start; overflow: auto;
+      border: 1px solid var(--edge); border-radius: 10px; background: #16110d;
+    }
+    #firmware-studio .studio-lines {
+      position: sticky; left: 0; z-index: 1; padding: 10px 8px 12px 10px;
+      color: var(--ink-dim); background: #16110d; text-align: right; user-select: none;
+      font: 500 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    #firmware-studio .studio-lines span { display: block; }
+    #firmware-studio .studio-lines span.error { color: #ff9788; font-weight: 700; }
+    #firmware-studio .studio-lines span.current { color: var(--accent); font-weight: 700; }
+    #firmware-studio .studio-source, #firmware-studio .studio-draft { grid-column: 2; min-width: 0; padding: 10px 12px 12px 6px; }
+    #firmware-studio .studio-source { position: relative; }
+    #firmware-studio .studio-label {
+      position: absolute; top: 2px; right: 8px; z-index: 1;
+      color: var(--accent); font: 600 10.5px/1.2 var(--font); letter-spacing: 0.06em; text-transform: uppercase;
+    }
+    #firmware-studio pre, #firmware-studio textarea {
+      margin: 0; color: var(--ink); white-space: pre; tab-size: 2;
+      font: 500 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    #firmware-studio textarea {
+      display: block; width: 100%; box-sizing: border-box; min-height: 280px;
+      padding: 0; border: 0; outline: none; resize: none; background: transparent;
+    }
+    #firmware-studio .studio-error {
+      margin: 0; padding: 7px 10px; border-radius: 8px; white-space: pre-wrap;
+      color: #ffd2c4; background: rgba(226, 85, 74, 0.16); border: 1px solid rgba(226, 85, 74, 0.5);
+      font: 500 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    #firmware-studio .studio-controls { display: flex; gap: 8px; }
+    #firmware-studio .studio-controls button {
+      padding: 4px 10px; border: 1px solid var(--edge); border-radius: 7px; cursor: pointer;
+      color: var(--ink); background: rgba(255, 240, 220, 0.06); font: 600 12px var(--font);
+    }
+    #firmware-studio .studio-controls button:hover { background: rgba(240, 180, 106, 0.18); }
+    #firmware-studio .studio-timeline {
+      flex: none; height: 170px; overflow: auto; display: flex; flex-direction: column; gap: 1px;
+      padding: 6px; border: 1px solid var(--edge); border-radius: 10px; background: #16110d;
+      font: 500 11.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    #firmware-studio [data-role="trace"] {
+      flex: none; padding: 1px 6px; border-radius: 5px; cursor: pointer;
+      color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    #firmware-studio [data-role="trace"]:hover { color: var(--ink); background: rgba(255, 240, 220, 0.07); }
+
     @media (max-width: 600px) {
       #tools { max-width: calc(100vw - 28px); }
       #viewbox { top: auto; bottom: 58px; right: 14px; }
@@ -261,6 +355,14 @@
       #runbar { top: 54px; align-items: flex-start; }
       #runbar .say { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
       body.demo-running #tools { display: none; }
+      #firmware-studio {
+        top: auto; left: 0; right: 0; bottom: 58px; width: 100vw;
+        height: min(80vh, calc(100vh - 130px)); padding: 12px 12px 14px;
+        border-radius: 14px 14px 0 0; border-left: 0; border-right: 0; border-bottom: 0;
+      }
+      #firmware-tab { top: auto; bottom: 76px; transform: none; }
+      #firmware-studio .studio-timeline { height: 120px; }
+      #firmware-studio .studio-bar select { max-width: 120px; }
     }
   </style>
 </head>

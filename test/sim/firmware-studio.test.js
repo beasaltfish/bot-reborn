@@ -34,10 +34,10 @@ test('the drawer is hidden by default and toggles', () => {
   } finally { restore(); }
 });
 
-test('line numbers match the source lines in both views', () => {
+test('line numbers match the source lines in both custom views', () => {
   const { studio, restore } = setup();
   try {
-    studio.update(state({ custom: custom({ draft: 'a\nb\nc', flashed: 'x\ny' }) }));
+    studio.update(state({ board: { firmware: 'custom' }, selection: { kind: 'custom' }, custom: custom({ draft: 'a\nb\nc', flashed: 'x\ny' }) }));
     assert.deepEqual([...studio.element.querySelectorAll('[data-role=line-numbers] span')].map((n) => n.textContent), ['1', '2']);
     studio.update(state({ view: 'draft' }));
     assert.deepEqual([...studio.element.querySelectorAll('[data-role=line-numbers] span')].map((n) => n.textContent), ['1', '2', '3']);
@@ -47,9 +47,58 @@ test('line numbers match the source lines in both views', () => {
 test('the selector is an inspection target, not the board', () => {
   const { studio, restore } = setup();
   try {
-    studio.update(state({ board: { firmware: 'custom' }, selection: { kind: 'body' } }));
+    studio.update(state({ board: { firmware: 'custom' }, selection: { kind: 'body' }, source: 'int main(void) {}', custom: custom({ flashed: 'void loop(){}' }) }));
     assert.match(/** @type {any} */ (studio.element.querySelector('[data-role=board]')).textContent, /custom/);
-    assert.match(/** @type {any} */ (studio.element.querySelector('[data-role=run-source]')).textContent, /Running/);
+    assert.match(/** @type {any} */ (studio.element.querySelector('[data-role=run-note]')).textContent, /running source/);
+    assert.equal(/** @type {any} */ (studio.element.querySelector('[data-role=run-code]')).textContent, 'int main(void) {}');
+  } finally { restore(); }
+});
+
+test('the run note names the firmware the board actually runs', () => {
+  const { studio, restore } = setup();
+  try {
+    studio.update(state({ board: { firmware: 'body' } }));
+    assert.match(/** @type {any} */ (studio.element.querySelector('[data-role=run-note]')).textContent, /serial console/);
+    studio.update(state({ board: { firmware: 'sketch-sonar' } }));
+    assert.match(/** @type {any} */ (studio.element.querySelector('[data-role=run-note]')).textContent, /line-by-line/);
+    studio.update(state({ board: { firmware: 'custom' }, custom: custom() }));
+    assert.match(/** @type {any} */ (studio.element.querySelector('[data-role=run-note]')).textContent, /No flashed source/);
+    studio.update(state({ board: { firmware: 'custom' }, custom: custom({ flashed: 'void loop(){}' }) }));
+    assert.match(/** @type {any} */ (studio.element.querySelector('[data-role=run-note]')).textContent, /running source/);
+    studio.update(state({ board: { firmware: '' } }));
+    assert.match(/** @type {any} */ (studio.element.querySelector('[data-role=run-note]')).textContent, /Blank chip/);
+  } finally { restore(); }
+});
+
+test('the board mark appears only when the selection is what the board runs', () => {
+  const { studio, restore } = setup();
+  try {
+    studio.update(state({ board: { firmware: 'custom' }, selection: { kind: 'custom' } }));
+    assert.equal(/** @type {any} */ (studio.element.querySelector('[data-role=board-mark]')).hidden, false);
+    studio.update(state({ selection: { kind: 'body' } }));
+    assert.equal(/** @type {any} */ (studio.element.querySelector('[data-role=board-mark]')).hidden, true);
+  } finally { restore(); }
+});
+
+test('a dirty draft is marked not flashed', () => {
+  const { studio, restore } = setup();
+  try {
+    studio.update(state({ board: { firmware: 'custom' }, selection: { kind: 'custom' }, custom: custom({ draft: 'new', flashed: 'old' }) }));
+    assert.equal(/** @type {any} */ (studio.element.querySelector('[data-role=dirty]')).hidden, false);
+    studio.update(state({ custom: custom({ draft: 'same', flashed: 'same' }) }));
+    assert.equal(/** @type {any} */ (studio.element.querySelector('[data-role=dirty]')).hidden, true);
+  } finally { restore(); }
+});
+
+test('an unplugged flash button says it will insert the cable for the target', () => {
+  const { studio, restore } = setup();
+  try {
+    studio.update(state({ selection: { kind: 'custom' }, usb: false }));
+    assert.match(/** @type {any} */ (studio.element.querySelector('[data-role=flash]')).textContent, /Insert USB.*custom/);
+    studio.update(state({ selection: { kind: 'sketch', id: 'sketch-sonar' }, usb: false }));
+    assert.match(/** @type {any} */ (studio.element.querySelector('[data-role=flash]')).textContent, /sketch-sonar/);
+    studio.update(state({ usb: true }));
+    assert.equal(/** @type {any} */ (studio.element.querySelector('[data-role=flash]')).textContent, 'Flash');
   } finally { restore(); }
 });
 
@@ -177,5 +226,42 @@ test('timing is shown as interpreter and UI separately', () => {
   try {
     studio.update(state({ timings: { interpreterMs: 3.2, uiMs: 0.6 } }));
     assert.match(/** @type {any} */ (studio.element.querySelector('[data-role=timing]')).textContent, /3\.2\/6.*0\.6\/2/);
+  } finally { restore(); }
+});
+
+test('Escape closes the open drawer', () => {
+  const { dom, studio, restore } = setup();
+  try {
+    studio.open();
+    dom.window.document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape' }));
+    assert.equal(studio.element.hidden, true);
+  } finally { restore(); }
+});
+
+test('the timeline skips tick and waiting markers', () => {
+  const frames = frameScheduler();
+  const { studio, restore } = setup({ scheduleFrame: frames.schedule });
+  try {
+    studio.update(state({ running: true }));
+    studio.pushTrace([
+      { tick: 1, kind: 'tick' },
+      { tick: 1, line: 7, kind: 'statement', text: 'if' },
+      { tick: 1, kind: 'waiting' },
+      { tick: 1, line: 13, kind: 'statement', text: 'delay(100)' },
+    ]);
+    frames.flush();
+    const rows = [...studio.element.querySelectorAll('[data-role=trace]')].map((r) => r.textContent);
+    assert.deepEqual(rows, ['7 if', '13 delay(100)']);
+  } finally { restore(); }
+});
+
+test('timing updates do not rebuild the editor', () => {
+  const { studio, restore } = setup({ onDraft: () => {} });
+  try {
+    studio.update(state({ board: { firmware: 'custom' }, selection: { kind: 'custom' }, custom: custom({ draft: 'x', flashed: 'x' }) }));
+    const area = /** @type {HTMLTextAreaElement} */ (studio.element.querySelector('[data-role=draft]'));
+    studio.setTiming({ interpreterMs: 4.2, uiMs: 0.4 });
+    assert.equal(/** @type {any} */ (studio.element.querySelector('[data-role=draft]')), area);
+    assert.match(/** @type {any} */ (studio.element.querySelector('[data-role=timing]')).textContent, /4\.2\/6.*0\.4\/2/);
   } finally { restore(); }
 });
