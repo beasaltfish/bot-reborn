@@ -76,3 +76,13 @@ test('an unknown owner shows nothing even when a device state says active', () =
   assert.deepEqual(out.bme280, {});
   assert.deepEqual(out.display, {});
 });
+
+test('the init pass sees the device records the gate would otherwise hide', () => {
+  const bench = { ...envBench(), usb: true };
+  const ownership = /** @type {Record<string, 'board'>} */ (Object.fromEntries(Object.keys(ownershipOf(bench)).map((id) => [id, 'board'])));
+  const gated = evaluateBench(bench, { ownership, deviceStates: {} }).engineering;
+  assert.deepEqual(gated.bme280, {});
+  const init = evaluateBench(bench, { ownership, deviceStates: {}, initializing: true }).engineering;
+  assert.equal(init.bme280.env.state, 'ready');
+  assert.equal(init.display.oled.state, 'ready');
+});

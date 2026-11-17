@@ -47,8 +47,7 @@ export function measureSonar(stimuli, on = true, distanceCm = 100) {
 /** Device states that mean the part exists but its init did not succeed. */
 const FAILED = new Set([
   'off', 'unsupported', 'burnt', 'reversed', 'address-conflict', 'swapped',
-  'shorted', 'wrong-bus', 'unsupported-voltage', 'level-incompatible',
-  'no-data', 'brownout',
+  'shorted', 'wrong-bus', 'unsupported-voltage', 'no-data', 'brownout',
 ]);
 
 /**
@@ -59,7 +58,8 @@ const FAILED = new Set([
  */
 export function deviceInitialized(evaluation, part) {
   const section = SECTION[part.part];
-  if (!section) return false;
+  // An LED, a screen or another part without a protocol has no init to fail.
+  if (!section) return true;
   const record = evaluation?.[section]?.[part.id];
   if (!record) return false;
   if (part.part === 'button-module') return record.level !== null;

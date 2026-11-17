@@ -16,7 +16,7 @@ import { DEVICES } from './catalog.js';
 import { PROFILES, checkResources } from './profiles.js';
 import { ownershipIssues } from '../firmware/ownership.js';
 
-/** @typedef {{ profile?: import('./profiles.js').Profile, mode?: import('../electrical/supply.js').OperatingMode, stimuli?: object, devices?: Record<string, any>, ownership?: Record<string, 'board'|'circuit'|'unknown'>, deviceStates?: Record<string, string>, gpioOutputs?: Record<string, 'high'|'low'|'high-z'>, firmware?: any }} Options */
+/** @typedef {{ profile?: import('./profiles.js').Profile, mode?: import('../electrical/supply.js').OperatingMode, stimuli?: object, devices?: Record<string, any>, ownership?: Record<string, 'board'|'circuit'|'unknown'>, deviceStates?: Record<string, string>, gpioOutputs?: Record<string, 'high'|'low'|'high-z'>, initializing?: boolean, firmware?: any }} Options */
 
 /** Deduplicate global findings by code and affected instances. */
 /** @param {{code:string, instances:string[], points:string[], origin?:string}[]} faults */
@@ -38,7 +38,7 @@ export function uniqueFaults(faults) {
  * @param {import('../bench.js').Bench} bench
  * @param {Options} [options]
  */
-export function evaluateDevices(bench, { profile = PROFILES[0], mode = 'idle', stimuli, devices = DEVICES, ownership = {}, deviceStates = {}, gpioOutputs = {}, firmware } = {}) {
+export function evaluateDevices(bench, { profile = PROFILES[0], mode = 'idle', stimuli, devices = DEVICES, ownership = {}, deviceStates = {}, gpioOutputs = {}, initializing = false, firmware } = {}) {
   const electrical = evaluateElectrical(bench, { profile, mode, stimuli, devices });
   const resources = checkResources(bench, profile, devices, { ownership, drivers: firmware?.drivers, firmware }).filter(f => {
     if (f.code !== 'spi-chip-select-conflict' || f.instances.length !== 2) return true;
@@ -111,15 +111,16 @@ export function evaluateDevices(bench, { profile = PROFILES[0], mode = 'idle', s
   /** A board device only speaks when its firmware initialised it; circuit devices always do. */
   /** @param {Record<string, any>} record */
   const gate = (record) => Object.fromEntries(Object.entries(record).filter(([id]) => {
+    if (initializing) return true;
     const own = ownership[id];
     if (own === 'circuit') return true;
     if (own === 'board') return deviceStates[id] === 'active';
     if (own === 'unknown') return false;
     return true;
   }));
+  const leds = gate(Object.fromEntries(ledResults.map(({ id, outcome, fromGpio }) => [id, { ...outcome, source: fromGpio ? 'gpio' : 'supply' }])));
   return {
-    electrical, resources, parts, faults, burns, deviceStates, ownership,
-    leds: Object.fromEntries(ledResults.map(({ id, outcome, fromGpio }) => [id, { ...outcome, source: fromGpio ? 'gpio' : 'supply' }])),
+    electrical, resources, parts, faults, burns, deviceStates, ownership, leds,
     bme280: gate(bme280),
     digital: gate(digital.parts),
     gpio: digital.gpio,

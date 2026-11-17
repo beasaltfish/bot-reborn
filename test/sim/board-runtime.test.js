@@ -68,16 +68,18 @@ test('welcome starts the microphone and audio frames reach the audio link', (t) 
   });
   h.runtime.start();
   t.mock.timers.tick(1000);
-  assert.equal(audio.stops, 1); // start() stops any previous boot first
+  // A boot clears the speaker queue but never stops the audio link itself:
+  // the caller owns it across a reboot.
+  assert.equal(audio.stops, 0);
   opts.onWelcome('pet');
   opts.onWelcome('pet');
   assert.equal(audio.attached, 1);
   opts.onAudio(new ArrayBuffer(4));
   assert.equal(audio.down, 1);
   opts.onLost();
-  assert.equal(audio.hushed, 1);
+  assert.ok(audio.hushed >= 1);
   h.runtime.stop();
-  assert.equal(audio.stops, 2);
+  assert.equal(audio.stops, 0);
 });
 
 test('busy rejects retry until the runtime budget ends, then are final', (t) => {
@@ -107,5 +109,21 @@ test('a busy body does not stop the screen link', (t) => {
   t.mock.timers.tick(1000);
   reject('busy');
   assert.deepEqual(opened, ['ws://brain/screen']);
+  h.runtime.stop();
+});
+
+test('a sketch firmware prints its own line, never the body boot', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const lines = /** @type {string[]} */ ([]);
+  const h = harness({
+    board: { ...board, firmware: 'sketch-button-led' },
+    onLine: (/** @type {string} */ l) => lines.push(l),
+  });
+  h.runtime.start();
+  t.mock.timers.tick(2000);
+  assert.ok(lines.some((l) => l.startsWith('sketch-button-led:')));
+  assert.ok(!lines.some((l) => l.startsWith('body: protocol')));
+  assert.ok(!lines.some((l) => l.startsWith('not set up')));
+  assert.deepEqual(h.links, []);
   h.runtime.stop();
 });

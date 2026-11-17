@@ -124,8 +124,8 @@ export function runRecipe(o) {
     });
   }
 
-  /** @param {Step} s */
-  async function play(s) {
+  /** @param {Step} s @param {Step} [next] */
+  async function play(s, next) {
     switch (s.kind) {
       case 'board':
       case 'part':
@@ -136,7 +136,9 @@ export function runRecipe(o) {
         tick();
         break;
       case 'usb':
-        await o.usb.insert();
+        // A plug that is followed by a flash enters the ROM bootloader: the old
+        // firmware never boots, and the new one boots when the write commits.
+        await o.usb.insert(next?.kind === 'flash' ? { pendingFlash: next.firmware } : undefined);
         break;
       case 'flash':
         await o.flash?.(s.firmware);
@@ -147,7 +149,7 @@ export function runRecipe(o) {
   async function run() {
     o.hands.enable(false);
     try {
-      for (const s of o.steps) {
+      for (const [index, s] of o.steps.entries()) {
         if (stopped) break;
         // Skipping lays everything down at once but leaves the plug to be pushed in.
         if (skipping && s.kind !== 'usb') {
@@ -159,7 +161,7 @@ export function runRecipe(o) {
         // Step by step: the line says what comes next, and Next does it.
         if (mode === 'step' && !skipping) await gate();
         if (stopped) break;
-        await play(s);
+        await play(s, o.steps[index + 1]);
         if (mode === 'watch' && !skipping && !stopped) await pause(pauseFor(s, speed));
       }
     } finally {

@@ -42,3 +42,18 @@ test('a GPIO overcurrent is its own diagnosis and burns the LED', () => {
   assert.ok(result.engineering.faults.some((f) => f.code === 'gpio-overcurrent' && f.instances.includes('led')));
   assert.ok(result.burns.includes('led'));
 });
+
+import { evaluateDevices } from '../../sim/devices/evaluate.js';
+
+test('an unknown owner or an uninitialised board LED shows no light', () => {
+  const bench = { ...highSide(), usb: true };
+  const high = /** @type {Record<string, 'high'>} */ ({ GPIO5: 'high' });
+  const unknown = evaluateDevices(bench, { gpioOutputs: high, ownership: { led: 'unknown' } });
+  assert.equal(unknown.leds.led, undefined);
+  const waiting = evaluateDevices(bench, { gpioOutputs: high, ownership: { led: 'board' }, deviceStates: {} });
+  assert.equal(waiting.leds.led, undefined);
+  const active = evaluateDevices(bench, { gpioOutputs: high, ownership: { led: 'board' }, deviceStates: { led: 'active' } });
+  assert.equal(active.leds.led.state, 'on');
+  const circuit = evaluateDevices(bench, { gpioOutputs: high, ownership: { led: 'circuit' } });
+  assert.equal(circuit.leds.led.state, 'on');
+});

@@ -93,3 +93,17 @@ test('the character helper can be filled later and hidden for a remote brain', (
     assert.equal(pick.hidden, false);
   } finally { restore(); }
 });
+
+test('a provisioning wait can be stopped from the panel', () => {
+  const { panel, restore } = setup();
+  try {
+    const cancel = /** @type {HTMLButtonElement} */ (panel.element.querySelector('button[data-role="cancel"]'));
+    assert.equal(cancel.hidden, true);
+    let stopped = 0;
+    panel.waiting(true, () => { stopped += 1; });
+    assert.equal(cancel.hidden, false);
+    cancel.click();
+    assert.equal(stopped, 1);
+    assert.equal(cancel.hidden, true);
+  } finally { restore(); }
+});

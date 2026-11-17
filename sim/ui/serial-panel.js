@@ -50,6 +50,20 @@ export function createSerialPanel(o) {
   send.textContent = simText(o.lang, 'serial.send');
   form.append(input, send);
 
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.dataset.role = 'cancel';
+  cancel.textContent = simText(o.lang, 'serial.cancel');
+  cancel.hidden = true;
+  /** @type {(() => void) | null} */
+  let waitingCancel = null;
+  cancel.addEventListener('click', () => {
+    const run = waitingCancel;
+    waitingCancel = null;
+    cancel.hidden = true;
+    run?.();
+  });
+
   const picker = document.createElement('label');
   picker.textContent = simText(o.lang, 'serial.characters');
   const select = document.createElement('select');
@@ -66,7 +80,7 @@ export function createSerialPanel(o) {
   }
   picker.append(select);
 
-  root.append(header, log, form, picker);
+  root.append(header, log, form, picker, cancel);
 
   function renderLog() {
     log.textContent = lines.join('\n');
@@ -123,7 +137,13 @@ export function createSerialPanel(o) {
     append,
     /** Type a line as the user would: the firmware sees the same command. */
     /** @param {string} line */
-    type(line) { input.value = line; sendLine(); },
+    type(line) {
+      // Programmatic setup must not eat a line the user is in the middle of typing.
+      const typed = input.value;
+      input.value = line;
+      sendLine();
+      if (typed) input.value = typed;
+    },
     /** Replace the character choices; empty leaves only the placeholder. */
     /** @param {{ id: string, name: string }[]} list */
     setCharacters(list) {
@@ -138,6 +158,12 @@ export function createSerialPanel(o) {
     /** A remote brain's local list proves nothing, so the helper is hidden. */
     /** @param {boolean} enabled */
     setCharacterHelper(enabled) { picker.hidden = !enabled; },
+    /** While a provisioning wait is running, offer to stop waiting (not the retry). */
+    /** @param {boolean} on @param {() => void} [onCancel] */
+    waiting(on, onCancel) {
+      waitingCancel = on ? onCancel ?? null : null;
+      cancel.hidden = !on;
+    },
     /** @param {import('../bench.js').Settings} next */
     setSettings(next) { settings = next; },
     /** @param {import('../firmware/index.js').Firmware} next */

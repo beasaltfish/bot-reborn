@@ -93,7 +93,9 @@ export function createBoardRuntime(o) {
     conn = null;
     feed?.stop();
     feed = null;
-    o.audio?.stop?.();
+    // A reboot keeps the speaker and microphone: it only clears the queue.
+    // Powering off stops the audio link from the caller, which owns it.
+    o.audio?.hush?.();
   }
 
   function openLink() {
@@ -144,7 +146,11 @@ export function createBoardRuntime(o) {
     const ids = drivenIds();
     // Nothing a board device shows before its firmware initialised it.
     states = Object.fromEntries(ids.map((id) => [id, 'uninitialized']));
-    const events = bodyBoot({ settings: o.board.settings, firmware, bench: o.bench, outcome: o.outcome, profile: o.profile, now: now() });
+    // A sketch has no body boot: no protocol line, no not-set-up loop and no
+    // link. Its own one line is all a serial panel shows (spec §11).
+    const events = firmware.link
+      ? bodyBoot({ settings: o.board.settings, firmware, bench: o.bench, outcome: o.outcome, profile: o.profile, now: now() })
+      : [{ afterMs: 0, line: `${firmware.id}: illustrative sketch, no console on this firmware` }];
     for (const event of events) {
       const timer = setTimeout(() => {
         if (gen !== generation) return;

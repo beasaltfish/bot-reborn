@@ -138,7 +138,9 @@ const panels = createPanels({
     const selection = describeSelection(bench, hands.selection(), document.documentElement.lang);
     if (plan) return { mode: 'guided', evaluated: true, project: plan, progress: connectionProgress(bench, plan), selection, diagnoses: [] };
     // Independent DC supplies can energize an LED circuit without USB.
-    const result = bench.usb || bench.placed.some(part => part.part === 'dc-source' && !part.burnt) ? evaluateBench(bench) : null;
+    const result = bench.usb || bench.placed.some(part => part.part === 'dc-source' && !part.burnt)
+      ? evaluateBench(bench, { firmware: firmwareById(bench.board.firmware), ownership: ownershipOf(bench) })
+      : null;
     const diagnoses = result ? rankedDiagnoses(bench, result, document.documentElement.lang) : [];
     return { mode: 'free', evaluated: Boolean(result), project: null, progress: [], selection, diagnoses };
   },
@@ -179,7 +181,7 @@ const serial = createSerialPanel({
     bench = { ...bench, board: { ...bench.board, settings } };
     setBench(bench);
   },
-  onReboot: () => { if (usb.plugged) { usb.pullOut(); plugIn(); } },
+  onReboot: () => rebootBoard(),
 });
 document.body.append(serial.element);
 /** @param {import('./selection.js').Selection} selection */
@@ -245,7 +247,9 @@ function setBench(b) {
   const openPart = panels.openPartId();
   if (openPart) {
     const selected = bench.placed.find(p => p.id === openPart);
-    const sensor = selected?.part === 'bme280-i2c' ? evaluateBench(bench, { stimuli: environment }).engineering.bme280[openPart] : undefined;
+    const sensor = selected?.part === 'bme280-i2c'
+      ? evaluateBench(bench, { stimuli: environment, firmware: firmwareById(bench.board.firmware), ownership: ownershipOf(bench), deviceStates: boardRuntime?.deviceStates() ?? {} }).engineering.bme280[openPart]
+      : undefined;
     panels.refreshPart(openPart, selected?.properties ?? null, sensor, environment);
   }
   hands.refreshSelection();
@@ -256,7 +260,7 @@ function setBench(b) {
   // The body normally uses a power-on snapshot; unsafe board power changes
   // instead stop the session and latch until USB is cycled.
   if (bench.usb && powered) {
-    const evaluated = evaluateBench(bench);
+    const evaluated = evaluateBench(bench, { firmware: firmwareById(bench.board.firmware), ownership: ownershipOf(bench) });
     const fault = powerInterlock.observe(bench, evaluated);
     const hint = fault
       ? diagnose(bench, { ...evaluated.legacy, faults: [fault], burns: evaluated.burns }, document.documentElement.lang).find(item => item.kind === 'fault') ?? null
@@ -309,11 +313,21 @@ const hands = attachInteraction(world, () => bench, setBench, {
     const schema = deviceByPart(part.part)?.properties ?? {};
     const led = part.part === 'led-5mm' ? evaluateLedBench(bench, id) : null;
     const bme = part.part === 'bme280-i2c' ? {
-      state: evaluateBench(bench, { stimuli: environment }).engineering.bme280[id], environment,
+      state: evaluateBench(bench, {
+        stimuli: environment,
+        firmware: firmwareById(bench.board.firmware),
+        ownership: ownershipOf(bench),
+        deviceStates: boardRuntime?.deviceStates() ?? {},
+      }).engineering.bme280[id], environment,
       change: (/** @type {string} */ key, /** @type {number} */ value) => {
         environment = setStimulus(environment, key, value);
         const current = bench.placed.find(item => item.id === id);
-        const state = evaluateBench(bench, { stimuli: environment }).engineering.bme280[id];
+        const state = evaluateBench(bench, {
+          stimuli: environment,
+          firmware: firmwareById(bench.board.firmware),
+          ownership: ownershipOf(bench),
+          deviceStates: boardRuntime?.deviceStates() ?? {},
+        }).engineering.bme280[id];
         panels.refreshPart(id, current?.properties ?? null, state, environment);
         refreshDeviceVisuals();
       },
@@ -449,6 +463,9 @@ let planMode = 'build';
 let provisionedFor = null;
 /** @type {ReturnType<typeof createProvisioning> | null} */
 let provisioning = null;
+/** A setup prompt held back until a Demo's own steps stop writing the line. */
+/** @type {(() => void) | null} */
+let offerOnEnd = null;
 /**
  * What the recipe now being played needs of the character and what to say to
  * try the result. Read once by the plug-in the run itself causes, so a plug
@@ -537,6 +554,32 @@ function driveStop() {
   for (const [id] of movingToys()) world.drive(id, { wheels: 'coast', steer: 'centred' });
 }
 
+/**
+ * End the board's life: timers, socket, screen feed, sketch, wand and audio.
+ * Every reboot/flash path goes through here, so no old generation keeps
+ * writing into the new one.
+ */
+function stopBoard() {
+  boardRuntime?.stop();
+  boardRuntime = null;
+  sketchRunner?.stop();
+  sketchRunner = null;
+  bodyAudioLink?.stop();
+  bodyAudioLink = null;
+  clearInterval(wandTimer);
+  wandFeed = null;
+  world.onWandLevel(null);
+  // A reboot keeps its provisioning wait; powering off cancels it (below).
+  serial.waiting(false);
+}
+
+/** Stop the board and boot it again, without moving the cable (spec §8.2 reboot). */
+function rebootBoard() {
+  if (!usb.plugged) return;
+  stopBoard();
+  void plugIn();
+}
+
 /** Invalidate pending starts before stopping so late callbacks cannot restart motion. */
 function stopUnsafeSession() {
   plugs++;
@@ -544,16 +587,11 @@ function stopUnsafeSession() {
   sonar = null;
   startLock.clear();
   driveStop();
-  boardRuntime?.stop();
-  boardRuntime = null;
-  sketchRunner?.stop();
-  sketchRunner = null;
-  bodyAudioLink?.stop();
-  bodyAudioLink = null;
+  stopBoard();
+  provisioning?.cancel();
+  provisioning = null;
+  offerOnEnd = null;
   bodyAudio.close();
-  clearInterval(wandTimer);
-  wandFeed = null;
-  world.onWandLevel(null);
   panels.closePicker();
   effects.setAlive(false);
   effects.playing([]);
@@ -562,6 +600,23 @@ function stopUnsafeSession() {
   const off = evaluateBench({ ...bench, usb: false }).parts;
   world.screens(/** @type {any} */ (off));
   world.imu(/** @type {any} */ (off));
+  // A lit GPIO LED must go dark with the session.
+  refreshDeviceVisuals();
+}
+
+/** A suspended context (no gesture at build time) resumes on the next one. */
+let soundGestureArmed = false;
+function armSoundGesture() {
+  if (soundGestureArmed) return;
+  soundGestureArmed = true;
+  const once = () => {
+    soundGestureArmed = false;
+    removeEventListener('pointerdown', once);
+    removeEventListener('keydown', once);
+    unlockAudio();
+  };
+  addEventListener('pointerdown', once);
+  addEventListener('keydown', once);
 }
 
 /** The output AudioContext is unlocked from a real gesture: a drag release or a Demo/Build click. */
@@ -579,6 +634,7 @@ function unlockAudio() {
  *   firmware that is already there.
  */
 async function plugIn(meta = {}) {
+  stopBoard();
   recipeOn = null;
   gpioOutputs = {};
   sonar = null;
@@ -660,9 +716,11 @@ async function plugIn(meta = {}) {
       line.mic = simText(document.documentElement.lang, 'audio.micBlocked');
       showLine();
     },
+    onMicReady: () => { line.mic = null; showLine(); },
     onNeedsGesture: () => {
       line.sound = true;
       showLine();
+      armSoundGesture();
     },
   }) : null;
   boardRuntime = createBoardRuntime({
@@ -671,7 +729,7 @@ async function plugIn(meta = {}) {
     outcome,
     ownership: ownershipOf(bench),
     initDevices: (ids) => {
-      const engineering = evaluateBench(bench, { firmware, ownership: ownershipOf(bench), stimuli: simulationStimuli() }).engineering;
+      const engineering = evaluateBench(bench, { firmware, ownership: ownershipOf(bench), stimuli: simulationStimuli(), initializing: true }).engineering;
       /** @type {Record<string, 'active'|'init-failed'>} */
       const verdicts = {};
       for (const id of ids) {
@@ -700,6 +758,8 @@ async function plugIn(meta = {}) {
       serial.append(text);
       if (text.startsWith('welcomed as ')) {
         provisioning?.welcomed();
+        line.lost = false;
+        line.mic = null;
         line.state = 'connected';
         const name = text.slice('welcomed as '.length);
         line.who = name;
@@ -712,6 +772,8 @@ async function plugIn(meta = {}) {
         }).catch(() => {});
       } else if (text.startsWith('rejected:')) {
         provisioning?.gaveUp();
+      } else if (text.startsWith('lost ')) {
+        line.lost = true;
       }
       showLine();
     },
@@ -763,6 +825,8 @@ async function flashFirmwareNow(/** @type {string} */ id) {
   if (!canFlash(bench, bench.board).ok) { panels.status(simText(document.documentElement.lang, 'board.cannotFlash')); return; }
   const before = bench.board;
   const result = await runFlash(before, id, { isCurrent: () => bench.board === before && bench.usb });
+  provisioning?.cancel();
+  provisioning = null;
   if (!result.ok) {
     panels.status(simText(document.documentElement.lang, 'board.flashFailed', { firmware: id, reason: result.reason ?? 'unknown' }));
     return;
@@ -836,23 +900,27 @@ async function maybeProvision(mine) {
     provisioning = createProvisioning({
       commands: steps.commands,
       panel: serial,
-      reboot: () => { if (usb.plugged) { usb.pullOut(); void plugIn(); } },
+      reboot: () => rebootBoard(),
       onDone: (result) => {
+        serial.waiting(false);
         if (result === 'still-retrying') panels.status(simText(lang, 'board.provisionDone'));
         else if (result === 'skipped') panels.status(simText(lang, 'board.provisionSkipped'));
       },
     });
     provisioning.start();
+    serial.waiting(true, () => provisioning?.cancel());
   };
 
   if (mismatch) {
     const screen = /** @type {string} */ (provisionSteps(plan, bench.board.settings, { token }).screen);
-    panels.status(simText(lang, 'board.provisionMismatch', { current: bench.board.settings.screen, wanted: screen }), {
+    const ask = () => panels.status(simText(lang, 'board.provisionMismatch', { current: bench.board.settings.screen, wanted: screen }), {
       actions: [
         { label: simText(lang, 'board.screenReplace'), run: () => begin(true) },
         { label: simText(lang, 'board.screenKeep'), run: () => { if (!missing.length) panels.status(simText(lang, 'board.provisionSkipped')); else begin(false); } },
       ],
     });
+    if (activeProject && (planMode === 'watch' || planMode === 'step') && running) offerOnEnd = ask;
+    else ask();
     return;
   }
 
@@ -866,12 +934,15 @@ async function maybeProvision(mine) {
     begin(true);
     return;
   }
-  panels.status(simText(lang, 'board.provisionNeeded', { what }), {
+  const offer = () => panels.status(simText(lang, 'board.provisionNeeded', { what }), {
     actions: [
       { label: simText(lang, 'board.provisionType'), run: () => begin(true) },
       { label: simText(lang, 'board.provisionSkip'), run: () => panels.status(simText(lang, 'board.provisionSkipped')) },
     ],
   });
+  // Demo's own steps keep writing the status line; the offer waits its turn.
+  if (activeProject && (planMode === 'watch' || planMode === 'step') && running) offerOnEnd = offer;
+  else offer();
 }
 
 function unplug() {
@@ -883,15 +954,12 @@ function unplug() {
   powerInterlock.reset();
   driveStop();
   powered = null;
-  boardRuntime?.stop();
-  boardRuntime = null;
-  bodyAudioLink?.stop();
-  bodyAudioLink = null;
+  stopBoard();
+  provisioning?.cancel();
+  provisioning = null;
+  offerOnEnd = null;
   bodyAudio.close();
   serial.show(false);
-  clearInterval(wandTimer);
-  wandFeed = null;
-  world.onWandLevel(null);
   panels.closePicker();
   effects.setAlive(false);
   effects.playing([]);
@@ -983,7 +1051,8 @@ export function startRun(recipeId, screenId, mode, hooks = {}, wand = false, spe
       recipeOn = null;
       runner = null;
       // Plugged in, the connection has its own news to show; do not talk over it.
-      if (!usb.plugged) showLine();
+      if (usb.plugged) offerOnEnd?.(); else showLine();
+      offerOnEnd = null;
     },
   });
   runner = controls;
@@ -1055,13 +1124,16 @@ export function startPlan(planId, options = {}, mode = 'build', hooks = {}, spee
       running = false;
       recipeOn = null;
       runner = null;
-      if (!usb.plugged) {
+      if (usb.plugged) {
+        offerOnEnd?.();
+      } else {
         const kept = offerBack();
         if (!kept) {
           const text = previewText(plan.id, document.documentElement.lang);
           if (text) panels.status(text);
         }
       }
+      offerOnEnd = null;
     },
   });
   runner = controls;

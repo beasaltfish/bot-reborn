@@ -169,3 +169,44 @@ test('every pace the run bar offers really paces the run', () => {
     }
   }
 });
+
+test('a USB step followed by a flash enters the bootloader and writes the new firmware', async () => {
+  const seen = /** @type {any[]} */ ([]);
+  const flashed = /** @type {string[]} */ ([]);
+  await new Promise((resolve) => {
+    runRecipe(/** @type {any} */ ({
+      steps: /** @type {any} */ ([{ kind: 'usb' }, { kind: 'flash', firmware: 'sketch-bme280' }]),
+      mode: 'watch',
+      speed: 100,
+      getBench: () => ({}),
+      setBench: () => {},
+      world: {},
+      usb: { insert: async (/** @type {any} */ meta) => { seen.push(meta); } },
+      flash: async (/** @type {string} */ id) => { flashed.push(id); },
+      hands: { enable: () => {} },
+      say: () => {},
+      onDone: resolve,
+    }));
+  });
+  assert.deepEqual(seen, [{ pendingFlash: 'sketch-bme280' }]);
+  assert.deepEqual(flashed, ['sketch-bme280']);
+});
+
+test('a USB step with no flash after it boots the current firmware', async () => {
+  const seen = /** @type {any[]} */ ([]);
+  await new Promise((resolve) => {
+    runRecipe(/** @type {any} */ ({
+      steps: /** @type {any} */ ([{ kind: 'usb' }]),
+      mode: 'watch',
+      speed: 100,
+      getBench: () => ({}),
+      setBench: () => {},
+      world: {},
+      usb: { insert: async (/** @type {any} */ meta) => { seen.push(meta); } },
+      hands: { enable: () => {} },
+      say: () => {},
+      onDone: resolve,
+    }));
+  });
+  assert.deepEqual(seen, [undefined]);
+});

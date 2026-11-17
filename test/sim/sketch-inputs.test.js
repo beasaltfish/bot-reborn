@@ -86,3 +86,19 @@ test('a latched measurement keeps the reading for the next evaluations', () => {
   const off = evaluateBench(wired, { stimuli: { sonar: { measure: false, distanceCm: 42 } } }).engineering.digital.sonar;
   assert.equal(off.distanceCm, null);
 });
+
+import { deviceInitialized } from '../../sim/firmware/parts-view.js';
+
+test('a protocol device whose init was refused is not visible; a warning is', () => {
+  const evaluation = {
+    motor: { m: { state: 'off' } },
+    strip: { s: { state: 'level-incompatible' } },
+    display: { d: { state: 'ready' } },
+  };
+  assert.equal(deviceInitialized(evaluation, { id: 'm', part: 'dc-motor-small' }), false);
+  // 3.3 V data into a 5 V strip is a warning, not a refusal: it still runs.
+  assert.equal(deviceInitialized(evaluation, { id: 's', part: 'ws2812-strip' }), true);
+  assert.equal(deviceInitialized(evaluation, { id: 'd', part: 'ssd1306' }), true);
+  // A part with no protocol init (an LED) has nothing to fail.
+  assert.equal(deviceInitialized(evaluation, { id: 'led', part: 'led-5mm' }), true);
+});

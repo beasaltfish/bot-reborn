@@ -33,6 +33,7 @@ function level(samples) {
  *   name?: string,
  *   onLevel?(up: number, down: number): void,
  *   onMicBlocked?(): void,
+ *   onMicReady?(): void,
  *   onNeedsGesture?(): void,
  *   acquire?: (echo: boolean, current: () => boolean) => Promise<any>,
  * }} o
@@ -85,6 +86,7 @@ export function createBodyAudioLink(o) {
       send?.(shaped);
     });
     lease?.commit?.();
+    o.onMicReady?.();
   }
 
   /** @param {ArrayBuffer} bytes */
