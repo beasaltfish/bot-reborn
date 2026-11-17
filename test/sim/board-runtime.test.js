@@ -93,3 +93,19 @@ test('busy rejects retry until the runtime budget ends, then are final', (t) => 
   assert.equal(reject('busy'), true);
   assert.equal(reject('token'), false);
 });
+
+test('a busy body does not stop the screen link', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  /** @type {any} */ let reject;
+  const opened = /** @type {string[]} */ ([]);
+  const h = harness({
+    board: { ...board, settings: { ...board.settings, screen: 'ili9341-ips' } },
+    connect: (/** @type {any} */ o) => { reject = o.onReject; return { close() {}, send() {}, sendAudio() {} }; },
+    openScreen: (/** @type {any} */ o) => { opened.push(o.url); return { stop() {} }; },
+  });
+  h.runtime.start();
+  t.mock.timers.tick(1000);
+  reject('busy');
+  assert.deepEqual(opened, ['ws://brain/screen']);
+  h.runtime.stop();
+});

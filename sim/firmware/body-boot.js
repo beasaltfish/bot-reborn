@@ -36,15 +36,16 @@ export function bodyBoot({ settings, firmware, bench, outcome }) {
     at(0, { line: `screen "${settings.screen}" is not a model this firmware knows: type screen for the list` });
   } else {
     screenReady = true;
+    // The identity line exists only for the two controllers whose response the
+    // firmware actually checks. No MISO, an unknown answer, or a controller the
+    // firmware cannot name: the real firmware says nothing, so this says nothing.
     const wired = outcome.screenModel ? screenById(outcome.screenModel) : undefined;
-    if (wired && wired.id !== selected.id) {
-      at(0, { line: `screen: you chose ${selected.label} but the panel answers like ${wired.label}` });
-    } else if (wired && IDENTITY.has(selected.controller)) {
-      at(0, { line: `screen: panel identifies as ${selected.label}, as chosen` });
-    } else {
-      // MISO unplugged or a controller the firmware does not identify: the real
-      // firmware says nothing about identity, then reaches ready.
-      at(0, { line: 'screen: ready' });
+    if (wired && IDENTITY.has(selected.controller) && IDENTITY.has(wired.controller)) {
+      at(0, {
+        line: wired.controller === selected.controller
+          ? `screen: panel identifies as ${selected.label}, as chosen`
+          : `screen: you chose ${selected.label} but the panel answers like ${wired.label}`,
+      });
     }
   }
 

@@ -9,6 +9,7 @@
 import * as THREE from 'three';
 import { PARTS, BOARD_OUTLINE, holeAt } from '../parts.js';
 import { screenById } from '../../core/screens.js';
+import { fitRect } from './fit.js';
 
 /** @typedef {import('../parts.js').PartDef} PartDef */
 
@@ -608,8 +609,16 @@ export function drawScreen(scr, show, image) {
   } else if ((show === 'ready' || show === 'dark') && image) {
     // Dark: the backlight is off, and all that is left is a hint of the picture.
     ctx.globalAlpha = show === 'dark' ? 0.06 : 1;
-    ctx.drawImage(image, 0, 0, w, h);
+    // The brain sends frames for the firmware's chosen profile; the glass may
+    // be another size. Fit and letterbox it, and say plainly that it is close.
+    const rect = fitRect(w, h, image.width, image.height);
+    ctx.drawImage(image, rect.x, rect.y, rect.w, rect.h);
     ctx.globalAlpha = 1;
+    if (!rect.exact) {
+      ctx.fillStyle = 'rgba(255,255,255,0.8)';
+      ctx.font = `${Math.max(8, Math.round(h / 24))}px sans-serif`;
+      ctx.fillText(`≈ ${image.width}×${image.height}`, 3, h - 4);
+    }
   }
   scr.texture.needsUpdate = true;
 }

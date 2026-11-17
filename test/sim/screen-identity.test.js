@@ -27,3 +27,42 @@ test('an explicit screen URL is used, not the page host', () => {
     feed.stop();
   } finally { globalThis.WebSocket = oldSocket; globalThis.location = oldLocation; }
 });
+
+import { bodyBoot } from '../../sim/firmware/body-boot.js';
+import { BODY } from '../../sim/firmware/body.js';
+import { emptyBench } from '../../sim/bench.js';
+import { fitRect } from '../../sim/scene/fit.js';
+
+const settings = (over = {}) => ({ ...emptyBench().board.settings, token: 'a'.repeat(32), ...over });
+const bootLines = (/** @type {string | null} */ screen, /** @type {string | null} */ wired) => bodyBoot({
+  settings: screen ? settings({ screen }) : settings(),
+  firmware: BODY,
+  bench: emptyBench(),
+  outcome: { parts: {}, screenModel: wired },
+}).map((e) => e.line ?? '').filter(Boolean);
+
+test('a known panel that answers as chosen prints its identity', () => {
+  const ili = bootLines('ili9341-ips', 'ili9341-ips');
+  assert.ok(ili.some((line) => line.includes('panel identifies as') && line.includes('as chosen')));
+  const st = bootLines('st7789-240', 'st7789-240');
+  assert.ok(st.some((line) => line.includes('ST7789') && line.includes('as chosen')));
+});
+
+test('a panel of the other controller says so and is still driven as chosen', () => {
+  const lines = bootLines('ili9341-ips', 'st7789-240');
+  assert.ok(lines.some((line) => line.includes('you chose') && line.includes('answers like')));
+});
+
+test('an unplugged MISO or an unknown controller prints no identity line', () => {
+  const unwired = bootLines('ili9341-ips', null);
+  assert.ok(!unwired.some((line) => line.includes('identifies') || line.includes('answers like')));
+  assert.ok(!unwired.includes('screen: ready'));
+  const unknown = bootLines('ili9341-ips', 'st7735-160');
+  assert.ok(!unknown.some((line) => line.includes('identifies') || line.includes('answers like')));
+});
+
+test('the frame is fitted and letterboxed, never stretched', () => {
+  assert.deepEqual(fitRect(320, 240, 320, 240), { x: 0, y: 0, w: 320, h: 240, exact: true });
+  assert.deepEqual(fitRect(240, 320, 320, 240), { x: 0, y: 70, w: 240, h: 180, exact: false });
+  assert.deepEqual(fitRect(160, 128, 320, 240), { x: 0, y: 4, w: 160, h: 120, exact: false });
+});
