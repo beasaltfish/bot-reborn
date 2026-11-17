@@ -120,3 +120,14 @@ test('skipping types nothing; cancelling stops only the wait', (t) => {
   t.mock.timers.tick(20000);
   assert.deepEqual(results, ['skipped', 'cancelled']);
 });
+
+import { tokenCandidates } from '../../sim/provision.js';
+
+test('pairing candidates are ready and offline, never filtered by capability', () => {
+  const list = [
+    { id: 'a', name: 'Asten', ready: true, online: false, motion: 'tarot' },
+    { id: 'b', name: 'Rex', ready: false, online: false, motion: 'car' },
+    { id: 'c', name: 'Busy', ready: true, online: true, motion: 'pet' },
+  ];
+  assert.deepEqual(tokenCandidates(list).map((c) => c.id), ['a']);
+});

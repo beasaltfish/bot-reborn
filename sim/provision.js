@@ -16,6 +16,16 @@ export function provisionPlan(plan, settings) {
   return { missing, screen };
 }
 
+/**
+ * The characters that could be paired right now: ready and not already online.
+ * `CAN_DO` is deliberately not a filter here; capability only affects the last
+ * step of a demo, never pairing.
+ * @param {{ id: string, name: string, ready?: boolean, online?: boolean, motion?: string }[]} list
+ */
+export function tokenCandidates(list) {
+  return (Array.isArray(list) ? list : []).filter((c) => c.ready && !c.online);
+}
+
 /** @param {string} url @param {string} origin */
 export function isRemote(url, origin) {
   if (!url) return false;

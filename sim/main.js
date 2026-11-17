@@ -31,7 +31,7 @@ import { createBoardRuntime, bootMode } from './firmware/runtime.js';
 import { createBodyAudio } from './body.js';
 import { createBodyAudioLink } from './firmware/audio-link.js';
 import { demoSkips, lookupCharacter } from './capabilities.js';
-import { isRemote, provisionSteps, screenMismatch, createProvisioning } from './provision.js';
+import { isRemote, provisionSteps, screenMismatch, createProvisioning, tokenCandidates } from './provision.js';
 import { firmwareById } from './firmware/index.js';
 import { ledPattern } from './firmware/led.js';
 import { createSerialPanel } from './ui/serial-panel.js';
@@ -845,11 +845,10 @@ async function flashFirmwareNow(/** @type {string} */ id) {
  */
 async function tokenCandidate() {
   try {
-    const list = await (await fetch('/api/characters')).json();
-    const ready = list.filter((/** @type {any} */ c) => c.ready && !c.online);
-    if (ready.length !== 1) return { list };
+    const ready = tokenCandidates(await (await fetch('/api/characters')).json());
+    if (ready.length !== 1) return { list: ready };
     const detail = await (await fetch(`/api/characters/${encodeURIComponent(ready[0].id)}`)).json();
-    return detail?.token ? { token: detail.token, list } : { list };
+    return detail?.token ? { token: detail.token, list: ready } : { list: ready };
   } catch {
     return {};
   }

@@ -57,3 +57,6 @@ tools/pet/preview/
 docs/promo-video.md
 tools/tarot/source/
 tools/tarot/fonts/*.ttf
+
+# playwright-cli snapshots and screenshots from browser checks
+.playwright-cli/
