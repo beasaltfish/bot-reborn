@@ -4,6 +4,7 @@ const COPY = {
   en: {
     'power.reconnect': 'Power safety stop: unplug USB and reconnect after correcting the circuit.',
     'tools.wire': 'Demo build', 'tools.parts': 'Parts', 'tools.diagram': 'Wiring overview', 'tools.hint': 'Next hint', 'tools.reset': 'Reset bench', 'tools.confirmReset': 'Clear the whole bench? ', 'tools.confirm': 'Reset', 'tools.keep': 'Keep', 'tools.close': 'Close', 'tools.screen': 'Screen', 'tools.wand': 'Add the tarot wand (MPU6050)', 'tools.watch': 'Watch it', 'tools.step': 'Step by step',
+    'studio.title': 'Firmware', 'studio.download': 'Download', 'studio.flash': 'Flash', 'studio.copy': 'Copy to my firmware', 'studio.run': 'Running', 'studio.draft': 'Draft', 'studio.board': 'On board', 'studio.close': 'Close firmware', 'studio.pause': 'Pause', 'studio.resume': 'Resume', 'studio.clear': 'Clear', 'studio.noFirmware': 'Blank chip',
     'serial.title': 'Serial', 'serial.hint': 'Type help for commands', 'serial.send': 'Send', 'serial.characters': 'Characters', 'serial.pick': 'Pick…', 'serial.cancel': 'Stop waiting',
     'demo.skip.pose': 'This character cannot pose; the pet stays off.', 'demo.skip.move': 'This character cannot move; the toy stays still.', 'demo.skip.draw': 'This character cannot draw a card.', 'demo.skip.other': 'This step is skipped.',
     'firmware.noDriver': 'The {firmware} firmware has no driver for this device; flash a firmware that includes it.',
@@ -177,6 +178,7 @@ const COPY = {
   zh: {
     'power.reconnect': '电源安全保护已停止会话；纠正电路后，请拔出并重新插入 USB。',
     'tools.wire': '示例演示', 'tools.parts': '元件', 'tools.diagram': '接线总览', 'tools.hint': '下一步提示', 'tools.reset': '重置工作台', 'tools.confirmReset': '清空整个工作台？', 'tools.confirm': '重置', 'tools.keep': '保留', 'tools.close': '关闭', 'tools.screen': '屏幕', 'tools.wand': '添加塔罗手杖（MPU6050）', 'tools.watch': '观看演示', 'tools.step': '逐步操作',
+    'studio.title': '固件', 'studio.download': '下载', 'studio.flash': '烧录', 'studio.copy': '复制到我的固件', 'studio.run': '运行中', 'studio.draft': '草稿', 'studio.board': '板上', 'studio.close': '关闭固件', 'studio.pause': '暂停', 'studio.resume': '继续', 'studio.clear': '清空', 'studio.noFirmware': '空白芯片',
     'serial.title': '串口', 'serial.hint': '输入 help 查看命令', 'serial.send': '发送', 'serial.characters': '角色', 'serial.pick': '选择…', 'serial.cancel': '停止等待',
     'demo.skip.pose': '这个角色不能摆姿势；宠物不会出现。', 'demo.skip.move': '这个角色不能移动；小车不会动。', 'demo.skip.draw': '这个角色不能抽牌。', 'demo.skip.other': '这一步已跳过。',
     'firmware.noDriver': '{firmware} 固件没有这个设备的驱动；请烧录包含它的固件。',
