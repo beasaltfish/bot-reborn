@@ -10,6 +10,7 @@ import {
 const BOARD = () => ({
   firmware: 'sketch-bme280',
   settings: { ssid: 'bench', pass: '', token: 'a'.repeat(32), url: '', screen: 'ili9341-ips', calib: { driveSwapped: false, steerSwapped: true } },
+  custom: null,
 });
 const MANIFEST = {
   chip: 'esp32s3', flashMode: 'dio', flashFreq: '80m', flashSize: '8MB',

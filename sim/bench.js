@@ -25,8 +25,9 @@ import { PARTS, holeXY, boardToTable, tableToBoard, holeOnTable, boardGroups } f
  * @typedef {{ id: string, a: string, b: string, color: string }} Wire
  * @typedef {{ ssid: string, pass: string, token: string, url: string, screen: string,
  *   calib: { driveSwapped: boolean, steerSwapped: boolean } }} Settings
- * @typedef {{ firmware: string, settings: Settings }} BoardState
- * @typedef {{ v: 4, boards: Board[], placed: Placed[], wires: Wire[], usb: boolean, board: BoardState }} Bench
+ * @typedef {{ name: string, draft: string, flashed: string, updatedAt: number }} CustomFirmware
+ * @typedef {{ firmware: string, settings: Settings, custom: CustomFirmware | null }} BoardState
+ * @typedef {{ v: 5, boards: Board[], placed: Placed[], wires: Wire[], usb: boolean, board: BoardState }} Bench
  */
 
 /** The board's flash and NVS settings; `emptyBench()` starts as the body board. */
@@ -35,6 +36,7 @@ export function emptyBoard() {
   return {
     firmware: 'body',
     settings: { ssid: 'bench', pass: '', token: '', url: '', screen: '', calib: { driveSwapped: false, steerSwapped: false } },
+    custom: null,
   };
 }
 
@@ -49,7 +51,7 @@ const ROTS = [0, 90, 180, 270];
  */
 export function emptyBench() {
   return {
-    v: 4,
+    v: 5,
     boards: [{ id: 'bb1', x: -31, z: -9, rot: 0 }],
     placed: [
       { id: 'esp', part: 'esp32', properties: propertiesFor('esp32'), at: { x: -10.5, z: 16 }, rot: 0, seated: false, burnt: false },
@@ -405,8 +407,17 @@ function isBoardState(v) {
   return isObject(c) && typeof c.driveSwapped === 'boolean' && typeof c.steerSwapped === 'boolean';
 }
 
+/** @param {unknown} v @returns {v is CustomFirmware} */
+function isCustomFirmware(v) {
+  return isObject(v)
+    && typeof v.name === 'string'
+    && typeof v.draft === 'string'
+    && typeof v.flashed === 'string'
+    && typeof v.updatedAt === 'number' && Number.isFinite(v.updatedAt);
+}
+
 /**
- * Read a saved bench. Versions 2, 3 and 4 are understood; v2 receives property
+ * Read a saved bench. Versions 2, 3, 4 and 5 are understood; v2 receives property
  * defaults and v2/v3 receive the default board state.
  *
  * A bench that is not whole is not half-loaded: exactly one ESP32, unique ids,
@@ -419,7 +430,7 @@ function isBoardState(v) {
 export function load(text) {
   try {
     const raw = JSON.parse(text ?? '');
-    if (!isObject(raw) || ![2, 3, 4].includes(raw.v) || typeof raw.usb !== 'boolean') return emptyBench();
+    if (!isObject(raw) || ![2, 3, 4, 5].includes(raw.v) || typeof raw.usb !== 'boolean') return emptyBench();
     if (!Array.isArray(raw.boards) || !raw.boards.every(isBoard)) return emptyBench();
     if (!Array.isArray(raw.placed) || !raw.placed.every(isPlaced)) return emptyBench();
     if (!Array.isArray(raw.wires) || !raw.wires.every(isWire)) return emptyBench();
@@ -434,7 +445,10 @@ export function load(text) {
     if (placed.some((p) => boards.some((bd) => bd.id === p.id))) return emptyBench();
     if (placed.filter((p) => p.part === 'esp32').length !== 1) return emptyBench();
 
-    const bench = /** @type {Bench} */ ({ v: 4, boards, placed, wires, usb: raw.usb, board: isBoardState(raw.board) ? raw.board : emptyBoard() });
+    const board = isBoardState(raw.board)
+      ? { ...raw.board, custom: isCustomFirmware(raw.board.custom) ? raw.board.custom : null }
+      : emptyBoard();
+    const bench = /** @type {Bench} */ ({ v: 5, boards, placed, wires, usb: raw.usb, board });
     /** @param {string} point */
     const realPin = (point) => {
       const i = point.indexOf(':');

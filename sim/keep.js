@@ -44,7 +44,7 @@ export function mergeKeptBench(saved, current) {
   const now = current.placed.find((part) => part.part === 'esp32');
   return {
     ...saved,
-    v: 4,
+    v: 5,
     usb: false,
     board: current.board,
     placed: saved.placed.map((part) => (part.part === 'esp32' && now ? { ...part, burnt: now.burnt } : part)),
