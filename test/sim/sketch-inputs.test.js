@@ -45,7 +45,7 @@ test('the real distance-reader wiring has no distance', () => {
   assert.equal(evaluateBench(sonar).engineering.digital.sonar?.distanceCm ?? null, null);
 });
 
-import { createSketchContext } from '../../sim/firmware/sketch-context.js';
+import { createSketchContext, gpioInputLevel } from '../../sim/firmware/sketch-context.js';
 
 test('a tick writes pins, measurements and device commands through one context', () => {
   const bench = buttonBench();
@@ -115,4 +115,11 @@ test('the context reads an evaluated GPIO level', () => {
   assert.equal(ctx.read(4), 'LOW');
   ctx.log('hello');
   assert.deepEqual(logs, ['hello']);
+});
+
+test('an undefined input has no level rather than defaulting to HIGH', () => {
+  assert.equal(gpioInputLevel({ gpio: { 'esp:GPIO4': 'low' } }, 4), 'LOW');
+  assert.equal(gpioInputLevel({ gpio: { 'esp:GPIO4': 'high' } }, 4), 'HIGH');
+  assert.equal(gpioInputLevel({ gpio: {} }, 0), null);
+  assert.equal(gpioInputLevel({ gpio: { 'esp:GPIO4': 'floating' } }, 4), null);
 });

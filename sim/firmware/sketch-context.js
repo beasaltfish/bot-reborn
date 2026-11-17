@@ -7,6 +7,18 @@
 import { partsView } from './parts-view.js';
 
 /**
+ * The evaluated level of a pin, or null when nothing defines it. Callers decide
+ * what an undefined input means; the simulator reads it as LOW with a warning.
+ * @param {Record<string, any>} evaluation
+ * @param {number} pin
+ * @returns {'HIGH'|'LOW'|null}
+ */
+export function gpioInputLevel(evaluation, pin) {
+  const level = String(evaluation?.gpio?.[`esp:GPIO${pin}`] ?? '').toLowerCase();
+  return level === 'high' ? 'HIGH' : level === 'low' ? 'LOW' : null;
+}
+
+/**
  * @param {{
  *   bench: import('../bench.js').Bench,
  *   evaluation: Record<string, any>,

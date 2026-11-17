@@ -7,7 +7,25 @@ const CONSTANTS = /** @type {Record<string, number>} */ ({ HIGH: 1, LOW: 0, INPU
 const MAX_LINE = 512;
 const MAX_LINES_PER_TICK = 200;
 const MAX_BYTES_PER_TICK = 8192;
-const MAX_CONTENT_BYTES = MAX_BYTES_PER_TICK - 1;
+const ELLIPSIS = '…';
+const ELLIPSIS_BYTES = 3;
+const MAX_CONTENT_BYTES = MAX_BYTES_PER_TICK - ELLIPSIS_BYTES;
+const encoder = new TextEncoder();
+/** @param {string} text @returns {number} */
+const utf8Bytes = (text) => encoder.encode(text).length;
+/** @param {string} text @param {number} maxBytes @returns {string} */
+function truncateUtf8(text, maxBytes) {
+  if (maxBytes <= 0) return '';
+  const chars = Array.from(text);
+  let low = 0;
+  let high = chars.length;
+  while (low < high) {
+    const mid = (low + high + 1) >> 1;
+    if (utf8Bytes(chars.slice(0, mid).join('')) <= maxBytes) low = mid;
+    else high = mid - 1;
+  }
+  return chars.slice(0, low).join('');
+}
 
 class ReturnSignal {}
 class BudgetSignal {}
@@ -93,14 +111,22 @@ export function createMachine({ program, now = () => performance.now(), budgetMs
     state.ctx?.pin(`GPIO${pin}`, level);
   }
 
+  /** @param {string} output @param {number} sourceLine */
+  function emit(output, sourceLine) {
+    state.linesTick += 1;
+    state.bytesTick += utf8Bytes(output);
+    state.ctx?.log(output);
+    traceRef.current({ line: sourceLine, kind: 'log', text: output });
+  }
+
   /** One marker per tick, and only if it fits inside the byte budget. */
   function markOverflow(/** @type {number} */ line) {
     if (state.overflowMarked) return;
     state.overflowMarked = true;
-    if (state.bytesTick >= MAX_BYTES_PER_TICK) return;
-    state.bytesTick += 1;
-    state.ctx?.log('…');
-    traceRef.current({ line, kind: 'log', text: '…' });
+    if (state.bytesTick + ELLIPSIS_BYTES > MAX_BYTES_PER_TICK) return;
+    state.bytesTick += ELLIPSIS_BYTES;
+    state.ctx?.log(ELLIPSIS);
+    traceRef.current({ line, kind: 'log', text: ELLIPSIS });
   }
 
   /** @param {string} text */
@@ -118,24 +144,20 @@ export function createMachine({ program, now = () => performance.now(), budgetMs
       return;
     }
     print(text);
-    let output = state.line;
+    const output = state.line;
     state.line = '';
     const remaining = MAX_CONTENT_BYTES - state.bytesTick;
-    if (output.length > remaining) {
-      if (remaining > 0) {
-        output = `${output.slice(0, remaining - 1)}…`;
-        state.linesTick += 1;
-        state.bytesTick += output.length;
-        state.ctx?.log(output);
-        traceRef.current({ line: sourceLine, kind: 'log', text: output });
+    if (utf8Bytes(output) > remaining) {
+      const content = truncateUtf8(output, remaining - ELLIPSIS_BYTES);
+      if (content) {
+        state.overflowMarked = true;
+        emit(`${content}${ELLIPSIS}`, sourceLine);
+      } else {
+        markOverflow(sourceLine);
       }
-      markOverflow(sourceLine);
       return;
     }
-    state.linesTick += 1;
-    state.bytesTick += output.length;
-    state.ctx?.log(output);
-    traceRef.current({ line: sourceLine, kind: 'log', text: output });
+    emit(output, sourceLine);
   }
 
   /** @param {any} expr @param {Env} env @param {{ trace: any }} local @returns {any} */

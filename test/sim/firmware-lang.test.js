@@ -239,9 +239,10 @@ test('one tick emits at most 8 KB, with a single truncation marker', () => {
   m.tick(ctx); // setup
   m.tick(ctx);
   const text = ctx.logs.join('');
-  assert.ok(text.length <= 8192, `emitted ${text.length}`);
-  assert.equal(text.length, 8192);
-  assert.equal(ctx.logs.filter((line) => line === '…').length, 1);
+  const bytes = new TextEncoder().encode(text).length;
+  assert.ok(bytes <= 8192, `emitted ${bytes} bytes`);
+  assert.ok(bytes >= 8000, `emitted only ${bytes} bytes`);
+  assert.equal([...text].filter((ch) => ch === '…').length, 1);
 });
 
 test('one tick emits at most 200 lines plus one marker', () => {
@@ -252,4 +253,18 @@ test('one tick emits at most 200 lines plus one marker', () => {
   m.tick(ctx);
   assert.ok(ctx.logs.length <= 201, `emitted ${ctx.logs.length} lines`);
   assert.equal(ctx.logs.filter((line) => line === '…').length, 1);
+});
+
+test('the 8 KB budget counts UTF-8 bytes, not UTF-16 characters', () => {
+  const { program } = compile(`void loop(){ for (int i = 0; i < 10; i = i + 1) { Serial.println("${'中'.repeat(500)}"); } }`);
+  const ctx = fakeCtx();
+  const m = createMachine({ program, now: advancingClock(0.001), budgetMs: 1000 }); m.start();
+  m.tick(ctx); // setup
+  m.tick(ctx);
+  const text = ctx.logs.join('');
+  const bytes = new TextEncoder().encode(text).length;
+  assert.ok(bytes <= 8192, `emitted ${bytes} bytes`);
+  assert.ok(bytes >= 8000, `emitted only ${bytes} bytes`);
+  assert.ok(!text.includes('\uFFFD'), 'truncation must not split a character');
+  assert.equal([...text].filter((ch) => ch === '…').length, 1);
 });

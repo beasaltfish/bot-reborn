@@ -37,7 +37,7 @@ import { ledPattern } from './firmware/led.js';
 import { createSerialPanel } from './ui/serial-panel.js';
 import { runFlash, canFlash } from './firmware/flash.js';
 import { deviceInitialized } from './firmware/parts-view.js';
-import { createSketchContext } from './firmware/sketch-context.js';
+import { createSketchContext, gpioInputLevel } from './firmware/sketch-context.js';
 import { createFirmwareStudio } from './ui/firmware-studio.js';
 import { runCustomFlash } from './firmware/flash.js';
 import { compile } from './firmware/lang/index.js';
@@ -105,6 +105,8 @@ let environment = defaultStimuli();
 const runtime = { servo: {}, motor: {}, strip: {}, display: {}, buttons: {} };
 /** GPIO levels the running sketch asked for; part of the next evaluation. */
 /** @type {Record<string, 'high'|'low'|'high-z'>} */ let gpioOutputs = {};
+/** Pins already warned about on this boot, so an undefined input says it once. @type {Set<number>} */
+let warnedGpioReads = new Set();
 /** A sonar measurement a sketch latched, until it turns it off or the board stops. */
 /** @type {{ measure: boolean, distanceCm: number } | null} */ let sonar = null;
 /** The board runtime: boot events, the brain link and the screen feed. */
@@ -825,6 +827,7 @@ async function plugIn(meta = {}) {
   stopBoard();
   recipeOn = null;
   gpioOutputs = {};
+  warnedGpioReads = new Set();
   sonar = null;
   const mine = ++plugs;
   bench = { ...bench, usb: true };
@@ -932,7 +935,15 @@ async function plugIn(meta = {}) {
           bench, evaluation, deviceStates, runtime,
           onPin: (pin, level) => { gpioOutputs[pin] = level; },
           onMeasure: (_id, on) => { sonar = { measure: on, distanceCm: 100 }; },
-          read: (pin) => evaluation.gpio?.[`esp:GPIO${pin}`] === 'low' ? 'LOW' : 'HIGH',
+          read: (pin) => {
+            const level = gpioInputLevel(evaluation, pin);
+            if (level) return level;
+            if (!warnedGpioReads.has(pin)) {
+              warnedGpioReads.add(pin);
+              serial.append(simText(document.documentElement.lang, 'gpio.noLevel', { pin }));
+            }
+            return 'LOW';
+          },
           onLog: () => {},
         });
       },
@@ -944,6 +955,7 @@ async function plugIn(meta = {}) {
         if (error) {
           studioRunError = { line: error.line ?? 1, column: 1, message: error.text };
           studio.update({ runError: studioRunError });
+          serial.append(error.text);
         }
         studio.pushTrace(records);
       },
@@ -1167,6 +1179,7 @@ async function maybeProvision(mine) {
 function unplug() {
   hands.highlightPoints([]);
   gpioOutputs = {};
+  warnedGpioReads = new Set();
   sonar = null;
   plugs++;
   startLock.clear();
