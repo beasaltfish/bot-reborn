@@ -127,10 +127,12 @@ export function createFirmwareStudio(o) {
     pause.textContent = state.paused ? simText(lang, 'studio.resume') : simText(lang, 'studio.pause');
     if (!state.paused) schedule();
   });
-  clear.addEventListener('click', () => { state.traces = []; renderTrace(); });
+  clear.addEventListener('click', () => { state.traces = []; state.rendered = 0; timeline.replaceChildren(); });
 
   /** @type {any[]} */
   state.traces = [];
+  state.rendered = 0;
+  state.paused = false;
   let scheduled = false;
   const scheduleFrame = o.scheduleFrame ?? ((fn) => {
     if (typeof requestAnimationFrame === 'function') requestAnimationFrame(fn);
@@ -153,15 +155,17 @@ export function createFirmwareStudio(o) {
   }
 
   function renderTrace() {
-    timeline.replaceChildren();
-    let shown = 0;
-    for (const record of state.traces.slice(-200)) {
-      if (shown >= 200) break;
+    if (state.paused) return;
+    const pending = state.traces.slice(state.rendered, state.rendered + 20);
+    state.rendered += pending.length;
+    for (const record of pending) {
       const row = el('div', { 'data-role': 'trace' });
       row.textContent = `${record.line ?? ''} ${record.text ?? record.kind}`.trim();
+      row.addEventListener('click', () => { state.view = 'run'; render(); });
       timeline.append(row);
-      shown += 1;
     }
+    while (timeline.children.length > 200) timeline.firstElementChild?.remove();
+    if (state.rendered < state.traces.length) schedule();
   }
 
   function render() {
@@ -201,7 +205,11 @@ export function createFirmwareStudio(o) {
     /** @param {any[]} records */
     pushTrace(records) {
       state.traces.push(...records);
-      if (state.traces.length > 500) state.traces.splice(0, state.traces.length - 500);
+      const overflow = state.traces.length - 500;
+      if (overflow > 0) {
+        state.traces.splice(0, overflow);
+        state.rendered = Math.max(0, state.rendered - overflow);
+      }
       schedule();
     },
     /** @param {boolean} on */

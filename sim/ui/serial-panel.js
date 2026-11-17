@@ -87,11 +87,16 @@ export function createSerialPanel(o) {
     log.scrollTop = log.scrollHeight;
   }
 
-  /** @param {string} line */
-  function append(line) {
-    lines.push(line);
+  /** @param {string[]} batch */
+  function appendLines(batch) {
+    lines.push(...batch);
     if (lines.length > MAX_LINES) lines.splice(0, lines.length - MAX_LINES);
     renderLog();
+  }
+
+  /** @param {string} line */
+  function append(line) {
+    appendLines([line]);
   }
 
   form.addEventListener('submit', (event) => {
@@ -135,6 +140,7 @@ export function createSerialPanel(o) {
     /** @param {boolean} visible */
     show(visible) { root.hidden = !visible; },
     append,
+    appendLines,
     /** Type a line as the user would: the firmware sees the same command. */
     /** @param {string} line */
     type(line) {

@@ -107,3 +107,12 @@ test('a provisioning wait can be stopped from the panel', () => {
     assert.equal(cancel.hidden, true);
   } finally { restore(); }
 });
+
+test('appendLines keeps the 200-line ring per line, not per call', () => {
+  const { panel, restore } = setup();
+  try {
+    panel.appendLines(Array.from({ length: 250 }, (_, i) => `line ${i}`));
+    assert.equal(panel.log.length, 200);
+    assert.equal(panel.log[0], 'line 50');
+  } finally { restore(); }
+});

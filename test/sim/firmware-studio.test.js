@@ -107,3 +107,75 @@ test('copying a v1 example is enabled only for v1', () => {
     assert.equal(copied.length, 1);
   } finally { restore(); }
 });
+
+function frameScheduler() {
+  /** @type {(() => void)[]} */ const queue = [];
+  return { schedule: (/** @type {() => void} */ fn) => queue.push(fn), flush() { for (const fn of queue.splice(0)) fn(); } };
+}
+
+test('a frame adds at most 20 rows and the DOM keeps at most 200', () => {
+  const frames = frameScheduler();
+  const { studio, restore } = setup({ scheduleFrame: frames.schedule });
+  try {
+    studio.update(state({ running: true }));
+    studio.pushTrace(Array.from({ length: 250 }, (_, i) => ({ tick: i, kind: 'statement', line: 1, text: `x${i}` })));
+    frames.flush();
+    assert.ok(studio.element.querySelectorAll('[data-role=trace]').length <= 20);
+    frames.flush();
+    assert.ok(studio.element.querySelectorAll('[data-role=trace]').length <= 40);
+    for (let i = 0; i < 20; i++) frames.flush();
+    assert.ok(studio.element.querySelectorAll('[data-role=trace]').length <= 200);
+  } finally { restore(); }
+});
+
+test('trace rows group by tick and render once per frame', () => {
+  const frames = frameScheduler();
+  const { studio, restore } = setup({ scheduleFrame: frames.schedule });
+  try {
+    studio.update(state({ running: true }));
+    studio.pushTrace([{ tick: 1, kind: 'statement', line: 9, text: 'digitalRead(4)' }]);
+    studio.pushTrace([{ tick: 2, kind: 'statement', line: 10, text: 'digitalWrite(5, HIGH)' }]);
+    assert.equal(studio.element.querySelectorAll('[data-role=trace]').length, 0);
+    frames.flush();
+    const rows = studio.element.querySelectorAll('[data-role=trace]');
+    assert.equal(rows.length, 2);
+    assert.match(rows[0].textContent, /9/);
+  } finally { restore(); }
+});
+
+test('a paused timeline updates memory only and renders on resume', () => {
+  const frames = frameScheduler();
+  const { studio, restore } = setup({ scheduleFrame: frames.schedule });
+  try {
+    studio.update(state({ running: true }));
+    /** @type {any} */ (studio.element.querySelector('[data-role=pause]')).click();
+    studio.pushTrace([{ tick: 3, kind: 'statement', line: 11, text: 'delay(100)' }]);
+    frames.flush();
+    assert.equal(studio.element.querySelectorAll('[data-role=trace]').length, 0);
+    /** @type {any} */ (studio.element.querySelector('[data-role=pause]')).click();
+    frames.flush();
+    assert.equal(studio.element.querySelectorAll('[data-role=trace]').length, 1);
+  } finally { restore(); }
+});
+
+test('the timeline only references the running source', () => {
+  const frames = frameScheduler();
+  const { studio, restore } = setup({ scheduleFrame: frames.schedule });
+  try {
+    studio.update(state({ view: 'draft', custom: custom({ draft: 'a\nb\nc', flashed: 'x\ny' }) }));
+    studio.pushTrace([{ tick: 1, kind: 'statement', line: 2, text: 'x' }]);
+    frames.flush();
+    const row = /** @type {any} */ (studio.element.querySelector('[data-role=trace]'));
+    row.click();
+    assert.equal(/** @type {any} */ (studio.element.querySelector('[data-role=run-source]')).hidden, false);
+    assert.equal(studio.element.dataset.view, 'run');
+  } finally { restore(); }
+});
+
+test('timing is shown as interpreter and UI separately', () => {
+  const { studio, restore } = setup();
+  try {
+    studio.update(state({ timings: { interpreterMs: 3.2, uiMs: 0.6 } }));
+    assert.match(/** @type {any} */ (studio.element.querySelector('[data-role=timing]')).textContent, /3\.2\/6.*0\.6\/2/);
+  } finally { restore(); }
+});
