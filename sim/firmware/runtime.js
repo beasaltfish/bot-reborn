@@ -35,6 +35,9 @@ export function bootMode(intent = {}) {
  *   brainUrl?: string,
  *   connect: (opts: any) => { close(): void, send(msg: object): void, sendAudio(pcm: Int16Array): void },
  *   openScreen?: (opts: any) => { stop(): void },
+ *   ownership?: Record<string, 'board'|'circuit'|'unknown'>,
+ *   initDevices?: (ids: string[]) => Record<string, 'active'|'init-failed'>,
+ *   bootInitMs?: number,
  *   onLine(line: string): void,
  *   onLed(mode: string): void,
  *   onDevice?(msg: any): void,
@@ -57,10 +60,24 @@ export function createBoardRuntime(o) {
   /** @type {ReturnType<NonNullable<typeof o.openScreen>> | null} */ let feed = null;
   /** @type {number | null} */ let busySince = null;
   let micStarted = false;
+  /** @type {Record<string, 'uninitialized'|'active'|'init-failed'>} */
+  let states = {};
 
   /** @param {{ blocked?: boolean, pendingFlash?: string | null }} [intent] */
   function mode(intent = {}) {
     return bootMode(intent);
+  }
+
+  /** The board devices this firmware carries, and only those the board drives. */
+  function drivenIds() {
+    if (!firmware) return [];
+    return o.bench.placed
+      .filter((part) => part.part !== 'esp32' && firmware.drivers.includes(part.part))
+      .filter((part) => {
+        const owner = o.ownership?.[part.id];
+        return owner === undefined || owner === 'board';
+      })
+      .map((part) => part.id);
   }
 
   function stop() {
@@ -68,6 +85,7 @@ export function createBoardRuntime(o) {
     for (const timer of timers) clearTimeout(timer);
     timers = [];
     micStarted = false;
+    states = {};
     conn?.close();
     conn = null;
     feed?.stop();
@@ -120,6 +138,9 @@ export function createBoardRuntime(o) {
     stop();
     if (!firmware) return;
     const gen = generation;
+    const ids = drivenIds();
+    // Nothing a board device shows before its firmware initialised it.
+    states = Object.fromEntries(ids.map((id) => [id, 'uninitialized']));
     const events = bodyBoot({ settings: o.board.settings, firmware, bench: o.bench, outcome: o.outcome, profile: o.profile, now: now() });
     for (const event of events) {
       const timer = setTimeout(() => {
@@ -131,18 +152,19 @@ export function createBoardRuntime(o) {
       }, event.afterMs);
       timers.push(timer);
     }
+    if (ids.length) {
+      timers.push(setTimeout(() => {
+        if (gen !== generation) return;
+        const verdicts = o.initDevices?.(ids) ?? Object.fromEntries(ids.map((id) => [id, 'active']));
+        states = Object.fromEntries(ids.map((id) => [id, verdicts[id] ?? 'active']));
+      }, o.bootInitMs ?? 1000));
+    }
   }
 
   /** @returns {Record<string, string>} */
   function deviceStates() {
     if (!firmware || o.outcome.esp !== 'ok') return {};
-    /** @type {Record<string, string>} */
-    const states = {};
-    for (const part of o.bench.placed) {
-      if (part.part === 'esp32') continue;
-      if (firmware.drivers.includes(part.part)) states[part.id] = 'active';
-    }
-    return states;
+    return { ...states };
   }
 
   return {

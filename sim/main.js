@@ -36,7 +36,7 @@ import { firmwareById } from './firmware/index.js';
 import { ledPattern } from './firmware/led.js';
 import { createSerialPanel } from './ui/serial-panel.js';
 import { runFlash, canFlash } from './firmware/flash.js';
-import { partsView } from './firmware/parts-view.js';
+import { partsView, deviceInitialized } from './firmware/parts-view.js';
 import { createSketchRunner } from './firmware/sketch.js';
 import { connectBody } from '../phone/body-link.js';
 import { openScreenFeed } from './screen-feed.js';
@@ -655,6 +655,17 @@ async function plugIn(meta = {}) {
     board: bench.board,
     bench,
     outcome,
+    ownership: ownershipOf(bench),
+    initDevices: (ids) => {
+      const engineering = evaluateBench(bench, { firmware, ownership: ownershipOf(bench), stimuli: simulationStimuli() }).engineering;
+      /** @type {Record<string, 'active'|'init-failed'>} */
+      const verdicts = {};
+      for (const id of ids) {
+        const part = bench.placed.find((p) => p.id === id);
+        verdicts[id] = part && deviceInitialized(engineering, part) ? 'active' : 'init-failed';
+      }
+      return verdicts;
+    },
     brainUrl: `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/body`,
     audio: bodyAudioLink ?? undefined,
     connect: (opts) => {

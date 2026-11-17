@@ -43,3 +43,25 @@ export function partsView(bench, evaluation, deviceStates = {}) {
 export function measureSonar(stimuli, on = true, distanceCm = 100) {
   return { ...stimuli, sonar: { ...(stimuli.sonar ?? {}), measure: on, distanceCm } };
 }
+
+/** Device states that mean the part exists but its init did not succeed. */
+const FAILED = new Set([
+  'off', 'unsupported', 'burnt', 'reversed', 'address-conflict', 'swapped',
+  'shorted', 'wrong-bus', 'unsupported-voltage', 'level-incompatible',
+  'no-data', 'brownout',
+]);
+
+/**
+ * Whether a board device's evaluation says its firmware init succeeded: the
+ * part's own section record exists and is not a refusal.
+ * @param {Record<string, any>} evaluation `evaluateBench(...).engineering`
+ * @param {{ id: string, part: string }} part
+ */
+export function deviceInitialized(evaluation, part) {
+  const section = SECTION[part.part];
+  if (!section) return false;
+  const record = evaluation?.[section]?.[part.id];
+  if (!record) return false;
+  if (part.part === 'button-module') return record.level !== null;
+  return !FAILED.has(record.state);
+}

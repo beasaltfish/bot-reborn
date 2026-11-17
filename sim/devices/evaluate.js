@@ -103,8 +103,10 @@ export function evaluateDevices(bench, { profile = PROFILES[0], mode = 'idle', s
   /** @param {Record<string, any>} record */
   const gate = (record) => Object.fromEntries(Object.entries(record).filter(([id]) => {
     const own = ownership[id];
-    if (!own || own === 'circuit') return true;
-    return deviceStates[id] === 'active';
+    if (own === 'circuit') return true;
+    if (own === 'board') return deviceStates[id] === 'active';
+    if (own === 'unknown') return false;
+    return true;
   }));
   return {
     electrical, resources, parts, faults, burns, deviceStates, ownership,
