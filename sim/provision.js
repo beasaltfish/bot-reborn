@@ -27,3 +27,67 @@ export function screenMismatch(plan, settings) {
   const screen = plan ? planScreen(plan) : null;
   return Boolean(screen && settings.screen && settings.screen !== screen);
 }
+
+/**
+ * The console lines the plan needs, given the token the helper found. The
+ * firmware requires a reboot after `token`/`screen`, which the caller types
+ * next; nothing here writes settings directly.
+ * @param {import('./plan.js').Plan | null} plan
+ * @param {import('./bench.js').Settings} settings
+ * @param {{ token?: string, replaceScreen?: boolean }} [o]
+ * @returns {{ commands: string[], missing: ('token'|'screen')[], screen: string | null, mismatch: boolean }}
+ */
+export function provisionSteps(plan, settings, { token = '', replaceScreen = true } = {}) {
+  const { missing, screen } = provisionPlan(plan, settings);
+  const mismatch = screenMismatch(plan, settings);
+  /** @type {string[]} */ const commands = [];
+  if (missing.includes('token') && token) commands.push(`token ${token}`);
+  if (screen && (missing.includes('screen') || (mismatch && replaceScreen))) commands.push(`screen ${screen}`);
+  return { commands, missing, screen, mismatch };
+}
+
+/**
+ * Type a plan's commands into the serial console, reboot once, and wait a
+ * bounded window (15 s) for the board to reach the brain. The four ways to
+ * hand control back are the plan's: welcomed, gave-up, still-retrying and
+ * skipped. Cancelling stops the waiting only; the firmware keeps retrying.
+ * @param {{
+ *   commands: string[],
+ *   panel: { type(line: string): void },
+ *   reboot(): void,
+ *   timeoutMs?: number,
+ *   timers?: { setTimeout: typeof setTimeout, clearTimeout: typeof clearTimeout },
+ *   onDone?(result: 'welcomed'|'gave-up'|'still-retrying'|'skipped'|'cancelled'): void,
+ * }} o
+ */
+export function createProvisioning(o) {
+  const timers = o.timers ?? { setTimeout, clearTimeout };
+  let started = false;
+  let settled = false;
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
+  let timer;
+
+  /** @param {'welcomed'|'gave-up'|'still-retrying'|'skipped'|'cancelled'} result */
+  function finish(result) {
+    if (settled) return false;
+    settled = true;
+    if (timer !== undefined) timers.clearTimeout(timer);
+    o.onDone?.(result);
+    return true;
+  }
+
+  return {
+    start() {
+      if (started || settled) return;
+      started = true;
+      for (const line of o.commands) o.panel.type(line);
+      if (o.commands.length) o.reboot();
+      timer = timers.setTimeout(() => finish('still-retrying'), o.timeoutMs ?? 15000);
+    },
+    welcomed: () => finish('welcomed'),
+    gaveUp: () => finish('gave-up'),
+    skip: () => finish('skipped'),
+    cancel: () => finish('cancelled'),
+    get done() { return settled; },
+  };
+}

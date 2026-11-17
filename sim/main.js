@@ -31,7 +31,7 @@ import { createBoardRuntime, bootMode } from './firmware/runtime.js';
 import { createBodyAudio } from './body.js';
 import { createBodyAudioLink } from './firmware/audio-link.js';
 import { demoSkips, lookupCharacter } from './capabilities.js';
-import { isRemote } from './provision.js';
+import { isRemote, provisionSteps, screenMismatch, createProvisioning } from './provision.js';
 import { firmwareById } from './firmware/index.js';
 import { ledPattern } from './firmware/led.js';
 import { createSerialPanel } from './ui/serial-panel.js';
@@ -431,6 +431,14 @@ function store() {
 
 /** Whether a recipe run is on the table. */
 let running = false;
+/** How the current run was started: Build types setup commands, Demo waits. */
+/** @type {'build' | 'watch' | 'step'} */
+let planMode = 'build';
+/** The plan whose setup was already offered, so its own reboot does not ask again. */
+/** @type {string | null} */
+let provisionedFor = null;
+/** @type {ReturnType<typeof createProvisioning> | null} */
+let provisioning = null;
 /**
  * What the recipe now being played needs of the character and what to say to
  * try the result. Read once by the plug-in the run itself causes, so a plug
@@ -666,6 +674,7 @@ async function plugIn(meta = {}) {
     onLine: (text) => {
       serial.append(text);
       if (text.startsWith('welcomed as ')) {
+        provisioning?.welcomed();
         line.state = 'connected';
         const name = text.slice('welcomed as '.length);
         line.who = name;
@@ -676,6 +685,8 @@ async function plugIn(meta = {}) {
           const zh = document.documentElement.lang === 'zh';
           for (const skip of demoSkips(needs, character?.motion ?? 'none', zh ? 'zh' : 'en')) serial.append(skip.text);
         }).catch(() => {});
+      } else if (text.startsWith('rejected:')) {
+        provisioning?.gaveUp();
       }
       showLine();
     },
@@ -695,6 +706,7 @@ async function plugIn(meta = {}) {
     },
   });
   boardRuntime.start();
+  if (firmware.link) void maybeProvision(mine);
   // The firmware's own IMU check is the gate: no MPU-6050 awake, no shake sent.
   const imu = bench.placed.find((part) => part.part === 'mpu6050');
   if (firmware.link && imu && /** @type {any} */ (outcome.parts)?.[imu.id]?.awake === true) {
@@ -732,6 +744,106 @@ async function flashFirmwareNow(/** @type {string} */ id) {
   const firmware = firmwareById(id);
   if (firmware) serial.setFirmware(firmware);
   if (usb.plugged) plugIn({ ending: line.ending });
+}
+
+/**
+ * The single ready character this brain could start, or a list to choose from
+ * when more than one could be meant.
+ * @returns {Promise<{ token?: string, list?: { id: string, name: string, ready?: boolean, online?: boolean }[] }>}
+ */
+async function tokenCandidate() {
+  try {
+    const list = await (await fetch('/api/characters')).json();
+    const ready = list.filter((/** @type {any} */ c) => c.ready && !c.online);
+    if (ready.length !== 1) return { list };
+    const detail = await (await fetch(`/api/characters/${encodeURIComponent(ready[0].id)}`)).json();
+    return detail?.token ? { token: detail.token, list } : { list };
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * A plan compares what it needs with the board and types the missing settings
+ * into the serial console itself (spec §8.2). Build types them when one
+ * character is unambiguous; Demo waits for the user. A remote brain gets no
+ * local helper: its token can only be typed by hand.
+ * @param {number} mine the plug this boot belongs to
+ */
+async function maybeProvision(mine) {
+  const plan = /** @type {import('./plan.js').Plan | null} */ (activeProject);
+  if (!plan || plan.connection !== 'body') return;
+  if (provisionedFor === plan.id) return;
+  provisionedFor = plan.id;
+  const lang = document.documentElement.lang;
+  const remote = isRemote(bench.board.settings.url, location.origin);
+  serial.show(true);
+  serial.setCharacterHelper(!remote);
+  if (remote) {
+    const steps = provisionSteps(plan, bench.board.settings);
+    if (steps.commands.length) panels.status(simText(lang, 'board.provisionRemote'));
+    return;
+  }
+  let token = bench.board.settings.token;
+  /** @type {{ id: string, name: string }[] | null} */ let list = null;
+  if (!token) {
+    const candidate = await tokenCandidate();
+    list = (candidate.list ?? []).map((c) => ({ id: c.id, name: c.name }));
+    token = candidate.token ?? '';
+  }
+  if (mine !== plugs) return;
+  if (list) serial.setCharacters(list);
+  const mismatch = screenMismatch(plan, bench.board.settings);
+  const missing = provisionSteps(plan, bench.board.settings, { token, replaceScreen: false }).missing;
+  if (!missing.length && !mismatch) return;
+
+  /** @param {boolean} replaceScreen */
+  const begin = (replaceScreen) => {
+    if (mine !== plugs) return;
+    const steps = provisionSteps(plan, bench.board.settings, { token, replaceScreen });
+    if (!steps.commands.length) {
+      panels.status(simText(lang, 'board.provisionSkipped'));
+      return;
+    }
+    provisioning = createProvisioning({
+      commands: steps.commands,
+      panel: serial,
+      reboot: () => { if (usb.plugged) { usb.pullOut(); void plugIn(); } },
+      onDone: (result) => {
+        if (result === 'still-retrying') panels.status(simText(lang, 'board.provisionDone'));
+        else if (result === 'skipped') panels.status(simText(lang, 'board.provisionSkipped'));
+      },
+    });
+    provisioning.start();
+  };
+
+  if (mismatch) {
+    const screen = /** @type {string} */ (provisionSteps(plan, bench.board.settings, { token }).screen);
+    panels.status(simText(lang, 'board.provisionMismatch', { current: bench.board.settings.screen, wanted: screen }), {
+      actions: [
+        { label: simText(lang, 'board.screenReplace'), run: () => begin(true) },
+        { label: simText(lang, 'board.screenKeep'), run: () => { if (!missing.length) panels.status(simText(lang, 'board.provisionSkipped')); else begin(false); } },
+      ],
+    });
+    return;
+  }
+
+  if (!token) {
+    panels.status(simText(lang, 'board.provisionManual'));
+    return;
+  }
+
+  const what = missing.map((need) => (need === 'token' ? 'token' : 'screen')).join(', ');
+  if (planMode === 'build') {
+    begin(true);
+    return;
+  }
+  panels.status(simText(lang, 'board.provisionNeeded', { what }), {
+    actions: [
+      { label: simText(lang, 'board.provisionType'), run: () => begin(true) },
+      { label: simText(lang, 'board.provisionSkip'), run: () => panels.status(simText(lang, 'board.provisionSkipped')) },
+    ],
+  });
 }
 
 function unplug() {
@@ -807,6 +919,9 @@ export function startRun(recipeId, screenId, mode, hooks = {}, wand = false, spe
   write(SPEED_KEY, String(speedFactor(speed)));
   // Before anything unplugs: the unplug redraws the status line, which must not offer the way back now.
   running = true;
+  planMode = mode === 'step' ? 'step' : 'watch';
+  provisionedFor = null;
+  provisioning = null;
   panels.status(null);
   if (usb.plugged) {
     usb.pullOut();
@@ -855,6 +970,9 @@ export function startPlan(planId, options = {}, mode = 'build', hooks = {}, spee
   const plan = planById(planId, options);
   if (!plan || running) return null;
   running = true;
+  planMode = mode === 'build' ? 'build' : mode === 'step' ? 'step' : 'watch';
+  provisionedFor = null;
+  provisioning = null;
   panels.status(null);
   if (usb.plugged) {
     usb.pullOut();

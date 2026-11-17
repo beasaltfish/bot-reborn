@@ -82,6 +82,10 @@ export function createSerialPanel(o) {
 
   form.addEventListener('submit', (event) => {
     event.preventDefault();
+    sendLine();
+  });
+
+  function sendLine() {
     if (firmware.id !== 'body') return;
     const result = consoleCommand({ settings, firmware }, input.value);
     for (const line of result.lines) append(line);
@@ -89,7 +93,7 @@ export function createSerialPanel(o) {
     o.onChange(settings);
     input.value = '';
     if (result.reboot) o.onReboot();
-  });
+  }
 
   select.addEventListener('change', async () => {
     const id = select.value;
@@ -117,6 +121,23 @@ export function createSerialPanel(o) {
     /** @param {boolean} visible */
     show(visible) { root.hidden = !visible; },
     append,
+    /** Type a line as the user would: the firmware sees the same command. */
+    /** @param {string} line */
+    type(line) { input.value = line; sendLine(); },
+    /** Replace the character choices; empty leaves only the placeholder. */
+    /** @param {{ id: string, name: string }[]} list */
+    setCharacters(list) {
+      select.replaceChildren(none);
+      for (const c of list) {
+        const option = document.createElement('option');
+        option.value = c.id;
+        option.textContent = c.name;
+        select.append(option);
+      }
+    },
+    /** A remote brain's local list proves nothing, so the helper is hidden. */
+    /** @param {boolean} enabled */
+    setCharacterHelper(enabled) { picker.hidden = !enabled; },
     /** @param {import('../bench.js').Settings} next */
     setSettings(next) { settings = next; },
     /** @param {import('../firmware/index.js').Firmware} next */

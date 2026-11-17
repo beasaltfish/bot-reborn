@@ -70,3 +70,26 @@ test('choosing a character only fills the input with token <hex>', async () => {
     assert.equal(changes.length, 0);
   } finally { restore(); }
 });
+
+test('type() sends a line the way the input form would', () => {
+  const { panel, changes, restore } = setup();
+  try {
+    panel.type('show');
+    assert.ok(panel.log.includes('board.end'));
+    assert.equal(changes.length, 1);
+  } finally { restore(); }
+});
+
+test('the character helper can be filled later and hidden for a remote brain', () => {
+  const { panel, restore } = setup({ characters: [] });
+  try {
+    const pick = /** @type {HTMLElement} */ (panel.element.querySelector('label'));
+    panel.setCharacters([{ id: 'ada', name: 'Ada' }]);
+    const select = /** @type {HTMLSelectElement} */ (panel.element.querySelector('select[data-role="character"]'));
+    assert.deepEqual([...select.options].map((o) => o.value), ['', 'ada']);
+    panel.setCharacterHelper(false);
+    assert.equal(pick.hidden, true);
+    panel.setCharacterHelper(true);
+    assert.equal(pick.hidden, false);
+  } finally { restore(); }
+});
