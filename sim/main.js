@@ -26,12 +26,12 @@ import { screenById } from '../core/screens.js';
 import { diagnose } from './diagnose.js';
 import { liveDiagnosis } from './live-diagnosis.js';
 import { isViewPeekShortcut } from './view-shortcut.js';
-import { startBody, faultText, adminLink, keepsFault } from './body.js';
+import { faultText, adminLink, keepsFault } from './body.js';
 import { createBoardRuntime, bootMode } from './firmware/runtime.js';
-import { createBodyAudio, shapeDownlink } from './body.js';
+import { createBodyAudio } from './body.js';
+import { createBodyAudioLink } from './firmware/audio-link.js';
 import { demoSkips, lookupCharacter } from './capabilities.js';
 import { isRemote } from './provision.js';
-import { PcmPlayer } from '../phone/audio/player.js';
 import { firmwareById } from './firmware/index.js';
 import { ledPattern } from './firmware/led.js';
 import { createSerialPanel } from './ui/serial-panel.js';
@@ -144,8 +144,8 @@ const panels = createPanels({
     void world.focusPoints(points, { left });
   },
   clearProjectFocus: () => hands.highlightGuidance([]),
-  start: (id, mode, hooks, speed) => startPlan(id, planOptionsFor(bench), mode, hooks, speed),
-  build: (id, options) => startPlan(id, options),
+  start: (id, mode, hooks, speed) => { unlockAudio(); return startPlan(id, planOptionsFor(bench), mode, hooks, speed); },
+  build: (id, options) => { unlockAudio(); return startPlan(id, options); },
   planOptions: options => planOptionsFor(bench, options),
   leaveProject: () => { activeProject = null; },
   speed: speedFactor(Number(read(SPEED_KEY))),
@@ -383,17 +383,13 @@ addEventListener('blur', unpeek);
 
 // ---- Power --------------------------------------------------------------
 
-/** The running body, if the bench is one. */
-/** @type {{ stop(): void } | null} */
-let session = null;
 /** The board runtime: boot events, the brain link and the screen feed. */
 /** @type {ReturnType<typeof createBoardRuntime> | null} */
 let boardRuntime = null;
 const bodyAudio = createBodyAudio();
-/** @type {PcmPlayer | null} */ let bodyPlayer = null;
+/** The microphone uplink and speaker downlink over the board's own link. */
+/** @type {ReturnType<typeof createBodyAudioLink> | null} */ let bodyAudioLink = null;
 /** @type {ReturnType<typeof createSketchRunner> | null} */ let sketchRunner = null;
-/** @type {AbortController | null} */
-let pendingStart = null;
 /** Reads the wand into the shake detector while a body is plugged in. @type {ReturnType<typeof createWandFeed> | null} */
 let wandFeed = null;
 /** @type {ReturnType<typeof setInterval> | undefined} */
@@ -405,16 +401,22 @@ let apiFor = '';
 
 /**
  * What the status line says while plugged in, most important first: why the
- * session ended, a dropped link, what is wrong with the wiring, what the robot is doing.
+ * session ended, a dropped link, what is wrong with the wiring, the browser
+ * keeping the microphone or the speaker away, what the robot is doing.
  * `ending` is what to say to try a bench the simulator built, kept after the state.
- * @type {{ end: string | null, lost: boolean, api: string | null, fault: string | null, state: string | null, who: string | null, ending: string | null }}
+ * @type {{ end: string | null, lost: boolean, api: string | null, fault: string | null, mic: string | null, sound: boolean, state: string | null, who: string | null, ending: string | null }}
  */
-let line = { end: null, lost: false, api: null, fault: null, state: null, who: null, ending: null };
+let line = { end: null, lost: false, api: null, fault: null, mic: null, sound: false, state: null, who: null, ending: null };
 function showLine() {
   if (line.end) return panels.status(line.end);
   if (line.lost) return panels.status('Reconnecting…');
   if (line.api) return panels.status(line.api, { href: adminLink(apiFor), label: 'open' });
   if (line.fault) return panels.status(line.fault);
+  if (line.mic) return panels.status(line.mic);
+  if (line.sound) {
+    const lang = document.documentElement.lang;
+    return panels.status(simText(lang, 'audio.enable'));
+  }
   if (line.state) {
     const state = line.who ? `${line.who} · ${line.state}` : line.state;
     return panels.status(line.ending ? `${state} — ${line.ending}` : state);
@@ -520,19 +522,15 @@ function driveStop() {
 /** Invalidate pending starts before stopping so late callbacks cannot restart motion. */
 function stopUnsafeSession() {
   plugs++;
-  pendingStart?.abort();
-  pendingStart = null;
   startLock.clear();
   driveStop();
   boardRuntime?.stop();
   boardRuntime = null;
   sketchRunner?.stop();
   sketchRunner = null;
-  bodyPlayer?.hush();
+  bodyAudioLink?.stop();
+  bodyAudioLink = null;
   bodyAudio.close();
-  const old = session;
-  session = null;
-  old?.stop();
   clearInterval(wandTimer);
   wandFeed = null;
   world.onWandLevel(null);
@@ -540,14 +538,20 @@ function stopUnsafeSession() {
   effects.setAlive(false);
   effects.playing([]);
   effects.led('off');
-  line = { end: null, lost: false, api: null, fault: null, state: null, who: null, ending: null };
+  line = { end: null, lost: false, api: null, fault: null, mic: null, sound: false, state: null, who: null, ending: null };
   const off = evaluateBench({ ...bench, usb: false }).parts;
   world.screens(/** @type {any} */ (off));
   world.imu(/** @type {any} */ (off));
 }
 
-/** The output AudioContext is unlocked from the first real gesture. */
-function unlockAudio() { void bodyAudio.resume(); }
+/** The output AudioContext is unlocked from a real gesture: a drag release or a Demo/Build click. */
+function unlockAudio() {
+  void bodyAudio.resume().then(() => {
+    if (!line.sound) return;
+    line.sound = false;
+    showLine();
+  });
+}
 
 /**
  * @param {{ ending?: string | null, pendingFlash?: string | null }} [meta]
@@ -596,7 +600,7 @@ async function plugIn(meta = {}) {
   const hints = diagnose(bench, { ...outcome, faults: blocked ? [blocked] : merged.faults, burns: merged.burns }, document.documentElement.lang);
   const first = blocked || outcome.esp === 'brownout' ? hints.find((h) => h.kind === 'fault') : hints[0];
   hands.highlightPoints(first?.points ?? []);
-  line = { end: null, lost: false, api: null, fault: first?.text ?? null, state: null, who: null, ending: null };
+  line = { end: null, lost: false, api: null, fault: first?.text ?? null, mic: null, sound: false, state: null, who: null, ending: null };
   showLine();
   if (outcome.esp !== 'ok' || blocked) return;
 
@@ -624,18 +628,34 @@ async function plugIn(meta = {}) {
   serial.setSettings(bench.board.settings);
   serial.show(true);
   line.ending = meta.ending ?? null;
+  bodyAudioLink?.stop();
+  bodyAudioLink = firmware.link ? createBodyAudioLink({
+    outcome: /** @type {any} */ (outcome),
+    audio: bodyAudio,
+    name: `sim-${(bench.board.settings.token || 'bench').slice(0, 8)}`,
+    onLevel: (up, down) => effects.levels(up, down),
+    onMicBlocked: () => {
+      line.mic = simText(document.documentElement.lang, 'audio.micBlocked');
+      showLine();
+    },
+    onNeedsGesture: () => {
+      line.sound = true;
+      showLine();
+    },
+  }) : null;
   boardRuntime = createBoardRuntime({
     board: bench.board,
     bench,
     outcome,
     brainUrl: `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/body`,
+    audio: bodyAudioLink ?? undefined,
     connect: (opts) => {
       const link = connectBody({
         url: opts.url, token: opts.token, retryOnReject: opts.retryOnReject,
         onWelcome: opts.onWelcome, onMessage: opts.onMessage, onAudio: opts.onAudio,
-        onLost: () => { driveStop(); bodyPlayer?.hush(); opts.onLost?.(); }, onReject: opts.onReject,
+        onLost: () => { driveStop(); bodyAudioLink?.hush(); opts.onLost?.(); }, onReject: opts.onReject,
       });
-      return { close: () => link.close(), send: (msg) => link.send(msg) };
+      return { close: () => link.close(), send: (msg) => link.send(msg), sendAudio: (pcm) => link.sendAudio(pcm) };
     },
     openScreen: (/** @type {any} */ opts) => openScreenFeed(/** @type {any} */ ({
       url: opts.url,
@@ -648,6 +668,7 @@ async function plugIn(meta = {}) {
       if (text.startsWith('welcomed as ')) {
         line.state = 'connected';
         const name = text.slice('welcomed as '.length);
+        line.who = name;
         const needs = activeProject?.needs ?? [];
         if (needs.length) void fetch('/api/characters').then((r) => r.json()).then((list) => {
           const remote = isRemote(bench.board.settings.url, location.origin);
@@ -662,12 +683,26 @@ async function plugIn(meta = {}) {
     onDevice: (msg) => {
       if (msg.type === 'move') driveMove(msg);
       else if (msg.type === 'stop') driveStop();
-      else if (msg.type === 'state') { line.state = String(msg.state).toLowerCase(); effects.led(ledPattern(String(msg.state))); showLine(); }
+      else if (msg.type === 'state') {
+        const state = String(msg.state).toUpperCase();
+        if (!keepsFault(state)) line.api = null;
+        line.state = state.toLowerCase();
+        effects.led(ledPattern(state));
+        showLine();
+      }
       else if (msg.type === 'fault') { line.api = faultText(msg); showLine(); }
-      else if (msg.type === 'hush') { bodyPlayer?.hush(); }
+      else if (msg.type === 'hush') { bodyAudioLink?.hush(); }
     },
   });
   boardRuntime.start();
+  // The firmware's own IMU check is the gate: no MPU-6050 awake, no shake sent.
+  const imu = bench.placed.find((part) => part.part === 'mpu6050');
+  if (firmware.link && imu && /** @type {any} */ (outcome.parts)?.[imu.id]?.awake === true) {
+    wandFeed = createWandFeed({ detector: createShakeDetector(), send: () => boardRuntime?.shake(), now: () => performance.now() });
+    world.onWandLevel((_id, level) => wandFeed?.level(level));
+    clearInterval(wandTimer);
+    wandTimer = setInterval(() => wandFeed?.tick(), 50);
+  }
   if (!firmware.link) {
     sketchRunner?.stop();
     sketchRunner = createSketchRunner({
@@ -702,20 +737,16 @@ async function flashFirmwareNow(/** @type {string} */ id) {
 function unplug() {
   hands.highlightPoints([]);
   plugs++;
-  pendingStart?.abort();
-  pendingStart = null;
   startLock.clear();
   powerInterlock.reset();
   driveStop();
   powered = null;
   boardRuntime?.stop();
   boardRuntime = null;
-  bodyPlayer?.hush();
-  bodyPlayer = null;
+  bodyAudioLink?.stop();
+  bodyAudioLink = null;
   bodyAudio.close();
   serial.show(false);
-  session?.stop();
-  session = null;
   clearInterval(wandTimer);
   wandFeed = null;
   world.onWandLevel(null);
@@ -723,7 +754,7 @@ function unplug() {
   effects.setAlive(false);
   effects.playing([]);
   effects.led('off');
-  line = { end: null, lost: false, api: null, fault: null, state: null, who: null, ending: null };
+  line = { end: null, lost: false, api: null, fault: null, mic: null, sound: false, state: null, who: null, ending: null };
   showLine();
   bench = { ...bench, usb: false };
   setBench(bench);

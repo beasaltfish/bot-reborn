@@ -2,16 +2,8 @@
 // applied to real microphone and speaker audio, and the brain is none the
 // wiser — it sees an ordinary phone-style body on /body.
 //
-// shapeUplink / shapeDownlink are pure and tested;
-// startBody touches the browser (microphone, WebSocket, AudioContext) and is
-// only exercised on the page.
-
-import { connectBody } from '../phone/body-link.js';
-import { openScreenFeed } from './screen-feed.js';
-import { AudioPipeline } from '../phone/audio/pipeline.js';
-import { PcmPlayer } from '../phone/audio/player.js';
-import { toInt16 } from '../core/audio/pcm.js';
-import { createPipelinePool } from './audio-pipeline-pool.js';
+// shapeUplink / shapeDownlink are pure and tested; the live microphone,
+// speaker and link live in sim/firmware/audio-link.js and the board runtime.
 
 /** @typedef {import('./power.js').Outcome} Outcome */
 
@@ -53,15 +45,6 @@ export function shapeDownlink(bytes, amp) {
   return /** @type {ArrayBuffer} */ (out.buffer);
 }
 
-/** @param {Int16Array | ArrayBuffer} samples @returns {number} 0..1 RMS */
-function level(samples) {
-  const s = samples instanceof Int16Array ? samples : new Int16Array(samples, 0, samples.byteLength >> 1);
-  if (!s.length) return 0;
-  let sum = 0;
-  for (let i = 0; i < s.length; i++) sum += s[i] * s[i];
-  return Math.sqrt(sum / s.length) / 32768;
-}
-
 /** The speaker's own AudioContext: created/resumed from a real gesture, closed on power off. */
 /** @param {() => AudioContext} [create] */
 export function createBodyAudio(create) {
@@ -82,21 +65,6 @@ export function createBodyAudio(create) {
     },
   };
 }
-
-const REJECTS = {
-  token: 'The brain no longer accepts this character’s token — open the admin page and check the character.',
-  unconfigured: 'This character is not set up yet — open the admin page and finish its setup.',
-  busy: 'Another body is already using this character — pick another character or unplug that body.',
-  origin: 'The brain refused this page’s address — open the simulator from the brain’s own address.',
-};
-
-/** @param {string} reason */
-const rejectMessage = (reason) =>
-  /** @type {Record<string, string>} */ (REJECTS)[reason] ?? `The brain turned this body away (${reason}).`;
-
-// Successfully used microphones remain shared across sessions as before;
-// an abandoned startup never claims the shared pipeline.
-const pipelines = createPipelinePool((echo, signal) => AudioPipeline.start({ echoCancellation: echo, signal }));
 
 /**
  * What the status line says when a layer of the brain failed, in the words of
@@ -137,106 +105,4 @@ export function keepsFault(state) {
  */
 export function adminLink(id) {
   return `/#character=${encodeURIComponent(id)}`;
-}
-
-/**
- * @param {{
- *   token: string, outcome: Outcome, audioContext?: AudioContext,
- *   isCurrent?(): boolean,
- *   signal?: AbortSignal,
- *   onState(s: string): void, onLevel(up: number, down: number): void,
- *   onEnd(msg: string): void, onMicBlocked?(): void,
- *   onLost?(): void, onWelcome?(): void,
- *   onFault?(msg: { part: string, status: number | null, kind: string }): void,
- *   onMove?(msg: any): void, onStop?(): void,
- *   screen?: { model: import('../core/screens.js').Screen, onFrame(img: ImageBitmap): void },
- * }} o
- * onLost: the brain dropped and the link is retrying by itself; onWelcome:
- * the brain took this body in (first time or again after a drop).
- * The microphone is optional: a refused or missing one silences the uplink
- * and leaves the link (and the downlink) running.
- * @returns {Promise<{ stop(): void, sendShake(): void }>}
- */
-export async function startBody(o) {
-  let stopped = false;
-  /** @type {AudioPipeline | null} */ let pipeline = null;
-  /** @type {ReturnType<typeof connectBody> | null} */ let link = null;
-  /** @type {ReturnType<typeof openScreenFeed> | null} */ let feed = null;
-  /** @type {PcmPlayer | null} */ let player = null;
-  const name = `sim-${o.token.slice(0, 8)}`;
-  let up = 0;
-  let down = 0;
-
-  /** The wand was shaken and is still: tell the brain, which draws a card if it is a tarot reader. */
-  const sendShake = () => { if (!stopped) link?.send({ type: 'shake' }); };
-
-  const stop = () => {
-    if (stopped) return;
-    stopped = true;
-    link?.close();
-    feed?.stop();
-    if (pipeline) pipeline.unsubscribe(name);
-    player?.hush();
-  };
-  /** Ends the session for a reason the page should show. */
-  const end = (/** @type {string} */ msg) => { if (!stopped) { stop(); o.onEnd(msg); } };
-  const current = () => !stopped && !o.signal?.aborted && (o.isCurrent?.() ?? true);
-
-  /** @type {Awaited<ReturnType<typeof pipelines.acquire>> | undefined} */
-  let lease;
-  try {
-    lease = await pipelines.acquire(true, current, o.signal);
-  } catch {
-    lease = undefined;
-  }
-  if (!current()) { lease?.cancel(); stop(); return { stop, sendShake }; }
-  pipeline = lease?.pipeline ?? null;
-
-  try {
-    const output = o.audioContext ?? pipeline?.audioContext;
-    if (output) player = new PcmPlayer(output);
-    link = connectBody({
-      url: `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/body`,
-      token: o.token,
-      onWelcome() { if (!stopped) o.onWelcome?.(); },
-      onMessage(msg) {
-        if (msg.type === 'hush') player?.hush();
-        else if (msg.type === 'fault') o.onFault?.(msg);
-        else if (msg.type === 'state') o.onState(msg.state);
-        else if (msg.type === 'move') o.onMove?.(msg);
-        else if (msg.type === 'stop') o.onStop?.();
-      },
-      onAudio(bytes) {
-        const shaped = shapeDownlink(bytes, o.outcome.amp);
-        down = shaped ? level(shaped) : 0;
-        o.onLevel(up, down);
-        if (shaped) player?.play(shaped);
-      },
-      onLost() { if (!stopped) o.onLost?.(); },
-      onReject: (reason) => end(rejectMessage(reason)),
-    });
-
-    // One feed for the bench's screens: the firmware drives one panel, and every
-    // glass of that model shows what it shows (spec §5.5).
-    if (o.screen) feed = openScreenFeed({ token: o.token, model: o.screen.model, onFrame: o.screen.onFrame });
-
-    if (pipeline) {
-      const mic = pipeline;
-      mic.subscribe(name, (frame) => {
-        const shaped = shapeUplink(toInt16(frame), o.outcome.mic);
-        up = level(shaped);
-        o.onLevel(up, down);
-        link?.sendAudio(shaped);
-      });
-      lease?.commit();
-    } else {
-      o.onMicBlocked?.();
-    }
-  } catch (error) {
-    stop();
-    lease?.cancel();
-    throw error;
-  }
-
-  return { stop, sendShake };
 }

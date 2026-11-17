@@ -33,11 +33,17 @@ export function bootMode(intent = {}) {
  *   outcome: Record<string, any>,
  *   profile?: unknown,
  *   brainUrl?: string,
- *   connect: (opts: any) => { close(): void, send(msg: object): void },
+ *   connect: (opts: any) => { close(): void, send(msg: object): void, sendAudio(pcm: Int16Array): void },
  *   openScreen?: (opts: any) => { stop(): void },
  *   onLine(line: string): void,
  *   onLed(mode: string): void,
  *   onDevice?(msg: any): void,
+ *   audio?: {
+ *     attach(send: (pcm: Int16Array) => void): unknown,
+ *     downlink(bytes: ArrayBuffer): void,
+ *     hush?(): void,
+ *     stop?(): void,
+ *   },
  *   now?: () => number,
  * }} o
  */
@@ -50,6 +56,7 @@ export function createBoardRuntime(o) {
   /** @type {ReturnType<typeof o.connect> | null} */ let conn = null;
   /** @type {ReturnType<NonNullable<typeof o.openScreen>> | null} */ let feed = null;
   /** @type {number | null} */ let busySince = null;
+  let micStarted = false;
 
   /** @param {{ blocked?: boolean, pendingFlash?: string | null }} [intent] */
   function mode(intent = {}) {
@@ -60,10 +67,12 @@ export function createBoardRuntime(o) {
     generation += 1;
     for (const timer of timers) clearTimeout(timer);
     timers = [];
+    micStarted = false;
     conn?.close();
     conn = null;
     feed?.stop();
     feed = null;
+    o.audio?.stop?.();
   }
 
   function openLink() {
@@ -82,10 +91,19 @@ export function createBoardRuntime(o) {
       onWelcome: (/** @type {string} */ name) => {
         busySince = null;
         o.onLine(`welcomed as ${name}`);
+        // The link is up first; the microphone is asked for afterwards, so a
+        // refusal cannot keep the body off the brain.
+        if (!micStarted) {
+          micStarted = true;
+          void o.audio?.attach((pcm) => conn?.sendAudio(pcm));
+        }
       },
       onMessage: (/** @type {any} */ msg) => o.onDevice?.(msg),
-      onAudio: () => {},
-      onLost: () => o.onLine(`lost ${dialed}; trying again`),
+      onAudio: (/** @type {ArrayBuffer} */ bytes) => o.audio?.downlink(bytes),
+      onLost: () => {
+        o.audio?.hush?.();
+        o.onLine(`lost ${dialed}; trying again`);
+      },
       onReject: (/** @type {string} */ reason) => {
         o.onLine(`rejected: ${reason} — fix it, then type reboot`);
         o.onLed('REJECTED');
