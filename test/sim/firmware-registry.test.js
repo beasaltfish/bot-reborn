@@ -64,3 +64,13 @@ test('commitCustomFlash writes flashed and keeps draft/settings', () => {
   assert.equal(next.custom.draft, 'new');
   assert.equal(next.settings.token, board.settings.token);
 });
+
+import { EXAMPLES } from '../../sim/firmware/examples.js';
+import { compile } from '../../sim/firmware/lang/index.js';
+
+test('every built-in sketch has an example; only button-led is v1-copyable', () => {
+  for (const id of Object.keys(FIRMWARES).filter((x) => x.startsWith('sketch-'))) assert.ok(EXAMPLES[id]?.source, id);
+  assert.equal(EXAMPLES['sketch-button-led'].v1, true);
+  assert.deepEqual(compile(EXAMPLES['sketch-button-led'].source).errors, []);
+  assert.equal(Object.values(EXAMPLES).filter((e) => e.v1).length, 1);
+});
