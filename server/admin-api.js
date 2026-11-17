@@ -9,6 +9,7 @@ import {
   regenerateToken, deleteCharacter, ready,
 } from './characters.js';
 import { createCheckApi, LAYERS } from './check-api.js';
+import { listFirmwareSources, readFirmwareSource } from './firmware-sources.js';
 
 const MAX_BODY = 64 * 1024;
 
@@ -66,6 +67,22 @@ export function createAdminApi(opts) {
         return send(/** @type {any} */ (err).status ?? 400, { error: /** @type {Error} */ (err).message });
       }
       return check(res, layer, body);
+    }
+    const fw = path.match(/^\/api\/firmware\/sources(?:\/([^/]+))?\/?$/);
+    if (fw) {
+      if (req.method !== 'GET') return send(405, { error: 'method not allowed' });
+      if (fw[1] === undefined) return send(200, { files: listFirmwareSources() });
+      let file;
+      try { file = decodeURIComponent(fw[1]); } catch { return send(403, { error: 'invalid firmware source name' }); }
+      try {
+        const text = readFirmwareSource(file);
+        res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(text);
+        return;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return send(message.includes('invalid') ? 403 : 404, { error: message });
+      }
     }
     const m = path.match(/^\/api\/characters(?:\/([^/]+))?(\/token)?\/?$/);
     if (!m) return send(404, { error: 'no such endpoint' });
