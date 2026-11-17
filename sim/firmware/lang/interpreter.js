@@ -7,6 +7,7 @@ const CONSTANTS = /** @type {Record<string, number>} */ ({ HIGH: 1, LOW: 0, INPU
 const MAX_LINE = 512;
 const MAX_LINES_PER_TICK = 200;
 const MAX_BYTES_PER_TICK = 8192;
+const MAX_CONTENT_BYTES = MAX_BYTES_PER_TICK - 1;
 
 class ReturnSignal {}
 class BudgetSignal {}
@@ -44,6 +45,17 @@ const truthy = (value) => (typeof value === 'string' ? value.length > 0 : Boolea
 /** @param {any} value @returns {string} */
 const asText = (value) => String(value);
 
+/** @param {string} name @param {any[]} args @param {number} count */
+function expectArgs(name, args, count) {
+  if (args.length !== count) throw new Error(`${name} expects ${count} argument${count === 1 ? '' : 's'}`);
+}
+
+/** @param {any} value @param {string} name @param {number} min @param {number} max @returns {number} */
+function integerIn(value, name, min, max) {
+  if (!Number.isInteger(value) || value < min || value > max) throw new Error(`${name} must be an integer ${min}..${max}`);
+  return value;
+}
+
 /**
  * @param {{
  *   program: any,
@@ -68,6 +80,7 @@ export function createMachine({ program, now = () => performance.now(), budgetMs
     atLine: 1,
     bytesTick: 0,
     linesTick: 0,
+    overflowMarked: false,
     /** @type {Generator<any, any, any> | null} */ gen: null,
     /** @type {any} */ ctx: null,
   };
@@ -80,26 +93,49 @@ export function createMachine({ program, now = () => performance.now(), budgetMs
     state.ctx?.pin(`GPIO${pin}`, level);
   }
 
+  /** One marker per tick, and only if it fits inside the byte budget. */
+  function markOverflow(/** @type {number} */ line) {
+    if (state.overflowMarked) return;
+    state.overflowMarked = true;
+    if (state.bytesTick >= MAX_BYTES_PER_TICK) return;
+    state.bytesTick += 1;
+    state.ctx?.log('…');
+    traceRef.current({ line, kind: 'log', text: '…' });
+  }
+
   /** @param {string} text */
   function print(text) {
-    if (state.linesTick >= MAX_LINES_PER_TICK || state.bytesTick >= MAX_BYTES_PER_TICK) return;
+    if (state.linesTick >= MAX_LINES_PER_TICK || state.bytesTick >= MAX_CONTENT_BYTES) return;
     state.line += text;
     if (state.line.length > MAX_LINE) state.line = `${state.line.slice(0, MAX_LINE - 1)}…`;
   }
 
-  /** @param {string} text */
-  function println(text) {
+  /** @param {string} text @param {number} sourceLine */
+  function println(text, sourceLine) {
+    if (state.linesTick >= MAX_LINES_PER_TICK || state.bytesTick >= MAX_CONTENT_BYTES) {
+      state.line = '';
+      markOverflow(sourceLine);
+      return;
+    }
     print(text);
-    const line = state.line;
+    let output = state.line;
     state.line = '';
-    if (state.linesTick >= MAX_LINES_PER_TICK || state.bytesTick >= MAX_BYTES_PER_TICK) {
-      traceRef.current({ kind: 'log', text: '…' });
+    const remaining = MAX_CONTENT_BYTES - state.bytesTick;
+    if (output.length > remaining) {
+      if (remaining > 0) {
+        output = `${output.slice(0, remaining - 1)}…`;
+        state.linesTick += 1;
+        state.bytesTick += output.length;
+        state.ctx?.log(output);
+        traceRef.current({ line: sourceLine, kind: 'log', text: output });
+      }
+      markOverflow(sourceLine);
       return;
     }
     state.linesTick += 1;
-    state.bytesTick += line.length;
-    state.ctx?.log(line);
-    traceRef.current({ kind: 'log', text: line });
+    state.bytesTick += output.length;
+    state.ctx?.log(output);
+    traceRef.current({ line: sourceLine, kind: 'log', text: output });
   }
 
   /** @param {any} expr @param {Env} env @param {{ trace: any }} local @returns {any} */
@@ -140,29 +176,48 @@ export function createMachine({ program, now = () => performance.now(), budgetMs
       case 'Call': {
         const args = expr.args.map((/** @type {any} */ arg) => evaluate(arg, env, local));
         if (expr.object === 'Serial') {
-          if (expr.name === 'begin') return null;
-          if (expr.name === 'print') { print(args.map(asText).join('')); traceRef.current({ line: expr.line, kind: 'print' }); return null; }
-          if (expr.name === 'println') { println(args.map(asText).join('')); return null; }
+          if (expr.name === 'begin') {
+            expectArgs('Serial.begin', args, 1);
+            if (!Number.isInteger(args[0]) || args[0] <= 0) throw new Error('Serial.begin baud must be a positive integer');
+            return null;
+          }
+          if (expr.name === 'print' || expr.name === 'println') {
+            expectArgs(`Serial.${expr.name}`, args, 1);
+            if (expr.name === 'print') { print(asText(args[0])); traceRef.current({ line: expr.line, kind: 'print' }); }
+            else println(asText(args[0]), expr.line);
+            return null;
+          }
           throw new Error(`unknown Serial.${expr.name}`);
         }
         switch (expr.name) {
-          case 'pinMode': return null;
+          case 'pinMode': {
+            expectArgs('pinMode', args, 2);
+            integerIn(args[0], 'pin', 0, 21);
+            if (![0, 1, 2].includes(Number(args[1]))) throw new Error('pinMode mode must be INPUT, OUTPUT or INPUT_PULLUP');
+            return null;
+          }
           case 'digitalWrite': {
-            const pin = Number(args[0]);
-            const level = Number(args[1]) ? 'high' : 'low';
+            expectArgs('digitalWrite', args, 2);
+            const pin = integerIn(args[0], 'pin', 0, 21);
+            const raw = Number(args[1]);
+            if (raw !== 0 && raw !== 1) throw new Error('digitalWrite level must be HIGH or LOW');
+            const level = raw ? 'high' : 'low';
             pinLevel(pin, level);
             state.atLine = expr.line;
             traceRef.current({ line: expr.line, kind: 'statement', text: `digitalWrite(${pin}, ${level === 'high' ? 'HIGH' : 'LOW'}) \u2192 GPIO${pin}`, writes: [{ target: `GPIO${pin}`, level }] });
             return null;
           }
           case 'digitalRead': {
-            const pin = Number(args[0]);
+            expectArgs('digitalRead', args, 1);
+            const pin = integerIn(args[0], 'pin', 0, 21);
             const level = state.ctx?.read(pin) === 'LOW' ? 0 : 1;
             state.atLine = expr.line;
             traceRef.current({ line: expr.line, kind: 'statement', text: `digitalRead(${pin}) \u2192 ${level ? 'HIGH' : 'LOW'}`, reads: [{ pin, level: level ? 'HIGH' : 'LOW' }] });
             return level;
           }
-          case 'millis': return state.simTime;
+          case 'millis':
+            expectArgs('millis', args, 0);
+            return state.simTime;
           default: throw new Error(`unknown function ${expr.name}`);
         }
       }
@@ -207,8 +262,8 @@ export function createMachine({ program, now = () => performance.now(), budgetMs
         case 'ExprStmt':
           if (statement.expr.type !== 'Call') record({ kind: 'statement' });
           if (statement.expr.type === 'Call' && statement.expr.name === 'delay' && !statement.expr.object) {
-            const ms = Number(evaluate(statement.expr.args[0], env, { trace: traceRef }));
-            if (!Number.isFinite(ms) || ms < 0 || ms > 60000) throw new Error('delay must be 0..60000 ms');
+            expectArgs('delay', statement.expr.args, 1);
+            const ms = integerIn(evaluate(statement.expr.args[0], env, { trace: traceRef }), 'delay', 0, 60000);
             record({ kind: 'statement', text: `delay(${ms})` });
             yield { waiting: ms };
             return;
@@ -284,6 +339,7 @@ export function createMachine({ program, now = () => performance.now(), budgetMs
       state.ctx = ctx;
       state.bytesTick = 0;
       state.linesTick = 0;
+      state.overflowMarked = false;
       /** @type {any[]} */ const records = [];
       traceRef.current = (entry) => records.push({ t: state.simTime, tick: state.tick, ...entry });
       records.push({ t: state.simTime, tick: state.tick, kind: 'tick' });

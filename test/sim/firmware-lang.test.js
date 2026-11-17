@@ -183,6 +183,7 @@ test('print is a partial line; println is the record the console shows', () => {
   assert.ok(records.some((r) => r.kind === 'print'));
   assert.equal(records.filter((r) => r.kind === 'log').length, 1);
   assert.equal(records.find((r) => r.kind === 'log')?.text, 'abc');
+  assert.equal(records.find((r) => r.kind === 'log')?.line, 1);
 });
 
 test('a watchdog stop names the line it was stuck on', () => {
@@ -201,4 +202,54 @@ test('a runtime error points at the statement that failed', () => {
   m.tick(ctx); // setup
   const records = m.tick(ctx);
   assert.equal(records.find((r) => r.kind === 'error')?.line, 3);
+});
+
+/** Run one loop tick and return the first machine error, if any. @param {string} source */
+function firstError(source) {
+  const { program, errors } = compile(source);
+  assert.deepEqual(errors, []);
+  const ctx = fakeCtx();
+  const m = createMachine({ program }); m.start();
+  m.tick(ctx); // setup
+  const records = m.tick(ctx);
+  return records.find((r) => r.kind === 'error');
+}
+
+test('built-ins reject out-of-range pins and non-integer delays', () => {
+  assert.match(firstError('void loop(){ digitalWrite(99, HIGH); }')?.text ?? '', /pin must be an integer 0\.\.21/);
+  assert.match(firstError('void loop(){ digitalRead(-1); }')?.text ?? '', /pin must be an integer 0\.\.21/);
+  assert.match(firstError('void loop(){ digitalWrite(5.5, HIGH); }')?.text ?? '', /pin must be an integer 0\.\.21/);
+  assert.match(firstError('void loop(){ delay(0.5); }')?.text ?? '', /delay must be an integer 0\.\.60000/);
+  assert.match(firstError('void loop(){ delay(60001); }')?.text ?? '', /delay must be an integer 0\.\.60000/);
+});
+
+test('built-ins reject wrong arity, modes and levels', () => {
+  assert.match(firstError('void loop(){ digitalWrite(5); }')?.text ?? '', /digitalWrite expects 2 arguments/);
+  assert.match(firstError('void loop(){ delay(); }')?.text ?? '', /delay expects 1 argument/);
+  assert.match(firstError('void loop(){ pinMode(5, 9); }')?.text ?? '', /pinMode mode/);
+  assert.match(firstError('void loop(){ digitalWrite(5, 9); }')?.text ?? '', /digitalWrite level/);
+  assert.match(firstError('void loop(){ millis(1); }')?.text ?? '', /millis expects 0 arguments/);
+  assert.match(firstError('void loop(){ Serial.begin(); }')?.text ?? '', /Serial\.begin expects 1 argument/);
+});
+
+test('one tick emits at most 8 KB, with a single truncation marker', () => {
+  const { program } = compile(`void loop(){ for (int i = 0; i < 20; i = i + 1) { Serial.println("${'x'.repeat(500)}"); } }`);
+  const ctx = fakeCtx();
+  const m = createMachine({ program, now: advancingClock(0.001), budgetMs: 1000 }); m.start();
+  m.tick(ctx); // setup
+  m.tick(ctx);
+  const text = ctx.logs.join('');
+  assert.ok(text.length <= 8192, `emitted ${text.length}`);
+  assert.equal(text.length, 8192);
+  assert.equal(ctx.logs.filter((line) => line === '…').length, 1);
+});
+
+test('one tick emits at most 200 lines plus one marker', () => {
+  const { program } = compile('void loop(){ for (int i = 0; i < 250; i = i + 1) { Serial.println("x"); } }');
+  const ctx = fakeCtx();
+  const m = createMachine({ program, now: advancingClock(0.001), budgetMs: 1000 }); m.start();
+  m.tick(ctx); // setup
+  m.tick(ctx);
+  assert.ok(ctx.logs.length <= 201, `emitted ${ctx.logs.length} lines`);
+  assert.equal(ctx.logs.filter((line) => line === '…').length, 1);
 });

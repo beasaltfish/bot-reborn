@@ -23,6 +23,7 @@ const linesOf = (source) => (source ? source.split('\n') : []);
  *   onDownload?: (selection: any) => void,
  *   onCopyExample?: (selection: any) => void,
  *   onFlash?: (selection: any) => Promise<{ ok: boolean, errors?: any[] }> | void,
+ *   onTracePick?: (record: any) => void,
  *   scheduleFrame?: (fn: () => void) => void,
  * }} o
  */
@@ -130,6 +131,7 @@ export function createFirmwareStudio(o) {
   draftTab.addEventListener('click', () => { state.view = 'draft'; render(); });
   draftArea.addEventListener('input', () => {
     state.view = 'draft';
+    draftArea.rows = Math.max(12, draftArea.value.split('\n').length);
     o.onDraft?.(draftArea.value);
   });
   download.addEventListener('click', () => o.onDownload?.(state.selection));
@@ -182,6 +184,7 @@ export function createFirmwareStudio(o) {
         state.view = 'run';
         state.highlight = record.line ?? 0;
         render();
+        o.onTracePick?.(record);
       });
       timeline.append(row);
     }
@@ -221,6 +224,7 @@ export function createFirmwareStudio(o) {
     const codeSource = isCustom ? (state.view === 'draft' ? draft : flashed) : (state.source ?? '');
     if (runPre.textContent !== codeSource) runPre.textContent = codeSource;
     if (draftArea.value !== draft) draftArea.value = draft;
+    draftArea.rows = Math.max(12, linesOf(draft).length);
     const runError = state.runError;
     const gutterErrors = isCustom
       ? (state.view === 'run'
@@ -281,6 +285,13 @@ export function createFirmwareStudio(o) {
     },
     /** @param {boolean} on */
     setBusy(on) { flash.disabled = on || Boolean(state.errors?.length); },
+    /** A new boot starts a new session: no old rows may point into new source. */
+    resetTrace() {
+      state.traces = [];
+      state.rendered = 0;
+      state.highlight = 0;
+      timeline.replaceChildren();
+    },
     /** @param {{ interpreterMs?: number, uiMs?: number }} next */
     setTiming(next) {
       state.timings = { ...(state.timings ?? {}), ...next };

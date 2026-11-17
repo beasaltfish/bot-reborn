@@ -379,6 +379,7 @@ const studio = createFirmwareStudio({
   onDownload: (selection) => void downloadStudioSource(selection),
   onCopyExample: (selection) => copyStudioExample(selection),
   onFlash: (selection) => flashStudio(selection),
+  onTracePick: () => jumpToRunningSource(),
 });
 document.body.append(studio.element);
 const studioTab = document.createElement('button');
@@ -425,6 +426,16 @@ function selectionForFirmware(firmware) {
   return { kind: 'body' };
 }
 
+/** A timeline row belongs to the firmware the board runs, so follow it there. */
+function jumpToRunningSource() {
+  const next = selectionForFirmware(bench.board.firmware);
+  if (next.kind === studioSelection.kind && next.id === studioSelection.id) return;
+  studioSelection = next;
+  studioErrors = [];
+  void loadStudioSource(next);
+  updateStudio();
+}
+
 /** @param {{ kind: string, id?: string }} selection */
 async function loadStudioSource(selection) {
   studioSource = '';
@@ -439,15 +450,19 @@ async function loadStudioSource(selection) {
   updateStudio();
 }
 
-/** @param {string} source */
+/**
+ * The draft is live the instant it is typed, so download and flash never use a
+ * stale value; only writing it to storage waits for the debounce.
+ * @param {string} source
+ */
 function saveStudioDraft(source) {
   clearTimeout(studioDraftTimer);
+  const custom = bench.board.custom ?? { name: 'my-firmware', draft: '', flashed: '', updatedAt: 0 };
+  bench = { ...bench, board: { ...bench.board, custom: { ...custom, draft: source, updatedAt: Date.now() } } };
+  studioErrors = compile(source).errors;
+  updateStudio();
   studioDraftTimer = setTimeout(() => {
-    const custom = bench.board.custom ?? { name: 'my-firmware', draft: '', flashed: '', updatedAt: 0 };
-    bench = { ...bench, board: { ...bench.board, custom: { ...custom, draft: source, updatedAt: Date.now() } } };
-    studioErrors = compile(source).errors;
-    setBench(bench);
-    updateStudio();
+    try { write(BENCH_KEY, serialize(bench)); } catch { /* the in-memory draft is still current */ }
   }, 250);
 }
 
@@ -734,6 +749,7 @@ function stopBoard() {
   boardRuntime?.stop();
   boardRuntime = null;
   studioRunError = null;
+  studio.resetTrace();
   bodyAudioLink?.stop();
   bodyAudioLink = null;
   clearInterval(wandTimer);

@@ -300,3 +300,47 @@ test('a parse error marks the draft gutter, not the running one', () => {
     assert.equal(spans[1].classList.contains('error'), true);
   } finally { restore(); }
 });
+
+test('a new session clears rows, pending work and highlight', () => {
+  const frames = frameScheduler();
+  const { studio, restore } = setup({ scheduleFrame: frames.schedule });
+  try {
+    studio.update(state({ board: { firmware: 'custom' }, selection: { kind: 'custom' }, custom: custom({ draft: 'x', flashed: 'x' }) }));
+    studio.pushTrace([{ tick: 1, line: 1, kind: 'statement', text: 'old' }]);
+    frames.flush();
+    assert.equal(studio.element.querySelectorAll('[data-role=trace]').length, 1);
+    studio.resetTrace();
+    assert.equal(studio.element.querySelectorAll('[data-role=trace]').length, 0);
+    assert.equal(studio.state.rendered, 0);
+    assert.equal(studio.state.highlight, 0);
+    studio.pushTrace([{ tick: 1, line: 1, kind: 'statement', text: 'new' }]);
+    frames.flush();
+    const rows = [...studio.element.querySelectorAll('[data-role=trace]')].map((r) => r.textContent);
+    assert.deepEqual(rows, ['1 new']);
+  } finally { restore(); }
+});
+
+test('clicking a timeline row asks main to follow the running source', () => {
+  const frames = frameScheduler();
+  /** @type {any[]} */ const picked = [];
+  const { studio, restore } = setup({ scheduleFrame: frames.schedule, onTracePick: (/** @type {any} */ r) => picked.push(r) });
+  try {
+    studio.update(state({ board: { firmware: 'custom' }, selection: { kind: 'body' } }));
+    studio.pushTrace([{ tick: 1, line: 4, kind: 'statement', text: 'x' }]);
+    frames.flush();
+    /** @type {any} */ (studio.element.querySelector('[data-role=trace]')).click();
+    assert.equal(picked[0].line, 4);
+    assert.equal(studio.element.dataset.view, 'run');
+  } finally { restore(); }
+});
+
+test('a long draft grows the textarea so line numbers scroll with the code', () => {
+  const { studio, restore } = setup();
+  try {
+    const long = Array.from({ length: 60 }, (_, i) => `int v${i} = ${i};`).join('\n');
+    studio.update(state({ board: { firmware: 'custom' }, selection: { kind: 'custom' }, custom: custom({ draft: long, flashed: long }), view: 'draft' }));
+    const area = /** @type {HTMLTextAreaElement} */ (studio.element.querySelector('[data-role=draft]'));
+    assert.equal(area.rows, 60);
+    assert.equal(studio.element.querySelectorAll('[data-role=line-numbers] span').length, 60);
+  } finally { restore(); }
+});
