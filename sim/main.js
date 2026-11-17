@@ -104,6 +104,9 @@ const runtime = { servo: {}, motor: {}, strip: {}, display: {}, buttons: {} };
 /** @type {Record<string, 'high'|'low'|'high-z'>} */ let gpioOutputs = {};
 /** A sonar measurement a sketch latched, until it turns it off or the board stops. */
 /** @type {{ measure: boolean, distanceCm: number } | null} */ let sonar = null;
+/** The board runtime: boot events, the brain link and the screen feed. */
+/** @type {ReturnType<typeof createBoardRuntime> | null} */
+let boardRuntime = null;
 /** @type {import('./projects.js').Project | null} */
 /** @type {import('./plan.js').Plan|import('./projects.js').Project|null} */
 let activeProject = null;
@@ -130,7 +133,7 @@ const panels = createPanels({
     return changed;
   },
   learn: (part) => {
-    if (!deviceByPart(part)) return panels.status('Unknown device; select one from the catalogue.');
+    if (!deviceByPart(part)) return panels.status(simText(document.documentElement.lang, 'board.unknownDevice'));
     location.href = `./lab.html?part=${encodeURIComponent(part)}`;
   },
   projectState: (id, options) => {
@@ -273,7 +276,7 @@ function setBench(b) {
   hands.refreshHighlights();
   panels.refreshProject();
   for (const id of result.burns) effects.smoke(id);
-  if (result.burns.length) panels.status('LED current exceeded its rating; replace the burnt LED and check the resistance or current limit.');
+  if (result.burns.length) panels.status(simText(document.documentElement.lang, 'led.burnt'));
   usb.refresh();
   effects.refresh();
 }
@@ -407,9 +410,6 @@ addEventListener('blur', unpeek);
 
 // ---- Power --------------------------------------------------------------
 
-/** The board runtime: boot events, the brain link and the screen feed. */
-/** @type {ReturnType<typeof createBoardRuntime> | null} */
-let boardRuntime = null;
 const bodyAudio = createBodyAudio();
 /** The microphone uplink and speaker downlink over the board's own link. */
 /** @type {ReturnType<typeof createBodyAudioLink> | null} */ let bodyAudioLink = null;
@@ -432,6 +432,8 @@ let apiFor = '';
  */
 let line = { end: null, lost: false, api: null, fault: null, mic: null, sound: false, state: null, who: null, ending: null };
 function showLine() {
+  // The user is answering a setup question; boot chatter must not take it away.
+  if (offerLocked) return;
   if (line.end) return panels.status(line.end);
   if (line.lost) return panels.status(simText(document.documentElement.lang, 'status.reconnecting'));
   if (line.api) return panels.status(line.api, { href: adminLink(apiFor), label: 'open' });
@@ -466,6 +468,8 @@ let provisioning = null;
 /** A setup prompt held back until a Demo's own steps stop writing the line. */
 /** @type {(() => void) | null} */
 let offerOnEnd = null;
+/** A setup question owns the status line until it is answered. */
+let offerLocked = false;
 /**
  * What the recipe now being played needs of the character and what to say to
  * try the result. Read once by the plug-in the run itself causes, so a plug
@@ -483,10 +487,11 @@ let runner = null;
  */
 function offerBack() {
   if (running || !keptBench(store())) return false;
-  panels.status('This bench was built for you.', {
+  const lang = document.documentElement.lang;
+  panels.status(simText(lang, 'board.builtForYou'), {
     actions: [
-      { label: 'Back to my bench', run: backToMine },
-      { label: 'Keep this one', run: keepThisOne },
+      { label: simText(lang, 'board.backToMine'), run: backToMine },
+      { label: simText(lang, 'board.keepThisOne'), run: keepThisOne },
     ],
   });
   return true;
@@ -533,7 +538,7 @@ function driveMove(/** @type {{ drive: string, steer: string, ms: number }} */ m
   if (!powered) return;
   const { drive, steer } = msg;
   if (!Object.keys(powered.toys).length) {
-    return panels.status('No toy robot on the bench — add one from Parts');
+    return panels.status(simText(document.documentElement.lang, 'toy.none'));
   }
   const levels = motorLevels(drive, steer);
   for (const [id, t] of movingToys()) {
@@ -541,7 +546,7 @@ function driveMove(/** @type {{ drive: string, steer: string, ms: number }} */ m
     if (action.wheels === 'short' || action.steer === 'short') {
       setBench({ ...bench, placed: bench.placed.map((p) => (p.id === id ? { ...p, burnt: true } : p)) });
       effects.smoke(id);
-      panels.status('A driver on the toy shorted and burnt — drag it to the bin for a fresh one');
+      panels.status(simText(document.documentElement.lang, 'toy.driverBurnt'));
       continue;
     }
     delete blocks[id];
@@ -591,6 +596,7 @@ function stopUnsafeSession() {
   provisioning?.cancel();
   provisioning = null;
   offerOnEnd = null;
+  offerLocked = false;
   bodyAudio.close();
   panels.closePicker();
   effects.setAlive(false);
@@ -660,12 +666,8 @@ async function plugIn(meta = {}) {
     setBench(park(bench, id, { x: pose.x, z: pose.z }, pose.heading));
     if (!blocked || blocks[id] === blocked) return;
     blocks[id] = blocked;
-    panels.status(/** @type {Record<string, string>} */ ({
-      hit: 'It\'s up against something — say "back up"',
-      edge: 'That\'s the edge of the mat',
-      taut: 'The wires are taut — the real build straps the board to the robot',
-      stuck: 'Move the toy off what it is standing on first',
-    })[blocked] ?? null);
+    const key = /** @type {Record<string, string>} */ ({ hit: 'toy.hit', edge: 'toy.edge', taut: 'toy.taut', stuck: 'toy.stuck' })[blocked];
+    panels.status(key ? simText(document.documentElement.lang, key) : null);
   });
   // A pad wired to a supply is already driving the moment USB goes in.
   for (const [id, t] of initialDriveActions(bench, merged)) world.drive(id, t.action);
@@ -772,6 +774,8 @@ async function plugIn(meta = {}) {
         }).catch(() => {});
       } else if (text.startsWith('rejected:')) {
         provisioning?.gaveUp();
+        // The brain said no for good; the status line says the same as the console.
+        line.fault = text;
       } else if (text.startsWith('lost ')) {
         line.lost = true;
       }
@@ -891,6 +895,7 @@ async function maybeProvision(mine) {
   /** @param {boolean} replaceScreen */
   const begin = (replaceScreen) => {
     if (mine !== plugs) return;
+    offerLocked = false;
     const steps = provisionSteps(plan, bench.board.settings, { token, replaceScreen });
     if (!steps.commands.length) {
       panels.status(simText(lang, 'board.provisionSkipped'));
@@ -912,12 +917,21 @@ async function maybeProvision(mine) {
 
   if (mismatch) {
     const screen = /** @type {string} */ (provisionSteps(plan, bench.board.settings, { token }).screen);
-    const ask = () => panels.status(simText(lang, 'board.provisionMismatch', { current: bench.board.settings.screen, wanted: screen }), {
-      actions: [
-        { label: simText(lang, 'board.screenReplace'), run: () => begin(true) },
-        { label: simText(lang, 'board.screenKeep'), run: () => { if (!missing.length) panels.status(simText(lang, 'board.provisionSkipped')); else begin(false); } },
-      ],
-    });
+    const ask = () => {
+      offerLocked = true;
+      panels.status(simText(lang, 'board.provisionMismatch', { current: bench.board.settings.screen, wanted: screen }), {
+        actions: [
+          { label: simText(lang, 'board.screenReplace'), run: () => begin(true) },
+          {
+            label: simText(lang, 'board.screenKeep'),
+            run: () => {
+              offerLocked = false;
+              if (!missing.length) panels.status(simText(lang, 'board.provisionSkipped')); else begin(false);
+            },
+          },
+        ],
+      });
+    };
     if (activeProject && (planMode === 'watch' || planMode === 'step') && running) offerOnEnd = ask;
     else ask();
     return;
@@ -933,12 +947,18 @@ async function maybeProvision(mine) {
     begin(true);
     return;
   }
-  const offer = () => panels.status(simText(lang, 'board.provisionNeeded', { what }), {
-    actions: [
-      { label: simText(lang, 'board.provisionType'), run: () => begin(true) },
-      { label: simText(lang, 'board.provisionSkip'), run: () => panels.status(simText(lang, 'board.provisionSkipped')) },
-    ],
-  });
+  const offer = () => {
+    offerLocked = true;
+    panels.status(simText(lang, 'board.provisionNeeded', { what }), {
+      actions: [
+        { label: simText(lang, 'board.provisionType'), run: () => begin(true) },
+        {
+          label: simText(lang, 'board.provisionSkip'),
+          run: () => { offerLocked = false; panels.status(simText(lang, 'board.provisionSkipped')); },
+        },
+      ],
+    });
+  };
   // Demo's own steps keep writing the status line; the offer waits its turn.
   if (activeProject && (planMode === 'watch' || planMode === 'step') && running) offerOnEnd = offer;
   else offer();
@@ -957,6 +977,7 @@ function unplug() {
   provisioning?.cancel();
   provisioning = null;
   offerOnEnd = null;
+  offerLocked = false;
   bodyAudio.close();
   serial.show(false);
   panels.closePicker();
@@ -1019,6 +1040,7 @@ export function startRun(recipeId, screenId, mode, hooks = {}, wand = false, spe
   planMode = mode === 'step' ? 'step' : 'watch';
   provisionedFor = null;
   provisioning = null;
+  offerLocked = false;
   panels.status(null);
   if (usb.plugged) {
     usb.pullOut();
@@ -1071,6 +1093,7 @@ export function startPlan(planId, options = {}, mode = 'build', hooks = {}, spee
   planMode = mode === 'build' ? 'build' : mode === 'step' ? 'step' : 'watch';
   provisionedFor = null;
   provisioning = null;
+  offerLocked = false;
   panels.status(null);
   if (usb.plugged) {
     usb.pullOut();
