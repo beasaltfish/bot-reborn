@@ -71,6 +71,7 @@ const FAULT_TEXT = {
   'source-short': 'The independent source terminals are shorted; disconnect the source and separate its positive and negative connections.',
   'led-reversed': 'The LED is connected in reverse; connect its anode towards the positive supply and its cathode towards the negative return.',
   'led-overcurrent': 'The modeled LED current exceeds its rating and may damage it; disconnect power and use appropriate current limiting.',
+  'gpio-overcurrent': 'This GPIO pin would have to source more current than its rating; disconnect power, raise the series resistance, or drive the load with a transistor.',
   'led-burnt': 'This LED is marked as burnt; replace it and check the circuit and current limit before powering it again.',
   'led-current-limited': 'The DC supply is limiting current in this LED circuit; check the current limit and component ratings.',
   'gpio-overvoltage-risk': 'The external source is set above the board’s nominal GPIO logic voltage; the pin may be exposed to excessive voltage. Disconnect power and use a suitable level shifter or lower voltage.',

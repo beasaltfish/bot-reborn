@@ -25,3 +25,20 @@ test('low and high-z leave a high-side LED dark', () => {
 test('over-current is diagnosed, not assumed safe', () => {
   assert.equal(evaluateGpioLed(highSide(10), 'led', { GPIO5: 'high' }).state, 'overcurrent');
 });
+
+import { evaluateBench } from '../../sim/devices/evaluate.js';
+
+test('the evaluated bench lights a GPIO LED and never assumes a dark one is safe', () => {
+  const bench = { ...highSide(), usb: true };
+  const on = evaluateBench(bench, { gpioOutputs: { GPIO5: 'high' } }).engineering;
+  assert.equal(on.leds.led.state, 'on');
+  const off = evaluateBench(bench, { gpioOutputs: { GPIO5: 'low' } }).engineering;
+  assert.equal(off.leds.led.state, 'off');
+});
+
+test('a GPIO overcurrent is its own diagnosis and burns the LED', () => {
+  const bench = { ...highSide(10), usb: true };
+  const result = evaluateBench(bench, { gpioOutputs: { GPIO5: 'high' } });
+  assert.ok(result.engineering.faults.some((f) => f.code === 'gpio-overcurrent' && f.instances.includes('led')));
+  assert.ok(result.burns.includes('led'));
+});

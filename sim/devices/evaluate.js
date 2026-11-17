@@ -1,5 +1,5 @@
 import { evaluateElectrical } from '../electrical/evaluate.js';
-import { evaluateLedBench } from '../electrical/led-bench.js';
+import { evaluateGpioLed, evaluateLedBench } from '../electrical/led-bench.js';
 import { dcSourceSafety } from '../electrical/dc-source-safety.js';
 import { bme280PullupSafety } from '../electrical/bme280-pullup-safety.js';
 import { boardGpioSafety } from '../electrical/board-gpio-safety.js';
@@ -16,7 +16,7 @@ import { DEVICES } from './catalog.js';
 import { PROFILES, checkResources } from './profiles.js';
 import { ownershipIssues } from '../firmware/ownership.js';
 
-/** @typedef {{ profile?: import('./profiles.js').Profile, mode?: import('../electrical/supply.js').OperatingMode, stimuli?: object, devices?: Record<string, any>, ownership?: Record<string, 'board'|'circuit'|'unknown'>, deviceStates?: Record<string, string>, firmware?: any }} Options */
+/** @typedef {{ profile?: import('./profiles.js').Profile, mode?: import('../electrical/supply.js').OperatingMode, stimuli?: object, devices?: Record<string, any>, ownership?: Record<string, 'board'|'circuit'|'unknown'>, deviceStates?: Record<string, string>, gpioOutputs?: Record<string, 'high'|'low'|'high-z'>, firmware?: any }} Options */
 
 /** Deduplicate global findings by code and affected instances. */
 /** @param {{code:string, instances:string[], points:string[], origin?:string}[]} faults */
@@ -38,7 +38,7 @@ export function uniqueFaults(faults) {
  * @param {import('../bench.js').Bench} bench
  * @param {Options} [options]
  */
-export function evaluateDevices(bench, { profile = PROFILES[0], mode = 'idle', stimuli, devices = DEVICES, ownership = {}, deviceStates = {}, firmware } = {}) {
+export function evaluateDevices(bench, { profile = PROFILES[0], mode = 'idle', stimuli, devices = DEVICES, ownership = {}, deviceStates = {}, gpioOutputs = {}, firmware } = {}) {
   const electrical = evaluateElectrical(bench, { profile, mode, stimuli, devices });
   const resources = checkResources(bench, profile, devices, { ownership, drivers: firmware?.drivers }).filter(f => {
     if (f.code !== 'spi-chip-select-conflict' || f.instances.length !== 2) return true;
@@ -49,9 +49,15 @@ export function evaluateDevices(bench, { profile = PROFILES[0], mode = 'idle', s
   });
   // Keep the bounded LED experiment visible in the shared diagnosis without
   // pretending the generic supply solver supports arbitrary LED networks.
+  // A GPIO level is a modeled source/sink, so the same LED model covers both;
+  // when the pin is not driving the LED, the DC-source model answers.
   const ledResults = devices['led-5mm'] === DEVICES['led-5mm'] ? bench.placed
     .filter(p => p.part === 'led-5mm')
-    .map(p => ({ id: p.id, outcome: evaluateLedBench(bench, p.id) })) : [];
+    .map(p => {
+      const driven = evaluateGpioLed(bench, p.id, gpioOutputs, profile);
+      const fromGpio = driven.state !== 'off';
+      return { id: p.id, fromGpio, outcome: fromGpio ? driven : evaluateLedBench(bench, p.id) };
+    }) : [];
   /** @type {Record<string, {code:string, severity:import('../electrical/supply.js').ElectricalFault['severity']}>} */
   const ledCodes = {
     unsupported: { code: 'unsupported-electrical-network', severity: 'error' },
@@ -60,7 +66,10 @@ export function evaluateDevices(bench, { profile = PROFILES[0], mode = 'idle', s
     burnt: { code: 'led-burnt', severity: 'error' },
     limited: { code: 'led-current-limited', severity: 'info' },
   };
-  const ledFaults = ledResults.flatMap(({ id, outcome }) => {
+  const ledFaults = ledResults.flatMap(({ id, outcome, fromGpio }) => {
+    if (fromGpio && outcome.state === 'overcurrent') {
+      return [{ code: 'gpio-overcurrent', severity: /** @type {const} */ ('destructive'), instances: [id], points: [`${id}:A`, `${id}:K`], values: { currentMa: outcome.currentMa } }];
+    }
     const diagnostic = ledCodes[outcome.state];
     const values = outcome.state === 'overcurrent' || outcome.state === 'limited' ? { currentMa: outcome.currentMa } : {};
     return diagnostic ? [{ ...diagnostic, instances: [id], points: [`${id}:A`, `${id}:K`], values }] : [];
@@ -110,6 +119,7 @@ export function evaluateDevices(bench, { profile = PROFILES[0], mode = 'idle', s
   }));
   return {
     electrical, resources, parts, faults, burns, deviceStates, ownership,
+    leds: Object.fromEntries(ledResults.map(({ id, outcome, fromGpio }) => [id, { ...outcome, source: fromGpio ? 'gpio' : 'supply' }])),
     bme280: gate(bme280),
     digital: gate(digital.parts),
     gpio: digital.gpio,

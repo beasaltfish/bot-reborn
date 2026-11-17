@@ -44,3 +44,45 @@ test('the real distance-reader wiring has no distance', () => {
   const sonar = addPart(bench, 'hc-sr04', { x: 20, z: 40 }).bench;
   assert.equal(evaluateBench(sonar).engineering.digital.sonar?.distanceCm ?? null, null);
 });
+
+import { createSketchContext } from '../../sim/firmware/sketch-context.js';
+
+test('a tick writes pins, measurements and device commands through one context', () => {
+  const bench = buttonBench();
+  const evaluation = evaluateBench(bench).engineering;
+  /** @type {Record<string, Record<string, any>>} */
+  const runtime = { servo: {}, motor: {}, strip: {}, display: {}, buttons: {} };
+  const pins = /** @type {[string, string][]} */ ([]);
+  const measures = /** @type {[string, boolean][]} */ ([]);
+  const ctx = createSketchContext({
+    bench, evaluation, deviceStates: { btn: 'active' }, runtime,
+    onPin: (pin, level) => pins.push([pin, level]),
+    onMeasure: (id, on) => measures.push([id, on]),
+  });
+  assert.equal(ctx.parts.btn.kind, 'button');
+  ctx.pin('GPIO5', 'high');
+  ctx.pin('GPIO5', { pwm: 0.5 });
+  ctx.measure('sonar');
+  ctx.measure('sonar', false);
+  ctx.device('display', 'oled', { lines: ['T 22.0 C'] });
+  ctx.device('servo', 'servo', { angle: 90 });
+  ctx.device('strip', 'strip', { pixels: [[0, 160, 40]] });
+  assert.deepEqual(pins, [['GPIO5', 'high'], ['GPIO5', 'high-z']]);
+  assert.deepEqual(measures, [['sonar', true], ['sonar', false]]);
+  assert.deepEqual(runtime.display.oled, { lines: ['T 22.0 C'] });
+  assert.deepEqual(runtime.servo.servo, { angle: 90 });
+  assert.deepEqual(runtime.strip.strip, { pixels: [[0, 160, 40]] });
+});
+
+test('a latched measurement keeps the reading for the next evaluations', () => {
+  const bench = buttonBench();
+  const sonar = addPart(bench, 'hc-sr04', { x: 20, z: 40 }).bench;
+  const wired = { ...addWire(addWire(addWire(addWire(addWire(sonar, 'sonar:VCC', 'esp:3V3', 'red'), 'sonar:GND', 'esp:GND', 'black'), 'sonar:TRIG', 'esp:GPIO6', 'green'), 'sonar:ECHO', 'esp:GPIO7', 'green'), 'sonar:TRIG', 'esp:GPIO6', 'green'), usb: true };
+  const stimuli = { sonar: measureSonar({}, true, 42).sonar };
+  const first = evaluateBench(wired, { stimuli }).engineering.digital.sonar;
+  const second = evaluateBench(wired, { stimuli }).engineering.digital.sonar;
+  assert.equal(first.distanceCm, 42);
+  assert.equal(second.distanceCm, 42);
+  const off = evaluateBench(wired, { stimuli: { sonar: { measure: false, distanceCm: 42 } } }).engineering.digital.sonar;
+  assert.equal(off.distanceCm, null);
+});

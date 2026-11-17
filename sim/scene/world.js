@@ -112,6 +112,9 @@ export function createWorld(canvas) {
   /** The bench as it stands, for framing a view and painting screens. */
   /** @type {Bench | null} */
   let current = null;
+  /** Last modeled LED outcomes; show() reuses them while rebuilding meshes. */
+  /** @type {Record<string, { state: string }>} */
+  let leds = {};
   /** A bench to frame the views for instead of `current`, while one is set. */
   /** @type {Bench | null} */
   let framing = null;
@@ -487,7 +490,7 @@ export function createWorld(canvas) {
     for (const p of b.placed.filter(part => part.part === 'led-5mm')) {
       const bulb = /** @type {THREE.Mesh | undefined} */ (built.get(p)?.getObjectByName('led-bulb'));
       if (bulb && bulb.material instanceof THREE.MeshPhongMaterial) {
-        const state = evaluateLedBench(b, p.id).state;
+        const state = leds[p.id]?.state ?? evaluateLedBench(b, p.id).state;
         bulb.material.emissive.setHex(state === 'on' || state === 'limited' ? 0x9e0800 : 0x000000);
       }
     }
@@ -734,7 +737,18 @@ export function createWorld(canvas) {
    * angle, motor spin and strip colours.
    * @param {{ display?: Record<string, any>, servo?: Record<string, any>, motor?: Record<string, any>, strip?: Record<string, any>, buttons?: Record<string, boolean> }} [runtime]
    */
+  /** @param {Record<string, any>} runtime */
   function devices(runtime = {}) {
+    if (runtime.leds) {
+      leds = runtime.leds;
+      for (const [id, outcome] of Object.entries(leds)) {
+        const part = current?.placed.find((q) => q.id === id);
+        const bulb = part && /** @type {THREE.Mesh | undefined} */ (built.get(part)?.getObjectByName('led-bulb'));
+        if (bulb && bulb.material instanceof THREE.MeshPhongMaterial) {
+          bulb.material.emissive.setHex(outcome.state === 'on' || outcome.state === 'limited' ? 0x9e0800 : 0x000000);
+        }
+      }
+    }
     for (const p of current?.placed ?? []) {
       const g = built.get(p);
       if (!g) continue;

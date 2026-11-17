@@ -36,7 +36,8 @@ import { firmwareById } from './firmware/index.js';
 import { ledPattern } from './firmware/led.js';
 import { createSerialPanel } from './ui/serial-panel.js';
 import { runFlash, canFlash } from './firmware/flash.js';
-import { partsView, deviceInitialized } from './firmware/parts-view.js';
+import { deviceInitialized } from './firmware/parts-view.js';
+import { createSketchContext } from './firmware/sketch-context.js';
 import { createSketchRunner } from './firmware/sketch.js';
 import { connectBody } from '../phone/body-link.js';
 import { openScreenFeed } from './screen-feed.js';
@@ -99,6 +100,10 @@ let environment = defaultStimuli();
 /** Runtime device stimuli, keyed by part id. */
 /** @type {{servo:Record<string, any>, motor:Record<string, any>, strip:Record<string, any>, display:Record<string, any>, buttons:Record<string, boolean>}} */
 const runtime = { servo: {}, motor: {}, strip: {}, display: {}, buttons: {} };
+/** GPIO levels the running sketch asked for; part of the next evaluation. */
+/** @type {Record<string, 'high'|'low'|'high-z'>} */ let gpioOutputs = {};
+/** A sonar measurement a sketch latched, until it turns it off or the board stops. */
+/** @type {{ measure: boolean, distanceCm: number } | null} */ let sonar = null;
 /** @type {import('./projects.js').Project | null} */
 /** @type {import('./plan.js').Plan|import('./projects.js').Project|null} */
 let activeProject = null;
@@ -186,7 +191,10 @@ function showContext(selection) {
 
 /** The stimuli the bench and its runtime controls currently request. */
 function simulationStimuli() {
-  return { ...environment, buttons: runtime.buttons, servo: runtime.servo, motor: runtime.motor, strip: runtime.strip, displays: runtime.display };
+  return {
+    ...environment, ...(sonar ? { sonar } : {}),
+    buttons: runtime.buttons, servo: runtime.servo, motor: runtime.motor, strip: runtime.strip, displays: runtime.display,
+  };
 }
 
 /** Push evaluated device state (OLED frames, servo, motor, strip) into the scene. */
@@ -196,6 +204,7 @@ function refreshDeviceVisuals() {
     stimuli,
     ownership: ownershipOf(bench),
     deviceStates: boardRuntime?.deviceStates() ?? {},
+    gpioOutputs,
     firmware: firmwareById(bench.board.firmware),
   }).engineering;
   world.devices(engineering);
@@ -530,6 +539,8 @@ function driveStop() {
 /** Invalidate pending starts before stopping so late callbacks cannot restart motion. */
 function stopUnsafeSession() {
   plugs++;
+  gpioOutputs = {};
+  sonar = null;
   startLock.clear();
   driveStop();
   boardRuntime?.stop();
@@ -568,6 +579,8 @@ function unlockAudio() {
  */
 async function plugIn(meta = {}) {
   recipeOn = null;
+  gpioOutputs = {};
+  sonar = null;
   const mine = ++plugs;
   bench = { ...bench, usb: true };
   const merged = evaluateBench(bench, { firmware: firmwareById(bench.board.firmware), ownership: ownershipOf(bench) });
@@ -730,12 +743,15 @@ async function plugIn(meta = {}) {
     sketchRunner?.stop();
     sketchRunner = createSketchRunner({
       firmware,
-      ctx: () => ({
-        parts: partsView(bench, evaluateBench(bench, { firmware, ownership: ownershipOf(bench), deviceStates: boardRuntime?.deviceStates() ?? {} }).engineering, boardRuntime?.deviceStates() ?? {}),
-        pin: () => {},
-        measure: () => {},
-        device: () => {},
-      }),
+      ctx: () => {
+        const deviceStates = boardRuntime?.deviceStates() ?? {};
+        const evaluation = evaluateBench(bench, { firmware, ownership: ownershipOf(bench), deviceStates, gpioOutputs, stimuli: simulationStimuli() }).engineering;
+        return createSketchContext({
+          bench, evaluation, deviceStates, runtime,
+          onPin: (pin, level) => { gpioOutputs[pin] = level; },
+          onMeasure: (_id, on) => { sonar = { measure: on, distanceCm: 100 }; },
+        });
+      },
       render: refreshDeviceVisuals,
     });
     sketchRunner.start();
@@ -859,6 +875,8 @@ async function maybeProvision(mine) {
 
 function unplug() {
   hands.highlightPoints([]);
+  gpioOutputs = {};
+  sonar = null;
   plugs++;
   startLock.clear();
   powerInterlock.reset();
