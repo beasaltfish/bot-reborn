@@ -265,3 +265,38 @@ test('timing updates do not rebuild the editor', () => {
     assert.match(/** @type {any} */ (studio.element.querySelector('[data-role=timing]')).textContent, /4\.2\/6.*0\.4\/2/);
   } finally { restore(); }
 });
+
+test('a runtime error marks the run gutter without disabling flash', () => {
+  const { studio, restore } = setup();
+  try {
+    studio.update(state({
+      board: { firmware: 'custom' },
+      selection: { kind: 'custom' },
+      custom: custom({ draft: 'a\nb', flashed: 'x\ny' }),
+      runError: { line: 2, column: 1, message: 'firmware stopped: loop did not finish' },
+    }));
+    const flash = /** @type {any} */ (studio.element.querySelector('[data-role=flash]'));
+    assert.equal(flash.disabled, false);
+    assert.match(/** @type {any} */ (studio.element.querySelector('[data-role=error]')).textContent, /did not finish/);
+    const spans = [...studio.element.querySelectorAll('[data-role=line-numbers] span')];
+    assert.equal(spans[1].classList.contains('error'), true);
+    assert.equal(spans[0].classList.contains('error'), false);
+  } finally { restore(); }
+});
+
+test('a parse error marks the draft gutter, not the running one', () => {
+  const { studio, restore } = setup();
+  try {
+    studio.update(state({
+      board: { firmware: 'custom' },
+      selection: { kind: 'custom' },
+      custom: custom({ draft: 'a\nb', flashed: 'x\ny' }),
+      errors: [{ line: 2, column: 1, message: "expected ';'" }],
+    }));
+    let spans = [...studio.element.querySelectorAll('[data-role=line-numbers] span')];
+    assert.equal(spans.some((s) => s.classList.contains('error')), false);
+    studio.update(state({ view: 'draft' }));
+    spans = [...studio.element.querySelectorAll('[data-role=line-numbers] span')];
+    assert.equal(spans[1].classList.contains('error'), true);
+  } finally { restore(); }
+});

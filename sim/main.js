@@ -361,6 +361,8 @@ let studioSelection = { kind: 'body' };
 /** @type {{ line: number, column: number, message: string }[]} */
 let studioErrors = [];
 let studioSource = '';
+/** @type {{ line: number, column: number, message: string } | null} */
+let studioRunError = null;
 const studioTimings = { interpreterMs: 0 };
 /** @type {ReturnType<typeof setTimeout> | undefined} */
 let studioDraftTimer;
@@ -409,6 +411,7 @@ function updateStudio() {
     running: Boolean(usb.plugged),
     usb: Boolean(usb.plugged),
     errors: studioErrors,
+    runError: studioRunError,
     timings: studioTimings,
     source: studioSource,
     exampleV1: studioSelection.kind === 'sketch' && Boolean(EXAMPLES[/** @type {string} */ (studioSelection.id)]?.v1),
@@ -489,6 +492,7 @@ async function flashStudio(selection) {
       return { ok: false, errors };
     }
     studioErrors = [];
+    studioRunError = null;
     if (!usb.plugged) await usb.insert({ instant: true, pendingFlash: targetId });
     const boardBefore = bench.board;
     const result = await runCustomFlash({ bench, board: boardBefore, source, isCurrent: () => bench.board === boardBefore && bench.usb });
@@ -729,6 +733,7 @@ function driveStop() {
 function stopBoard() {
   boardRuntime?.stop();
   boardRuntime = null;
+  studioRunError = null;
   bodyAudioLink?.stop();
   bodyAudioLink = null;
   clearInterval(wandTimer);
@@ -919,6 +924,11 @@ async function plugIn(meta = {}) {
       onTrace: (records) => {
         const logs = records.filter((record) => record.kind === 'log' && record.text).map((record) => record.text);
         if (logs.length) serial.appendLines(logs);
+        const error = records.find((record) => record.kind === 'error');
+        if (error) {
+          studioRunError = { line: error.line ?? 1, column: 1, message: error.text };
+          studio.update({ runError: studioRunError });
+        }
         studio.pushTrace(records);
       },
       onTiming: (ms) => {

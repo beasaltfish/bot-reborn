@@ -65,6 +65,7 @@ export function createMachine({ program, now = () => performance.now(), budgetMs
     resumeAt: 0,
     written: /** @type {Set<number>} */ (new Set()),
     line: '',
+    atLine: 1,
     bytesTick: 0,
     linesTick: 0,
     /** @type {Generator<any, any, any> | null} */ gen: null,
@@ -150,12 +151,14 @@ export function createMachine({ program, now = () => performance.now(), budgetMs
             const pin = Number(args[0]);
             const level = Number(args[1]) ? 'high' : 'low';
             pinLevel(pin, level);
+            state.atLine = expr.line;
             traceRef.current({ line: expr.line, kind: 'statement', text: `digitalWrite(${pin}, ${level === 'high' ? 'HIGH' : 'LOW'}) \u2192 GPIO${pin}`, writes: [{ target: `GPIO${pin}`, level }] });
             return null;
           }
           case 'digitalRead': {
             const pin = Number(args[0]);
             const level = state.ctx?.read(pin) === 'LOW' ? 0 : 1;
+            state.atLine = expr.line;
             traceRef.current({ line: expr.line, kind: 'statement', text: `digitalRead(${pin}) \u2192 ${level ? 'HIGH' : 'LOW'}`, reads: [{ pin, level: level ? 'HIGH' : 'LOW' }] });
             return level;
           }
@@ -176,7 +179,11 @@ export function createMachine({ program, now = () => performance.now(), budgetMs
   function* exec(ast, initial) {
     /** @param {any} statement @param {Env} env @returns {Generator<any, void, any>} */
     const run = function* (statement, env) {
-      const record = (/** @type {Record<string, any>} */ entry) => traceRef.current({ line: statement.line, ...entry });
+      if (typeof statement.line === 'number') state.atLine = statement.line;
+      const record = (/** @type {Record<string, any>} */ entry) => {
+        if (typeof statement.line === 'number') state.atLine = statement.line;
+        traceRef.current({ line: statement.line, ...entry });
+      };
       switch (statement.type) {
         case 'Block': {
           const child = new Env(env);
@@ -249,7 +256,7 @@ export function createMachine({ program, now = () => performance.now(), budgetMs
     state.phase = 'stopped';
     state.lastError = message;
     for (const pin of state.written) ctx.pin(`GPIO${pin}`, 'high-z');
-    records.push({ t: state.simTime, tick: state.tick, kind: 'error', text: message });
+    records.push({ t: state.simTime, tick: state.tick, kind: 'error', text: message, line: state.atLine });
   }
 
   return {
@@ -266,6 +273,7 @@ export function createMachine({ program, now = () => performance.now(), budgetMs
       state.resumeAt = 0;
       state.gen = null;
       state.line = '';
+      state.atLine = 1;
       state.written.clear();
     },
     /** @param {any} ctx @returns {any[]} */

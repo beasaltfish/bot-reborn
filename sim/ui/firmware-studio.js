@@ -39,6 +39,7 @@ export function createFirmwareStudio(o) {
     paused: false,
     usb: false,
     errors: [],
+    runError: null,
     timings: { interpreterMs: 0, uiMs: 0 },
     exampleV1: false,
     source: '',
@@ -220,8 +221,13 @@ export function createFirmwareStudio(o) {
     const codeSource = isCustom ? (state.view === 'draft' ? draft : flashed) : (state.source ?? '');
     if (runPre.textContent !== codeSource) runPre.textContent = codeSource;
     if (draftArea.value !== draft) draftArea.value = draft;
-    const errorLines = isCustom && state.view === 'draft' ? (state.errors ?? []).map((/** @type {any} */ e) => e.line) : [];
-    renderNumbers(codeSource, errorLines);
+    const runError = state.runError;
+    const gutterErrors = isCustom
+      ? (state.view === 'run'
+        ? (runError ? [runError] : [])
+        : (state.errors ?? []))
+      : [];
+    renderNumbers(codeSource, gutterErrors.map((/** @type {any} */ e) => e.line));
     runSource.hidden = isCustom && state.view !== 'run';
     draftWrap.hidden = !(isCustom && state.view === 'draft');
     seg.hidden = !isCustom;
@@ -245,8 +251,9 @@ export function createFirmwareStudio(o) {
     flash.textContent = state.usb
       ? simText(lang, 'studio.flash')
       : `${simText(lang, 'studio.insertFlash')} ${selectionId}`;
-    error.textContent = (state.errors ?? []).map((/** @type {any} */ e) => `${e.line}:${e.column} ${e.message}`).join('\n');
-    error.hidden = !(state.errors?.length);
+    const listed = [...(state.errors ?? []), ...(isCustom && state.view === 'run' && runError ? [runError] : [])];
+    error.textContent = listed.map((/** @type {any} */ e) => `${e.line}:${e.column} ${e.message}`).join('\n');
+    error.hidden = !listed.length;
     timing.textContent = timingLine();
   }
 

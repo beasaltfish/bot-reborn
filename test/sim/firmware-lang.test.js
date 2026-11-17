@@ -184,3 +184,21 @@ test('print is a partial line; println is the record the console shows', () => {
   assert.equal(records.filter((r) => r.kind === 'log').length, 1);
   assert.equal(records.find((r) => r.kind === 'log')?.text, 'abc');
 });
+
+test('a watchdog stop names the line it was stuck on', () => {
+  const { program } = compile('void loop() {\n  digitalWrite(5, HIGH);\n  while(1){}\n}');
+  const m = createMachine({ program, now: advancingClock() }); m.start(); const ctx = fakeCtx();
+  /** @type {any[]} */ const records = [];
+  for (let i = 0; i < 700; i++) records.push(...m.tick(ctx));
+  assert.equal(m.phase, 'stopped');
+  assert.ok(m.lastError?.includes('loop did not finish'));
+  assert.equal(records.find((r) => r.kind === 'error')?.line, 3);
+});
+
+test('a runtime error points at the statement that failed', () => {
+  const { program } = compile('void loop() {\n  int x = 1;\n  x = x / 0;\n}');
+  const m = createMachine({ program }); m.start(); const ctx = fakeCtx();
+  m.tick(ctx); // setup
+  const records = m.tick(ctx);
+  assert.equal(records.find((r) => r.kind === 'error')?.line, 3);
+});
