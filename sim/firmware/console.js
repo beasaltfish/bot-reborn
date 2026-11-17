@@ -61,7 +61,7 @@ export function consoleCommand(state, line) {
     }
     case 'token': {
       if (!/^[0-9a-fA-F]{32}$/.test(args[0] ?? '')) { out.push('error: token needs 32 hex characters'); break; }
-      out.push(`token ${args[0].slice(0, 4)}… `);
+      out.push(`token ${args[0].slice(0, 4)}…`);
       save('');
       rebootHint();
       return { settings: { ...settings, token: args[0].toLowerCase() }, lines: out };

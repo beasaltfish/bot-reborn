@@ -419,7 +419,7 @@ let apiFor = '';
 let line = { end: null, lost: false, api: null, fault: null, mic: null, sound: false, state: null, who: null, ending: null };
 function showLine() {
   if (line.end) return panels.status(line.end);
-  if (line.lost) return panels.status('Reconnecting…');
+  if (line.lost) return panels.status(simText(document.documentElement.lang, 'status.reconnecting'));
   if (line.api) return panels.status(line.api, { href: adminLink(apiFor), label: 'open' });
   if (line.fault) return panels.status(line.fault);
   if (line.mic) return panels.status(line.mic);
@@ -643,7 +643,7 @@ async function plugIn(meta = {}) {
 
   const firmware = firmwareById(bench.board.firmware);
   if (!firmware) {
-    panels.status('No firmware on this board — flash one.');
+    panels.status(simText(document.documentElement.lang, 'board.noFirmware'));
     return;
   }
   serial.setFirmware(firmware);
@@ -760,11 +760,11 @@ async function plugIn(meta = {}) {
 }
 
 async function flashFirmwareNow(/** @type {string} */ id) {
-  if (!canFlash(bench, bench.board).ok) { panels.status('Cannot flash: plug in USB and clear any supply short.'); return; }
+  if (!canFlash(bench, bench.board).ok) { panels.status(simText(document.documentElement.lang, 'board.cannotFlash')); return; }
   const before = bench.board;
   const result = await runFlash(before, id, { isCurrent: () => bench.board === before && bench.usb });
   if (!result.ok) {
-    panels.status(`Could not flash ${id}: ${result.reason}`);
+    panels.status(simText(document.documentElement.lang, 'board.flashFailed', { firmware: id, reason: result.reason ?? 'unknown' }));
     return;
   }
   bench = { ...bench, board: result.board };

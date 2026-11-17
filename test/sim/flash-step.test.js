@@ -96,3 +96,13 @@ test('flashing keeps NVS settings and changes firmware', async () => {
   assert.equal(r.board.settings.screen, 'ili9341-ips');
   assert.equal(r.board.settings.calib.steerSwapped, true);
 });
+
+import { flashEvent } from '../../sim/firmware/flash.js';
+import { FIRMWARES } from '../../sim/firmware/index.js';
+
+test('a release flash event writes the image own filename, not a hardcoded one', () => {
+  const event = flashEvent(FIRMWARES.body);
+  assert.ok(event.lines.includes(`esptool: writing ${FIRMWARES.body.image.label}`));
+  const sketch = flashEvent(FIRMWARES['sketch-bme280']);
+  assert.match(sketch.lines[0], /simulated image/);
+});

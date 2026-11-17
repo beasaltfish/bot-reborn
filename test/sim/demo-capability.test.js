@@ -21,6 +21,7 @@ test('a missing capability is explained, not blocked', () => {
   assert.equal(skips.length, 1);
   assert.match(skips[0].text, /cannot pose/);
   assert.match(demoSkips(['pose'], 'car', 'zh')[0].text, /不能摆姿势/);
+  assert.equal(demoSkips(['dance'], 'car')[0].text, 'This step is skipped.');
 });
 
 test('a remote brain never matches a local same-name character', () => {

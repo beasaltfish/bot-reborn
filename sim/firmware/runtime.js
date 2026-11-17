@@ -12,6 +12,9 @@ export function screenUrl(bodyUrl) {
   try {
     const url = new URL(bodyUrl);
     url.pathname = '/screen';
+    // The body's hello query belongs to /body; the screen link has none.
+    url.search = '';
+    url.hash = '';
     return url.toString();
   } catch {
     return '';

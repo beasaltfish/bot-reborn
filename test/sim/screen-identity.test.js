@@ -66,3 +66,7 @@ test('the frame is fitted and letterboxed, never stretched', () => {
   assert.deepEqual(fitRect(240, 320, 320, 240), { x: 0, y: 70, w: 240, h: 180, exact: false });
   assert.deepEqual(fitRect(160, 128, 320, 240), { x: 0, y: 4, w: 160, h: 120, exact: false });
 });
+
+test('a body URL with a query still maps to a clean screen URL', () => {
+  assert.equal(screenUrl('ws://other:8787/body?token=x#y'), 'ws://other:8787/screen');
+});

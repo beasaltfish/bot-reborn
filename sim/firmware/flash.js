@@ -89,8 +89,9 @@ export function flashEvent(firmware) {
   if (firmware.image.kind === 'illustrative') {
     return { label: firmware.image.label, lines: [`${firmware.image.label} (simulated image)`] };
   }
+  // A release image names its own file; the bootloader offset is fixed.
   return {
     label: firmware.image.label,
-    lines: ['esptool: writing bootloader.bin', 'esptool: writing body.bin', 'esptool: done; rebooting'],
+    lines: ['esptool: writing bootloader.bin', `esptool: writing ${firmware.image.label}`, 'esptool: done; rebooting'],
   };
 }

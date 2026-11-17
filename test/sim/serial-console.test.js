@@ -11,7 +11,7 @@ const state = (settings = {}) => ({ settings: { ...emptyBoard().settings, ...set
 test('token saves, echoes the prefix, and asks for reboot', () => {
   const r = consoleCommand(state(), 'token 0123456789abcdef0123456789abcdef');
   assert.equal(r.settings.token, '0123456789abcdef0123456789abcdef');
-  assert.ok(r.lines.some((line) => line.startsWith('token 0123…')));
+  assert.ok(r.lines.includes('token 0123…'));
   assert.ok(r.lines.includes('type reboot to use it'));
 });
 
