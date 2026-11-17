@@ -133,7 +133,8 @@ export function createMachine({ program, now = () => performance.now(), budgetMs
   function print(text) {
     if (state.linesTick >= MAX_LINES_PER_TICK || state.bytesTick >= MAX_CONTENT_BYTES) return;
     state.line += text;
-    if (state.line.length > MAX_LINE) state.line = `${state.line.slice(0, MAX_LINE - 1)}…`;
+    const chars = Array.from(state.line);
+    if (chars.length > MAX_LINE) state.line = `${chars.slice(0, MAX_LINE - 1).join('')}${ELLIPSIS}`;
   }
 
   /** @param {string} text @param {number} sourceLine */

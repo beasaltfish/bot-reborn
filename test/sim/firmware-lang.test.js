@@ -268,3 +268,25 @@ test('the 8 KB budget counts UTF-8 bytes, not UTF-16 characters', () => {
   assert.ok(!text.includes('\uFFFD'), 'truncation must not split a character');
   assert.equal([...text].filter((ch) => ch === '…').length, 1);
 });
+
+test('a half-line truncates on code points, not UTF-16 units', () => {
+  const { program } = compile(`void loop(){ Serial.print("${'🙂'.repeat(600)}"); Serial.println(""); }`);
+  const ctx = fakeCtx();
+  const m = createMachine({ program }); m.start();
+  m.tick(ctx); // setup
+  m.tick(ctx);
+  const line = ctx.logs[0];
+  assert.equal(Array.from(line).length, 512);
+  assert.equal(Array.from(line).at(-1), '…');
+  assert.ok(!new TextDecoder().decode(new TextEncoder().encode(line)).includes('\uFFFD'));
+});
+
+test('300 emoji are not split by the 512-character line cap', () => {
+  const { program } = compile(`void loop(){ Serial.println("${'🙂'.repeat(300)}"); }`);
+  const ctx = fakeCtx();
+  const m = createMachine({ program }); m.start();
+  m.tick(ctx); // setup
+  m.tick(ctx);
+  assert.equal(ctx.logs[0], '🙂'.repeat(300));
+  assert.ok(!new TextDecoder().decode(new TextEncoder().encode(ctx.logs[0])).includes('\uFFFD'));
+});

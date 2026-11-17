@@ -940,7 +940,7 @@ async function plugIn(meta = {}) {
             if (level) return level;
             if (!warnedGpioReads.has(pin)) {
               warnedGpioReads.add(pin);
-              serial.append(simText(document.documentElement.lang, 'gpio.noLevel', { pin }));
+              serial.append(`GPIO${pin}: no defined level — reading LOW.`);
             }
             return 'LOW';
           },
