@@ -138,3 +138,10 @@ test('a second mic is named in the hint, and its swapped clocks are caught', () 
   assert.ok(hint);
   assert.match(hint?.text ?? '', /mic2 SCK/);
 });
+
+test('a missing driver names the firmware that lacks it', () => {
+  const hint = diagnose(emptyBench(), { ...powerOn(emptyBench()), faults: [{ code: 'firmware-unsupported', points: [], detail: { firmware: 'bot-reborn body' } }] }, 'en')[0];
+  assert.ok(hint?.text.includes('bot-reborn body'));
+  const zh = diagnose(emptyBench(), { ...powerOn(emptyBench()), faults: [{ code: 'firmware-unsupported', points: [], detail: { firmware: 'bot-reborn body' } }] }, 'zh')[0];
+  assert.ok(zh?.text.includes('bot-reborn body'));
+});

@@ -228,11 +228,15 @@ export function diagnose(b, o, lang = 'en') {
     }
   }
 
-  const faults = o.faults.map((f) => /** @type {Hint} */ ({
-    kind: 'fault',
-    text: (lang === 'zh' ? chineseFault(f.code) : undefined) ?? FAULT_TEXT[/** @type {keyof typeof FAULT_TEXT} */ (f.code)] ?? `Something is wrong here (${f.code}).`,
-    points: f.points,
-  }));
+  const faults = o.faults.map((f) => {
+    const firmware = f.detail?.firmware;
+    const text = f.code === 'firmware-unsupported' && firmware
+      ? lang === 'zh'
+        ? simText(lang, 'firmware.noDriver', { firmware })
+        : `The ${firmware} firmware has no driver for this device; flash a firmware that includes it.`
+      : (lang === 'zh' ? chineseFault(f.code) : undefined) ?? FAULT_TEXT[/** @type {keyof typeof FAULT_TEXT} */ (f.code)] ?? `Something is wrong here (${f.code}).`;
+    return /** @type {Hint} */ ({ kind: 'fault', text, points: f.points });
+  });
   return [...hanging(b, lang), ...swapped, ...slips, ...offs, ...faults, ...missing];
 }
 

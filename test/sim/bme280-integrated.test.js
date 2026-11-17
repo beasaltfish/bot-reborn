@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { addPart, addWire, emptyBench } from '../../sim/bench.js';
 import { evaluateBench } from '../../sim/devices/evaluate.js';
+import { FIRMWARES } from '../../sim/firmware/index.js';
 
 /** @param {boolean} [usb] */
 function fixture(usb = true) {
@@ -12,7 +13,7 @@ function fixture(usb = true) {
 
 test('powered supported BME280 topology gives bounded simulated readings without claiming firmware support', () => {
   const bench = fixture();
-  const result = evaluateBench(bench, { stimuli: { temperatureC: 200, humidityPct: 45, pressureHpa: NaN } });
+  const result = evaluateBench(bench, { firmware: FIRMWARES.body, stimuli: { temperatureC: 200, humidityPct: 45, pressureHpa: NaN } });
   const sensor = result.engineering.bme280.env;
   assert.equal(sensor.state, 'ready');
   assert.deepEqual(sensor.telemetry, { temperatureC: 85, humidityPct: 45, pressureHpa: 1013.25 });

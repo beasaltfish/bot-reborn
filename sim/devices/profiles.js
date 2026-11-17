@@ -1,12 +1,11 @@
 // Firmware assignments come from firmware/main/board.h and sim/target.js.
-import { SCREENS } from '../../core/screens.js';
 import { PARTS } from '../parts.js';
 import { nets } from '../netlist.js';
 import { DEVICES, firmwareIndependent } from './catalog.js';
 import { bme280Wiring } from './bme280-wiring.js';
 
 /** @typedef {{ code: string, instances: string[], points: string[], detail: Record<string, unknown>, origin?: string }} ResourceIssue */
-/** @typedef {{ id: string, rails: Record<string, number>, gpioVoltage: number, adcPins: string[], i2cBuses: {id:string,sda:string,scl:string}[], spiBuses: {id:string,sck:string,mosi:string,miso:string}[], pwmPins: string[], pwmChannels: number, gpioSourceMa: number, gpioAbsMaxMa: number, endpoints: Record<string, Record<string, string|number>>, supportedParts: string[] }} Profile */
+/** @typedef {{ id: string, rails: Record<string, number>, gpioVoltage: number, adcPins: string[], i2cBuses: {id:string,sda:string,scl:string}[], spiBuses: {id:string,sck:string,mosi:string,miso:string}[], pwmPins: string[], pwmChannels: number, gpioSourceMa: number, gpioAbsMaxMa: number, endpoints: Record<string, Record<string, string|number>> }} Profile */
 // Exclude strapping pins and GPIO46 (input-only); GPIO19/20 are USB pins.
 const exposed = PARTS.esp32.pins.map((p) => p.name).filter((p) => /^GPIO\d+$/.test(p));
 const reserved = new Set(['GPIO0', 'GPIO3', 'GPIO19', 'GPIO20', 'GPIO45', 'GPIO46']);
@@ -22,7 +21,7 @@ export const PROFILES = [{
     screen: { sck: 'GPIO11', mosi: 'GPIO10', cs: 'GPIO9', dc: 'GPIO8', rst: 'GPIO18', miso: 'GPIO17' },
     wand: { sda: 'GPIO1', scl: 'GPIO2', address: 0x68 },
     toy: { driveA: 'GPIO4', driveB: 'GPIO5', steerA: 'GPIO6', steerB: 'GPIO7' },
-  }, supportedParts: ['esp32', 'inmp441', 'max98357a', 'speaker', 'mpu6050', 'toy', ...SCREENS.map((screen) => `screen-${screen.id}`)].sort(),
+  },
 }];
 /** @param {string} id @returns {Profile | undefined} */
 export function profileById(id) { return PROFILES.find((p) => p.id === id); }
@@ -39,9 +38,10 @@ function addressNumber(value) {
  * @param {import('../bench.js').Bench} bench
  * @param {Profile} profile
  * @param {Record<string, import('./catalog.js').DeviceDef>} devices
+ * @param {{ ownership?: Record<string, 'board'|'circuit'|'unknown'>, drivers?: string[], firmware?: { id: string, name: string } }} [o]
  * @returns {ResourceIssue[]}
  */
-export function checkResources(bench, profile, devices, { ownership = {}, drivers = profile.supportedParts } = {}) {
+export function checkResources(bench, profile, devices, { ownership = {}, drivers, firmware } = {}) {
   const net = nets(bench);
   /** @type {ResourceIssue[]} */ const issues = [];
   /** @type {{instance:string, sda:string, scl:string, address:number}[]} */ const i2c = [];
@@ -49,7 +49,7 @@ export function checkResources(bench, profile, devices, { ownership = {}, driver
   /** @type {{instance:string, point:string, kind:string, direction:unknown}[]} */ const pins = [];
   for (const p of bench.placed.filter((p) => !p.burnt).sort((a, b) => a.id.localeCompare(b.id))) {
     const d = devices[p.part];
-    if (!firmwareIndependent(p.part) && /** @type {Record<string,string>} */ (ownership)[p.id] !== 'circuit' && !drivers.includes(p.part)) issues.push({ code: 'firmware-unsupported', origin: 'firmware', instances: [p.id], points: [], detail: { part: p.part } });
+    if (Array.isArray(drivers) && !firmwareIndependent(p.part) && /** @type {Record<string,string>} */ (ownership)[p.id] !== 'circuit' && !drivers.includes(p.part)) issues.push({ code: 'firmware-unsupported', origin: 'firmware', instances: [p.id], points: [], detail: { part: p.part, firmware: firmware?.name ?? firmware?.id ?? null } });
     if (!d) continue;
     for (const cap of d.capabilities) {
       const point = (/** @type {string} */ pin) => `${p.id}:${pin}`;

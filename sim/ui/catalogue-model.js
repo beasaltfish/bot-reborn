@@ -1,12 +1,11 @@
 import { DEVICES, firmwareIndependent } from '../devices/catalog.js';
-import { PROFILES } from '../devices/profiles.js';
 import { PARTS } from '../parts.js';
 import { screenById } from '../../core/screens.js';
 import { DEFAULT_LED_FORWARD_VOLTAGE } from '../electrical/led.js';
 import { BATTERY_CHEMISTRIES } from '../electrical/power-sources.js';
 import { simText } from './strings.js';
 
-/** @typedef {{ part: string, name: string, summary: string, category: string, tags: string[], voltage: string|null, interfaces: string[], onBoard: boolean, simulated: boolean, firmwareSupported: boolean, required: boolean, recent: boolean, favourite: boolean, structural?: boolean, simulationLimited?: boolean, firmwareIndependent?: boolean }} CatalogueEntry */
+/** @typedef {{ part: string, name: string, summary: string, category: string, tags: string[], voltage: string|null, interfaces: string[], onBoard: boolean, simulated: boolean, firmwareSupported: boolean, firmwareNone?: boolean, required: boolean, recent: boolean, favourite: boolean, structural?: boolean, simulationLimited?: boolean, firmwareIndependent?: boolean }} CatalogueEntry */
 /** @typedef {{ id: string, label: string, entries: CatalogueEntry[] }} CatalogueSection */
 /** @param {string} value */
 const normalize = (value) => value.normalize('NFKC').trim().toLocaleLowerCase();
@@ -37,8 +36,9 @@ function voltageLabel(partId, lang) {
   return null;
 }
 
-/** @param {string} partId @param {string} [lang] @returns {CatalogueEntry | undefined} */
-export function catalogueEntry(partId, lang = 'en') {
+/** @param {string} partId @param {string} [lang] @param {string[] | null} [drivers] the running firmware's drivers, or null for none
+ * @returns {CatalogueEntry | undefined} */
+export function catalogueEntry(partId, lang = 'en', drivers = null) {
   if (partId === 'breadboard') return { part: partId, name: simText(lang, 'name.breadboard'), summary: simText(lang, 'summary.breadboard'), category: 'fundamental', tags: [], voltage: null, interfaces: [], onBoard: false, simulated: true, firmwareSupported: false, required: false, recent: false, favourite: false, structural: true };
   if (!Object.hasOwn(DEVICES, partId) || !Object.hasOwn(PARTS, partId)) return undefined;
   const device = DEVICES[partId], part = PARTS[partId];
@@ -57,19 +57,20 @@ export function catalogueEntry(partId, lang = 'en') {
   return { part: partId, name: translatedName === nameKey ? part.label : translatedName,
     summary: simText(lang, summaryKey), category: device.category,
     tags: [...new Set([...device.tags, ...interfaces])], voltage: voltageLabel(partId, lang), interfaces,
-    onBoard: part.onBoard, simulated: !['bme280-i2c', 'hc-sr04'].includes(partId), firmwareSupported: PROFILES[0].supportedParts.includes(partId),
+    onBoard: part.onBoard, simulated: !['bme280-i2c', 'hc-sr04'].includes(partId),
+    firmwareSupported: Array.isArray(drivers) && drivers.includes(partId), firmwareNone: drivers === null,
     simulationLimited: ['led-5mm', 'resistor', 'dc-source', 'push-button'].includes(partId),
     firmwareIndependent: firmwareIndependent(partId),
     required: false, recent: false, favourite: false };
 }
 
 /**
- * @param {{query?: string, categories?: string[], tags?: string[], required?: string[], recent?: string[], favourites?: string[], lang?: string}} [options]
+ * @param {{query?: string, categories?: string[], tags?: string[], required?: string[], recent?: string[], favourites?: string[], lang?: string, drivers?: string[] | null}} [options]
  * @returns {CatalogueSection[]}
  */
-export function catalogueView({ query = '', categories = [], tags = [], required = [], recent = [], favourites = [], lang = 'en' } = {}) {
+export function catalogueView({ query = '', categories = [], tags = [], required = [], recent = [], favourites = [], lang = 'en', drivers = null } = {}) {
   const entries = ['breadboard', ...Object.keys(DEVICES)].flatMap(id => {
-    const entry = catalogueEntry(id, lang);
+    const entry = catalogueEntry(id, lang, drivers);
     return entry ? [{ ...entry, required: required.includes(id), recent: recent.includes(id), favourite: favourites.includes(id) }] : [];
   });
   const term = normalize(query);

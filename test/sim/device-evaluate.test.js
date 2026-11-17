@@ -6,6 +6,7 @@ import { diagnose } from '../../sim/diagnose.js';
 import { powerOn } from '../../sim/power.js';
 import { evaluateBench, evaluateDevices } from '../../sim/devices/evaluate.js';
 import { PROFILES } from '../../sim/devices/profiles.js';
+import { FIRMWARES } from '../../sim/firmware/index.js';
 import { DEVICES } from '../../sim/devices/catalog.js';
 
 const model = (/** @type {number} */ voltage) => ({ ...DEVICES,
@@ -19,8 +20,9 @@ const fixture = () => {
 };
 
 test('electrically valid is separate from firmware support', () => {
-  const profile = { ...PROFILES[0], supportedParts: PROFILES[0].supportedParts.filter(p => p !== 'inmp441') };
-  const result = evaluateDevices(fixture(), { profile, mode: 'idle', devices: model(3.3) });
+  const profile = PROFILES[0];
+  const firmware = { ...FIRMWARES.body, drivers: FIRMWARES.body.drivers.filter(p => p !== 'inmp441') };
+  const result = evaluateDevices(fixture(), { profile, mode: 'idle', devices: model(3.3), firmware });
   assert.equal(result.electrical.devices.mic.status, 'ok');
   assert.ok(result.resources.some(f => f.code === 'firmware-unsupported' && f.instances.includes('mic')));
   assert.ok(!result.burns.includes('mic'));
@@ -47,7 +49,7 @@ test('same-model displays share the target bus without a conflict', () => {
   b = addPart(b, 'screen-ili9341-ips', { x: 0, z: 40 }).bench;
   b = addPart(b, 'screen-ili9341-ips', { x: 0, z: 60 }).bench;
   for (const l of targetFor(b)) b = addWire(b, l.a, l.b, 'red');
-  const result = evaluateBench(b);
+  const result = evaluateBench(b, { firmware: FIRMWARES.body });
   assert.equal(/** @type {any} */ (result.legacy.parts.scr).show, 'ready');
   assert.equal(/** @type {any} */ (result.legacy.parts.scr2).show, 'ready');
   assert.deepEqual(result.faults, []);

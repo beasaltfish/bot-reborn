@@ -74,7 +74,7 @@ export function createCataloguePanel(opts) {
         const summary = document.createElement('p'); summary.textContent = entry.summary;
         const meta = document.createElement('p');
         const simulation = entry.simulationLimited ? 'limited' : entry.simulated ? 'simulated' : 'developing';
-        const firmware = entry.firmwareIndependent ? 'noFirmwareNeeded' : entry.firmwareSupported ? 'firmware' : 'noFirmware';
+        const firmware = entry.firmwareIndependent ? 'noFirmwareNeeded' : entry.firmwareNone ? 'noFirmwareOnBoard' : entry.firmwareSupported ? 'firmware' : 'noFirmware';
         meta.textContent = entry.structural ? '' : [...entry.interfaces, ...(entry.voltage ? [entry.voltage] : []), ...(entry.onBoard ? [text('board')] : []), text(simulation), text(firmware)].join(' · ');
         const add = actionButton(text('add'), entry.name, 'add', () => opts.add(entry.part));
         const learn = actionButton(text('learn'), entry.name, 'learn', () => opts.learn(entry.part));

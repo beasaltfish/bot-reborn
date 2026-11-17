@@ -84,6 +84,7 @@ function pointName(point) {
  *     hooks: { onSay(text: string): void, onEnd(): void }, speed: number): { next(): void, finish(): void, skip(): void, stop(): void, speed(x: number): void } | null,
  *   speed: number,
  *   rememberSpeed(x: number): void,
+ *   firmwareDrivers?(): string[] | null,
  * }} opts
  */
 export function createPanels(opts) {
@@ -126,7 +127,7 @@ export function createPanels(opts) {
   /** @type {string[]} */ let tags = [];
   /** @param {string[]} values @param {string} value */
   const toggle = (values, value) => values.includes(value) ? values.filter(v => v !== value) : [...values, value];
-  const all = catalogueView({ lang }).map(section => ({ ...section, entries: section.entries.filter(entry => entry.part !== 'esp32') })).filter(section => section.entries.length);
+  const all = catalogueView({ lang, drivers: opts.firmwareDrivers?.() ?? null }).map(section => ({ ...section, entries: section.entries.filter(entry => entry.part !== 'esp32') })).filter(section => section.entries.length);
   const availableCategories = all.map(section => ({ id: section.id, label: section.label }));
   const availableTags = [...new Set(all.flatMap(section => section.entries.flatMap(entry => entry.interfaces)))].sort();
   /** @type {ReturnType<typeof createPartThumbnails>|null} */ let thumbnails = null;
@@ -146,7 +147,7 @@ export function createPanels(opts) {
     },
   });
   function renderCatalogue() {
-    const sections = catalogueView({ query, categories, tags, favourites, lang }).map(section => ({ ...section, entries: section.entries.filter(entry => entry.part !== 'esp32') })).filter(section => section.entries.length);
+    const sections = catalogueView({ query, categories, tags, favourites, lang, drivers: opts.firmwareDrivers?.() ?? null }).map(section => ({ ...section, entries: section.entries.filter(entry => entry.part !== 'esp32') })).filter(section => section.entries.length);
     catalogue.render({ query, sections, categories: availableCategories, tags: availableTags, selectedCategories: categories, selectedTags: tags });
   }
   renderCatalogue();

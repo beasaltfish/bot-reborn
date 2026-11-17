@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { emptyBench, addPart } from '../../sim/bench.js';
 import { DEVICES } from '../../sim/devices/catalog.js';
 import { PROFILES, profileById, checkResources } from '../../sim/devices/profiles.js';
+import { FIRMWARES } from '../../sim/firmware/index.js';
 
 const profile = PROFILES[0];
 /** @param {import('../../sim/bench.js').Bench} b @param {string} a @param {string} c */
@@ -20,7 +21,7 @@ test('firmware profile records board pin assignments', () => {
 test('passive resistor and independent supply do not claim unsupported firmware', () => {
   let bench = emptyBench();
   for (const part of /** @type {const} */ (['resistor', 'dc-source', 'bme280-i2c'])) bench = addPart(bench, part, { x: 0, z: 0 }).bench;
-  const issues = checkResources(bench, profile, DEVICES).filter(issue => issue.code === 'firmware-unsupported');
+  const issues = checkResources(bench, profile, DEVICES, { drivers: FIRMWARES.body.drivers }).filter(issue => issue.code === 'firmware-unsupported');
   assert.deepEqual(issues.map(issue => issue.instances), [['env']]);
 });
 
@@ -57,8 +58,10 @@ test('BME280 resource address follows grounded SDO and does not guess unknown wi
 
 test('unsupported part reports firmware support without invented electrical conflicts', () => {
   const b = emptyBench();
-  const limited = { ...profile, supportedParts: profile.supportedParts.filter(p => p !== 'speaker') };
-  assert.deepEqual(checkResources(b, limited, DEVICES).map(i => [i.code, i.instances]), [['firmware-unsupported', ['spk']]]);
+  const drivers = FIRMWARES.body.drivers.filter((p) => p !== 'speaker');
+  assert.deepEqual(checkResources(b, profile, DEVICES, { drivers }).map(i => [i.code, i.instances]), [['firmware-unsupported', ['spk']]]);
+  const named = checkResources(b, profile, DEVICES, { drivers, firmware: FIRMWARES.body }).find(i => i.code === 'firmware-unsupported');
+  assert.equal(named?.detail.firmware, FIRMWARES.body.name);
 });
 
 test('firmware wand address is checked without an explicit catalogue resource', () => {

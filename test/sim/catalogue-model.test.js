@@ -65,3 +65,13 @@ test('favourites are pinned in their own group and leave the categories', () => 
   assert.ok(!searched.some(section => section.id === 'favourites'));
   assert.ok(searched.some(section => section.entries.some(entry => entry.part === 'led-5mm')));
 });
+
+import { FIRMWARES } from '../../sim/firmware/index.js';
+
+test('catalogue support comes from the board firmware, and a blank board says so', () => {
+  assert.equal(catalogueEntry('bme280-i2c', 'en', FIRMWARES.body.drivers)?.firmwareSupported, false);
+  assert.equal(catalogueEntry('bme280-i2c', 'en', FIRMWARES['sketch-bme280'].drivers)?.firmwareSupported, true);
+  const blank = catalogueEntry('bme280-i2c', 'en', null);
+  assert.equal(blank?.firmwareSupported, false);
+  assert.equal(blank?.firmwareNone, true);
+});

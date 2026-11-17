@@ -40,12 +40,12 @@ export function uniqueFaults(faults) {
  */
 export function evaluateDevices(bench, { profile = PROFILES[0], mode = 'idle', stimuli, devices = DEVICES, ownership = {}, deviceStates = {}, gpioOutputs = {}, firmware } = {}) {
   const electrical = evaluateElectrical(bench, { profile, mode, stimuli, devices });
-  const resources = checkResources(bench, profile, devices, { ownership, drivers: firmware?.drivers }).filter(f => {
+  const resources = checkResources(bench, profile, devices, { ownership, drivers: firmware?.drivers, firmware }).filter(f => {
     if (f.code !== 'spi-chip-select-conflict' || f.instances.length !== 2) return true;
     const [a, b] = f.instances.map(id => bench.placed.find(p => p.id === id));
     // The built-in firmware deliberately broadcasts to identical supported panels.
     return !(a && b && a.part === b.part && devices[a.part] === DEVICES[a.part]
-      && DEVICES[a.part]?.category === 'display' && profile.supportedParts.includes(a.part));
+      && DEVICES[a.part]?.category === 'display' && Boolean(firmware?.drivers?.includes(a.part)));
   });
   // Keep the bounded LED experiment visible in the shared diagnosis without
   // pretending the generic supply solver supports arbitrary LED networks.

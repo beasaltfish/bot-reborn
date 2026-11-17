@@ -4,6 +4,7 @@ import { emptyBench, addPart, serialize, load } from '../../sim/bench.js';
 import { PARTS } from '../../sim/parts.js';
 import { DEVICES } from '../../sim/devices/catalog.js';
 import { PROFILES } from '../../sim/devices/profiles.js';
+import { FIRMWARES } from '../../sim/firmware/index.js';
 import { catalogueEntry } from '../../sim/ui/catalogue-model.js';
 import { lessonByPart } from '../../sim/lessons/index.js';
 import { validateLesson } from '../../sim/lessons/schema.js';
@@ -75,7 +76,6 @@ test('every first-pack device is used by a project, except supply alternatives',
 
 test('the new device pack is reported as not yet implemented by real firmware', () => {
   for (const id of FIRST_PACK) {
-    if (PROFILES[0].supportedParts.includes(id)) continue;
-    assert.ok(!PROFILES[0].supportedParts.includes(id), `${id}: firmware support must be explicit`);
+    assert.ok(!FIRMWARES.body.drivers.includes(id), `${id}: firmware support must be explicit`);
   }
 });

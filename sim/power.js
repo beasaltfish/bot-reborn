@@ -29,7 +29,7 @@ import { toyWiring, toyAction, TOY_INPUTS } from './car.js';
  *   esp: 'ok' | 'brownout' | 'off',
  *   mic: Path, amp: Path | 'quiet',
  *   burns: string[],
- *   faults: { code: string, points: string[] }[],
+ *   faults: { code: string, points: string[], detail?: Record<string, any> }[],
  *   parts: Record<string, PartState>,
  *   screenModel: string | null,
  *   toys: Record<string, { wiring: import('./car.js').Wiring, action: import('./car.js').ToyAction }>,
