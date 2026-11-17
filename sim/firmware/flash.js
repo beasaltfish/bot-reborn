@@ -4,6 +4,7 @@
 import { nets } from '../netlist.js';
 import { evaluateBench } from '../devices/evaluate.js';
 import { firmwareById } from './index.js';
+import { commitCustomFlash } from './custom.js';
 
 const POSITIVE_RAILS = ['esp:3V3', 'esp:5V'];
 
@@ -94,4 +95,22 @@ export function flashEvent(firmware) {
     label: firmware.image.label,
     lines: ['esptool: writing bootloader.bin', `esptool: writing ${firmware.image.label}`, 'esptool: done; rebooting'],
   };
+}
+
+/**
+ * Flash a compiled custom source behind the same power gate as a release
+ * image. Nothing changes when the board is unplugged, burnt, shorted, or the
+ * request is stale.
+ * @param {{
+ *   bench: import('../bench.js').Bench,
+ *   board: import('../bench.js').BoardState,
+ *   source: string,
+ *   isCurrent?: () => boolean,
+ * }} o
+ */
+export async function runCustomFlash({ bench, board, source, isCurrent }) {
+  const gate = canFlash(bench, board);
+  if (!gate.ok) return { ok: false, reason: gate.reason, board };
+  if (isCurrent && !isCurrent()) return { ok: false, reason: 'stale', board };
+  return { ok: true, board: commitCustomFlash(board, source) };
 }

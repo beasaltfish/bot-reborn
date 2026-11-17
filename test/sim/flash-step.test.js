@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { emptyBench, addPart, addWire } from '../../sim/bench.js';
+import { emptyBench, emptyBoard, addPart, addWire } from '../../sim/bench.js';
 import { evaluateBench, uniqueFaults } from '../../sim/devices/evaluate.js';
 import {
-  canFlash, flashPowerFault, runFlash,
+  canFlash, flashPowerFault, runFlash, runCustomFlash,
 } from '../../sim/firmware/flash.js';
 
 const BOARD = () => ({
@@ -106,4 +106,30 @@ test('a release flash event writes the image own filename, not a hardcoded one',
   assert.ok(event.lines.includes(`esptool: writing ${FIRMWARES.body.image.label}`));
   const sketch = flashEvent(FIRMWARES['sketch-bme280']);
   assert.match(sketch.lines[0], /simulated image/);
+});
+
+test('custom flash refuses unplugged, burnt and shorted boards', async () => {
+  const board = { ...emptyBoard(), custom: { name: 'm', draft: 'void loop(){}', flashed: 'old', updatedAt: 1 } };
+  const unplugged = { ...emptyBench(), usb: false };
+  assert.equal((await runCustomFlash({ bench: unplugged, board, source: 'new' })).ok, false);
+  const burnt = { ...emptyBench(), usb: true, placed: emptyBench().placed.map((p) => p.part === 'esp32' ? { ...p, burnt: true } : p) };
+  assert.equal((await runCustomFlash({ bench: burnt, board, source: 'new' })).ok, false);
+  const shorted = addWire({ ...emptyBench(), usb: true }, 'esp:3V3', 'esp:GND', 'red');
+  assert.equal((await runCustomFlash({ bench: shorted, board, source: 'new' })).ok, false);
+});
+
+test('custom flash leaves the board untouched when the request is stale', async () => {
+  const board = { ...emptyBoard(), custom: { name: 'm', draft: 'x', flashed: 'old', updatedAt: 1 } };
+  const r = await runCustomFlash({ bench: { ...emptyBench(), usb: true }, board, source: 'new', isCurrent: () => false });
+  assert.equal(r.ok, false);
+  assert.equal(r.board, board);
+});
+
+test('custom flash commits only when current', async () => {
+  const board = { ...emptyBoard(), custom: { name: 'm', draft: 'x', flashed: 'old', updatedAt: 1 } };
+  const r = await runCustomFlash({ bench: { ...emptyBench(), usb: true }, board, source: 'new', isCurrent: () => true });
+  assert.equal(r.ok, true);
+  assert.equal(r.board.firmware, 'custom');
+  assert.ok(r.board.custom);
+  assert.equal(r.board.custom.flashed, 'new');
 });
