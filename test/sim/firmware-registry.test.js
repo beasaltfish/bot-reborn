@@ -33,3 +33,34 @@ test('unknown firmware ids resolve to undefined', () => {
   assert.equal(firmwareById('nope'), undefined);
   assert.equal(firmwareById(''), undefined);
 });
+
+import { firmwareFor } from '../../sim/firmware/index.js';
+import { commitCustomFlash } from '../../sim/firmware/custom.js';
+import { emptyBoard } from '../../sim/bench.js';
+
+test('firmwareFor returns metadata only for custom', () => {
+  const board = { ...emptyBoard(), firmware: 'custom', custom: { name: 'm', draft: '', flashed: '', updatedAt: 1 } };
+  const f = firmwareFor(board);
+  assert.ok(f);
+  assert.equal(f.id, 'custom');
+  assert.equal(f.link, null);
+  assert.equal(typeof f.tick, 'undefined');
+  assert.deepEqual(f.drivers, ['esp32', 'button-module', 'led-5mm']);
+});
+
+test('firmwareFor is a pure lookup', () => {
+  const board = { ...emptyBoard(), firmware: 'custom', custom: { name: 'm', draft: '', flashed: '', updatedAt: 1 } };
+  assert.equal(firmwareFor(board), firmwareFor(board));
+  assert.equal(firmwareFor(emptyBoard())?.id, 'body');
+  assert.equal(firmwareFor({ ...emptyBoard(), firmware: '' }), undefined);
+});
+
+test('commitCustomFlash writes flashed and keeps draft/settings', () => {
+  const board = { ...emptyBoard(), custom: { name: 'm', draft: 'new', flashed: 'old', updatedAt: 1 } };
+  const next = commitCustomFlash(board, 'new');
+  assert.ok(next.custom);
+  assert.equal(next.firmware, 'custom');
+  assert.equal(next.custom.flashed, 'new');
+  assert.equal(next.custom.draft, 'new');
+  assert.equal(next.settings.token, board.settings.token);
+});
