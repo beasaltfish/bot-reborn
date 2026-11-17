@@ -104,3 +104,62 @@ test('variables and for loops execute in order', () => {
   m.tick(ctx);
   assert.deepEqual(ctx.logs, ['3']);
 });
+
+/** A wall clock that advances a little on every read, so a budget exhausts. */
+function advancingClock(step = 0.01) { let t = 0; return () => (t += step); }
+
+test('delay(60000) in setup does not trip the setup watchdog', () => {
+  const { program } = compile('void setup(){ delay(60000); Serial.println("done"); } void loop(){}');
+  const m = createMachine({ program }); m.start();
+  const ctx = fakeCtx();
+  for (let i = 0; i < 600; i++) m.tick(ctx);
+  assert.ok(m.phase === 'setup' || m.phase === 'waiting');
+  m.tick(ctx);
+  assert.equal(m.phase, 'loop');
+  assert.deepEqual(ctx.logs, ['done']);
+});
+
+test('a setup that never returns stops at 300 progress ticks', () => {
+  const { program } = compile('void setup(){ while(1){} } void loop(){}');
+  const m = createMachine({ program, now: advancingClock() }); m.start(); const ctx = fakeCtx();
+  for (let i = 0; i < 300; i++) m.tick(ctx);
+  assert.equal(m.phase, 'stopped');
+  assert.ok(m.lastError?.includes('setup did not finish'));
+});
+
+test('an empty while loop is progress and stops at 600 progress ticks', () => {
+  const { program } = compile('void loop(){ digitalWrite(5, HIGH); while(1){} }');
+  const m = createMachine({ program, now: advancingClock() }); m.start(); const ctx = fakeCtx();
+  for (let i = 0; i < 601; i++) m.tick(ctx);
+  assert.equal(m.phase, 'stopped');
+  assert.ok(m.lastError?.includes('loop did not finish'));
+  assert.ok(ctx.written.some(([, level]) => level === 'high-z'));
+});
+
+test('while(1){delay(100);} also accumulates progress and stops', () => {
+  const { program } = compile('void loop(){ while(1){ delay(100); } }');
+  const m = createMachine({ program, now: advancingClock() }); m.start(); const ctx = fakeCtx();
+  for (let i = 0; i < 1301; i++) m.tick(ctx);
+  assert.equal(m.phase, 'stopped');
+});
+
+test('a long loop yields at the budget and resumes at the same statement', () => {
+  const { program } = compile('void loop(){ for (int i = 0; i < 100; i = i + 1) { Serial.println(i); } }');
+  const m = createMachine({ program, now: advancingClock(0.1), budgetMs: 6 }); m.start();
+  const ctx = fakeCtx();
+  m.tick(ctx); // setup
+  m.tick(ctx); // budget exhausts inside the loop
+  const first = ctx.logs.length;
+  assert.ok(first > 0 && first < 100);
+  m.tick(ctx);
+  assert.ok(ctx.logs.length > first);
+});
+
+test('a half-line print flushes capped at 512 chars', () => {
+  const { program } = compile(`void loop(){ Serial.print("${'x'.repeat(600)}"); Serial.println(""); }`);
+  const m = createMachine({ program, now: advancingClock() }); m.start(); const ctx = fakeCtx();
+  m.tick(ctx); // setup
+  m.tick(ctx);
+  assert.ok(ctx.logs.length > 0);
+  assert.ok(ctx.logs.every((line) => line.length <= 512));
+});
