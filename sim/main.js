@@ -404,9 +404,11 @@ function updateStudio() {
   // The runtime panel keeps its corner; the drawer stops above it rather than
   // covering it (spec §11).
   const runtimeElement = /** @type {HTMLElement} */ (runtimePanel.element);
-  studio.element.style.bottom = runtimeElement.hidden
-    ? ''
-    : `${Math.round(runtimeElement.getBoundingClientRect().height) + 28}px`;
+  const serialElement = /** @type {HTMLElement} */ (serial.element);
+  const runtimeLift = runtimeElement.hidden ? 0 : Math.round(runtimeElement.getBoundingClientRect().height) + 28;
+  const serialLift = serialElement.hidden ? 0 : Math.round(serialElement.getBoundingClientRect().height) + 72;
+  const lift = Math.max(runtimeLift, serialLift);
+  studio.element.style.bottom = lift ? `${lift}px` : '';
   studio.update({
     board: bench.board,
     custom: bench.board.custom,
@@ -881,6 +883,7 @@ async function plugIn(meta = {}) {
     serial.show(true);
     serial.setFirmware(/** @type {any} */ (target ?? firmwareById('body')));
     serial.append(`esptool: ${target?.image?.label ?? 'firmware'} ready for flashing`);
+    updateStudio();
     return;
   }
 

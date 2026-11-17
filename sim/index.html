@@ -68,6 +68,41 @@
     #runtime select { font: 500 12px var(--font); color: var(--ink); background: #40362d; border: 1px solid var(--edge); border-radius: 6px; padding: 3px; }
     #runtime output { min-width: 38px; text-align: right; color: var(--ink-dim); }
 
+    /* The board's serial console: the only place setup, Wi-Fi and the brain
+       speak in the firmware's own words. It sits above the status line. */
+    #serial {
+      position: fixed; left: 50%; bottom: 58px; transform: translateX(-50%); z-index: 4;
+      width: min(640px, calc(100vw - 28px)); max-height: min(42vh, 300px); box-sizing: border-box;
+      display: flex; flex-direction: column; gap: 8px; padding: 12px 14px;
+      font: 500 13px/1.35 var(--font); color: var(--ink);
+      background: var(--glass-strong); border: 1px solid var(--edge); border-radius: 12px;
+      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    }
+    #serial h2 { margin: 0; font: 600 13px/1.2 var(--font); }
+    #serial pre {
+      margin: 0; min-height: 78px; max-height: 170px; overflow: auto; padding: 8px 10px;
+      color: var(--ink-dim); background: #16110d; border: 1px solid var(--edge); border-radius: 8px;
+      font: 500 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+      white-space: pre-wrap; overflow-wrap: anywhere;
+    }
+    #serial form { display: flex; gap: 6px; }
+    #serial input {
+      flex: 1 1 auto; min-width: 0; padding: 6px 8px; color: var(--ink);
+      background: rgba(255, 240, 220, 0.06); border: 1px solid var(--edge); border-radius: 7px; font: inherit;
+    }
+    #serial button {
+      padding: 6px 10px; border: 1px solid var(--edge); border-radius: 7px; cursor: pointer;
+      color: var(--ink); background: rgba(255, 240, 220, 0.06); font: 600 12px var(--font);
+    }
+    #serial button:hover:not(:disabled) { background: rgba(240, 180, 106, 0.18); border-color: rgba(240, 180, 106, 0.5); }
+    #serial button:disabled, #serial input:disabled { opacity: 0.55; cursor: default; }
+    #serial label { display: flex; align-items: center; gap: 8px; color: var(--ink-dim); font-size: 12px; }
+    #serial select {
+      flex: 1 1 auto; max-width: 240px; padding: 4px 6px; color: var(--ink);
+      background: #40362d; border: 1px solid var(--edge); border-radius: 6px; font: 500 12px var(--font);
+    }
+    #serial [data-role="cancel"] { align-self: flex-start; }
+
     #hint {
       position: fixed; top: 52px; left: 14px; max-width: min(420px, calc(100vw - 28px));
       padding: 10px 14px; border-radius: 12px;
@@ -300,7 +335,7 @@
     #firmware-studio .studio-seg button[aria-pressed="true"] { color: #2a2018; background: var(--accent); }
     #firmware-studio [data-role="timing"] { margin-left: auto; font-variant-numeric: tabular-nums; white-space: nowrap; }
     #firmware-studio .studio-code {
-      flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: auto minmax(0, 1fr);
+      flex: 1 1 auto; min-height: 110px; display: grid; grid-template-columns: auto minmax(0, 1fr);
       align-content: start; overflow: auto;
       border: 1px solid var(--edge); border-radius: 10px; background: #16110d;
     }
@@ -338,7 +373,7 @@
     }
     #firmware-studio .studio-controls button:hover { background: rgba(240, 180, 106, 0.18); }
     #firmware-studio .studio-timeline {
-      flex: none; height: 170px; overflow: auto; display: flex; flex-direction: column; gap: 1px;
+      flex: 0 1 170px; min-height: 64px; overflow: auto; display: flex; flex-direction: column; gap: 1px;
       padding: 6px; border: 1px solid var(--edge); border-radius: 10px; background: #16110d;
       font: 500 11.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
     }
@@ -355,6 +390,8 @@
       #runbar { top: 54px; align-items: flex-start; }
       #runbar .say { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
       body.demo-running #tools { display: none; }
+      #serial { max-height: min(46vh, 320px); padding: 10px 10px 12px; }
+      #serial pre { max-height: 120px; }
       #firmware-studio {
         top: auto; left: 0; right: 0; bottom: 58px; width: 100vw;
         height: min(80vh, calc(100vh - 130px)); padding: 12px 12px 14px;
