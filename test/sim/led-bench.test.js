@@ -119,3 +119,47 @@ test('the resistor can be on the cathode side of the LED', () => {
   bench = addWire(bench, 'r:2', 'src:-', 'black');
   assert.equal(evaluateLedBench(bench, 'led').state, 'on');
 });
+
+import { planById, planSteps } from '../../sim/plan.js';
+import { applyStep, startBench } from '../../sim/recipes.js';
+
+/** The power-a-rail project's real wiring, exactly as Build lays it down. */
+const powerARail = () => planSteps(/** @type {any} */ (planById('power-a-rail'))).reduce(applyStep, startBench(emptyBench()));
+
+test('a battery through the regulator lights the LED with USB out', () => {
+  const bench = powerARail();
+  assert.equal(bench.usb, false);
+  const led = evaluateLedBench(bench, 'led');
+  assert.equal(led.state, 'on');
+  // The bounded LED model uses a 2 V forward drop.
+  assert.ok(Math.abs(led.currentMa - (3.3 - 2) / 220.1 * 1000) < 0.01, `current ${led.currentMa}`);
+});
+
+test('a flat battery leaves the regulator in dropout, so the LED is off', () => {
+  const flat = {
+    ...powerARail(),
+    placed: powerARail().placed.map((p) => (p.part === 'battery-4xaa' ? { ...p, properties: { ...p.properties, charge: 0 } } : p)),
+  };
+  assert.equal(evaluateLedBench(flat, 'led').state, 'off');
+});
+
+test('a bench supply is a modeled source as well', () => {
+  let bench = emptyBench();
+  for (const part of /** @type {const} */ (['led-5mm', 'resistor', 'bench-supply'])) bench = addPart(bench, part, { x: 0, z: 0 }).bench;
+  bench = addWire(bench, 'bench:+', 'r:1', 'red');
+  bench = addWire(bench, 'r:2', 'led:A', 'yellow');
+  bench = addWire(bench, 'led:K', 'bench:-', 'black');
+  assert.equal(evaluateLedBench(bench, 'led').state, 'on');
+});
+
+test('a battery wired straight to the LED lights it at its own voltage', () => {
+  let bench = emptyBench();
+  for (const part of /** @type {const} */ (['led-5mm', 'resistor', 'battery-4xaa'])) bench = addPart(bench, part, { x: 0, z: 0 }).bench;
+  bench = addWire(bench, 'bat:+', 'r:1', 'red');
+  bench = addWire(bench, 'r:2', 'led:A', 'yellow');
+  bench = addWire(bench, 'led:K', 'bat:-', 'black');
+  const led = evaluateLedBench(bench, 'led');
+  assert.equal(led.state, 'on');
+  // 6 V pack, 0.6 Ω pack resistance, 220 Ω resistor, 2 V LED.
+  assert.ok(Math.abs(led.currentMa - (6 - 2) / 220.6 * 1000) < 0.05, `current ${led.currentMa}`);
+});

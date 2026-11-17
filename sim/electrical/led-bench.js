@@ -1,6 +1,90 @@
 import { nets } from '../netlist.js';
 import { PARTS } from '../parts.js';
+import { DEVICES } from '../devices/catalog.js';
+import { batterySource } from './power-sources.js';
 import { DEFAULT_LED_FORWARD_VOLTAGE, evaluateLed } from './led.js';
+
+/**
+ * A capability value that may be a fixed number or read from a property. A
+ * regulator's voltage also maps a written value ("3.3") to a number.
+ * @param {any} value @param {Record<string, any>} properties @param {boolean} [mapValues]
+ */
+function scalar(value, properties, mapValues = false) {
+  if (typeof value === 'number') return value;
+  if (value && typeof value === 'object' && typeof value.property === 'string') {
+    const raw = properties[value.property];
+    if (mapValues && value.values && typeof value.values[String(raw)] === 'number') return value.values[String(raw)];
+    return Number(raw);
+  }
+  return NaN;
+}
+
+/**
+ * The sources the bounded LED loop solves: a bench DC source, a regulated or
+ * battery supply, and a regulator output whose input is one of those on shared
+ * ground and clear of dropout. Everything else stays unsupported.
+ * @param {import('../bench.js').Bench} bench
+ * @param {any} n
+ */
+function modeledSources(bench, n) {
+  /** @type {{ id: string, positive: string, negative: string, voltage: number, resistance: number, currentLimitMa: number, allowed: string[] }[]} */
+  const sources = [];
+  /** @type {{ p: import('../bench.js').Placed, cap: any, voltage: number }[]} */
+  const regulators = [];
+  for (const p of bench.placed) {
+    if (p.burnt) continue;
+    if (p.part === 'dc-source') {
+      sources.push({
+        id: p.id, positive: `${p.id}:+`, negative: `${p.id}:-`,
+        voltage: Number(p.properties.voltage),
+        resistance: Number(p.properties.internalResistanceOhm) || 0,
+        currentLimitMa: Number(p.properties.currentLimitMa),
+        allowed: [],
+      });
+      continue;
+    }
+    for (const raw of DEVICES[p.part]?.capabilities ?? []) {
+      const cap = /** @type {any} */ (raw);
+      if (cap.kind === 'source' && cap.positive && cap.negative) {
+        sources.push({
+          id: p.id, positive: `${p.id}:${cap.positive}`, negative: `${p.id}:${cap.negative}`,
+          voltage: scalar(cap.voltage, p.properties),
+          resistance: scalar(cap.internalResistanceOhm, p.properties) || 0,
+          currentLimitMa: scalar(cap.currentLimitMa, p.properties),
+          allowed: [],
+        });
+      } else if (cap.kind === 'battery' && cap.positive && cap.negative) {
+        const spec = batterySource(p.properties);
+        if (spec) {
+          sources.push({
+            id: p.id, positive: `${p.id}:${cap.positive}`, negative: `${p.id}:${cap.negative}`,
+            voltage: spec.voltage, resistance: spec.internalResistanceOhm,
+            currentLimitMa: spec.currentLimitMa, allowed: [],
+          });
+        }
+      } else if (cap.kind === 'regulator' && cap.input && cap.output && cap.ground) {
+        const voltage = scalar(cap.voltage, p.properties, true);
+        if (Number.isFinite(voltage) && voltage > 0) regulators.push({ p, cap, voltage });
+      }
+    }
+  }
+  for (const { p, cap, voltage } of regulators) {
+    const input = `${p.id}:${cap.input}`, ground = `${p.id}:${cap.ground}`;
+    const feed = sources.find((s) => n.same(input, s.positive) && n.same(ground, s.negative));
+    if (!feed) continue;
+    const dropout = scalar(cap.dropoutVoltage, p.properties) || 0;
+    if (feed.voltage < voltage + dropout) continue;
+    sources.push({
+      id: p.id, positive: `${p.id}:${cap.output}`, negative: ground,
+      // A bench regulator is stiff enough for a few tens of mA; this is the
+      // bounded stand-in for its output impedance, not a datasheet figure.
+      voltage, resistance: 0.1,
+      currentLimitMa: scalar(cap.currentLimitMa, p.properties),
+      allowed: [input, ground, feed.positive, feed.negative],
+    });
+  }
+  return sources;
+}
 
 /** Evaluate a single unbranched source–resistor–LED loop from actual nets.
  * @param {import('../bench.js').Bench} bench
@@ -11,7 +95,7 @@ export function evaluateLedBench(bench, ledId) {
   if (!led) throw new RangeError('unknown LED');
   if (led.burnt) return { state: 'burnt', currentMa: 0 };
   const n = nets(bench);
-  const sources = bench.placed.filter(p => p.part === 'dc-source' && !p.burnt);
+  const sources = modeledSources(bench, n);
   const resistors = bench.placed.filter(p => p.part === 'resistor' && !p.burnt);
   const anode = `${ledId}:A`, cathode = `${ledId}:K`;
   // Reachability through other modeled passive elements detects closed loops
@@ -37,7 +121,7 @@ export function evaluateLedBench(bench, ledId) {
       // network is outside the one-source approximation.
       for (const other of sources) {
         if (other.id === excludedSource) continue;
-        const positive = n.netOf(`${other.id}:+`), negative = n.netOf(`${other.id}:-`);
+        const positive = n.netOf(other.positive), negative = n.netOf(other.negative);
         if (queue[i] === positive) neighbours.push(negative);
         if (queue[i] === negative) neighbours.push(positive);
       }
@@ -46,7 +130,8 @@ export function evaluateLedBench(bench, ledId) {
     return false;
   };
   for (const source of sources) {
-    const positive = `${source.id}:+`, negative = `${source.id}:-`;
+    if (!Number.isFinite(source.voltage) || source.voltage <= 0) continue;
+    const positive = source.positive, negative = source.negative;
     if (n.same(positive, negative) && (n.same(anode, positive) || n.same(cathode, positive))) return { state: 'short', currentMa: 0 };
     if (n.same(anode, negative)) {
       const reversed = n.same(cathode, positive) || resistors.some(r => (n.same(`${r.id}:1`, positive) && n.same(`${r.id}:2`, cathode)) || (n.same(`${r.id}:2`, positive) && n.same(`${r.id}:1`, cathode)));
@@ -62,7 +147,7 @@ export function evaluateLedBench(bench, ledId) {
       if (closed) return { state: 'unsupported', currentMa: 0 };
       continue;
     }
-    const allowed = new Set([positive, negative, anode, cathode, ...(direct ? [] : [`${matching[0].id}:1`, `${matching[0].id}:2`])]);
+    const allowed = new Set([positive, negative, anode, cathode, ...source.allowed, ...(direct ? [] : [`${matching[0].id}:1`, `${matching[0].id}:2`])]);
     for (const button of bench.placed.filter(p => p.part === 'push-button' && p.properties.pressed === true)) {
       allowed.add(`${button.id}:1`);
       allowed.add(`${button.id}:2`);
@@ -70,7 +155,7 @@ export function evaluateLedBench(bench, ledId) {
     const extra = [positive, negative, anode, cathode].some(point => n.members(point).some(member => !member.startsWith('bb') && !allowed.has(member)));
     if (extra || (direct && matching.length)) return { state: 'unsupported', currentMa: 0 };
     const resistance = direct ? 0 : Number(matching[0].properties.ohms);
-    return evaluateLed({ voltage: Number(source.properties.voltage), resistance: resistance + Number(source.properties.internalResistanceOhm), forwardVoltage: DEFAULT_LED_FORWARD_VOLTAGE, maxCurrentMa: 20, maxPowerMw: 60, currentLimitMa: Number(source.properties.currentLimitMa) });
+    return evaluateLed({ voltage: source.voltage, resistance: resistance + source.resistance, forwardVoltage: DEFAULT_LED_FORWARD_VOLTAGE, maxCurrentMa: 20, maxPowerMw: 60, currentLimitMa: source.currentLimitMa });
   }
   return { state: 'off', currentMa: 0 };
 }
