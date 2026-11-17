@@ -926,7 +926,8 @@ async function maybeProvision(mine) {
             label: simText(lang, 'board.screenKeep'),
             run: () => {
               offerLocked = false;
-              if (!missing.length) panels.status(simText(lang, 'board.provisionSkipped')); else begin(false);
+              if (!missing.length) panels.status(simText(lang, 'board.screenKept', { current: bench.board.settings.screen, wanted: screen }));
+              else begin(false);
             },
           },
         ],
