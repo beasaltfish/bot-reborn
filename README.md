@@ -4,9 +4,9 @@
 
 English | [中文](README.zh-CN.md)
 
-> **A brain you configure, and a workbench to build it on.** Give an ESP32-S3
-> or an old phone a voice, a character and a body — wire it, flash it and set it
-> up from one page, before you buy a single part.
+> **A brain you configure, and a workbench to build it on.** Turn an ESP32-S3 or
+> an old phone into a robot with a voice and a character — wire it, flash it and
+> set it up from one page, before you buy a single part.
 
 <p align="center"><a href="https://youtube.com/shorts/Y80lk1O1Z-0"><img src="docs/media/breadboard.gif" width="440" alt="An ESP32-S3 on a breadboard with a mic and an amp, talking back"></a></p>
 
@@ -14,8 +14,8 @@ English | [中文](README.zh-CN.md)
 
 ## What you can build
 
-Three gadgets this platform has already run, plus the route that needs no
-parts at all. Each is a different body on the same brain.
+Three gadgets that have already been built on this platform, plus the route
+that needs no parts at all. Each is a different body on the same brain.
 
 - **A desk companion that talks back.** An ESP32-S3, a microphone, an amp and a
   speaker on a breadboard, with a screen for a face.
