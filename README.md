@@ -6,7 +6,7 @@ English | [中文](README.zh-CN.md)
 
 > **A brain you configure, and a workbench to build it on.** Turn an ESP32-S3 or
 > an old phone into a robot with a voice and a character — wire it, flash it and
-> set it up from one page, before you buy a single part.
+> set it up from one local app, before you buy a single part.
 
 <p align="center"><a href="https://youtube.com/shorts/Y80lk1O1Z-0"><img src="docs/media/breadboard.gif" width="440" alt="An ESP32-S3 on a breadboard with a mic and an amp, talking back"></a></p>
 
@@ -48,11 +48,12 @@ Four layers, each given its own provider and key:
   sees each line first and picks one action, so "stop" stops the car now rather
   than after a chat round trip.
 
-Any OpenAI-compatible provider works; the admin page ships presets and tests
-each key as you type it. Keys stay on the computer, in a file under
+Ears, mind and voice take any OpenAI-compatible provider; the admin page ships
+presets and tests each key as you type it. Reflex is the exception: it wants a
+local decision model served at an endpoint, not a chat provider. Keys stay on the computer, in a file under
 `~/.bot-reborn/` that only your user can read, and are sent only to the
 providers you chose. The robot never sees them: it holds a token that says
-which character it is.
+which character it is. See [Security](docs/development.md#security).
 
 <img src="docs/media/admin.png" width="440" alt="The admin page: a character's basic settings and the QR code a phone scans to become its body">
 
@@ -95,14 +96,15 @@ machine. It exists so the first hour of a build costs nothing:
 
 - **Wire it by hand**, hole by hole: a seated pin's wire ends in a free hole on
   the same strip, and the netlist is computed from what you actually built.
-- **Wire it for me** does the audio build in about forty seconds, then hands it
-  back so you can do it yourself.
+- **Build it for me** leaves the audio build standing; **Demo** shows it going
+  together in about forty seconds. Either way you can undo it and do it
+  yourself.
 - **Mistakes are bounded, and some of them burn a virtual part** — a reversed
   supply is the classic.
-- **Eleven device families** come with a bilingual five-stage lesson each, and
+- **Ten device families** come with a bilingual five-stage lesson each, and
   there are nine guided projects that build something small and check it.
 
-<p align="center"><a href="https://youtube.com/shorts/0MMilmoEPdo"><img src="docs/media/wire-it-for-me.gif" width="300" alt="The wiring simulator: click &quot;Wire it for me&quot; and an ESP32 gets a mic, a speaker and a screen"></a></p>
+<p align="center"><a href="https://youtube.com/shorts/0MMilmoEPdo"><img src="docs/media/wire-it-for-me.gif" width="300" alt="The wiring simulator: press Demo and an ESP32 gets a mic, a speaker and a screen"></a></p>
 
 Power, current, level and bus checks are bounded models, not SPICE. Firmware
 support is reported separately, and the table below is the honest version of
@@ -122,8 +124,10 @@ touching a board.
    The admin page opens in your browser.
 2. **Open the workbench:** <http://localhost:8787/sim/> (or the link in the
    admin sidebar). It opens only on the computer the brain runs on.
-3. **Press Wire it for me.** An ESP32 gets a microphone, an amp and a speaker,
-   then a screen, then the dog shows up on it. Undo it, and do it yourself.
+3. **Open Projects, pick Audio + screen, and press Demo.** An ESP32 gets a
+   microphone, an amp, a speaker and a screen in about forty seconds. Then
+   press **Build it for me** to get the same bench left standing, or Undo it and
+   wire it hole by hole yourself.
 
 No parts, no keys, no hardware. When you want the real one, keep reading.
 
@@ -132,8 +136,8 @@ No parts, no keys, no hardware. When you want the real one, keep reading.
 Every build needs the brain, a computer on the same Wi-Fi as the body, plus
 **API keys** for speech-to-text, a chat model and text-to-speech.
 
-The body is an ESP32-S3: it talks, listens, and shows a pet dog on a screen. It
-does not drive a car yet.
+The body is an ESP32-S3: it talks, listens, shows a pet dog on a screen, and
+runs timed moves on a car's motor driver inputs (GPIO 4–7).
 
 - An **ESP32-S3** dev board, an **INMP441** microphone, a **MAX98357A** amp and
   a speaker, and a small SPI screen. Pin tables are in
@@ -144,6 +148,9 @@ does not drive a car yet.
   board finds the brain on its own.
 - Turn **Barge-in off** for this character. The body has no echo cancellation,
   so it would hear itself and interrupt itself.
+- Driving a toy, give the character **Body: Car**, wire the four motor inputs,
+  and calibrate: `cal drive` if it goes backwards, `cal steer` if it turns the
+  wrong way. The board stops the car within a second of losing the brain.
 
 The phone body — an Android phone plus an FT232H, which is what drove the car
 in the demos above — still works, but it is not the direction here and the
@@ -168,17 +175,18 @@ table is which is which:
 | TB6612FNG + DC motor | yes | — | yes |
 | WS2812 strip | yes | — | yes |
 | Power: USB, 4×AA, bench, MB102 | yes | USB only | yes |
+| MPU-6050 (the tarot wand) | yes | reads it, untested on a board | — |
 
 The real firmware still implements only the original body: the INMP441
-microphone, the MAX98357A amp and speaker, a screen, and four motor pins on
-GPIO 4–7 for the car. Everything else in that table is something the workbench
-can teach and the board cannot run yet.
+microphone, the MAX98357A amp and speaker, a screen, four motor pins on GPIO
+4–7 for the car, and the MPU-6050 on I²C. Everything else in that table is
+something the workbench can teach and the board cannot run yet.
 
 ### What a body can do
 
 | Body | Moves | Shows | Needs |
 |---|---|---|---|
-| Car | drives, cruises, stops | a face | phone + FT232H (the older route) |
+| Car | drives, cruises, stops | a face | ESP32 motor pins, or a phone + FT232H |
 | Pet on a screen | poses, barks | a dog | a screen |
 | Tarot | no | cards | an MPU-6050 wand |
 | Dry run | logged only | a face | nothing |
@@ -186,10 +194,10 @@ can teach and the board cannot run yet.
 
 ## Status and limits
 
-**ESP32 body:** hears, talks and shows a pet dog on a breadboard, set up from
-the admin page. Driving is the next step, along with choosing the screen from
-the admin page. The tarot wand works in the simulator; the firmware reads it
-too, but that has not been tried on a real board yet.
+**ESP32 body:** hears, talks, shows a pet dog on a breadboard and drives a toy's
+motor inputs, all set up from the admin page. Choosing the screen from the admin
+page is still missing. The tarot wand works in the simulator; the firmware reads
+it too, but that has not been tried on a real board yet.
 
 **Phone body:** works end to end on one robot and one phone, and is kept as it
 is. The simple-commands reflex was driven by a real voice on that car and the
@@ -200,6 +208,7 @@ Some hardware numbers are still unmeasured.
 
 ## More
 
+- [bot-reborn.agentlenshq.com](https://bot-reborn.agentlenshq.com) — a 20-second look at the workbench
 - [`firmware/README.md`](firmware/README.md) — the ESP32 body: pins, flashing, setup
 - [`docs/story.md`](docs/story.md) — the gadget this platform came out of
 - [`docs/hardware.md`](docs/hardware.md) — the toy car's wiring, pin map, every measurement

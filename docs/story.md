@@ -61,7 +61,7 @@ machine — the reflex model already does — and the body can shrink to somethi
 much smaller than a phone. A phone, it turns out, is heavy enough to tip the
 car over when it backs up.
 
-That smaller body is an ESP32-S3. It hears, talks and shows a pet dog on a
-small screen, on a breadboard with no wheels yet. You flash and set it up from
-the admin page in Chrome, over one USB cable, and it finds the brain on its
-own.
+That smaller body is an ESP32-S3. It hears, talks, shows a pet dog on a small
+screen and drives the toy's motor inputs — though the breadboard rig in the
+demos has no wheels mounted yet. You flash and set it up from the admin page in
+Chrome, over one USB cable, and it finds the brain on its own.
