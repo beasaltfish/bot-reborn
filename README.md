@@ -130,12 +130,10 @@ No parts, no keys, no hardware. When you want the real one, keep reading.
 ## Real hardware
 
 Every build needs the brain, a computer on the same Wi-Fi as the body, plus
-**API keys** for speech-to-text, a chat model and text-to-speech. Then pick a
-body.
+**API keys** for speech-to-text, a chat model and text-to-speech.
 
-### ESP32 body
-
-Talking, listening, and a pet dog on a screen. It does not drive a car yet.
+The body is an ESP32-S3: it talks, listens, and shows a pet dog on a screen. It
+does not drive a car yet.
 
 - An **ESP32-S3** dev board, an **INMP441** microphone, a **MAX98357A** amp and
   a speaker, and a small SPI screen. Pin tables are in
@@ -147,25 +145,10 @@ Talking, listening, and a pet dog on a screen. It does not drive a car yet.
 - Turn **Barge-in off** for this character. The body has no echo cancellation,
   so it would hear itself and interrupt itself.
 
-### Phone body
-
-Drives a toy car.
-
-- **A cheap toy robot or car** with a drive motor and steering. Ours is a
-  Silverlit Maze Breaker — the only one tested, but any toy on the same kind of
-  motor driver should behave the same way.
-- **An FT232H breakout** — the bridge between the phone's USB port and the
-  toy's motor driver — plus a soldering iron, wire, cardboard and rubber bands.
-- **An Android phone with Chrome.** The phone talks to the board over WebUSB,
-  which iPhones do not have.
-- Let Chrome use USB and the microphone on that page, once per phone: open
-  `chrome://flags/#unsafely-treat-insecure-origin-as-secure`, add the address
-  the admin page shows, set it to Enabled, relaunch. Read the **D6/D7 soldering
-  warning** in [`docs/hardware.md`](docs/hardware.md) before you cut anything.
-- **Scan the character's QR code**, plug the board in, and press Listen. The
-  robot shows what it is still missing, and each missing part is a step.
-
-No car yet? Set a character's body to **Dry run** and the moves only reach the
+The phone body — an Android phone plus an FT232H, which is what drove the car
+in the demos above — still works, but it is not the direction here and the
+README does not teach it: [`docs/hardware.md`](docs/hardware.md) does. Without
+wheels, set a character's body to **Dry run** and the moves only reach the
 brain's log, or to **Cannot move** for a robot that just talks.
 
 ## What runs where
@@ -195,7 +178,7 @@ can teach and the board cannot run yet.
 
 | Body | Moves | Shows | Needs |
 |---|---|---|---|
-| Car | drives, cruises, stops | a face | phone + FT232H |
+| Car | drives, cruises, stops | a face | phone + FT232H (the older route) |
 | Pet on a screen | poses, barks | a dog | a screen |
 | Tarot | no | cards | an MPU-6050 wand |
 | Dry run | logged only | a face | nothing |
@@ -203,15 +186,15 @@ can teach and the board cannot run yet.
 
 ## Status and limits
 
-**Phone body:** works end to end on one robot and one phone. The
-simple-commands reflex has been driven by a real voice on the car and the 0.8
-threshold holds up; the bark preset is still on its first guess. The phone is
-top-heavy and has tipped the car over backing up.
-
 **ESP32 body:** hears, talks and shows a pet dog on a breadboard, set up from
-the admin page. It does not drive a car yet, which is the next step, along with
-choosing the screen from the admin page. The tarot wand works in the simulator;
-the firmware reads it too, but that has not been tried on a real board yet.
+the admin page. Driving is the next step, along with choosing the screen from
+the admin page. The tarot wand works in the simulator; the firmware reads it
+too, but that has not been tried on a real board yet.
+
+**Phone body:** works end to end on one robot and one phone, and is kept as it
+is. The simple-commands reflex was driven by a real voice on that car and the
+0.8 threshold holds up; the bark preset is still on its first guess. The phone
+is top-heavy and has tipped the car over backing up.
 
 Some hardware numbers are still unmeasured.
 
