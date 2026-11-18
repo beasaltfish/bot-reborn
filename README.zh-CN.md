@@ -39,8 +39,8 @@
 - **耳朵** —— 语音转文字。
 - **心智** —— 对话模型，加上 persona：它是谁、怎么说话、用什么语言。
 - **声音** —— 文字转语音。
-- **反射** —— 可选。一个小决策模型先看每一句话，只挑一个动作，所以"停"是现在停，
-  而不是等对话模型想完一轮再停。
+- **反射** —— 可选。你自己提供的决策模型先看每一句话，只挑一个动作，所以"停"是现在
+  停，而不是等对话模型想完一轮再停。
 
 任何 OpenAI 兼容的 provider 都能用；admin 页面自带常用预设，边填边测 key。key 留在
 你自己电脑上 `~/.bot-reborn/` 下一个只有你能读的文件里，只发给你选的那几家。机器人
@@ -50,10 +50,14 @@
 
 ### 拿反射当例子：一层是怎么配的
 
-在对话模型看到一句话之前，一个 0.8B 的决策模型先读它，挑一个动作——`stop`、
+反射和其他三层一样，背后用什么模型由你决定：JEV 那一类决策模型、你自己训练并挂在
+`/v1/systemone` 上的、或者就在同一台机器上跑一个小模型。平台不依赖你用哪一种。
+
+不管用哪个，它都在对话模型看到一句话之前先读它，挑一个动作——`stop`、
 `forward`、`backward`、`left`、`right`、`keep_going`——或者 `pass`，把这一轮交给
-对话模型。它给的是概率不是文字，所以快：在 Mac mini M4 上从转写到动作约 200 毫秒，
-而且回复里没有语音，只有动作。
+对话模型。它给的是概率不是文字，所以才能快：回复里没有语音，只有动作。
+
+这个项目一直在用的那个是 0.8B 的模型，在 Mac mini M4 上从转写到动作约 200 毫秒。
 
 ![反射服务端日志：第一次调用花 3.6 秒加载模型，之后每次 203–220 毫秒](docs/media/reflex-log.png)
 
@@ -61,12 +65,14 @@
 超过 0.8 时才发出：拿不准的一律交给对话模型，慢一点，但不会把车带歪。**反射判错比
 判慢糟得多。**
 
+这个例子模型：
+
 - **训练方法：** [Unsloth 的 decision model 配方](https://unsloth.ai/docs/basics/train-your-own-decision-model-with-unsloth)
 - **数据集：**[`beasaltfish/robot-simple-commands`](https://huggingface.co/datasets/beasaltfish/robot-simple-commands) —— 由 [`training/commands/`](training/commands/) 生成
-- **模型：**[`beasaltfish/robot-simple-commands-qwen3.5-0.8b`](https://huggingface.co/beasaltfish/robot-simple-commands-qwen3.5-0.8b)
+- **权重：**[`beasaltfish/robot-simple-commands-qwen3.5-0.8b`](https://huggingface.co/beasaltfish/robot-simple-commands-qwen3.5-0.8b)
   （[GGUF](https://huggingface.co/beasaltfish/robot-simple-commands-qwen3.5-0.8b-GGUF)）
 
-它只认英文。别的语言的指令应该分数偏低、落到对话模型上，但这条没测过。
+这个例子只认英文。别的语言的指令应该分数偏低、落到对话模型上，但这条没测过。
 
 ## 工作台
 

@@ -44,9 +44,9 @@ Four layers, each given its own provider and key:
 - **Mind** — the chat model, plus the persona that decides who it is and how it
   talks, in any language.
 - **Voice** — text to speech.
-- **Reflex** — optionally, a small decision model that sees each line first and
-  picks one action, so "stop" stops the car now rather than after a chat round
-  trip.
+- **Reflex** — optionally, a decision model you supply and serve yourself. It
+  sees each line first and picks one action, so "stop" stops the car now rather
+  than after a chat round trip.
 
 Any OpenAI-compatible provider works; the admin page ships presets and tests
 each key as you type it. Keys stay on the computer, in a file under
@@ -58,11 +58,18 @@ which character it is.
 
 ### Reflex, as an example of a layer
 
-Before the chat model sees a line, a 0.8B decision model reads it and picks one
-move — `stop`, `forward`, `backward`, `left`, `right`, `keep_going` — or
-`pass`, which hands the turn to the chat model. It answers with a probability,
-not text, which is why it is fast: about 200 ms from transcript to move on a
-Mac mini M4, with no voice in the reply, only the action.
+Reflex is one layer like the others, and the model behind it is yours to
+choose: a JEV-style decision model, one you trained yourself and serve at
+`/v1/systemone`, or a small one running on the same machine. Nothing about the
+platform depends on which.
+
+Whatever it is, it reads each line before the chat model and picks one move —
+`stop`, `forward`, `backward`, `left`, `right`, `keep_going` — or `pass`, which
+hands the turn to the chat model. It answers with a probability, not text, which
+is why it can be fast: no voice in the reply, only the action.
+
+The one this project has been using is a 0.8B model. On a Mac mini M4 it
+answers about 200 ms after the transcript.
 
 ![The reflex server's log: after a 3.6 s first call that loads the model, every request takes 203–220 ms](docs/media/reflex-log.png)
 
@@ -71,13 +78,15 @@ number suggests, because a move fires only above 0.8: anything it is unsure of
 is passed to the chat model, which is slower but does not lurch the car off.
 Getting a reflex wrong is worse than getting it late.
 
+The example model:
+
 - **Trained with** [Unsloth's decision-model recipe](https://unsloth.ai/docs/basics/train-your-own-decision-model-with-unsloth)
 - **Dataset:** [`beasaltfish/robot-simple-commands`](https://huggingface.co/datasets/beasaltfish/robot-simple-commands) — built by [`training/commands/`](training/commands/)
-- **Model:** [`beasaltfish/robot-simple-commands-qwen3.5-0.8b`](https://huggingface.co/beasaltfish/robot-simple-commands-qwen3.5-0.8b)
+- **Weights:** [`beasaltfish/robot-simple-commands-qwen3.5-0.8b`](https://huggingface.co/beasaltfish/robot-simple-commands-qwen3.5-0.8b)
   ([GGUF](https://huggingface.co/beasaltfish/robot-simple-commands-qwen3.5-0.8b-GGUF))
 
-It is English only. A command in another language should score low and fall
-through to the chat model, but that is untested.
+That example is English only. A command in another language should score low and
+fall through to the chat model, but that is untested.
 
 ## The workbench
 
