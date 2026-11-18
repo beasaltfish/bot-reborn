@@ -18,7 +18,7 @@ import { PARTS, BOARD_OUTLINE, holeXY } from '../parts.js';
 import { pinPoints, isHole } from '../bench.js';
 import { boardToTable } from '../parts.js';
 import {
-  BOARD_TOP, MM, MAT_THICK, BIN_COLORS, buildBreadboard, buildBin, buildMat, buildPart, buildTable, buildWire, drawScreen, paintOled, dispose,
+  BOARD_TOP, MM, MAT_THICK, BIN_COLORS, buildBreadboard, buildBin, buildMat, buildPart, buildTable, buildWire, drawScreen, outline, paintOled, dispose,
 } from './meshes.js';
 import { BIN } from '../layout.js';
 import { createWandState } from '../wand-state.js';
@@ -64,7 +64,7 @@ export function createWorld(canvas) {
   renderer.toneMapping = THREE.NeutralToneMapping;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x2b241e);
+  scene.background = new THREE.Color(0xded3c0);
   // Baked-looking light: a warm sky over a wooden floor, and one sun from the
   // back left so the boards' edges and the wires' tops catch it. No shadows.
   scene.add(new THREE.HemisphereLight(0xfff4e2, 0x7a5a3c, 2.2));
@@ -437,6 +437,7 @@ export function createWorld(canvas) {
       let g = builtBoards.get(bd.id);
       if (!g) {
         g = buildBreadboard();
+        outline(g);
         g.name = `board:${bd.id}`;
         const body = g.getObjectByName('breadboard');
         if (body) body.userData = { kind: 'board', id: bd.id };
@@ -463,6 +464,7 @@ export function createWorld(canvas) {
         const def = PARTS[p.part];
         const made = buildPart(def, { onBoard: p.seated, burnt: p.burnt, pressed: p.properties.pressed === true });
         g = made.group;
+        outline(g);
         g.name = `part:${p.id}`;
         g.userData = { kind: 'part', id: p.id, anchors: made.anchors, screen: made.screen ?? null };
         if (p.seated) markHanging(g, made.anchors, pinPoints(b, p), def);

@@ -336,13 +336,54 @@ function buildCar(state) {
   return { group: g, anchors };
 }
 
+/**
+ * The one line colour every drawn edge uses: a warm near-black, not `#000`,
+ * so the outline sits in the same family as the shadows instead of cutting
+ * the eye like ink on glass.
+ */
+const OUTLINE = new THREE.LineBasicMaterial({ color: 0x2b2018 });
+
+/**
+ * Give every form in a group its own outline, the way a handbook draws a
+ * board. Shape then reads from the line rather than from how far a face
+ * happens to be from the colour behind it, which is the only thing that keeps
+ * a cream breadboard legible on a cream bench.
+ *
+ * Print and shadow are skipped: they are pictures laid on a surface, not
+ * forms, and an outline round them would draw a box on the floor.
+ * @param {THREE.Object3D} g
+ */
+export function outline(g) {
+  /** @type {THREE.Mesh[]} */
+  const forms = [];
+  g.traverse((o) => {
+    const mesh = /** @type {any} */ (o);
+    if (!mesh.isMesh || !mesh.geometry) return;
+    // The holes are one merged mesh: its outline would box in all forty rows.
+    if (mesh.name === 'holes') return;
+    if (mesh.geometry.type === 'PlaneGeometry') return;
+    if (mesh.material?.transparent) return;
+    forms.push(/** @type {THREE.Mesh} */ (mesh));
+  });
+  for (const o of forms) {
+    const line = new THREE.LineSegments(new THREE.EdgesGeometry(o.geometry, 35), OUTLINE);
+    line.position.copy(o.position);
+    line.quaternion.copy(o.quaternion);
+    // Lifted a hair off the faces it traces: a line laid exactly on a surface
+    // z-fights with it and mostly disappears.
+    line.scale.copy(o.scale).multiplyScalar(1.006);
+    line.renderOrder = 2;
+    o.parent?.add(line);
+  }
+}
+
 /** The wooden table: a big plane with a grain drawn once on a canvas. */
 export function buildTable() {
   const tex = texture('wood', () => {
     const canvas = document.createElement('canvas');
     canvas.width = canvas.height = 1024;
     const ctx = /** @type {CanvasRenderingContext2D} */ (canvas.getContext('2d'));
-    ctx.fillStyle = '#d2ab7e';
+    ctx.fillStyle = '#ded3c0';
     ctx.fillRect(0, 0, 1024, 1024);
     // A fixed seed, so the grain is the same on every load.
     let seed = 7;
@@ -350,7 +391,7 @@ export function buildTable() {
     for (let i = 0; i < 260; i++) {
       const y0 = rnd() * 1024;
       const dark = rnd() < 0.7;
-      ctx.strokeStyle = dark ? `rgba(120,78,40,${0.05 + rnd() * 0.12})` : `rgba(255,236,205,${0.05 + rnd() * 0.1})`;
+      ctx.strokeStyle = dark ? `rgba(152,128,100,${0.03 + rnd() * 0.05})` : `rgba(255,252,244,${0.06 + rnd() * 0.08})`;
       ctx.lineWidth = 0.6 + rnd() * 2.6;
       ctx.beginPath();
       const amp = 2 + rnd() * 6;
@@ -364,7 +405,7 @@ export function buildTable() {
       ctx.stroke();
     }
     // Plank seams.
-    ctx.fillStyle = 'rgba(90,58,30,0.35)';
+    ctx.fillStyle = 'rgba(170,150,122,0.18)';
     for (const y of [0, 256, 512, 768]) ctx.fillRect(0, y, 1024, 2);
     const t = new THREE.CanvasTexture(canvas);
     t.colorSpace = THREE.SRGBColorSpace;
@@ -400,7 +441,7 @@ export function buildMat(bounds) {
     const ctx = /** @type {CanvasRenderingContext2D} */ (canvas.getContext('2d'));
     const W = canvas.width;
     const H = canvas.height;
-    ctx.fillStyle = '#2f6b55';
+    ctx.fillStyle = '#7e8a7f';
     ctx.fillRect(0, 0, W, H);
     // A little mottling, so it reads as a material and not a flat fill.
     let seed = 11;
@@ -463,7 +504,7 @@ export function buildMat(bounds) {
   const d = bounds.z1 - bounds.z0;
   // One slab whose top face carries the print: a separate printed sheet laid
   // on a slab flickers wherever the two faces meet, seen from far off.
-  const side = new THREE.MeshLambertMaterial({ color: 0x24533f });
+  const side = new THREE.MeshLambertMaterial({ color: 0x67736a });
   const top = new THREE.MeshLambertMaterial({ map: tex });
   const g = new THREE.Mesh(new THREE.BoxGeometry(w, MAT_THICK, d), [side, side, top, side, side, side]);
   // Its top is the table top things stand on (y = 0); the wood is lowered under it.
@@ -1176,13 +1217,13 @@ const HOUSING = 14 * MM * 0.75;
  */
 export function buildWire(a, b, color) {
   const g = new THREE.Group();
-  const housing = mat('gloss', 0x141414);
+  const housing = mat('matte', 0x141414);
   /** @type {THREE.Color} */
   let c;
   try { c = new THREE.Color(color); } catch { c = new THREE.Color(0x888888); }
   for (const p of [a, b]) {
     g.add(box(1, HOUSING, 1, housing, p.x, p.y, p.z));
-    g.add(box(0.6, 0.6, 0.6, mat('gloss', c), p.x, p.y + HOUSING, p.z));
+    g.add(box(0.6, 0.6, 0.6, mat('matte', c), p.x, p.y + HOUSING, p.z));
   }
   const ta = a.clone().setY(a.y + HOUSING + 0.3);
   const tb = b.clone().setY(b.y + HOUSING + 0.3);
@@ -1193,8 +1234,17 @@ export function buildWire(a, b, color) {
   // soft arch; the bezier's flat-topped controls give it the slack look of a
   // real jumper rather than a semicircle.
   const curve = new THREE.CubicBezierCurve3(ta, ta.clone().setY(crest), tb.clone().setY(crest), tb);
-  const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, Math.max(24, Math.round(span * 1.2)), 0.3, 7), mat('gloss', c));
-  g.add(tube);
+  const segments = Math.max(24, Math.round(span * 1.2));
+  const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, segments, 0.3, 7), mat('matte', c));
+  // A matte wire has no highlight to tell it apart from the one behind it, so
+  // it carries its own edge instead: a slightly fatter tube drawn back-facing,
+  // in the colour the wire would be in shade. This is what makes a bundle of
+  // jumpers read as separate wires rather than one smear of colour.
+  const edge = new THREE.Mesh(
+    new THREE.TubeGeometry(curve, segments, 0.39, 7),
+    new THREE.MeshBasicMaterial({ color: c.clone().multiplyScalar(0.42), side: THREE.BackSide }),
+  );
+  g.add(edge, tube);
   return g;
 }
 
