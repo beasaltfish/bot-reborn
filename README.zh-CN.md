@@ -1,230 +1,199 @@
-<p align="center"><img src="admin/src/logo.svg" width="128" alt="bot-reborn logo: a little robot hatching from an eggshell"></p>
+<p align="center"><img src="admin/src/logo.svg" width="128" alt="bot-reborn logo: 一只从蛋壳里孵出来的小机器人"></p>
 
 # bot-reborn
 
 [English](README.md) | 中文
 
-> **一个帮你把 AI 小玩意从想法做到实物的工作台。** 模拟、接线、烧录、配置，
-> AI 大脑跑在你自己的电脑上。下面的演示是在它上面做的第一个小玩意。
+> **一个你自己配的大脑，一个先把活干起来的工作台。** 给一块 ESP32-S3 或一台旧手机
+> 一张嘴、一个性格、一个身体——接线、烧录、配置，全在一个页面里完成，而且可以先不买
+> 任何零件。
 
-🌐 **主页：** https://bot-reborn.agentlenshq.com/zh/ — 20 秒看一遍这个工作台。
+<p align="center"><a href="https://youtube.com/shorts/Y80lk1O1Z-0"><img src="docs/media/breadboard.gif" width="440" alt="面包板上的一块 ESP32-S3，接着麦克风和功放，正在答话"></a></p>
 
-**把一个 30 块钱的玩具机器人改成 AI 机器人：旧手机当身体，电脑当大脑。**
+*让它用三个字证明自己还活着："两根铜线。"* —— [看这条 Short（有声）](https://youtube.com/shorts/Y80lk1O1Z-0)
 
-<p align="center"><a href="https://youtube.com/shorts/SNA9ok1j0Sg"><img src="docs/media/demo.gif" width="480" alt="真狗在吃饭，机器狗陪着孩子玩"></a></p>
+## 你能搭出什么
 
-<p align="center"><em>真狗：忙着吃饭。机器狗：正在值班。</em> — <a href="https://youtube.com/shorts/SNA9ok1j0Sg">看带声音的短视频</a></p>
+这套东西已经真跑通过三个成品，外加一条完全不用买零件的路。它们用的是同一个大脑,
+只是身体不同。
 
-**还没买零件？先在浏览器里接一遍。** 启动大脑，打开接线模拟器，点"Wire it for
-me"（帮我接），40 秒内看着一块 ESP32 装上麦克风、喇叭和屏幕；然后自己一步步
-接，直到小狗出现。不需要任何硬件，见[自己做一个](#自己做一个)（模拟器页面为英文）。
+- **一个会顶嘴的桌面伙伴。** 一块 ESP32-S3、一个麦克风、一个功放和喇叭，都用面包板
+  连起来，再加一块屏当脸。[1 分钟](https://youtube.com/shorts/Y80lk1O1Z-0)
+- **一辆听得懂话的小车。** 一个 4 美元的玩具、一台手机当身体，加一个 200 毫秒就能
+  给出动作的反射模型。[40 秒](https://youtube.com/shorts/zPd0V5mH7p4)
+- **一只屏幕上的宠物。** 会坐下、会握爪，没人跟它说话就自己趴下。
+  [30 秒](https://youtube.com/shorts/zxbSJz2M2tY)
+- **或者，先一个都不做：**[在浏览器里把线接一遍](#五分钟上手零硬件)。接错了烧的是
+  虚拟零件，不是真零件。
 
-<p align="center"><a href="https://youtube.com/shorts/0MMilmoEPdo"><img src="docs/media/wire-it-for-me.gif" width="270" alt="接线模拟器：点一下 Wire it for me，ESP32 就接上了麦克风、喇叭和屏幕"></a></p>
+是先有这几个成品，才有这套平台：[第一个是怎么做出来的](docs/story.md)。
 
-**📖 完整的改造故事：[我把一台 30 块钱的玩具机器人，改成了会顶嘴的 AI 机器人](https://agentlenshq.com/zh-CN/maker/four-dollar-robot)**
+## 大脑和它的角色
 
-<table>
-  <tr>
-    <td align="center"><img src="docs/media/before.jpg" height="320" alt="买来时的样子：盒装的 Silverlit Maze Breaker"></td>
-    <td align="center"><img src="docs/media/phone-mount.jpg" height="320" alt="去掉头的机器人上，用纸板马鞍和橡皮筋固定着一台手机，屏幕上是机器人的脸"></td>
-  </tr>
-  <tr>
-    <td align="center">改造前：一个巡线玩具</td>
-    <td align="center">改造后：头没了，手机就是脸</td>
-  </tr>
-</table>
+你电脑上跑的一个小 Node 服务就是大脑：它听、它理解、它决定、它说话。它带动的每个
+机器人都叫一个**角色**——角色是数据不是代码，在 admin 页面里就是几栏，第二个角色还能
+直接复制第一个角色的 provider，连 key 一起。
 
-## 更多演示
+四层，每层单独选 provider、单独填 key：
 
-<table>
-  <tr>
-    <td align="center" width="50%"><a href="https://youtube.com/shorts/3Y984t1W6nc"><img src="docs/media/homework.gif" width="400" alt="机器人在书桌上回答孩子写作业时问的科学问题"></a><br>孩子：问题很多。机器人：脾气不小。</td>
-    <td align="center" width="50%"><a href="https://youtube.com/shorts/zPd0V5mH7p4"><img src="docs/media/reflex.gif" width="400" alt="机器人听到一句口令就开动，旁边是反射模型服务的日志"></a><br>一句口令，电脑上一个 0.8B 的小模型约 200 毫秒就给出动作，不经过大模型。</td>
-  </tr>
-  <tr>
-    <td align="center" width="50%"><a href="https://youtube.com/shorts/Y80lk1O1Z-0"><img src="docs/media/breadboard-zh.gif" width="400" alt="面包板上的 ESP32-S3，接着麦克风和功放，在跟人对话"></a><br>让它用三个词证明自己活着，它说："两根铜线。"</td>
-    <td align="center" width="50%"><a href="https://youtube.com/shorts/zxbSJz2M2tY"><img src="docs/media/pet.gif" width="200" alt="2 美元的屏幕上的小狗，听口令坐下、握手、趴下"></a><br>它有脸了，还听得懂话：没有按钮，只靠声音。</td>
-  </tr>
-</table>
+- **耳朵** —— 语音转文字。
+- **心智** —— 对话模型，加上 persona：它是谁、怎么说话、用什么语言。
+- **声音** —— 文字转语音。
+- **反射** —— 可选。一个小决策模型先看每一句话，只挑一个动作，所以"停"是现在停，
+  而不是等对话模型想完一轮再停。
 
-点每张 GIF 可以看带声音的短视频。
+任何 OpenAI 兼容的 provider 都能用；admin 页面自带常用预设，边填边测 key。key 留在
+你自己电脑上 `~/.bot-reborn/` 下一个只有你能读的文件里，只发给你选的那几家。机器人
+看不到 key，它只持有一个说明"我是哪个角色"的 token。
 
-## 它能做什么
+<img src="docs/media/admin.png" width="440" alt="admin 页面：某个角色的基本设置，以及让手机成为它身体的二维码">
 
-- **你说话，它开车、回答。** 比如"往前走两秒，然后左转"。
-- **反射：聊天模型还没开始想，它已经动了。** 可选功能。一个小的决策模型先听
-  每一句话，从你写好的几个答案里挑一个。每个答案做什么由你定：放个声音、
-  动一下、停下，或者把这一轮交给聊天模型。自带两个预设：*学狗叫就叫回去*，
-  和*简单移动命令*（"停"、"过来"、"左转"立刻执行）。预设只是数据，在管理页
-  里随便改。
-- **亮屏就在听。** 不需要唤醒词，想要也可以打开。按停止键，车马上停，不管它正在
-  干什么。
-- **屏幕上的小狗。** 带小 SPI 屏幕的 ESP32-S3 身体会显示一只宠物狗：你一说
-  （任何语言都行），它就趴下、坐下、站起、握手、转圈；10 秒没人说话，它会自己趴回去。
-- **塔罗占卜师。** 给角色选塔罗身体，晃一下 MPU-6050 签棒（模拟器里用鼠标晃也行）：
-  屏幕上洗牌、翻开一张韦特塔罗牌，再念出解读。每次抽牌都是随机的。
-- **买之前先接一遍。** 浏览器里的接线模拟器让你在虚拟面包板上练习 ESP32 的
-  接线，接错了烧的是虚拟零件。
-- **一个大脑，多个角色。** 每个机器人是一个角色，有自己的名字、声音、服务商和
-  key，都在浏览器里的管理页上配置，界面有中文和英文。
+### 拿反射当例子：一层是怎么配的
 
-### 模拟器里的首包器件
+在对话模型看到一句话之前，一个 0.8B 的决策模型先读它，挑一个动作——`stop`、
+`forward`、`backward`、`left`、`right`、`keep_going`——或者 `pass`，把这一轮交给
+对话模型。它给的是概率不是文字，所以快：在 Mac mini M4 上从转写到动作约 200 毫秒，
+而且回复里没有语音，只有动作。
 
-首个器件包覆盖 LED 与电阻、两端按键与 KY-004 按键模块、HC-SR04、BME280、
-SSD1306 OLED、SG90 舵机、TB6612FNG 与小直流电机、WS2812 灯带，以及 USB、
-4×AA 电池、实验室电源和 MB102 稳压模块。每个器件家族都有双语五阶段课程和至少
-一个引导项目，自由模式可以放置任意器件。电源、电流、电平和总线检查都是有界的
-模型，不是 SPICE；固件支持单独标注，当前真实固件仍只实现原有的音频/屏幕/玩具接法。
+![反射服务端日志：第一次调用花 3.6 秒加载模型，之后每次 203–220 毫秒](docs/media/reflex-log.png)
 
-## 你需要准备
+它在测试集上 86.6%（164 条对 142 条）。实际用起来比这个数字好，因为动作只在置信度
+超过 0.8 时才发出：拿不准的一律交给对话模型，慢一点，但不会把车带歪。**反射判错比
+判慢糟得多。**
 
-不管做哪种身体，都需要大脑（和身体连同一个 Wi-Fi 的一台电脑），以及 **API
-key**：语音转文字、聊天模型、文字转语音各一个。任何兼容 OpenAI 接口的服务商都行，
-管理页里预置了常用的几家。然后选一种身体：
-
-**ESP32 身体**——能说、能听、能显示一只宠物狗，也能开玩具车：四个电机输入是 GPIO 4–7，
-就是以前 FT232H 拨的那四根（模拟器里也能先接一遍、开起来）。
-
-- 一块 **ESP32-S3** 开发板、一个 **INMP441** 麦克风、一个 **MAX98357A** 功放和
-  喇叭，再加一块显示小狗用的小 SPI 屏幕；想让它开，再加那台玩具车。引脚表在
-  [`firmware/README.md`](firmware/README.md)（英文）。
-- **Chrome 或 Edge** 和一根 USB 线，用来在管理页里配置板子。
-
-**手机身体**——开玩具车。
-
-- **一个便宜的玩具机器人或玩具车**，有驱动电机和转向。我们用的是 Silverlit
-  Maze Breaker，目前只测过这一款，但用同类电机驱动芯片的玩具应该都一样能用。
-- **一块 FT232H 转接板**，连接手机的 USB 口和玩具的电机驱动。
-- **一台装了 Chrome 的安卓手机。** 手机通过 WebUSB 控制转接板，iPhone 没有
-  WebUSB。另外还要一根接转接板的 USB-C 线。
-- 电烙铁、几根线、纸板和橡皮筋。
-
-**反射（可选）**：一个决策模型，可以是 JEV，也可以是用
-[Unsloth](https://github.com/unslothai/unsloth) 训练、在 `/v1/systemone`
-上提供服务的模型。"简单移动命令"预设的题目和
-[`training/commands/`](training/commands/) 训练出的模型一字不差。
-
-还没有车？把角色的身体设成**演练**，动作只写进大脑的日志；或者设成**不能动**，
-做一个只会说话的机器人。这样手机就完全不用接转接板。
-
-## 原理
-
-<p align="center"><img src="docs/media/wiring.jpg" width="400" alt="玩具自带的电路板，FT232H 的线接在电机和转向的输入上"></p>
-
-玩具自带的巡线芯片被绕开了。FT232H 引出四根线，直接接到玩具电机驱动和转向线圈
-的输入端，手机通过 USB 控制这四个引脚。手机是机器人的身体：听、播放、开车、
-显示表情。所有做决定的事——听到自己的名字、理解、决定做什么、回话——都在同一个
-Wi-Fi 下一台电脑上的小 Node 服务里运行，这就是机器人的大脑。
-
-大脑一开始在手机浏览器里，后来搬到了电脑上，原因有两个：一是所有听你说话的环节
-将来都能在自己的机器上本地运行（反射模型已经是）；二是身体可以换成比手机小得多的东西。
-事实证明，手机太重，车一后退就可能翻倒。
-
-这个更小的身体就是 ESP32-S3（[`firmware/`](firmware/README.md)）。它在面包板上
-已经能听、说，还能在小屏幕上显示一只小狗，还没装上车。在 Chrome 里打开管理页，
-用一根 USB 线就能刷固件、配 Wi-Fi，它会自己找到大脑。
-
-## 反射模型
-
-喊"停"，车应该马上停，而不是等语音识别、大模型、语音合成走完一个来回。所以在大模型
-看到一句话之前，先由一个 0.8B 的决策模型读一遍，从几个简单动作里挑一个——`stop`、
-`forward`、`backward`、`left`、`right`、`keep_going`——或者选 `pass`，把这一轮交给
-大模型。它输出的是概率，不生成文字，所以快：在 Mac mini M4 上，从拿到转写文字到
-发出动作大约 200 毫秒。这一步不出声音，只出动作。
-
-![反射服务的日志：第一次请求加载模型用了 3.6 秒，之后每次 203–220 毫秒](docs/media/reflex-log.png)
-
-它在测试集上的准确率是 86.6%（164 条对了 142 条）。实际用起来比这个数字好，因为
-只有概率超过 0.8 才会动：拿不准的都交给大模型，慢一点，但车不会乱冲。反射这一层
-宁可慢，不能错。
-
-- **训练方法**：Unsloth 的决策模型教程
-  [Train your own decision model with Unsloth](https://unsloth.ai/docs/basics/train-your-own-decision-model-with-unsloth)
-- **数据集**：[`beasaltfish/robot-simple-commands`](https://huggingface.co/datasets/beasaltfish/robot-simple-commands)
-  ——由 [`training/commands/`](training/commands/) 生成
-- **模型**：[`beasaltfish/robot-simple-commands-qwen3.5-0.8b`](https://huggingface.co/beasaltfish/robot-simple-commands-qwen3.5-0.8b)
+- **训练方法：** [Unsloth 的 decision model 配方](https://unsloth.ai/docs/basics/train-your-own-decision-model-with-unsloth)
+- **数据集：**[`beasaltfish/robot-simple-commands`](https://huggingface.co/datasets/beasaltfish/robot-simple-commands) —— 由 [`training/commands/`](training/commands/) 生成
+- **模型：**[`beasaltfish/robot-simple-commands-qwen3.5-0.8b`](https://huggingface.co/beasaltfish/robot-simple-commands-qwen3.5-0.8b)
   （[GGUF](https://huggingface.co/beasaltfish/robot-simple-commands-qwen3.5-0.8b-GGUF)）
 
-目前只支持英文。按设计，中文口令的得分应该会很低，于是交给大模型处理，但这一点还
-没实测过。
+它只认英文。别的语言的指令应该分数偏低、落到对话模型上，但这条没测过。
 
-## 自己做一个
+## 工作台
 
-1. **启动大脑**，在和身体连同一个 Wi-Fi 的电脑上：
+接线模拟器就是浏览器里的一张工作台，地址是大脑所在机器上的 `/sim/`。它存在的意义是
+让搭东西的头一个小时不花钱：
+
+- **一根一根接**：坐进板子的引脚，另一头落进同一条 strip 上的空孔，网表是按你真连
+  的东西算出来的。
+- **Wire it for me** 用四十秒接完音频那套，然后把场子还给你，让你自己再来一遍。
+- **错误是有边界的，其中一些会烧掉虚拟零件**——电源接反是经典的一例。
+- **十一个器件家族**，每家配一节双语五阶段实验课，另有九个能自己跑通、自己检查的
+  引导项目。
+
+<p align="center"><a href="https://youtube.com/shorts/0MMilmoEPdo"><img src="docs/media/wire-it-for-me.gif" width="300" alt="接线模拟器：点一下 Wire it for me，ESP32 就接上麦克风、喇叭和屏幕"></a></p>
+
+供电、电流、电平和总线检查都是有界的模型，不是 SPICE。固件支持情况单独列出，下面那张
+表就是诚实的版本。固件工作台还能不碰真板子，对着虚拟台子编译并运行一段 sketch。
+
+## 五分钟上手（零硬件）
+
+1. **先把大脑跑起来**，放在和身体同一个 Wi-Fi 的电脑上：
 
    ```bash
    npm install
-   server/models/fetch.sh   # 唤醒词和 VAD 模型，只需一次
+   server/models/fetch.sh   # 唤醒词和 VAD 模型，只跑一次
    npm start
    ```
 
-   浏览器会自动打开管理页，左下角可以切到中文。新建一个角色，选好它的身体，
-   给每一层（听、想、说，以及可选的反射）选服务商、填 key；每填一个，页面就会
-   测一下能不能用。第二个角色可以直接从第一个复制服务商，连 key 一起复制。
+   浏览器会打开 admin 页面。
+2. **打开工作台：**<http://localhost:8787/sim/>（admin 侧边栏也有入口）。它只在大脑
+   所在的机器上能打开。
+3. **点 Wire it for me。** ESP32 先接上麦克风、功放和喇叭，再接上屏幕，然后狗就在屏幕
+   上出现了。撤销它，自己接一遍。
 
-   <img src="docs/media/admin.png" width="400" alt="管理页：一个角色的基本设置，以及手机扫码成为它身体用的二维码">
-2. **先练一遍（可选）。** 大脑跑起来后，打开
-   <http://localhost:8787/sim/>（或点管理页侧栏里的链接），在虚拟面包板上接音频线：
-   **Wire it for me** 会演示一遍，然后你自己动手。接错了烧的是虚拟零件，不是真的。
-   只有运行大脑的那台电脑能打开（页面为英文）。
-3. **做一个身体。** 二选一：
+不用零件、不用 key、不用硬件。想要真的那个，往下看。
 
-   **ESP32 身体**
-   - **接线。** 麦克风、功放和屏幕的引脚表在
-     [`firmware/README.md`](firmware/README.md#wiring)（英文）。
-   - **配置板子。** 在 Chrome 或 Edge 里打开管理页，把板子插在标着 **USB** 的
-     那个口，点 **Set up a board**。"First time"会写入固件、Wi-Fi 和角色的
-     口令，不需要装 ESP-IDF。板子会自己找到大脑。
-   - 给这个角色把 **Barge-in（打断）关掉**：这个身体没有回声消除，不关的话它会听到
-     自己说话并打断自己。出了问题，
-     [`docs/esp32-lessons.md`](docs/esp32-lessons.md)（英文）列出了这块板子真正
-     出过的故障。
+## 真实硬件
 
-   **手机身体**
-   - **接线。** 引脚图、接线方法和各项测量数据在
-     [`docs/hardware.md`](docs/hardware.md)（英文）。动手之前先看里面关于 D6/D7
-     焊接的警告。
-   - **让手机上的 Chrome 允许这个页面使用 USB 和麦克风**，每台手机做一次：打开
-     `chrome://flags/#unsafely-treat-insecure-origin-as-secure`，填入管理页上显示
-     的地址（`http://<电脑>:8787`），设为 Enabled，然后重启 Chrome。这个页面是
-     局域网里的普通 http，而 Chrome 只在它认为安全的页面上开放 USB 和麦克风。
-     在路由器上给电脑固定一个 IP，就不用反复设置。
-   - **用手机扫管理页上这个角色的二维码**，插上转接板，按"开始听"。机器人会显示
-     还缺什么，每一项缺的就是一步：插上转接板、教它哪边是左。没插转接板的手机也
-     照样能听能说。
+每个搭建都需要大脑、一台和身体同一个 Wi-Fi 的电脑，以及**语音转写、对话模型、
+文字转语音的 API key**。然后挑一个身体。
 
-你的 key 只存在电脑上 `~/.bot-reborn/` 下的一个文件里，只有你的用户能读，也只
-发给你选的服务商。手机永远看不到 key：它手里只有一个说明"我是哪个角色"的口令。
-详见 [Security](docs/development.md#security)（英文）。
+### ESP32 身体
 
-## 现状
+会听、会说，屏幕上还有一只宠物狗。它还不能开车。
 
-**手机身体：** 在一台机器人、一台手机上已经从头到尾跑通。简单移动命令的反射已经在车上
-用真人声音试过（见上面的反射演示），0.8 的阈值站得住；学狗叫那套预设的阈值还是初步的
-猜测。手机头重脚轻，后退时把车带翻过。
+- 一块 **ESP32-S3** 开发板、一个 **INMP441** 麦克风、一个 **MAX98357A** 功放和一个
+  喇叭，再加一块小 SPI 屏。引脚表在
+  [`firmware/README.md`](firmware/README.md#wiring)。
+- **Chrome 或 Edge** 和一根 USB 线。打开 admin 页面，把板子插到标着 **USB** 的口
+  上，点 **Set up a board**：选 "First time" 会把固件、Wi-Fi 和角色 token 一起写
+  进去，不用装 ESP-IDF。板子自己会找到大脑。
+- 这个角色要把 **Barge-in 关掉**。这块身体没有回声消除，不关它会听见自己、打断自己。
 
-**ESP32 身体：** 在面包板上能听、能说、能显示一只小狗，也能开玩具车（GPIO 4–7 接玩具
-驱动板的四个输入 + 共地），板子在管理页里配置。还要做的是在管理页里选屏幕。塔罗签棒
-在模拟器里能用；固件也会读它，但还没在真板子上试过。
+### 手机身体
 
-有些硬件参数还没测。
+能开小车。
+
+- **一个便宜的小车或机器人玩具**，带驱动电机和转向。我们用的是 Silverlit Maze
+  Breaker——只测过这一个，但只要玩具用的是同一种电机驱动，应该表现一样。
+- **一块 FT232H 转接板** —— 手机 USB 口和玩具电机驱动之间的桥 —— 外加电烙铁、
+  导线、硬纸板和橡皮筋。
+- **一台装了 Chrome 的安卓手机。** 手机通过 WebUSB 和板子讲话，iPhone 没有这个。
+- 每台手机要放行一次 USB 和麦克风：打开
+  `chrome://flags/#unsafely-treat-insecure-origin-as-secure`，填上 admin 页面显示的
+  地址，设为 Enabled，重启 Chrome。动手之前先读
+  [`docs/hardware.md`](docs/hardware.md) 里的 **D6/D7 焊接警告**。
+- **扫角色的二维码**，插上板子，按 Listen。机器人会显示它还缺什么，缺的每一件都是
+  一个步骤。
+
+还没有小车？把角色的身体设成 **Dry run**，动作只会写进大脑的日志；或者设成
+**Cannot move**，那就只是一个会说话的机器人。
+
+## 什么能跑在哪
+
+工作台建模的东西比真实固件实现的多——这是有意的。下表说明哪个是哪个：
+
+| 器件 | 仿真 | 真实固件 | 实验课 |
+|---|---|---|---|
+| LED 和电阻 | 是 | — | 是 |
+| 按钮（两脚） | 是 | — | 是 |
+| 按钮模块（KY-004） | 是 | — | 是 |
+| HC-SR04 测距 | 是 | — | 是 |
+| BME280 环境 | 是 | — | 是 |
+| SSD1306 OLED | 是 | — | 是 |
+| SG90 舵机 | 是 | — | 是 |
+| TB6612FNG + 直流电机 | 是 | — | 是 |
+| WS2812 灯带 | 是 | — | 是 |
+| 供电：USB、4×AA、实验电源、MB102 | 是 | 仅 USB | 是 |
+
+真实固件目前只实现了最初那套身体：INMP441 麦克风、MAX98357A 功放加喇叭、一块屏，
+以及 GPIO 4–7 那四个给小车用的电机脚。表里其余的东西，工作台能教，板子还跑不了。
+
+### 一个身体能做什么
+
+| 身体 | 会动 | 有画面 | 需要 |
+|---|---|---|---|
+| 小车 | 前进、巡航、停 | 一张脸 | 手机 + FT232H |
+| 屏幕宠物 | 摆姿势、叫 | 一只狗 | 一块屏 |
+| 塔罗 | 不会 | 卡面 | 一根 MPU-6050 魔杖 |
+| Dry run | 只写日志 | 一张脸 | 什么都不用 |
+| Cannot move | 不会 | 一张脸 | 什么都不用 |
+
+## 状态和边界
+
+**手机身体：** 在一个机器人、一台手机上端到端跑通。简单指令那套反射已经用真人的声音
+在车上验过，0.8 这个阈值站得住；bark 预设还只是第一次的猜测。手机头重，倒车时把车
+带翻过。
+
+**ESP32 身体：** 在面包板上会听、会说，屏幕上有一只宠物狗，从 admin 页面配置。
+它还不能开车，这是下一步，同时还要把屏幕的选择放进 admin 页面。塔罗魔杖在模拟器里
+能用；固件也读得到它，但还没在真板子上试过。
+
+有些硬件数字还没测。
 
 ## 更多
 
-以下文档都是英文：
+- [`firmware/README.md`](firmware/README.md) —— ESP32 身体：引脚、烧录、配置
+- [`docs/story.md`](docs/story.md) —— 这套平台是从哪个作品里长出来的
+- [`docs/hardware.md`](docs/hardware.md) —— 小车接线、引脚图、每一项测量
+- [`docs/esp32-lessons.md`](docs/esp32-lessons.md) —— 这块 ESP32 真出过的故障
+- [`docs/development.md`](docs/development.md) —— 怎么读代码、怎么跑、测试、安全
+- [`docs/instruments.md`](docs/instruments.md) —— 齿轮按钮后面那个校准页面
+- [`docs/ui.md`](docs/ui.md) —— 机器人的脸，以及每种状态是什么意思
+- [`docs/promo-video.md`](docs/promo-video.md) —— 拍那条片子学到的东西
+- [`training/commands/`](training/commands/) —— 简单指令数据集，它的生成器和 model card
 
-- [`firmware/README.md`](firmware/README.md) — ESP32 身体：引脚、刷固件、配置
-- [`docs/esp32-lessons.md`](docs/esp32-lessons.md) — ESP32 板子出过的故障
-- [`docs/hardware.md`](docs/hardware.md) — 玩具车的接线、引脚图、每一项测量
-- [`docs/development.md`](docs/development.md) — 怎么读代码、怎么运行、测试、
-  安全
-- [`docs/instruments.md`](docs/instruments.md) — 齿轮图标后面的校准页
-- [`docs/ui.md`](docs/ui.md) — 机器人的脸，以及每种状态的含义
-- [`docs/promo-video.md`](docs/promo-video.md) — 做宣传视频学到的东西
-- [`training/commands/`](training/commands/) — 简单移动命令的数据集、生成脚本和
-  模型说明
+## 许可
 
-## 许可证
-
-[MIT](LICENSE)。`server/sounds/` 里的音效是 CC0，见
-[来源说明](server/sounds/CREDITS.md)。
+[MIT](LICENSE)。`server/sounds/` 里的音效是 CC0——见它们的
+[署名](server/sounds/CREDITS.md)。
