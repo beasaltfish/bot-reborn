@@ -4,157 +4,65 @@
 
 English | [中文](README.zh-CN.md)
 
-> **A workbench that takes your AI gadget from idea to hardware.** Simulate it,
-> wire it, flash it and configure it, with the AI brain running on your own
-> computer. The demo below is the first gadget built on it.
+> **A brain you configure, and a workbench to build it on.** Give an ESP32-S3
+> or an old phone a voice, a character and a body — wire it, flash it and set it
+> up from one page, before you buy a single part.
 
-🌐 **Homepage:** https://bot-reborn.agentlenshq.com — a 20-second look at the workbench.
+<p align="center"><a href="https://youtube.com/shorts/Y80lk1O1Z-0"><img src="docs/media/breadboard.gif" width="440" alt="An ESP32-S3 on a breadboard with a mic and an amp, talking back"></a></p>
 
-**Turn a $4 toy robot into an AI robot, with an old phone as its body and your
-computer as its brain.**
+*Asked to prove it's alive in three words: "Two copper wires."* — [watch the Short, with sound](https://youtube.com/shorts/Y80lk1O1Z-0)
 
-<p align="center"><a href="https://youtube.com/shorts/SNA9ok1j0Sg"><img src="docs/media/demo.gif" width="480" alt="The robot keeping a child company while the real dog eats"></a></p>
+## What you can build
 
-*Real dog: busy eating. Robot dog: on duty.* — [watch the Short, with sound](https://youtube.com/shorts/SNA9ok1j0Sg)
+Three gadgets this platform has already run, plus the route that needs no
+parts at all. Each is a different body on the same brain.
 
-**Not bought any parts yet? Wire it in your browser first.** Run the brain,
-open the wiring simulator, click **Wire it for me** and watch an ESP32 get a
-mic, a speaker and a screen in 40 seconds; then do it yourself, step by step,
-until the dog shows up. No hardware needed — see [Build your own](#build-your-own).
+- **A desk companion that talks back.** An ESP32-S3, a microphone, an amp and a
+  speaker on a breadboard, with a screen for a face.
+  [1 min](https://youtube.com/shorts/Y80lk1O1Z-0)
+- **A toy car that drives on a spoken command.** A $4 toy, a phone as its body,
+  and a reflex model that answers a move in about 200 ms.
+  [40 s](https://youtube.com/shorts/zPd0V5mH7p4)
+- **A pet on a screen.** It sits, shakes a paw and lies back down when nobody
+  talks to it.
+  [30 s](https://youtube.com/shorts/zxbSJz2M2tY)
+- **Or none of them yet:** [wire the whole thing in a browser first](#five-minutes-no-parts).
+  A mistake burns a virtual part, not a real one.
 
-<p align="center"><a href="https://youtube.com/shorts/0MMilmoEPdo"><img src="docs/media/wire-it-for-me.gif" width="270" alt="The wiring simulator: click &quot;Wire it for me&quot; and an ESP32 gets a mic, a speaker and a screen"></a></p>
+The gadgets came before the platform: [how the first one was built](docs/story.md).
 
-**📖 The whole build story: [I turned a $4 toy robot into an AI robot that talks back](https://agentlenshq.com/maker/four-dollar-robot)**
+## The brain and its characters
 
-<table>
-  <tr>
-    <td align="center"><img src="docs/media/before.jpg" height="320" alt="The toy as sold: a Silverlit Maze Breaker in its box"></td>
-    <td align="center"><img src="docs/media/phone-mount.jpg" height="320" alt="A phone held on the headless robot by a cardboard saddle and rubber bands, showing the robot's face"></td>
-  </tr>
-  <tr>
-    <td align="center">Before: a line-following toy</td>
-    <td align="center">After: the head is gone, the phone is the face</td>
-  </tr>
-</table>
+A small Node server on your computer is the brain. It hears, understands,
+decides and speaks. Every robot it drives is a **character** — and a character
+is data, not code: one page in the admin app, and a second character can copy
+providers from the first, keys included.
 
-## More demos
+Four layers, each given its own provider and key:
 
-<table>
-  <tr>
-    <td align="center" width="50%"><a href="https://youtube.com/shorts/3Y984t1W6nc"><img src="docs/media/homework.gif" width="400" alt="The robot on a desk answering a child's science questions during homework"></a><br>Kid: has questions. Robot: has attitude.</td>
-    <td align="center" width="50%"><a href="https://youtube.com/shorts/zPd0V5mH7p4"><img src="docs/media/reflex.gif" width="400" alt="The robot driving off a spoken command, with the reflex model's server log beside it"></a><br>A spoken move, answered in about 200 ms by a 0.8B model on the computer — no LLM call.</td>
-  </tr>
-  <tr>
-    <td align="center" width="50%"><a href="https://youtube.com/shorts/Y80lk1O1Z-0"><img src="docs/media/breadboard.gif" width="400" alt="An ESP32-S3 on a breadboard with a mic and an amp, talking back"></a><br>Asked to prove it's alive in three words: "Two copper wires."</td>
-    <td align="center" width="50%"><a href="https://youtube.com/shorts/zxbSJz2M2tY"><img src="docs/media/pet.gif" width="200" alt="A pet dog on a $2 screen sitting, shaking hands and lying down on spoken commands"></a><br>Now it has a face, and it listens: a dog on a $2 screen, no buttons, just a voice.</td>
-  </tr>
-</table>
+- **Ears** — speech to text.
+- **Mind** — the chat model, plus the persona that decides who it is and how it
+  talks, in any language.
+- **Voice** — text to speech.
+- **Reflex** — optionally, a small decision model that sees each line first and
+  picks one action, so "stop" stops the car now rather than after a chat round
+  trip.
 
-Each GIF links to its Short, with sound.
+Any OpenAI-compatible provider works; the admin page ships presets and tests
+each key as you type it. Keys stay on the computer, in a file under
+`~/.bot-reborn/` that only your user can read, and are sent only to the
+providers you chose. The robot never sees them: it holds a token that says
+which character it is.
 
-## What it does
+<img src="docs/media/admin.png" width="440" alt="The admin page: a character's basic settings and the QR code a phone scans to become its body">
 
-- **You talk, it drives and answers.** "Go forward two seconds, then turn
-  left".
-- **Reflexes, before the chat model thinks.** Optionally, a small decision
-  model hears each line first and picks one of a few answers you wrote; each
-  answer does what you set it to — play a sound, move, stop — or hands the
-  turn to the chat model. Two presets come with it: *bark* (bark at it and it
-  barks back) and *simple commands* ("stop", "come here", "turn left" act at
-  once). Both are just data you can edit on the admin page.
-- **It listens while its screen is on.** No wake word needed, though you can
-  turn one on. Hit the stop button and the car stops, whatever it was doing.
-- **A dog on a screen.** An ESP32-S3 body with a small SPI screen shows a pet
-  dog that lies, sits, stands, shakes a paw and spins when you ask, in any
-  language, and lies back down when nobody talks for ten seconds.
-- **A tarot reader.** Give a character the tarot body and shake an MPU-6050
-  wand (or mouse-shake it in the simulator): it shuffles on the screen, turns
-  over a Rider-Waite-Smith card, and reads it aloud. Each draw is random.
-- **Wire it before you buy it.** A wiring simulator in your browser lets you
-  practise the ESP32 build on a virtual bench, where a mistake burns a virtual
-  part.
-- **Several characters, one brain.** Each robot is a character with its own
-  name, voice, providers and keys, all set up from an admin page in your
-  browser, in English or Chinese.
+### Reflex, as an example of a layer
 
-### In the simulator
-
-The first device pack covers the LED and resistor, a two-terminal and a KY-004
-button, the HC-SR04, BME280, SSD1306 OLED, SG90 servo, TB6612FNG with a small
-DC motor, a WS2812 strip, and USB / 4×AA / bench / MB102 power. Each family has
-a bilingual five-stage lab lesson and at least one guided project; free mode
-can place any of them. Power, current, level and bus checks are bounded models,
-not SPICE: firmware support is reported separately and the current real
-firmware still implements only the original audio/screen/toy build.
-
-## What you need
-
-Every build needs the brain, a computer on the same Wi-Fi as the body, plus
-**API keys** for speech-to-text, a chat model and text-to-speech. Any
-OpenAI-compatible provider works; the admin page has presets for common ones.
-Then pick a body:
-
-**ESP32 body** — talks, listens, shows a pet dog, and drives a toy car: its
-four motor inputs are GPIO 4–7, the same wires the FT232H used to switch (the
-simulator wires and drives that too, before you own the parts).
-
-- An **ESP32-S3** dev board, an **INMP441** microphone, a **MAX98357A** amp
-  and a speaker, and a small SPI screen for the dog — plus the toy car, if you
-  want it to move. Pin tables are in
-  [`firmware/README.md`](firmware/README.md).
-- **Chrome or Edge** and a USB cable, to set the board up from the admin page.
-
-**Phone body** — drives a toy car.
-
-- **A cheap toy robot or car** with a drive motor and steering. Ours is a
-  Silverlit Maze Breaker. It is the only one tested so far, but
-  any toy driven by the same kind of motor driver should work the same way.
-- **An FT232H breakout board** — the bridge between the phone's USB port and
-  the toy's motor driver.
-- **An Android phone with Chrome.** The phone talks to the board over WebUSB,
-  which iPhones do not have. Plus a USB-C cable to the board.
-- A soldering iron, some wire, cardboard and rubber bands.
-
-**For reflexes (optional):** a decision model — JEV, or one trained with
-[Unsloth](https://github.com/unslothai/unsloth) and served at
-`/v1/systemone`. The simple-commands preset asks exactly the question of the
-model trained on [`training/commands/`](training/commands/).
-
-No car yet? Set a character's body to **Dry run** and the moves are only
-written to the brain's log, or to **Cannot move** for a robot that just talks. The
-phone then needs no board at all.
-
-## How it works
-
-<p align="center"><img src="docs/media/wiring.jpg" width="400" alt="The toy's own board with the FT232H wired onto its motor and steering inputs"></p>
-
-The toy's own line-following chip is cut out of the loop. Four wires from the
-FT232H go straight to the inputs of the toy's motor driver and steering coil,
-and the phone switches those four pins over USB. The phone is the robot's
-body: it listens, plays, drives and shows a face. Everything that decides —
-hearing its name, understanding, choosing what to do, talking back — runs in a
-small Node server on a computer on the same Wi-Fi, the robot's brain.
-
-The brain started out inside the phone's browser and moved to the computer for
-two reasons: everything that hears you can, in time, run locally on your own
-machine — the reflex model already does — and the body can shrink to something
-much smaller than a phone. A phone, it turns out, is heavy enough to tip the
-car over when it backs up.
-
-That smaller body is an ESP32-S3 ([`firmware/`](firmware/README.md)). It hears,
-talks and shows a pet dog on a small screen, on a breadboard with no wheels
-yet. You flash and set it up from the admin page in Chrome, over one USB
-cable, and it finds the brain on its own.
-
-## The reflex model
-
-"Stop" should stop the car now, not after a speech-to-text, chat model and
-text-to-speech round trip. So before the chat model sees a line, a 0.8B
-decision model reads it and picks one simple move — `stop`, `forward`,
-`backward`, `left`, `right`, `keep_going` — or `pass`, which hands the turn to
-the chat model. It answers with a probability, not text, which is why it is
-fast: about 200 ms from transcript to move on a Mac mini M4, with no voice in
-the reply, only the action.
+Before the chat model sees a line, a 0.8B decision model reads it and picks one
+move — `stop`, `forward`, `backward`, `left`, `right`, `keep_going` — or
+`pass`, which hands the turn to the chat model. It answers with a probability,
+not text, which is why it is fast: about 200 ms from transcript to move on a
+Mac mini M4, with no voice in the reply, only the action.
 
 ![The reflex server's log: after a 3.6 s first call that loads the model, every request takes 203–220 ms](docs/media/reflex-log.png)
 
@@ -163,17 +71,36 @@ number suggests, because a move fires only above 0.8: anything it is unsure of
 is passed to the chat model, which is slower but does not lurch the car off.
 Getting a reflex wrong is worse than getting it late.
 
-- **Trained with** Unsloth's decision-model recipe:
-  [Train your own decision model with Unsloth](https://unsloth.ai/docs/basics/train-your-own-decision-model-with-unsloth)
-- **Dataset:** [`beasaltfish/robot-simple-commands`](https://huggingface.co/datasets/beasaltfish/robot-simple-commands)
-  — built by [`training/commands/`](training/commands/)
+- **Trained with** [Unsloth's decision-model recipe](https://unsloth.ai/docs/basics/train-your-own-decision-model-with-unsloth)
+- **Dataset:** [`beasaltfish/robot-simple-commands`](https://huggingface.co/datasets/beasaltfish/robot-simple-commands) — built by [`training/commands/`](training/commands/)
 - **Model:** [`beasaltfish/robot-simple-commands-qwen3.5-0.8b`](https://huggingface.co/beasaltfish/robot-simple-commands-qwen3.5-0.8b)
   ([GGUF](https://huggingface.co/beasaltfish/robot-simple-commands-qwen3.5-0.8b-GGUF))
 
 It is English only. A command in another language should score low and fall
 through to the chat model, but that is untested.
 
-## Build your own
+## The workbench
+
+The wiring simulator is a bench in your browser, at `/sim/` on the brain's own
+machine. It exists so the first hour of a build costs nothing:
+
+- **Wire it by hand**, hole by hole: a seated pin's wire ends in a free hole on
+  the same strip, and the netlist is computed from what you actually built.
+- **Wire it for me** does the audio build in about forty seconds, then hands it
+  back so you can do it yourself.
+- **Mistakes are bounded, and some of them burn a virtual part** — a reversed
+  supply is the classic.
+- **Eleven device families** come with a bilingual five-stage lesson each, and
+  there are nine guided projects that build something small and check it.
+
+<p align="center"><a href="https://youtube.com/shorts/0MMilmoEPdo"><img src="docs/media/wire-it-for-me.gif" width="300" alt="The wiring simulator: click &quot;Wire it for me&quot; and an ESP32 gets a mic, a speaker and a screen"></a></p>
+
+Power, current, level and bus checks are bounded models, not SPICE. Firmware
+support is reported separately, and the table below is the honest version of
+it. The firmware studio can build and run a sketch against the bench without
+touching a board.
+
+## Five minutes, no parts
 
 1. **Start the brain** on a computer on the same Wi-Fi as the body:
 
@@ -183,81 +110,113 @@ through to the chat model, but that is untested.
    npm start
    ```
 
-   The admin page opens in your browser. Make a character, pick what body it
-   has, and give each layer (ears, mind, voice, and optionally reflex) a
-   provider and key; the page tests each one as you type it, and a second
-   character can copy providers, keys included, from the first.
+   The admin page opens in your browser.
+2. **Open the workbench:** <http://localhost:8787/sim/> (or the link in the
+   admin sidebar). It opens only on the computer the brain runs on.
+3. **Press Wire it for me.** An ESP32 gets a microphone, an amp and a speaker,
+   then a screen, then the dog shows up on it. Undo it, and do it yourself.
 
-   <img src="docs/media/admin.png" width="400" alt="The admin page: a character's basic settings and the QR code a phone scans to become its body">
-2. **Practice first (optional).** With the brain running, open
-   <http://localhost:8787/sim/> (or follow the link in the admin sidebar) and
-   wire the audio on a virtual bench: **Wire it for me** shows you how, then
-   you do it yourself. A mistake burns a virtual part, not a real one. It opens
-   only on the computer the brain runs on.
-3. **Build a body.** Pick one:
+No parts, no keys, no hardware. When you want the real one, keep reading.
 
-   **ESP32 body**
-   - **Wire it.** The pin tables for the mic, amp and screen are in
-     [`firmware/README.md`](firmware/README.md#wiring).
-   - **Set the board up.** Open the admin page in Chrome or Edge, plug the
-     board into the port marked **USB**, and click **Set up a board**. "First
-     time" writes the firmware, the Wi-Fi and the character's token; no
-     ESP-IDF needed. The board finds the brain by itself.
-   - Turn **Barge-in off** for this character: the body has no echo
-     cancellation, so it would hear itself and interrupt itself. If something
-     goes wrong, [`docs/esp32-lessons.md`](docs/esp32-lessons.md) lists the
-     faults this board has actually had.
+## Real hardware
 
-   **Phone body**
-   - **Wire it.** Pin map, wiring and measurements are in
-     [`docs/hardware.md`](docs/hardware.md). Read its D6/D7 soldering warning
-     before you start.
-   - **Let Chrome on the phone use USB and the microphone on that page**, once
-     per phone: open `chrome://flags/#unsafely-treat-insecure-origin-as-secure`,
-     add the address the admin page shows (`http://<computer>:8787`), set it to
-     Enabled and relaunch Chrome. The page is plain http on your own network,
-     and Chrome only allows USB and the microphone on a page it treats as
-     secure. Giving the computer a fixed address on your router saves redoing
-     this.
-   - **Scan the character's QR code** on the admin page with the phone, plug
-     the board in, and press Listen. The robot shows what it is still missing,
-     and each missing part is a step: plugging in the board, and teaching it
-     which way is left. A phone with no board plugged in still listens and
-     talks.
+Every build needs the brain, a computer on the same Wi-Fi as the body, plus
+**API keys** for speech-to-text, a chat model and text-to-speech. Then pick a
+body.
 
-Your keys stay on the computer, in a file under `~/.bot-reborn/` that only your
-user can read, and are sent only to the providers you chose. The phone never
-sees them: it holds a token that says which character it is. See
-[Security](docs/development.md#security).
+### ESP32 body
 
-## Status
+Talking, listening, and a pet dog on a screen. It does not drive a car yet.
+
+- An **ESP32-S3** dev board, an **INMP441** microphone, a **MAX98357A** amp and
+  a speaker, and a small SPI screen. Pin tables are in
+  [`firmware/README.md`](firmware/README.md#wiring).
+- **Chrome or Edge** and a USB cable. Open the admin page, plug the board into
+  the port marked **USB**, and click **Set up a board**: "First time" writes the
+  firmware, the Wi-Fi and the character's token, with no ESP-IDF to install. The
+  board finds the brain on its own.
+- Turn **Barge-in off** for this character. The body has no echo cancellation,
+  so it would hear itself and interrupt itself.
+
+### Phone body
+
+Drives a toy car.
+
+- **A cheap toy robot or car** with a drive motor and steering. Ours is a
+  Silverlit Maze Breaker — the only one tested, but any toy on the same kind of
+  motor driver should behave the same way.
+- **An FT232H breakout** — the bridge between the phone's USB port and the
+  toy's motor driver — plus a soldering iron, wire, cardboard and rubber bands.
+- **An Android phone with Chrome.** The phone talks to the board over WebUSB,
+  which iPhones do not have.
+- Let Chrome use USB and the microphone on that page, once per phone: open
+  `chrome://flags/#unsafely-treat-insecure-origin-as-secure`, add the address
+  the admin page shows, set it to Enabled, relaunch. Read the **D6/D7 soldering
+  warning** in [`docs/hardware.md`](docs/hardware.md) before you cut anything.
+- **Scan the character's QR code**, plug the board in, and press Listen. The
+  robot shows what it is still missing, and each missing part is a step.
+
+No car yet? Set a character's body to **Dry run** and the moves only reach the
+brain's log, or to **Cannot move** for a robot that just talks.
+
+## What runs where
+
+The workbench models more than the real firmware implements — on purpose. This
+table is which is which:
+
+| Device | Simulated | On real firmware | Lesson |
+|---|---|---|---|
+| LED and resistor | yes | — | yes |
+| Push button, two-terminal | yes | — | yes |
+| Button module (KY-004) | yes | — | yes |
+| HC-SR04 distance | yes | — | yes |
+| BME280 environment | yes | — | yes |
+| SSD1306 OLED | yes | — | yes |
+| SG90 servo | yes | — | yes |
+| TB6612FNG + DC motor | yes | — | yes |
+| WS2812 strip | yes | — | yes |
+| Power: USB, 4×AA, bench, MB102 | yes | USB only | yes |
+
+The real firmware still implements only the original body: the INMP441
+microphone, the MAX98357A amp and speaker, a screen, and four motor pins on
+GPIO 4–7 for the car. Everything else in that table is something the workbench
+can teach and the board cannot run yet.
+
+### What a body can do
+
+| Body | Moves | Shows | Needs |
+|---|---|---|---|
+| Car | drives, cruises, stops | a face | phone + FT232H |
+| Pet on a screen | poses, barks | a dog | a screen |
+| Tarot | no | cards | an MPU-6050 wand |
+| Dry run | logged only | a face | nothing |
+| Cannot move | no | a face | nothing |
+
+## Status and limits
 
 **Phone body:** works end to end on one robot and one phone. The
-simple-commands reflex has been driven by a real voice on the car (see the
-reflex demo above) and the 0.8 threshold holds up; the bark preset is still on
-its first guess. The phone is top-heavy and has tipped the car over backing up.
+simple-commands reflex has been driven by a real voice on the car and the 0.8
+threshold holds up; the bark preset is still on its first guess. The phone is
+top-heavy and has tipped the car over backing up.
 
 **ESP32 body:** hears, talks and shows a pet dog on a breadboard, set up from
-the admin page. It does not drive a car yet, which is the next step, along
-with choosing the screen from the admin page. The tarot wand works in the
-simulator; the firmware reads it too, but that has not been tried on a real
-board yet.
+the admin page. It does not drive a car yet, which is the next step, along with
+choosing the screen from the admin page. The tarot wand works in the simulator;
+the firmware reads it too, but that has not been tried on a real board yet.
 
 Some hardware numbers are still unmeasured.
 
 ## More
 
 - [`firmware/README.md`](firmware/README.md) — the ESP32 body: pins, flashing, setup
-- [`docs/esp32-lessons.md`](docs/esp32-lessons.md) — faults the ESP32 board has had
+- [`docs/story.md`](docs/story.md) — the gadget this platform came out of
 - [`docs/hardware.md`](docs/hardware.md) — the toy car's wiring, pin map, every measurement
-- [`docs/development.md`](docs/development.md) — reading the code, running it,
-  tests, security
-- [`docs/instruments.md`](docs/instruments.md) — the calibration page behind
-  the gear
+- [`docs/esp32-lessons.md`](docs/esp32-lessons.md) — faults the ESP32 board has had
+- [`docs/development.md`](docs/development.md) — reading the code, running it, tests, security
+- [`docs/instruments.md`](docs/instruments.md) — the calibration page behind the gear
 - [`docs/ui.md`](docs/ui.md) — the robot's face and what each state means
 - [`docs/promo-video.md`](docs/promo-video.md) — what making the video taught us
-- [`training/commands/`](training/commands/) — the simple-commands dataset,
-  its builder and model card
+- [`training/commands/`](training/commands/) — the simple-commands dataset, its builder and model card
 
 ## License
 
