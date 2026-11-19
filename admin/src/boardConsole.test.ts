@@ -42,6 +42,44 @@ describe('BoardConsole', () => {
     await expect(done).resolves.toBeUndefined();
   });
 
+  it('reads the screen back, and treats a firmware without the line as no screen', async () => {
+    const f = fakePort();
+    const c = new BoardConsole(f.port);
+    const read = c.readSettings();
+    await settle();
+    f.emit('board.ssid=HomeNet');
+    f.emit('board.pass=secret12');
+    f.emit('board.token=00000000000000000000000000000001');
+    f.emit('board.url=');
+    f.emit('board.screen=ili9341-ips');
+    f.emit('board.end');
+    await expect(read).resolves.toMatchObject({ screen: 'ili9341-ips' });
+
+    const old = fakePort();
+    const c2 = new BoardConsole(old.port);
+    const readOld = c2.readSettings();
+    await settle();
+    old.emit('board.ssid=HomeNet');
+    old.emit('board.pass=secret12');
+    old.emit('board.token=00000000000000000000000000000001');
+    old.emit('board.url=');
+    old.emit('board.end');
+    await expect(readOld).resolves.toMatchObject({ screen: '' });
+  });
+
+  it('writes screen <id> and refuses anything that is not a model id', async () => {
+    const f = fakePort();
+    const c = new BoardConsole(f.port);
+    const done = c.setScreen('ili9341-ips');
+    await settle();
+    expect(f.written).toEqual(['screen ili9341-ips\n']);
+    f.emit('screen saved');
+    await done;
+    expect(await reason(c.setScreen('../etc'))).toBe('bad-screen');
+    expect(await reason(c.setScreen('ILI9341 IPS'))).toBe('bad-screen');
+    expect(f.written).toEqual(['screen ili9341-ips\n']);
+  });
+
   it('refuses a name with a double quote, a short password, and writes nothing', async () => {
     const f = fakePort();
     const c = new BoardConsole(f.port);
@@ -115,7 +153,7 @@ describe('BoardConsole', () => {
     f.emit('board.url=');
     f.emit('board.end');
     await expect(got).resolves.toEqual({
-      ssid: 'My Home  2.4G', pass: 'pa=ss word', token: '0123456789abcdef0123456789abcdef', url: '',
+      ssid: 'My Home  2.4G', pass: 'pa=ss word', token: '0123456789abcdef0123456789abcdef', url: '', screen: '',
     });
   });
 

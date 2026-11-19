@@ -11,9 +11,9 @@ export interface LinePort {
   close(): Promise<void>;
 }
 
-export interface BoardSettings { ssid: string; pass: string; token: string; url: string }
+export interface BoardSettings { ssid: string; pass: string; token: string; url: string; screen: string }
 
-export type ConsoleReason = 'bad-ssid' | 'bad-pass' | 'bad-token' | 'no-reply' | 'rejected' | 'not-welcomed';
+export type ConsoleReason = 'bad-ssid' | 'bad-pass' | 'bad-token' | 'bad-screen' | 'no-reply' | 'rejected' | 'not-welcomed';
 
 export class ConsoleError extends Error {
   reason: ConsoleReason;
@@ -81,10 +81,11 @@ export class BoardConsole {
       const listen = (line: string) => {
         if (line === 'board.end') {
           return done(() => resolve({
-            ssid: got.ssid ?? '', pass: got.pass ?? '', token: got.token ?? '', url: got.url ?? '',
+            // `screen` is missing on firmware from before the picker existed: empty, not an error.
+            ssid: got.ssid ?? '', pass: got.pass ?? '', token: got.token ?? '', url: got.url ?? '', screen: got.screen ?? '',
           }));
         }
-        const m = /^board\.(ssid|pass|token|url)=(.*)$/.exec(line);
+        const m = /^board\.(ssid|pass|token|url|screen)=(.*)$/.exec(line);
         if (m) got[m[1]] = m[2];
       };
       const timer = setTimeout(() => done(() => reject(new ConsoleError('no-reply'))), this.opts.replyTimeoutMs ?? REPLY_TIMEOUT_MS);
@@ -101,6 +102,12 @@ export class BoardConsole {
   async setToken(token: string): Promise<void> {
     if (!/^[0-9a-fA-F]{32}$/.test(token)) throw new ConsoleError('bad-token');
     await this.command(`token ${token.toLowerCase()}\n`);
+  }
+
+  /** Pick the panel; the board needs a reboot before it uses it. */
+  async setScreen(id: string): Promise<void> {
+    if (!/^[a-z0-9-]+$/.test(id)) throw new ConsoleError('bad-screen');
+    await this.command(`screen ${id}\n`);
   }
 
   /** The board restarts and answers nothing. */
