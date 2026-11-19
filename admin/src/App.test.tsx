@@ -21,7 +21,7 @@ describe('App', () => {
   });
 
   it('places setup above the active editor and skips flashing after a phone connects', async () => {
-    const phone: Summary = { id: 'Pocket', name: 'Pocket', motion: 'none', ready: true, online: false };
+    const phone: Summary = { id: 'Pocket', name: 'Pocket', motion: 'none', ready: true, online: false, bodyKind: 'phone' };
     const pet: Summary = { id: 'Rex', name: 'Rex', motion: 'pet', ready: false, online: false };
     vi.spyOn(api, 'list').mockImplementation(async () => [{ ...phone }, { ...pet }]);
     render(<App pollMs={50} renderEditor={slot} />);
@@ -30,15 +30,15 @@ describe('App', () => {
     const editor = screen.getByTestId('editor');
     expect(card.compareDocumentPosition(editor) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(editor).toHaveTextContent('Pocket:basic');
-    expect(within(card).getByRole('status')).toHaveTextContent('Next: Choose a body and screen');
+    expect(within(card).getByRole('status')).toHaveTextContent('Next: Connect a body');
     expect(within(card).getByText('2 of 4 complete')).toBeVisible();
 
     phone.online = true;
     phone.lastSeenAt = 1;
     await waitFor(() => expect(within(card).getByRole('status')).toHaveTextContent('Next: Hear the first reply'));
     const rows = within(card).getAllByRole('listitem');
-    expect(within(rows[2]).getByText('From this brain')).toBeVisible();
-    expect(within(rows[3]).getByText('Skipped')).toBeVisible();
+    expect(within(rows[2]).getByText('Skipped')).toBeVisible();
+    expect(within(rows[3]).getByText('From this brain')).toBeVisible();
     expect(within(card).getByText('3 of 4 complete')).toBeVisible();
 
     phone.lastSpokeAt = 2;
@@ -48,7 +48,7 @@ describe('App', () => {
     delete phone.lastSeenAt;
     delete phone.lastSpokeAt;
     phone.online = false;
-    await waitFor(() => expect(within(card).getByRole('status')).toHaveTextContent('Next: Choose a body and screen'));
+    await waitFor(() => expect(within(card).getByRole('status')).toHaveTextContent('Next: Connect a body'));
 
     await userEvent.click(screen.getByRole('button', { name: /Rex/ }));
     const petCard = screen.getByRole('region', { name: 'First-time setup' });
@@ -68,7 +68,7 @@ describe('App', () => {
     expect(within(card).getByRole('status')).toHaveTextContent('Next: Add three keys');
     pet.ready = true;
     await userEvent.click(screen.getByRole('button', { name: 'Save editor changes' }));
-    await waitFor(() => expect(within(card).getByRole('status')).toHaveTextContent('Next: Choose a body and screen'));
+    await waitFor(() => expect(within(card).getByRole('status')).toHaveTextContent('Next: Flash the board (board bodies only)'));
 
     await userEvent.click(screen.getByRole('button', { name: 'Set up a board' }));
     expect(await screen.findByRole('alert')).toHaveTextContent(/Chrome or Edge/);

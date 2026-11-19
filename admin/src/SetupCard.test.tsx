@@ -16,15 +16,16 @@ describe('SetupCard', () => {
     render(<SetupCard steps={steps} next={steps[1]} />);
 
     const rows = screen.getAllByRole('listitem');
-    expect(rows.map((row) => row.dataset.step)).toEqual(['character', 'keys', 'body-screen', 'board', 'first-words']);
+    expect(rows.map((row) => row.dataset.step)).toEqual(['character', 'keys', 'board', 'body-screen', 'first-words']);
     expect(within(rows[0]).getByText('Done')).toBeVisible();
     expect(within(rows[0]).getByText('From this brain')).toBeVisible();
     expect(rows[1]).toHaveAttribute('aria-current', 'step');
     expect(within(rows[1]).getByText('Add three keys')).toBeVisible();
     expect(within(rows[1]).getByText(/Ears.*Mind.*Voice/)).toBeVisible();
     expect(within(rows[1]).getByText('To do')).toBeVisible();
-    expect(within(rows[2]).getByText(/Basic.*Body.*Set up a board.*Car.*QR code/)).toBeVisible();
-    expect(within(rows[3]).getByText(/First time \(flash \+ settings\)/)).toBeVisible();
+    expect(within(rows[2]).getByText(/First time \(flash \+ settings\)/)).toBeVisible();
+    expect(within(rows[3]).getByText(/Connect a body/)).toBeVisible();
+    expect(within(rows[3]).getByText(/cannot happen before the flash/)).toBeVisible();
     expect(within(rows[4]).getByText(/wake word/i)).toBeVisible();
     expect(within(rows[4]).getByText('Not recorded')).toBeVisible();
     expect(screen.getByText(/since this brain started/i)).toBeVisible();
@@ -32,20 +33,20 @@ describe('SetupCard', () => {
   });
 
   it('shows the skipped row but excludes it from phone progress', () => {
-    const steps = stepsFor({ motion: 'none', ready: true, lastSeenAt: 1 });
+    const steps = stepsFor({ motion: 'car', bodyKind: 'phone', ready: true, lastSeenAt: 1 });
     render(<SetupCard steps={steps} next={steps[4]} />);
 
     const rows = screen.getAllByRole('listitem');
-    expect(within(rows[2]).getByText(/Basic.*QR code.*Phone/)).toBeVisible();
-    expect(within(rows[3]).getByText('Skipped')).toBeVisible();
-    expect(within(rows[3]).getByText(/phone does not need/i)).toBeVisible();
-    expect(within(rows[3]).getByText('Not recorded')).toBeVisible();
+    expect(within(rows[2]).getByText('Skipped')).toBeVisible();
+    expect(within(rows[2]).getByText(/phone does not need/i)).toBeVisible();
+    expect(within(rows[3]).getByText(/scan the QR code/i)).toBeVisible();
+    expect(within(rows[4]).getByText('Not recorded')).toBeVisible();
     expect(screen.getByText('3 of 4 complete')).toBeVisible();
     expect(screen.getByRole('status')).toHaveTextContent('Next: Hear the first reply');
   });
 
   it('starts collapsed when all required phone steps are complete and can be reopened', async () => {
-    const steps = stepsFor({ motion: 'dry-run', ready: true, lastSeenAt: 1, lastSpokeAt: 2 });
+    const steps = stepsFor({ motion: 'dry-run', bodyKind: 'phone', ready: true, lastSeenAt: 1, lastSpokeAt: 2 });
     render(<SetupCard steps={steps} next={null} />);
 
     const summary = screen.getByText('Setup complete', { selector: 'summary' });
@@ -71,8 +72,8 @@ describe('SetupCard', () => {
     const copy = [
       ['创建角色', /先给机器人创建一个角色/, '来自这个大脑'],
       ['填入三把密钥', /「听」「想」「说」/, '来自这个大脑'],
-      ['选身体与屏幕', /「基本」.*「配置板子」.*「小车」.*二维码/, '记在此浏览器'],
-      ['刷写板子', /「第一次（刷固件 \+ 设置）」/, '记在此浏览器'],
+      ['刷写板子（只对板子身体）', /「第一次（刷固件 \+ 设置）」/, '记在此浏览器'],
+      ['让一个身体连上来', /先刷上面那块板子.*二维码/, '记在此浏览器'],
       ['听到第一句回复', /唤醒词/, '暂无记录'],
     ] as const;
     rows.forEach((row, index) => {
@@ -84,7 +85,7 @@ describe('SetupCard', () => {
     expect(screen.getByText(/本次启动以来/)).toBeVisible();
     expect(screen.getByRole('status')).toHaveTextContent('下一步：填入三把密钥');
 
-    const phone = stepsFor({ motion: 'none', ready: true, lastSeenAt: 1 });
+    const phone = stepsFor({ motion: 'car', bodyKind: 'phone', ready: true, lastSeenAt: 1 });
     view.rerender(<ChineseSetupCard steps={phone} next={phone[4]} />);
     expect(screen.getByText(/扫描「手机」区的二维码/)).toBeVisible();
     expect(screen.getByText('已跳过')).toBeVisible();

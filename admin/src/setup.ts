@@ -17,17 +17,18 @@ export function setupSteps({ characters, current, board }: {
     && (current.setupId == null || board?.setupId === current.setupId);
   const seen = current?.lastSeenAt != null;
   const spoke = current?.lastSpokeAt != null;
-  // A phone body has no board to flash even when it drives a car; with no
-  // marker, the old motion baseline still says which bodies are boardless.
-  const phone = current?.bodyKind === 'phone'
-    || current?.motion === 'none' || current?.motion === 'dry-run';
+  // Only the hello marker says a phone is on the other end. Motion cannot: a
+  // phone driving a car and a board driving the same car look identical until
+  // one of them connects, so guessing would label the wrong step.
+  const phone = current?.bodyKind === 'phone';
+  // Flashing comes before connecting: a board has to be flashed to join at all.
   return [
     { id: 'character', done: characters.length > 0, source: 'brain' },
     { id: 'keys', done: current?.ready === true, source: current ? 'brain' : 'none' },
-    { id: 'body-screen', done: seen || flashed, source: seen ? 'brain' : flashed ? 'browser' : 'none' },
     phone
       ? { id: 'board', done: false, source: 'none', optionalFor: 'phone' }
       : { id: 'board', done: flashed, source: flashed ? 'browser' : 'none' },
+    { id: 'body-screen', done: seen || flashed, source: seen ? 'brain' : flashed ? 'browser' : 'none' },
     { id: 'first-words', done: spoke, source: spoke ? 'brain' : 'none' },
   ];
 }
