@@ -142,3 +142,14 @@ describe('the screen picker', () => {
     expect(await screen.findByText(/does not offer/i)).toBeInTheDocument();
   });
 });
+
+describe('the screen picker before anything is verified', () => {
+  beforeEach(() => { installFakeApi([{ name: 'Asten' }]); });
+
+  it('says why there is nothing to pick instead of showing a dead dropdown', async () => {
+    const { serial } = fakeSerial();
+    render(<BoardSetup serial={serial} replyTimeoutMs={50} screens={[]} />);
+    expect(await screen.findByText(/no model has been verified on a real board yet/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/screen/i)).toBeDisabled();
+  });
+});

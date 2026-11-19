@@ -123,11 +123,12 @@ export function BoardSetup({ serial = realSerial, replyTimeoutMs, screens = SCRE
           </label>
         )}
         <label>{t('boardScreen')}
-          <select value={offered.some((s) => s.id === screenId) ? screenId : ''} onChange={(e) => setScreenId(e.target.value)}>
+          <select disabled={!offered.length} value={offered.some((s) => s.id === screenId) ? screenId : ''} onChange={(e) => setScreenId(e.target.value)}>
             <option value="">{t('boardScreenNone')}</option>
             {offered.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
         </label>
+        {!offered.length && <p className="board-note">{t('boardScreenNoneYet')}</p>}
         {screenId && !offered.some((s) => s.id === screenId) && (
           <p role="alert" className="board-error">{t('boardScreenUnsupported')}</p>
         )}

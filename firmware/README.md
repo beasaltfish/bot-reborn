@@ -110,6 +110,10 @@ When it is unclear, put a 100 ohm resistor in series with the rail: every
 answer under that limit is safe to look at, and nothing burns while you
 decide.
 
+You can also pick the panel in the admin page's board setup, which writes the
+same `screen <id>` command for you; the picker lists only models somebody has
+lit on real glass, so the console stays the way to try a new one.
+
 **First light.** `screen_start()` runs a red / green / blue test, one second
 each, on a task below the audio tasks. `monitor` prints
 `screen: ILI9341 320x240 up, colour test`. Then:
