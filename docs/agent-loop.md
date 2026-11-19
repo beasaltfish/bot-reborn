@@ -42,21 +42,26 @@ What it does, in order:
 - Merging. Branch protection requires the CI check and one approval.
 - The stop decisions above.
 
-## Turning the gate on (do this once, by hand)
+## Turning the gate on (done once, 2026-11-19)
 
-Not before CI has run green on this repository at least once:
+`main` requires the two CI jobs, with `strict` (a branch behind `main` must
+merge it first):
 
 ```bash
-gh api -X PUT "repos/{owner}/{repo}/branches/main/protection" \
-  -f "required_status_checks[strict]=true" \
-  -f "required_status_checks[contexts][]=js" \
-  -f "required_status_checks[contexts][]=firmware" \
-  -f "enforce_admins=false" \
-  -f "required_pull_request_reviews[required_approving_review_count]=1" \
-  -f "restrictions="
+gh api -X PUT "repos/{owner}/{repo}/branches/main/protection" --input - <<'JSON'
+{
+  "required_status_checks": { "strict": true, "contexts": ["js", "firmware"] },
+  "enforce_admins": false,
+  "required_pull_request_reviews": null,
+  "restrictions": null
+}
+JSON
+gh api repos/{owner}/{repo}/branches/main/protection
 ```
 
-Then check it: `gh api repos/{owner}/{repo}/branches/main/protection | head -40`.
+No approving review is required, on purpose: this is a one-person repository and
+GitHub does not let you approve your own pull request. The review that matters
+is the loop's reviewer plus the merge click.
 
 ## Cost and honesty
 
