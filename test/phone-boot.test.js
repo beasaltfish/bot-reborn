@@ -155,7 +155,7 @@ test('with no car paired the phone still listens, links the brain, and ignores a
   assert.equal(page.sockets(), 1, 'the brain was never linked');
   const ws = page.lastSocket();
   ws.onopen?.({});
-  assert.deepEqual(JSON.parse(ws.sent[0]), { type: 'hello', protocol: 2, token: 'ab'.repeat(16) });
+  assert.deepEqual(JSON.parse(ws.sent[0]), { type: 'hello', protocol: 2, token: 'ab'.repeat(16), body: 'phone' });
   ws.onmessage?.({ data: JSON.stringify({ type: 'welcome', name: 'a' }) });
   // Review Focus 5: orders for a car that is not there are not obeyed, and do not throw.
   ws.onmessage?.({ data: JSON.stringify({ type: 'move', drive: 'forward', steer: 'straight', ms: 600 }) });
