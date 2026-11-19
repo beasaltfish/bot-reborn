@@ -22,3 +22,15 @@ waits for. `scripts/agent-loop.sh --item N` picks up `ready` items only.
 - [ ] **3.** A5 walkthrough — blocked: needs 2
   - done when: `docs/first-build-walkthrough.md` records one end-to-end build with real timings
     and every stop longer than two minutes explained
+
+- [ ] **4.** Loop budget: one item, one sitting — ready
+  - done when: the default cap is 60 minutes, the prompt says an item is one PR's worth,
+    and `docs/agent-loop.md` explains how to size an item so it fits
+
+- [ ] **5.** A2 failure path, end to end — ready
+  - done when: a corrupted `silero_vad.onnx` makes `npm run setup` exit non-zero with a fix line,
+    a rerun recovers, and the rehearsal is written down in `docs/first-build-walkthrough.md`
+
+- [ ] **6.** English in the repository — blocked: needs a policy call on product data
+  - done when: tracked files outside the bilingual exceptions carry no Chinese, and the
+    exceptions are listed in `AGENTS.md`
