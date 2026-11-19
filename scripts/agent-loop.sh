@@ -94,7 +94,7 @@ else
   echo "note: no docs/superpowers here, the agent will have no spec" >&2
 fi
 
-OPENCODE_ARGS="run --agent orchestrator --auto --title \"item $ITEM: $TITLE\"
+OPENCODE_ARGS="run --agent orchestrator --auto --title \"item $ITEM: $TITLE\""
 [ -n "$MODEL" ] && OPENCODE_ARGS="$OPENCODE_ARGS --model $MODEL"
 
 if [ "$DRY" = "1" ]; then
