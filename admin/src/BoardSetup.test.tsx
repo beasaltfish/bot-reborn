@@ -215,7 +215,19 @@ describe('remembering this board', () => {
     await userEvent.selectOptions(screen.getByLabelText(/screen/i), 'ili9341-ips');
     await userEvent.click(screen.getByRole('button', { name: /start/i }));
     await screen.findByText(/Connected to the brain as Asten/);
-    expect(readBoardMemory()).toEqual({ characterId: 'Asten', screen: 'ili9341-ips', flashedAt: 1_700_000_000_000 });
+    expect(readBoardMemory()).toEqual({
+      characterId: 'Asten', setupId: expect.any(String), screen: 'ili9341-ips', flashedAt: 1_700_000_000_000,
+    });
+  });
+
+  it('records the setup generation returned with the token it wrote', async () => {
+    const fake = installFakeApi([{ name: 'Asten' }]);
+    const { serial } = fakeSerial();
+    render(<BoardSetup serial={serial} replyTimeoutMs={50} screens={screens} />);
+    await fill('My Home', 'secret12');
+    await userEvent.click(screen.getByRole('button', { name: /start/i }));
+    await screen.findByText(/Connected to the brain as Asten/);
+    expect(readBoardMemory()?.setupId).toBe(fake.chars.get('Asten')?.setupId);
   });
 
   it('records a flash that kept an unknown panel as null, not as a guess', async () => {

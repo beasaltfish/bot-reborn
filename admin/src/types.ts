@@ -63,13 +63,17 @@ export interface Patch {
 
 export interface Summary {
   id: string; name: string; ready: boolean; online: boolean; motion?: Motion | null;
+  /** Non-secret name for this pairing; absent from older brains. */
+  setupId?: string;
+  /** The last body admitted in this brain's life; absent when it sent no marker. */
+  bodyKind?: 'phone';
   /** First time this brain saw the body connect, ms. Absent until it does. */
   lastSeenAt?: number;
   /** First time this brain sent the body an audible reply, ms. Absent until it does. */
   lastSpokeAt?: number;
 }
 export interface Detail {
-  id: string; name: string; token: string; config: Config; endpoints: Endpoint[]; savedReflexes: SavedReflex[]; online: boolean;
+  id: string; name: string; token: string; setupId?: string; config: Config; endpoints: Endpoint[]; savedReflexes: SavedReflex[]; online: boolean;
 }
 
 export interface EditorSlot {

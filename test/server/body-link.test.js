@@ -47,6 +47,30 @@ test('the phone\'s link carries a whole turn: welcome, audio up, a move and spee
   await server.close();
 });
 
+test('the phone advertises itself, so a car body is not asked to flash a board', async () => {
+  const chars = tempCharacters();
+  const a = chars.add('Rex', (cfg) => { cfg.body.motion = 'car'; });
+  const server = createBrainServer({
+    dir: chars.dir, fetch: fakeFetch(), sfx: new Map(), earcons: renderEarcons(),
+    makeEars: () => onceEars(), log: () => {},
+  });
+  const port = await server.listen(0);
+  const link = connectBody({
+    url: `ws://127.0.0.1:${port}/body`, token: a.token,
+    WebSocket: /** @type {any} */ (WebSocket),
+    onWelcome() {}, onMessage() {}, onAudio() {}, onLost() {}, onReject() {},
+  });
+  try {
+    await until(() => link.welcomed);
+    const list = await (await fetch(`http://127.0.0.1:${port}/api/characters`)).json();
+    assert.equal(list[0].motion, 'car');
+    assert.equal(list[0].bodyKind, 'phone');
+  } finally {
+    link.close();
+    await server.close();
+  }
+});
+
 test('a wrong token is refused once, and the phone does not knock again', async () => {
   const chars = tempCharacters();
   const server = createBrainServer({

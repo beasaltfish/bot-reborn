@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { setupSteps } from './setup';
 import type { Summary } from './types';
 
-const summary: Summary = { id: 'asten', name: 'Asten', ready: true, online: false, motion: 'pet' };
-const stepsFor = (current: Summary, board: { characterId: string; screen: string | null; flashedAt: number } | null = null) =>
+const summary: Summary = { id: 'asten', name: 'Asten', ready: true, online: false, motion: 'pet', setupId: 'gen-1' };
+const stepsFor = (current: Summary, board: { characterId: string; setupId?: string; screen: string | null; flashedAt: number } | null = null) =>
   setupSteps({ characters: [current], current, board });
-const flash = { characterId: 'asten', screen: 'ili9341-ips', flashedAt: 1 };
+const flash = { characterId: 'asten', setupId: 'gen-1', screen: 'ili9341-ips', flashedAt: 1 };
 
 describe('setupSteps', () => {
   it('keeps all five steps in order and starts with the character', () => {
@@ -40,6 +40,21 @@ describe('setupSteps', () => {
 
   it.each(['none', 'dry-run'] as const)('does not require flashing a %s body', (motion) => {
     expect(stepsFor({ ...summary, motion }, flash)[3]).toMatchObject({ done: false, optionalFor: 'phone' });
+  });
+
+  it('does not require a board for a phone body even when it drives a car', () => {
+    const phoneCar = stepsFor({ ...summary, motion: 'car', bodyKind: 'phone' }, flash);
+    expect(phoneCar[3]).toEqual({ id: 'board', done: false, source: 'none', optionalFor: 'phone' });
+  });
+
+  it('does not credit a flash from before the pairing token changed', () => {
+    const rotated = stepsFor(summary, { ...flash, setupId: 'gen-0' });
+    expect(rotated.slice(2, 4).map((s) => s.done)).toEqual([false, false]);
+  });
+
+  it('does not trust an ID-only old flash when this brain has a setupId', () => {
+    const old = { characterId: 'asten', screen: 'ili9341-ips', flashedAt: 1 };
+    expect(stepsFor(summary, old).slice(2, 4).map((s) => s.done)).toEqual([false, false]);
   });
 
   it('prefers this brain’s presence over browser memory and requires its speech evidence', () => {

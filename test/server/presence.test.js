@@ -24,3 +24,23 @@ test('one body’s memory does not leak into another’s', () => {
   assert.deepEqual(p.of('a'), { lastSeenAt: 100 });
   assert.deepEqual(p.of('b'), { lastSeenAt: 200, lastSpokeAt: 300 });
 });
+
+test('presence belongs to a setup generation, so a reused name inherits none of it', () => {
+  let clock = 100;
+  const p = createPresence(() => clock);
+  p.saw('asten', 'gen-a');
+  clock = 200;
+  p.spoke('asten', 'gen-a');
+
+  assert.deepEqual(p.of('asten', 'gen-a'), { lastSeenAt: 100, lastSpokeAt: 200 });
+  assert.deepEqual(p.of('asten', 'gen-b'), {});
+  // A lookup without a generation must not fall back to, or trust, a
+  // generation-scoped record.
+  assert.deepEqual(p.of('asten'), {});
+
+  // An older record written under the id alone still works when no generation
+  // is available.
+  clock = 300;
+  p.saw('legacy');
+  assert.deepEqual(p.of('legacy'), { lastSeenAt: 300 });
+});

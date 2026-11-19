@@ -4,11 +4,13 @@ import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request, createServer } from 'node:http';
+import WebSocket from 'ws';
 import { createBrainServer } from '../../server/brain-server.js';
-import { createAdminApi } from '../../server/admin-api.js';
+import { createAdminApi, setupIdFor } from '../../server/admin-api.js';
 import { createDistPages, FIXTURES_DIR } from '../../server/dist-pages.js';
 import { renderEarcons } from '../../server/audio/render.js';
 import { connectFakeBody } from '../../server/fake-body.js';
+import { PROTOCOL } from '../../core/protocol.js';
 import { tempCharacters, fakeFetch, until } from './helpers.js';
 
 const W = { 'X-Bot-Reborn': '1', 'Content-Type': 'application/json' };
@@ -42,10 +44,32 @@ async function rig(chars = tempCharacters()) {
 
 test('the list has names, readiness and presence — never keys or tokens', async () => {
   const r = await rig();
-  r.chars.add('a');
+  const a = r.chars.add('a');
   const { status, body } = await r.call('/api/characters');
   assert.equal(status, 200);
-  assert.deepEqual(body, [{ id: 'a', name: 'a', ready: true, online: false, motion: 'car' }]);
+  assert.deepEqual(body, [{
+    id: 'a', name: 'a', ready: true, online: false, motion: 'car', setupId: setupIdFor(a.token),
+  }]);
+  await r.server.close();
+});
+
+test('the setup id is a stable, non-secret fingerprint; the list leaks no credentials', async () => {
+  const r = await rig();
+  const a = r.chars.add('a', (cfg) => { cfg.llm.apiKey = 'secret-llm-key'; });
+  const list = (await r.call('/api/characters')).body;
+  const detail = (await r.call('/api/characters/a')).body;
+
+  assert.match(list[0].setupId, /^[0-9a-f]{64}$/);
+  assert.equal(list[0].setupId, setupIdFor(a.token));
+  assert.equal(list[0].setupId, detail.setupId);
+  assert.notEqual(list[0].setupId, a.token);
+  assert.equal(list[0].setupId.includes(a.token), false);
+
+  // The list is what the page polls: it must never carry the token or a key.
+  assert.equal('token' in list[0], false);
+  assert.equal('endpoints' in list[0], false);
+  assert.equal(JSON.stringify(list).includes(a.token), false);
+  assert.equal(JSON.stringify(list).includes(a.config.llm.apiKey), false);
   await r.server.close();
 });
 
@@ -139,6 +163,89 @@ test('a new brain has not met anyone, even a body the last one met', async () =>
     assert.equal((await second.call('/api/characters')).body[0].lastSeenAt, undefined);
   } finally {
     await second.server.close();
+  }
+});
+
+test('deleting and recreating a name keeps its id but not its setup identity or presence', async () => {
+  const r = await rig();
+  const first = r.chars.add('again');
+  const body = await connectFakeBody(`ws://127.0.0.1:${r.port}/body`, { token: first.token });
+  try {
+    await until(() => body.messages.some((m) => m.type === 'state'));
+    const before = (await r.call('/api/characters')).body[0];
+    assert.equal(before.id, 'again');
+    assert.equal(typeof before.lastSeenAt, 'number');
+
+    await r.call('/api/characters/again', { method: 'DELETE', headers: W });
+    await until(() => body.halted !== null);
+    const made = await r.call('/api/characters', { method: 'POST', headers: W, body: JSON.stringify({ name: 'again' }) });
+    assert.equal(made.body.id, 'again');
+    assert.notEqual(made.body.token, first.token);
+
+    const after = (await r.call('/api/characters')).body[0];
+    assert.equal(after.id, 'again');
+    assert.notEqual(after.setupId, before.setupId);
+    assert.equal(after.lastSeenAt, undefined, 'the old generation’s presence must not follow the name');
+    assert.equal(after.lastSpokeAt, undefined);
+  } finally {
+    body.close();
+    await r.server.close();
+  }
+});
+
+/** @param {string} url @param {Record<string, unknown>} hello */
+async function sayHello(url, hello) {
+  const ws = new WebSocket(url);
+  /** @type {any[]} */ const msgs = [];
+  ws.on('message', (d, bin) => {
+    if (bin) return;
+    const m = JSON.parse(String(d));
+    if (m.type === 'ping') return ws.send(JSON.stringify({ type: 'pong' }));
+    msgs.push(m);
+  });
+  await new Promise((res) => ws.once('open', res));
+  ws.send(JSON.stringify({ type: 'hello', protocol: PROTOCOL, ...hello }));
+  await until(() => msgs.length > 0);
+  return { ws, msgs };
+}
+
+test('a connected phone says so without changing how the character moves, and the marker clears on reconnect', async () => {
+  const r = await rig();
+  const car = r.chars.add('car', (cfg) => { cfg.body.motion = 'car'; });
+  const phone = await sayHello(`ws://127.0.0.1:${r.port}/body`, { token: car.token, body: 'phone' });
+  try {
+    assert.equal(phone.msgs[0].type, 'welcome');
+    const withPhone = (await r.call('/api/characters')).body[0];
+    assert.equal(withPhone.motion, 'car');
+    assert.equal(withPhone.bodyKind, 'phone');
+
+    phone.ws.close();
+    await until(() => phone.ws.readyState === WebSocket.CLOSED);
+    await new Promise((res) => setTimeout(res, 50));
+
+    const board = await sayHello(`ws://127.0.0.1:${r.port}/body`, { token: car.token });
+    assert.equal(board.msgs[0].type, 'welcome');
+    const afterBoard = (await r.call('/api/characters')).body[0];
+    assert.equal('bodyKind' in afterBoard, false, 'an unmarked body must not inherit the last marker');
+    board.ws.close();
+  } finally {
+    phone.ws.close();
+    await r.server.close();
+  }
+});
+
+test('the phone marker is ignored when admission fails', async () => {
+  const r = await rig();
+  const car = r.chars.add('car');
+  const bad = await sayHello(`ws://127.0.0.1:${r.port}/body`, { token: '0'.repeat(32), body: 'phone' });
+  try {
+    assert.deepEqual(bad.msgs[0], { type: 'reject', reason: 'token' });
+    const list = (await r.call('/api/characters')).body;
+    assert.equal(list[0].id, car.id);
+    assert.equal('bodyKind' in list[0], false);
+  } finally {
+    bad.ws.close();
+    await r.server.close();
   }
 });
 

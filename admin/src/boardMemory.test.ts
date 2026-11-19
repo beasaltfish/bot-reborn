@@ -14,6 +14,18 @@ describe('board memory', () => {
     expect(readBoardMemory()).toEqual({ characterId: 'asten', screen: null, flashedAt: 7 });
   });
 
+  it('keeps the setup generation beside the character', () => {
+    rememberBoard({ characterId: 'asten', setupId: 'setup-123', screen: null, flashedAt: 7 });
+    expect(readBoardMemory()).toEqual({ characterId: 'asten', setupId: 'setup-123', screen: null, flashedAt: 7 });
+  });
+
+  it('reads an older record without a setup generation, and rejects a malformed one', () => {
+    localStorage.setItem('botreborn.adminBoard', JSON.stringify({ characterId: 'asten', screen: null, flashedAt: 7 }));
+    expect(readBoardMemory()).toEqual({ characterId: 'asten', screen: null, flashedAt: 7 });
+    localStorage.setItem('botreborn.adminBoard', JSON.stringify({ characterId: 'asten', setupId: 3, screen: null, flashedAt: 7 }));
+    expect(readBoardMemory()).toBeNull();
+  });
+
   it('ignores junk and blocked storage instead of throwing', () => {
     localStorage.setItem('botreborn.adminBoard', '{oops');
     expect(readBoardMemory()).toBeNull();

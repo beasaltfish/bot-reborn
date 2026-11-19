@@ -19,7 +19,7 @@ export function installFakeApi(seed: Array<{ name: string; online?: boolean }> =
   let n = 0;
   const token = () => (++n).toString(16).padStart(32, '0');
   const make = (name: string, online = false): Detail =>
-    ({ id: name, name, token: token(), online, config: blankConfig(), endpoints: [], savedReflexes: [] as SavedReflex[] });
+    ({ id: name, name, token: token(), setupId: `setup-${n}`, online, config: blankConfig(), endpoints: [], savedReflexes: [] as SavedReflex[] });
   for (const s of seed) chars.set(s.name, make(s.name, s.online));
   const calls: Array<{ method: string; path: string; body: any; headers: Record<string, string> }> = [];
   const state = { down: false, addresses: ['192.168.1.5'] as string[] };
@@ -38,7 +38,7 @@ export function installFakeApi(seed: Array<{ name: string; online?: boolean }> =
     const id = m[1] === undefined ? undefined : decodeURIComponent(m[1]);
     if (id === undefined && method === 'GET') {
       return json(200, [...chars.values()].map((c) =>
-        ({ id: c.id, name: c.name, online: c.online, ready: Boolean(c.config.llm.apiKey) })));
+        ({ id: c.id, name: c.name, online: c.online, ready: Boolean(c.config.llm.apiKey), setupId: c.setupId })));
     }
     if (id === undefined && method === 'POST') {
       if (chars.has(body.name)) return json(400, { error: `a character called ${body.name} already exists` });
@@ -48,7 +48,7 @@ export function installFakeApi(seed: Array<{ name: string; online?: boolean }> =
     }
     const c = id === undefined ? undefined : chars.get(id);
     if (!c) return json(404, { error: 'no such character' });
-    if (m[2] && method === 'POST') { c.token = token(); return json(200, { token: c.token }); }
+    if (m[2] && method === 'POST') { c.token = token(); c.setupId = `setup-${n}`; return json(200, { token: c.token }); }
     if (method === 'GET') return json(200, c);
     if (method === 'PATCH') {
       if (body.name !== undefined) c.name = body.name;

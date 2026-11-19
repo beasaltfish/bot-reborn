@@ -164,6 +164,25 @@ test('an oversized frame closes the connection instead of being buffered', async
   r.close();
 });
 
+test('the hello passes its optional body marker to admit, after protocol and origin checks', async () => {
+  /** @type {{ token: string, body: unknown }[]} */ const seen = [];
+  const r = await rig({
+    admit: (token, hello) => {
+      seen.push({ token, body: hello?.body });
+      return token === 'bad' ? 'token' : { id: token, name: `n-${token}` };
+    },
+  });
+  const ws = new WebSocket(r.url);
+  /** @type {any[]} */ const msgs = [];
+  ws.on('message', (d, bin) => { if (!bin) msgs.push(JSON.parse(String(d))); });
+  await new Promise((res) => ws.once('open', res));
+  ws.send(JSON.stringify({ type: 'hello', protocol: PROTOCOL, token: 'a', body: 'phone' }));
+  await until(() => msgs.length > 0);
+  assert.deepEqual(seen, [{ token: 'a', body: 'phone' }]);
+  assert.equal(msgs[0].type, 'welcome');
+  ws.close(); r.close();
+});
+
 test('a wrong token is rejected with the reason admit gave', async () => {
   const r = await rig();
   const { ws, msgs } = await hello(r.url, PROTOCOL, 'bad');

@@ -90,8 +90,9 @@ export function BoardSetup({ serial = realSerial, replyTimeoutMs, screens = SCRE
     let port: LinePort | null = null;
     try {
       // The token is read, never regenerated: regenerating would disconnect
-      // a body already paired with this character.
-      const { token } = await api.get(character);
+      // a body already paired with this character. Its setup id comes from the
+      // same detail, so the board memory names exactly this pairing.
+      const { token, setupId } = await api.get(character);
       let flashed: SerialPort | undefined;
       if (mode === 'flash') {
         setStep('flashing');
@@ -112,7 +113,7 @@ export function BoardSetup({ serial = realSerial, replyTimeoutMs, screens = SCRE
       // Changing settings is not a flash, and reading the board says nothing
       // about what this computer put on it.
       if (mode === 'flash') {
-        rememberBoard({ characterId: character, screen: writtenScreen(), flashedAt: Date.now() });
+        rememberBoard({ characterId: character, setupId, screen: writtenScreen(), flashedAt: Date.now() });
       }
       setStep('waiting');
       setDone(await board.waitWelcomed(15000));

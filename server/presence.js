@@ -4,11 +4,20 @@
 // Never written to a character's config or to disk.
 
 /**
+ * The key a record lives under: a setup generation when the caller has one,
+ * else the character id alone (records and callers from before generations
+ * existed). A generation is never compared with an id, so a name reused after
+ * deletion cannot inherit the old pairing's memory.
+ * @param {string} id @param {string} [setupId]
+ */
+const scope = (id, setupId) => setupId ?? id;
+
+/**
  * @param {() => number} [now] milliseconds; injectable so a test needs no clock
  * @returns {{
- *   saw(id: string): void,
- *   spoke(id: string): void,
- *   of(id: string): { lastSeenAt?: number, lastSpokeAt?: number },
+ *   saw(id: string, setupId?: string): void,
+ *   spoke(id: string, setupId?: string): void,
+ *   of(id: string, setupId?: string): { lastSeenAt?: number, lastSpokeAt?: number },
  * }}
  */
 export function createPresence(now = Date.now) {
@@ -18,17 +27,20 @@ export function createPresence(now = Date.now) {
   const spoke = new Map();
 
   return {
-    saw(id) {
-      if (!seen.has(id)) seen.set(id, now());
+    saw(id, setupId) {
+      const key = scope(id, setupId);
+      if (!seen.has(key)) seen.set(key, now());
     },
-    spoke(id) {
-      if (!spoke.has(id)) spoke.set(id, now());
+    spoke(id, setupId) {
+      const key = scope(id, setupId);
+      if (!spoke.has(key)) spoke.set(key, now());
     },
-    of(id) {
+    of(id, setupId) {
+      const key = scope(id, setupId);
       /** @type {{ lastSeenAt?: number, lastSpokeAt?: number }} */
       const out = {};
-      const firstSeen = seen.get(id);
-      const firstSpoke = spoke.get(id);
+      const firstSeen = seen.get(key);
+      const firstSpoke = spoke.get(key);
       if (firstSeen !== undefined) out.lastSeenAt = firstSeen;
       if (firstSpoke !== undefined) out.lastSpokeAt = firstSpoke;
       return out;
