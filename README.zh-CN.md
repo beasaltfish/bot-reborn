@@ -97,22 +97,23 @@ provider。key 留在
 
 ## 五分钟上手（零硬件）
 
-1. **先把大脑跑起来**，放在和身体同一个 Wi-Fi 的电脑上：
+1. **先把大脑跑起来**，放在和身体同一个 Wi-Fi 的电脑上。三条命令，先装 Node 20 或更新。
 
    ```bash
    npm install
-   server/models/fetch.sh   # 唤醒词和 VAD 模型，只跑一次
+   npm run setup   # 拉唤醒词和 VAD 模型、检查 Node、构建一次
    npm start
    ```
 
-   浏览器会打开 admin 页面。
+   `npm run setup` 会告诉你缺什么、怎么补。浏览器会打开 admin 页面。
 2. **打开工作台：**<http://localhost:8787/sim/>（admin 侧边栏也有入口）。它只在大脑
-   所在的机器上能打开。
-3. **打开 Projects，选 Audio + screen，按 Demo。** 四十秒左右，ESP32 就接上了麦克风、
-   功放、喇叭和屏幕。想要同样的台子直接留下来，按 **Build it for me**；想自己一根一根
-   接，撤销它再动手。
+   所在的机器上能打开——工作台就是大脑自己的页面。
+3. **打开 Projects，选 Audio + screen，再点「购物清单」。** 那是一份该买什么的清单，
+   每件带着下单时要核对的规格和大概价格，可以直接打印。然后按 Demo 看它四十秒接好，
+   或按 **Build it for me** 把台子留下，自己一根一根接。
 
 不用零件、不用 key、不用硬件。想要真的那个，往下看。
+目前只在 macOS 上完整走过；Windows 未测。
 
 ## 真实硬件
 
