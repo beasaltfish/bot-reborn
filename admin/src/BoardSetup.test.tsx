@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BoardSetup } from './BoardSetup';
@@ -99,5 +99,46 @@ describe('BoardSetup', () => {
     await userEvent.click(screen.getByRole('button', { name: /read from the board/i }));
     expect(await screen.findByText(/none of this brain/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/wi-?fi name/i)).toHaveValue('HomeNet');
+  });
+});
+
+describe('the screen picker', () => {
+  beforeEach(() => { installFakeApi([{ name: 'Asten' }]); });
+
+  const screens = [
+    { id: 'ili9341-ips', label: 'ILI9341V 2.8" IPS', verified: true, controller: 'ili9341' },
+    { id: 'st7735-160', label: 'ST7735 1.8" TFT', verified: true, controller: 'st7735' },
+    { id: 'st7789-240', label: 'ST7789 1.3" IPS', verified: false, controller: 'st7789' },
+  ] as unknown as Parameters<typeof BoardSetup>[0]['screens'];
+
+  it('offers only panels that are verified and that the firmware drives', async () => {
+    const { serial } = fakeSerial();
+    render(<BoardSetup serial={serial} replyTimeoutMs={50} screens={screens} />);
+    const picker = await screen.findByLabelText(/screen/i);
+    const values = [...(picker as HTMLSelectElement).options].map((o) => o.value);
+    expect(values).toEqual(['', 'ili9341-ips']);
+  });
+
+  it('writes the screen before the single reboot', async () => {
+    const { serial, written } = fakeSerial();
+    render(<BoardSetup serial={serial} replyTimeoutMs={50} screens={screens} />);
+    await userEvent.type(await screen.findByLabelText(/wi-?fi name/i), 'HomeNet');
+    await userEvent.type(screen.getByLabelText(/wi-?fi password/i), 'secret12');
+    await userEvent.selectOptions(await screen.findByLabelText(/character/i), 'Asten');
+    await userEvent.selectOptions(screen.getByLabelText(/screen/i), 'ili9341-ips');
+    await userEvent.click(screen.getByRole('button', { name: /start/i }));
+    await screen.findByText(/Connected to the brain as Asten/);
+    const order = written.map((line) => line.trim());
+    expect(order).toContain('screen ili9341-ips');
+    expect(order.indexOf('screen ili9341-ips')).toBeLessThan(order.indexOf('reboot'));
+    expect(order.filter((line) => line === 'reboot')).toHaveLength(1);
+  });
+
+  it('says when the board holds a model the firmware cannot drive', async () => {
+    const { serial } = fakeSerial({ screen: 'st7735-160' });
+    render(<BoardSetup serial={serial} replyTimeoutMs={50} screens={screens} />);
+    await userEvent.click(await screen.findByLabelText(/change settings/i));
+    await userEvent.click(screen.getByRole('button', { name: /read/i }));
+    expect(await screen.findByText(/does not offer/i)).toBeInTheDocument();
   });
 });

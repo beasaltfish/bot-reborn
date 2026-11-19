@@ -34,6 +34,13 @@ import table from './screens.json' with { type: 'json' };
 /** @type {Screen[]} */
 export const SCREENS = /** @type {any} */ (table).screens;
 
+/**
+ * The controllers the body firmware actually drives. It is a set because the
+ * firmware's boot only checks an identity response for these two, and the
+ * shopping list and the admin picker must not offer a panel that stays dark.
+ */
+export const FIRMWARE_CONTROLLERS = new Set(['ili9341', 'st7789']);
+
 /** @param {string} id @returns {Screen | undefined} */
 export function screenById(id) {
   return SCREENS.find((s) => s.id === id);

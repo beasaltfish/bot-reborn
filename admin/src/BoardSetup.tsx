@@ -7,6 +7,7 @@ import { BoardConsole, ConsoleError, checkWifi, type LinePort } from './boardCon
 import * as realSerial from './boardSerial';
 import { t } from './i18n';
 import type { Summary } from './types';
+import { SCREENS, FIRMWARE_CONTROLLERS, type Screen } from '../../core/screens.js';
 
 export interface Serial {
   supportsSerial(): boolean;
@@ -16,12 +17,13 @@ export interface Serial {
 
 type Step = 'idle' | 'flashing' | 'saving' | 'waiting' | 'reading';
 
-export function BoardSetup({ serial = realSerial, replyTimeoutMs }: { serial?: Serial; replyTimeoutMs?: number }) {
+export function BoardSetup({ serial = realSerial, replyTimeoutMs, screens = SCREENS }: { serial?: Serial; replyTimeoutMs?: number; screens?: Screen[] }) {
   const [list, setList] = useState<Summary[] | null>(null);
   const [mode, setMode] = useState<'flash' | 'settings'>('flash');
   const [ssid, setSsid] = useState('');
   const [pass, setPass] = useState('');
   const [character, setCharacter] = useState('');
+  const [screenId, setScreenId] = useState('');
   const [step, setStep] = useState<Step>('idle');
   const [percent, setPercent] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +39,8 @@ export function BoardSetup({ serial = realSerial, replyTimeoutMs }: { serial?: S
   if (!serial.supportsSerial()) return <p role="alert" className="board-error">{t('boardNeedsChrome')}</p>;
 
   const busy = step !== 'idle';
+  /** Only a panel that was lit on a real board, and that the firmware drives, may be offered. */
+  const offered = screens.filter((s) => s.verified && FIRMWARE_CONTROLLERS.has(s.controller));
 
   /** Fill the form with what the board holds: name, password, and the character whose token it carries. */
   async function readBoard() {
@@ -50,6 +54,9 @@ export function BoardSetup({ serial = realSerial, replyTimeoutMs }: { serial?: S
       const stored = await new BoardConsole(port, { replyTimeoutMs }).readSettings();
       setSsid(stored.ssid);
       setPass(stored.pass);
+      // An unknown model is kept visible as an error rather than silently cleared.
+      setScreenId(stored.screen);
+      if (stored.screen && !offered.some((s) => s.id === stored.screen)) setNote(t('boardScreenUnsupported'));
       // The list holds no tokens: ask for each character's own (never regenerate).
       const details = await Promise.all((list ?? []).map((c) => api.get(c.id)));
       const match = details.find((d) => d.token === stored.token);
@@ -86,6 +93,7 @@ export function BoardSetup({ serial = realSerial, replyTimeoutMs }: { serial?: S
       await board.setWifi(ssid, pass);
       await board.useDiscovery();
       await board.setToken(token);
+      if (screenId) await board.setScreen(screenId);
       await board.reboot();
       setStep('waiting');
       setDone(await board.waitWelcomed(15000));
@@ -113,6 +121,15 @@ export function BoardSetup({ serial = realSerial, replyTimeoutMs }: { serial?: S
               {list.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </label>
+        )}
+        <label>{t('boardScreen')}
+          <select value={offered.some((s) => s.id === screenId) ? screenId : ''} onChange={(e) => setScreenId(e.target.value)}>
+            <option value="">{t('boardScreenNone')}</option>
+            {offered.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+          </select>
+        </label>
+        {screenId && !offered.some((s) => s.id === screenId) && (
+          <p role="alert" className="board-error">{t('boardScreenUnsupported')}</p>
         )}
         {mode === 'settings' && <button type="button" onClick={() => void readBoard()}>{t('boardRead')}</button>}
         <button type="button" onClick={() => void start()}>{t('boardStart')}</button>

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SCREENS, screenById, sizeKey, frameSizes, DEFAULT_SIZE, verifiedProblem } from '../core/screens.js';
+import { SCREENS, screenById, sizeKey, frameSizes, DEFAULT_SIZE, verifiedProblem, FIRMWARE_CONTROLLERS } from '../core/screens.js';
 
 test('ids are unique and every screen names its pins by role', () => {
   assert.equal(new Set(SCREENS.map((s) => s.id)).size, SCREENS.length);
@@ -51,4 +51,11 @@ test('a verified screen with no record, or a record outside docs/hardware, is re
   // An unverified screen is allowed to have no record; that is the whole point.
   assert.equal(verifiedProblem({ id: 'd', verified: false }, () => false), null);
   for (const screen of SCREENS) assert.equal(verifiedProblem(screen, () => true), null, screen.id);
+});
+
+test('the firmware drives exactly two controllers, and the sim reads the same list', () => {
+  assert.ok(FIRMWARE_CONTROLLERS.has('ili9341'));
+  assert.ok(FIRMWARE_CONTROLLERS.has('st7789'));
+  assert.ok(!FIRMWARE_CONTROLLERS.has('st7735'));
+  assert.ok(!FIRMWARE_CONTROLLERS.has('gc9a01'));
 });
