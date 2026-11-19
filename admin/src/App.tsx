@@ -103,7 +103,10 @@ export function App({ pollMs = 2000, renderEditor }: {
             />
           ) : current ? (
             <>
-              <SetupCard key={current.id} steps={steps} next={next} />
+              {/* No key here: the card holds no state, and a key equal to the
+                  editor's would make two siblings collide, which React resolves
+                  by appending instead of replacing. */}
+              <SetupCard steps={steps} next={next} />
               {renderEditor({
                 id: current.id,
                 online: current.online,

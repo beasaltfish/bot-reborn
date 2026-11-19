@@ -5,6 +5,7 @@ import { App } from './App';
 import { api } from './api';
 import { rememberBoard } from './boardMemory';
 import { installFakeApi } from './test/fakeApi';
+import { Editor } from './Editor';
 import type { EditorSlot, Summary } from './types';
 
 const slot = (p: EditorSlot) => <div data-testid="editor">{`${p.id}:${p.initialTab}`}</div>;
@@ -187,3 +188,16 @@ describe('App', () => {
     expect(fake.calls.every((c) => c.headers['X-Bot-Reborn'] === '1')).toBe(true);
   });
 });
+
+  it('keeps one setup card when characters are switched', async () => {
+    localStorage.clear();
+    installFakeApi([{ name: 'A' }, { name: 'B' }, { name: 'C' }]);
+    render(<App pollMs={50} renderEditor={(p) => <Editor key={p.id} {...p} />} />);
+    await screen.findByRole('heading', { name: 'A' });
+    for (const name of ['B', 'C', 'A', 'B']) {
+      await userEvent.click(await screen.findByRole('button', { name: new RegExp(`^${name}`) }));
+      await screen.findByRole('heading', { name });
+    }
+    // Two siblings with the same key made React append a card per switch.
+    expect(document.querySelectorAll('section.setup')).toHaveLength(1);
+  });
