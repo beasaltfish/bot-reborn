@@ -73,3 +73,60 @@ What this proved, and the one thing it changed: a corrupt model used to be
 reported as **missing**, which sends a person looking for a file that is right
 there. `setup.js` now separates `missing` from `corrupt`; the rehearsal above is
 the before/after.
+
+## A5: what this record still needs (protocol, written before the parts arrive)
+
+The point of A5 is a record nobody can talk themselves out of afterwards. Set it up
+before touching a screwdriver.
+
+**Starting line**
+
+- Parts arrived and unboxed; **not one wire connected**.
+- A computer that has never run this repo: no `node_modules`, no `~/.bot-reborn`,
+  no model files. Node installed is the one allowed head start.
+- **No API keys anywhere.** Provider accounts may exist; keys are created during
+  the run, so the cost of a wrong turn is visible.
+- Only the repository URL.
+
+**The clock**
+
+Start it when the README is opened. Stop it when the robot answers a sentence in
+its own voice with a face on the screen. Anything before opening the README
+(unboxing, OS updates) is recorded separately, not in the number.
+
+**At every stop longer than two minutes, write four lines**
+
+1. What I was trying to do.
+2. What the docs said to do.
+3. What I expected to see, and what I saw instead.
+4. What I did next.
+
+Do not ask the author mid-run. Write the question down and keep going; the
+question is data, the answer is not.
+
+**Record alongside it**
+
+- Every command, verbatim, in the order typed.
+- A screenshot at each step that changed the screen — admin, board setup, the
+  workbench, the first conversation.
+- Which provider was chosen for each of the three layers, and whether its test
+  button passed on the first try.
+- Wall clock: minutes to a running brain, to a flashed board, to the first reply.
+
+**The same session also closes A3's last task**
+
+Before the walkthrough proper, with the board on USB:
+
+- Flash `firmware/release/`; note the console lines in order: white, red, green,
+  blue, then `screen: ready`. Note whether `screen: panel identifies as an
+  ILI9341, as chosen` appears (no MISO means it will not).
+- Photograph the lit panel; keep the file.
+- Then the record lands in `docs/hardware/msp2834-ili9341v.md`, `ili9341-ips` is
+  marked `verified: true`, `firmware/main/screen_profile.c` gets the same flag,
+  and `npm run firmware:test` must stay green.
+
+**Failure is a result**
+
+If it does not finish, write what happened and where. Fix what it exposed, then
+walk A5b: the same path again, fresh machine, no time limit. Only A5b passing
+means the path works; a single observed failure is a lead, not a verdict.
