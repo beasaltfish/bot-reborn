@@ -15,7 +15,7 @@ waits for. `scripts/agent-loop.sh --item N` picks up `ready` items only.
   - done when: `docs/hardware/msp2834-ili9341v.md` holds the real monitor lines and a photo,
     `ili9341-ips` and `firmware/main/screen_profile.c` both say verified, `firmware:test` is green
 
-- [ ] **2.** A4 setup card — ready
+- [x] **2.** A4 setup card — done
   - done when: admin shows the five steps with their source, a phone body skips the board step,
     and the Chinese copy covers titles, notes and source labels
 
