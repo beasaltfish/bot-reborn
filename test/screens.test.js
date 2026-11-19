@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SCREENS, screenById, sizeKey, frameSizes, DEFAULT_SIZE } from '../core/screens.js';
+import { SCREENS, screenById, sizeKey, frameSizes, DEFAULT_SIZE, verifiedProblem } from '../core/screens.js';
 
 test('ids are unique and every screen names its pins by role', () => {
   assert.equal(new Set(SCREENS.map((s) => s.id)).size, SCREENS.length);
@@ -35,4 +35,20 @@ test('every screen has the shape the simulator draws and judges', () => {
     // A round panel's glass is a disc: as wide as it is tall.
     if (s.round) assert.equal(s.glass.w, s.glass.d, s.id);
   }
+});
+
+test('a verified screen with no record, or a record outside docs/hardware, is rejected', () => {
+  const ok = () => true;
+  assert.equal(verifiedProblem({ id: 'a', verified: true }, ok), 'verified screen a has no verifiedNote');
+  assert.equal(
+    verifiedProblem({ id: 'b', verified: true, verifiedNote: 'docs/elsewhere.md' }, ok),
+    'b: verifiedNote must live in docs/hardware/',
+  );
+  assert.equal(
+    verifiedProblem({ id: 'c', verified: true, verifiedNote: 'docs/hardware/c.md' }, () => false),
+    'c: missing docs/hardware/c.md',
+  );
+  // An unverified screen is allowed to have no record; that is the whole point.
+  assert.equal(verifiedProblem({ id: 'd', verified: false }, () => false), null);
+  for (const screen of SCREENS) assert.equal(verifiedProblem(screen, () => true), null, screen.id);
 });

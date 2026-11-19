@@ -27,6 +27,7 @@ import table from './screens.json' with { type: 'json' };
  *   glass: { w: number, d: number },     // the lit area, mm (a disc when round)
  *   pins: ScreenPin[],                   // header order, as printed on the module
  *   buy?: ScreenBuy,                     // what to ask for when buying one
+ *   verifiedNote?: string,               // docs/hardware/ record, required once verified
  * }} Screen
  */
 
@@ -63,4 +64,20 @@ export function frameSizes() {
     else byKey.set(key, { w: s.w, h: s.h, round: s.round });
   }
   return [...byKey.values()];
+}
+
+/**
+ * A screen may claim `verified: true` only while the repo holds the record of
+ * the glass it was lit on. The rule lives here, next to the data, so the
+ * simulator, the admin page and the tests all ask the same question.
+ * @param {{ id: string, verified: boolean, verifiedNote?: string }} screen
+ * @param {(path: string) => boolean} exists
+ * @returns {string | null}  why it is not acceptable, or null
+ */
+export function verifiedProblem(screen, exists) {
+  if (!screen.verified) return null;
+  if (!screen.verifiedNote) return `verified screen ${screen.id} has no verifiedNote`;
+  if (!screen.verifiedNote.startsWith('docs/hardware/')) return `${screen.id}: verifiedNote must live in docs/hardware/`;
+  if (!exists(screen.verifiedNote)) return `${screen.id}: missing ${screen.verifiedNote}`;
+  return null;
 }
