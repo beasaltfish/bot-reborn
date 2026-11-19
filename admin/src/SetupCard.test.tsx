@@ -23,7 +23,7 @@ describe('SetupCard', () => {
     expect(within(rows[1]).getByText('Add three keys')).toBeVisible();
     expect(within(rows[1]).getByText(/Ears.*Mind.*Voice/)).toBeVisible();
     expect(within(rows[1]).getByText('To do')).toBeVisible();
-    expect(within(rows[2]).getByText(/Basic.*Body.*Set up a board/)).toBeVisible();
+    expect(within(rows[2]).getByText(/Basic.*Body.*Set up a board.*Car.*QR code/)).toBeVisible();
     expect(within(rows[3]).getByText(/First time \(flash \+ settings\)/)).toBeVisible();
     expect(within(rows[4]).getByText(/wake word/i)).toBeVisible();
     expect(within(rows[4]).getByText('Not recorded')).toBeVisible();
@@ -71,7 +71,7 @@ describe('SetupCard', () => {
     const copy = [
       ['创建角色', /先给机器人创建一个角色/, '来自这个大脑'],
       ['填入三把密钥', /「听」「想」「说」/, '来自这个大脑'],
-      ['选身体与屏幕', /「基本」.*「配置板子」/, '记在此浏览器'],
+      ['选身体与屏幕', /「基本」.*「配置板子」.*「小车」.*二维码/, '记在此浏览器'],
       ['刷写板子', /「第一次（刷固件 \+ 设置）」/, '记在此浏览器'],
       ['听到第一句回复', /唤醒词/, '暂无记录'],
     ] as const;
