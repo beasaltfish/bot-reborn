@@ -1,14 +1,15 @@
 # Roadmap
 
-人写这张表，机器只读。每项一行，固定形状：
+A person writes this table; machines only read it. One line per item, always the
+same shape:
 
 ```
-- [ ] **N.** 标题 — state
-  - done when: 怎么算完成（一两句，能验证）
+- [ ] **N.** title — state
+  - done when: how we will know it is done (one or two checkable lines)
 ```
 
-`state` 只能是 `ready`、`blocked`、`done` 之一；`blocked` 后面写清等什么。
-`scripts/agent-loop.sh --item N` 只会取 `ready` 的项。
+`state` is exactly one of `ready`, `blocked`, `done`. After `blocked`, say what it
+waits for. `scripts/agent-loop.sh --item N` picks up `ready` items only.
 
 - [ ] **1.** A3 hardware record — blocked: needs the board and the panel in hand
   - done when: `docs/hardware/msp2834-ili9341v.md` holds the real monitor lines and a photo,

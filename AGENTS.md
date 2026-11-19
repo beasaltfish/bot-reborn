@@ -42,6 +42,11 @@
 
 ## Conventions
 
+- **English everywhere it is published**: code comments, commit messages, PR
+  bodies, README/docs under version control, and anything a contributor reads.
+  This is an open-source project; Chinese belongs only in user-facing bilingual
+  product text (`sim/ui/strings.js`, `admin/src/i18n.ts`, `README.zh-CN.md`) and
+  in local, git-ignored working notes under `docs/superpowers/`.
 - Plain ESM JavaScript; avoid new frameworks or dependencies.
 - User-visible text is bilingual in `sim/ui/strings.js`.
 - Models are bounded: no SPICE, no unmodeled safety or firmware claims.

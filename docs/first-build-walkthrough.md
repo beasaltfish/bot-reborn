@@ -1,14 +1,16 @@
-# 第一次从零搭一台：复演记录
+# First build, from nothing: the rehearsal record
 
-这份文件记录**真实**走过的过程：谁走的、花了多久、卡在哪。它不是教程——教程是 README。
-A5 会在这里正式写一次完整的复演；在那之前有下面两条。
+This file records what **actually** happened: who walked it, how long it took,
+where they stopped. It is not a tutorial — the README is. A5 will write one full
+rehearsal here; until then there are the two runs below.
 
-## 2026-11-19 · 安装与清单（A2 验收，作者自走）
+## 2026-11-19 · Install and the shopping list (A2 acceptance, walked by the author)
 
-**起跑线**：新目录、`git clone` 一份、没有 `node_modules`、没有 `~/.bot-reborn`、没有模型文件。
-Node 24.13.1 已装（按约定算环境，不算流程）。这台机器上已有一个大脑占着 8787。
+**Starting line**: a new directory, one `git clone`, no `node_modules`, no
+`~/.bot-reborn`, no model files. Node 24.13.1 installed (environment, not part of
+the flow, by agreement). Another brain was already holding port 8787 on this machine.
 
-**允许的三条命令**，外加一个端口环境变量（原因见下）：
+**The three commands**, plus one port variable (see below):
 
 ```bash
 npm install
@@ -16,23 +18,29 @@ PORT=8899 npm run setup
 PORT=8899 npm start
 ```
 
-**第一次（修复前，失败的记录）**：`npm run setup` 拉了 6 MB 模型并构建，然后如实报告
-`port 8787 is already in use` 并以 1 退出。这不是默认路径通过，而是一条**失败恢复**记录：
-它证明错误能被指出来、并且给出 `PORT=<another>` 的用法。
+**Run 1 (before the fixes; a failure record)**: `npm run setup` fetched the 6 MB of
+models and built the pages, then reported `port 8787 is already in use` and exited 1.
+That is not the default path succeeding — it is a **failure-recovery** record: the
+error was named, and the fix (`PORT=<another>`) was printed.
 
-**第二次（修复后）**：同一起跑线，`npm run setup` 退出码 0（node / models / port / build 四项全 ok），
-`npm start` 之后：
+**Run 2 (after the fixes)**: same starting line. `npm run setup` exited 0 (node,
+models, port and build all ok). After `npm start`:
 
-- `http://localhost:8899/` → 200，admin 页面
-- `http://localhost:8899/sim/` → 200，工作台能开
-- 不选项目，直接点顶栏「Shopping list」→ 空白台面的清单能打开（自由搭建也有入口）
-- Projects → Audio + screen → Shopping list → 9 行、$33.00–83.00；屏带「还没人在真板上点亮过」；
-  打印预览一页纸，最后一项是 USB-C 数据线
+- `http://localhost:8899/` → 200, the admin page
+- `http://localhost:8899/sim/` → 200, the workbench opens
+- no project selected, `Shopping list` in the top bar → the empty-bench list opens,
+  so free wiring has an entry too
+- Projects → Audio + screen → Shopping list → 9 lines, $33.00–83.00; the screen line
+  says its settings are not marked verified; the print preview is one page and the
+  last line is the USB-C cable
 
-**没验证到的**：8787 这条默认路径。本机一直有另一个大脑在跑，占着那个端口，所以两次都用了
-`PORT=8899`。要证明默认路径，需要一台 8787 空闲的机器——A5 换机器走的时候补上。
+**Not verified**: the default path on 8787. Another brain has held that port the whole
+time, so both runs used `PORT=8899`. Proving the default needs a machine with 8787
+free — A5 on a different machine will cover it.
 
-**记下来的小毛病**（没有当场修）：
+**Small annoyances, not fixed on the spot**:
 
-- `npm run setup` 会连带打印 Vite 的「chunk 超过 500 kB」警告，第一次看会以为出错了。
-- 自己机器上大脑已经在跑时，端口那条失败不影响已经跑着的那个，但观感偏重。
+- `npm run setup` also prints Vite's "chunk larger than 500 kB" warning, which reads
+  like an error the first time.
+- When a brain is already running here, the port check fails loudly even though the
+  running one is fine.
