@@ -40,7 +40,8 @@ function rig(/** @type {Parameters<typeof fakeFetch>[0]} */ fetchOpts = {}, moti
   /** @type {Record<string, any>} */ overrides = {}) {
   const c = fakeConn();
   const e = fakeEars();
-  const fetch = fakeFetch(fetchOpts);
+  const { fetch: customFetch, ...deps } = overrides;
+  const fetch = customFetch ?? fakeFetch(fetchOpts);
   /** @type {string[]} */ const logged = [];
   /** @type {number[]} */ const spoken = [];
   const config = readyConfig();
@@ -49,7 +50,7 @@ function rig(/** @type {Parameters<typeof fakeFetch>[0]} */ fetchOpts = {}, moti
   const robot = startRobot(c.conn, {
     config, fetch, ears: e.ears, sfx, earcons: renderEarcons(),
     log: (l) => logged.push(l), slackMs: 0,
-    ...overrides,
+    ...deps,
     onSpoke: () => spoken.push(1),
   });
   /**
@@ -100,6 +101,41 @@ test('a real audible reply is reported once, and the wake beep is not one', asyn
   await until(() => states(r.sent).includes('SPEAKING'));
   await until(() => r.spoken.length > 0, 3000, () => `states ${JSON.stringify(states(r.sent))}, audio ${r.audio.length}`);
   await until(() => spokeAndFinished(r.sent));
+  assert.equal(r.spoken.length, 1);
+  r.robot.stop();
+});
+
+test('an audible STT apology is not an audible reply', async () => {
+  const base = fakeFetch();
+  const fetch = /** @type {any} */ ((/** @type {string} */ url, /** @type {RequestInit} */ init) =>
+    url.endsWith('/audio/transcriptions') ? Promise.reject(new Error('stt down')) : base(url, init));
+  const r = rig({}, 'car', { fetch });
+  const before = r.audio.length;
+  await r.speak();
+  await until(() => spokeAndFinished(r.sent), 3000, () => `states ${JSON.stringify(states(r.sent))}`);
+  assert.ok(r.audio.length > before, 'the apology really went out');
+  assert.deepEqual(r.spoken, []);
+  r.robot.stop();
+});
+
+test('an LLM apology does not count, and the next real answer does', async () => {
+  const base = fakeFetch();
+  let first = true;
+  const fetch = /** @type {any} */ ((/** @type {string} */ url, /** @type {RequestInit} */ init) => {
+    if (url.endsWith('/chat/completions') && first) {
+      first = false;
+      return Promise.reject(new Error('llm down'));
+    }
+    return base(url, init);
+  });
+  const r = rig({}, 'car', { fetch });
+  const before = r.audio.length;
+  await r.speak();
+  await until(() => spokeAndFinished(r.sent), 3000, () => `states ${JSON.stringify(states(r.sent))}`);
+  assert.ok(r.audio.length > before, 'the apology really went out');
+  assert.deepEqual(r.spoken, [], 'the apology was audible but is not the answer');
+  await r.speak();
+  await until(() => r.spoken.length > 0, 3000, () => `states ${JSON.stringify(states(r.sent))}, audio ${r.audio.length}`);
   assert.equal(r.spoken.length, 1);
   r.robot.stop();
 });

@@ -86,14 +86,11 @@ export function startRobot(conn, deps) {
     send: (msg) => conn.send(msg),
     slackMs: deps.slackMs ?? ECHO_SLACK_MS,
   });
-  // A pet's bark is its reply; for a talking body only TTS is. Both are
-  // labelled at the mouth, where the audio actually goes out.
+  // A pet's bark is its reply; for a talking body TTS is, unless the call
+  // site tagged it diagnostic (an apology). Both are labelled at the mouth,
+  // where the audio actually goes out.
   const replySound = motion === 'pet' ? 'reply' : 'sound';
-  const replyMouth = {
-    play: (/** @type {Int16Array} */ pcm) => mouth.play(pcm, 'reply'),
-    hush: () => mouth.hush(),
-  };
-  const tts = new PcmTts(makeTtsSource(config.tts, net), { mouth: replyMouth });
+  const tts = new PcmTts(makeTtsSource(config.tts, net), { mouth });
   /** @type {(part: import('../core/strings.js').FaultPart, err: Error) => void} */
   const onFault = (part, err) => {
     log(`[${part}] ${err.message}`);

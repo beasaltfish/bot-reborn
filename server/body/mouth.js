@@ -44,8 +44,8 @@ export class Mouth {
   /**
    * @param {Int16Array} pcm 16 kHz mono
    * @param {string} [source] what this clip is (a reply, an earcon, a sound
-   *   effect). It travels with every frame it queued, so a beep that happens
-   *   to go out during a reply is never mistaken for one.
+   *   effect, a diagnostic apology). It travels with every frame it queued, so
+   *   a beep that happens to go out during a reply is never mistaken for one.
    * @returns {{ ms: number, started: Promise<void>, done: Promise<void> }}
    *   `ms` from now until this clip has played out, plus the slack — the
    *   number earcon() and sfx() must return to the session.

@@ -375,7 +375,7 @@ export class Session {
     // silence: this is the case where BOTH instruments are down, and the
     // screen is the only channel left. The earcon has already played, so the
     // report here is the written one only.
-    await this.speakingTts.speak(t(this.#config.lang, key))
+    await this.speakingTts.speak(t(this.#config.lang, key), { kind: 'diagnostic' })
       .catch((err) => this.#onFault('tts', err));
   }
 
@@ -392,7 +392,8 @@ export class Session {
    */
   get speakingTts() {
     return {
-      /** @param {string} text @param {{ signal?: AbortSignal }} [opts] */
+      /** @param {string} text
+       *  @param {{ signal?: AbortSignal, kind?: 'reply' | 'diagnostic' }} [opts] */
       speak: async (text, opts) => {
         // A cancelled turn can still have a continuation running inside it —
         // brain.handle() resuming after cancel() and reaching its reply. It

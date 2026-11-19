@@ -446,7 +446,7 @@ export class Brain {
    *               pose?(name: import('./poses.js').Pose): Promise<void>,
    *               draw?(card: import('./tarot.js').Draw): Promise<void>,
    *               reveal?(): Promise<void> },
-   *   tts: { speak(text: string, opts?: { signal?: AbortSignal }): Promise<void> },
+   *   tts: { speak(text: string, opts?: { signal?: AbortSignal, kind?: 'reply' | 'diagnostic' }): Promise<void> },
    *   earcon: (name: import('./audio/earcon.js').EarconName) => void,
    *   sound?: (name: import('./audio/sfx.js').SoundName) => Promise<void>,
    *   reflex?: { judge(heard: string, robotSaid: string, signal?: AbortSignal):
@@ -560,7 +560,7 @@ export class Brain {
         if (turn.signal.aborted) return;
         this.#fail('llm', /** @type {Error} */ (err));
         // A pet has no voice to say it with: the earcon is its whole apology.
-        if (this.#motion() !== 'pet') await this.#say(t(this.#config.lang, 'apiFailed'), turn);
+        if (this.#motion() !== 'pet') await this.#say(t(this.#config.lang, 'apiFailed'), turn, { kind: 'diagnostic' });
         return;
       }
 
@@ -705,10 +705,13 @@ export class Brain {
    *
    * @param {string} text
    * @param {AbortController} turn
+   * @param {{ kind?: 'reply' | 'diagnostic' }} [opts] diagnostic lines are
+   *   apologies, not answers: the mouth tags them so they cannot tick
+   *   "the robot has answered" in the first-run guide.
    */
-  async #say(text, turn) {
+  async #say(text, turn, opts = {}) {
     try {
-      await this.#tts.speak(text, { signal: turn.signal });
+      await this.#tts.speak(text, { signal: turn.signal, kind: opts.kind });
     } catch (err) {
       // Same distinction as around chat(): the user cancelling is not a fault.
       if (turn.signal.aborted) return;
@@ -837,7 +840,7 @@ export class Brain {
     turn?.abort();
     await this.#reveal();
     this.#fail('llm', new Error(`no reading within ${READING_TIMEOUT_MS / 1000} s`));
-    await this.#say(t(this.#config.lang, 'apiFailed'), apology);
+    await this.#say(t(this.#config.lang, 'apiFailed'), apology, { kind: 'diagnostic' });
   }
 
   /**

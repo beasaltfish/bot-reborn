@@ -35,7 +35,7 @@ export class PcmTts {
 
   /**
    * @param {string} text
-   * @param {{ signal?: AbortSignal, onPlaying?: () => void }} [opts]
+   * @param {{ signal?: AbortSignal, onPlaying?: () => void, kind?: 'reply' | 'diagnostic' }} [opts]
    */
   async speak(text, opts = {}) {
     this.cancel();
@@ -55,7 +55,7 @@ export class PcmTts {
     }
     if (epoch !== this.#epoch) return;
 
-    const clip = this.#mouth.play(pcm);
+    const clip = this.#mouth.play(pcm, opts.kind ?? 'reply');
     this.#playing = true;
     await clip.started;
     if (epoch === this.#epoch) opts.onPlaying?.();
