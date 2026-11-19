@@ -121,6 +121,15 @@ done
 wait "$AGENT" || { echo "the agent exited non-zero; worktree kept at $WT" >&2; exit 4; }
 
 cd "$WT"
+# Rebase onto the base branch while the branch is still private: the tests must
+# run on the result a reviewer will actually see. A conflict is a judgement call,
+# so it stops here instead of letting the agent guess.
+git fetch origin
+if ! git rebase origin/main; then
+  git rebase --abort
+  echo "the branch does not rebase onto main; worktree kept at $WT" >&2
+  exit 4
+fi
 [ -d server/models ] && [ -f server/models/silero_vad.onnx ] || sh server/models/fetch.sh
 npm install --no-audit --no-fund
 npm test
