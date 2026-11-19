@@ -41,14 +41,14 @@ function rig(/** @type {Parameters<typeof fakeFetch>[0]} */ fetchOpts = {}, moti
   const c = fakeConn();
   const e = fakeEars();
   const { fetch: customFetch, ...deps } = overrides;
-  const fetch = customFetch ?? fakeFetch(fetchOpts);
+  const fetch = fakeFetch(fetchOpts);
   /** @type {string[]} */ const logged = [];
   /** @type {number[]} */ const spoken = [];
   const config = readyConfig();
   config.body.motion = /** @type {any} */ (motion);
   const sfx = new Map([[/** @type {const} */ ('bark'), new Int16Array(1600).fill(1200)]]);
   const robot = startRobot(c.conn, {
-    config, fetch, ears: e.ears, sfx, earcons: renderEarcons(),
+    config, fetch: customFetch ?? fetch, ears: e.ears, sfx, earcons: renderEarcons(),
     log: (l) => logged.push(l), slackMs: 0,
     ...deps,
     onSpoke: () => spoken.push(1),
