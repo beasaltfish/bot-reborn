@@ -44,9 +44,16 @@
 
 - **English everywhere it is published**: code comments, commit messages, PR
   bodies, README/docs under version control, and anything a contributor reads.
-  This is an open-source project; Chinese belongs only in user-facing bilingual
-  product text (`sim/ui/strings.js`, `admin/src/i18n.ts`, `README.zh-CN.md`) and
-  in local, git-ignored working notes under `docs/superpowers/`.
+  This is an open-source project.
+- Where Chinese is legitimate, and only there: user-facing bilingual product copy
+  (`sim/ui/strings.js`, `admin/src/i18n.ts`, `README.zh-CN.md`, `site/zh/`, and
+  the copy tables beside them such as `sim/ui/diagnose-copy.js`,
+  `sim/ui/project-copy.js`, `sim/pin-info.js`, `core/strings.js`,
+  `core/tarot.js`, `core/provider-presets.js`, `core/reflex-presets.js`, and
+  `labelZh` in `core/screens.json`); Chinese test inputs that exist to exercise
+  the Chinese path; quoted measurements and transcripts (`docs/hardware.md`,
+  `core/fixtures/README.md`); and console/product names quoted verbatim. Local
+  working notes under `docs/superpowers/` are exempt and git-ignored.
 - Plain ESM JavaScript; avoid new frameworks or dependencies.
 - User-visible text is bilingual in `sim/ui/strings.js`.
 - Models are bounded: no SPICE, no unmodeled safety or firmware claims.

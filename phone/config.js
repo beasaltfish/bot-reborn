@@ -1,7 +1,8 @@
 // What this phone keeps about itself, and the only phone module that touches
 // localStorage. A character's keys, voice and wake word live on the brain
 // (server/body split spec §1.1); calibration describes the wiring of the car
-// this phone rides on, so it stays here (§1.1, "硬件校准不在这里").
+// this phone rides on, so it stays here (§1.1, "hardware calibration is not
+// part of this").
 
 export const CONFIG_KEY = 'botreborn.body';
 

@@ -117,19 +117,21 @@ The hardware notes are the source of truth for selected variants:
 `sim-power-sources.md`, `sim-digital-inputs.md`, `sim-ssd1306.md`,
 `sim-sg90.md`, `sim-tb6612-motor.md` and `sim-ws2812.md`.
 
-### Trying Volcengine (豆包语音) with a real key
+### Trying Volcengine (`豆包语音`) with a real key
 
 The Volcengine adapters (`server/providers/stt-volcengine.js`,
 `server/providers/tts-volcengine.js`) were written from the docs and tested
 against fakes. A few things only a real API key (new console, one `X-Api-Key`)
-can settle. STT uses 一句话识别 on the 2.0 model, so first enable
-**豆包流式语音识别模型 2.0（小时版）** for the key in the Volcengine console.
+can settle. STT uses `一句话识别` (one-shot recognition) on the 2.0 model, so
+first enable **`豆包流式语音识别模型 2.0（小时版）`** in the Volcengine console for
+that key. Those are console product names, kept verbatim because that is what the
+console shows.
 Pick "Volcengine 火山引擎" for STT and TTS on a character, then:
 
 - [ ] **STT Test button** on the admin page shows the check clip's words. If it
       fails, the error names Volcengine's status code. A 401 or 403 straight
       away usually means the 2.0 resource is not enabled for the key.
-- [ ] **TTS Test button** plays 小何 in the browser. Also note whether the last
+- [ ] **TTS Test button** plays `小何`, the preset voice, in the browser. Also note whether the last
       line of the answer carries code `20000000`. The docs only describe `0`, and
       the adapter lets `20000000` through just in case; if it never appears, that
       exception can go.

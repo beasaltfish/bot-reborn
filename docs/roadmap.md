@@ -31,6 +31,6 @@ waits for. `scripts/agent-loop.sh --item N` picks up `ready` items only.
   - done when: a corrupted `silero_vad.onnx` makes `npm run setup` exit non-zero with a fix line,
     a rerun recovers, and the rehearsal is written down in `docs/first-build-walkthrough.md`
 
-- [ ] **6.** English in the repository — blocked: needs a policy call on product data
+- [x] **6.** English in the repository — done (policy: product copy and quoted transcripts stay)
   - done when: tracked files outside the bilingual exceptions carry no Chinese, and the
     exceptions are listed in `AGENTS.md`
