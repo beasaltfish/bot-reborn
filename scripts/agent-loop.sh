@@ -79,6 +79,12 @@ run_cmd() {
 }
 
 echo "item $ITEM: $TITLE"
+if [ -e "$WT" ] || git show-ref --quiet "refs/heads/$BRANCH"; then
+  echo "a worktree or branch for item $ITEM already exists; finish or remove it first:" >&2
+  echo "  git -C \"$WT\" status" >&2
+  echo "  git worktree remove --force \"$WT\" && git branch -D $BRANCH" >&2
+  exit 5
+fi
 run_cmd git worktree add "$WT" -b "$BRANCH" main
 
 if [ -d "$ROOT/docs/superpowers" ]; then
@@ -100,7 +106,7 @@ if [ "$DRY" = "1" ]; then
 fi
 
 # `timeout` is GNU; macOS has none. Run in the background and watch the clock.
-( cd "$WT" && opencode $OPENCODE_ARGS --prompt "$(cat "$PROMPT_FILE")" ) &
+( cd "$WT" && opencode $OPENCODE_ARGS "$(cat "$PROMPT_FILE")" ) &
 AGENT=$!
 WAITED=0
 while kill -0 "$AGENT" 2>/dev/null; do
