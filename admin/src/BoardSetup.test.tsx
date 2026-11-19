@@ -2,8 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BoardSetup } from './BoardSetup';
+import { readBoardMemory } from './boardMemory';
 import { installFakeApi } from './test/fakeApi';
 import { fakeSerial } from './test/fakeSerial';
+
+beforeEach(() => localStorage.clear());
 
 async function fill(ssid: string, pass: string) {
   await userEvent.type(await screen.findByLabelText(/wi-?fi name/i), ssid);
@@ -194,5 +197,82 @@ describe('the screen picker', () => {
     render(<BoardSetup serial={serial} replyTimeoutMs={50} screens={[]} />);
     expect(await screen.findByText(/no model has been verified on a real board yet/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/screen/i)).toBeDisabled();
+  });
+});
+
+describe('remembering this board', () => {
+  const screens = [
+    { id: 'ili9341-ips', label: 'ILI9341V 2.8" IPS', labelZh: 'ILI9341V 2.8 寸 IPS', verified: true, controller: 'ili9341' },
+  ] as unknown as Parameters<typeof BoardSetup>[0]['screens'];
+
+  beforeEach(() => { installFakeApi([{ name: 'Asten' }]); });
+
+  it('records the flash and the panel it wrote', async () => {
+    const { serial } = fakeSerial();
+    vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
+    render(<BoardSetup serial={serial} replyTimeoutMs={50} screens={screens} />);
+    await fill('My Home', 'secret12');
+    await userEvent.selectOptions(screen.getByLabelText(/screen/i), 'ili9341-ips');
+    await userEvent.click(screen.getByRole('button', { name: /start/i }));
+    await screen.findByText(/Connected to the brain as Asten/);
+    expect(readBoardMemory()).toEqual({ characterId: 'Asten', screen: 'ili9341-ips', flashedAt: 1_700_000_000_000 });
+  });
+
+  it('records a flash that kept an unknown panel as null, not as a guess', async () => {
+    const { serial } = fakeSerial();
+    render(<BoardSetup serial={serial} replyTimeoutMs={50} screens={screens} />);
+    await fill('My Home', 'secret12');
+    await userEvent.click(screen.getByRole('button', { name: /start/i }));
+    await screen.findByText(/Connected to the brain as Asten/);
+    expect(readBoardMemory()).toMatchObject({ characterId: 'Asten', screen: null });
+  });
+
+  it('records a deliberately headless flash as null', async () => {
+    const { serial } = fakeSerial({ screen: 'ili9341-ips' });
+    render(<BoardSetup serial={serial} replyTimeoutMs={50} screens={screens} />);
+    await fill('My Home', 'secret12');
+    await userEvent.selectOptions(screen.getByLabelText(/screen/i), 'off');
+    await userEvent.click(screen.getByRole('button', { name: /start/i }));
+    await screen.findByText(/Connected to the brain as Asten/);
+    expect(readBoardMemory()).toMatchObject({ characterId: 'Asten', screen: null });
+  });
+
+  it('does not count changing Wi-Fi as a flash', async () => {
+    const { serial } = fakeSerial();
+    render(<BoardSetup serial={serial} replyTimeoutMs={50} screens={screens} />);
+    await userEvent.click(await screen.findByLabelText(/change settings/i));
+    await fill('My Home', 'secret12');
+    await userEvent.click(screen.getByRole('button', { name: /start/i }));
+    await screen.findByText(/Connected to the brain as Asten/);
+    expect(serial.flashBoard).not.toHaveBeenCalled();
+    expect(readBoardMemory()).toBeNull();
+  });
+
+  it('does not count reading the board as a flash', async () => {
+    const { serial } = fakeSerial({ screen: 'ili9341-ips' });
+    render(<BoardSetup serial={serial} replyTimeoutMs={50} screens={screens} />);
+    await userEvent.click(await screen.findByLabelText(/change settings/i));
+    await userEvent.click(screen.getByRole('button', { name: /read from the board/i }));
+    await screen.findByText(/Filled in from the board/);
+    expect(readBoardMemory()).toBeNull();
+  });
+
+  it('does not record a flash whose configuration failed', async () => {
+    const { serial } = fakeSerial({ answer: false });
+    render(<BoardSetup serial={serial} replyTimeoutMs={20} screens={screens} />);
+    await fill('My Home', 'secret12');
+    await userEvent.click(screen.getByRole('button', { name: /start/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/other USB port/i);
+    expect(serial.flashBoard).toHaveBeenCalled();
+    expect(readBoardMemory()).toBeNull();
+  });
+
+  it('records the flash even when the reboot takes the link away', async () => {
+    const { serial } = fakeSerial({ dropAfterReboot: true });
+    render(<BoardSetup serial={serial} replyTimeoutMs={50} screens={screens} />);
+    await fill('My Home', 'secret12');
+    await userEvent.click(screen.getByRole('button', { name: /start/i }));
+    await screen.findByText(/cannot confirm/i);
+    expect(readBoardMemory()).toMatchObject({ characterId: 'Asten' });
   });
 });

@@ -3,6 +3,7 @@
 // page's logic is tested without hardware.
 import { useEffect, useState } from 'react';
 import { api } from './api';
+import { rememberBoard } from './boardMemory';
 import { BoardConsole, ConsoleError, checkWifi, type LinePort } from './boardConsole';
 import * as realSerial from './boardSerial';
 import { lang, t } from './i18n';
@@ -74,6 +75,12 @@ export function BoardSetup({ serial = realSerial, replyTimeoutMs, screens = SCRE
     }
   }
 
+  /** The panel the board is left with, named only when this build knows it. */
+  function writtenScreen(): string | null {
+    const written = screenChoice === 'off' ? null : screenChoice !== 'keep' ? screenChoice : boardScreen;
+    return written !== null && SCREENS.some((s) => s.id === written) ? written : null;
+  }
+
   async function start() {
     setError(null);
     setDone(null);
@@ -100,6 +107,13 @@ export function BoardSetup({ serial = realSerial, replyTimeoutMs, screens = SCRE
       if (screenChoice === 'off') await board.clearScreen();
       else if (screenChoice !== 'keep') await board.setScreen(screenChoice);
       await board.reboot();
+      // A flashed board is remembered even if the reboot drops the USB link
+      // before it can greet us: the flash and every write before it succeeded.
+      // Changing settings is not a flash, and reading the board says nothing
+      // about what this computer put on it.
+      if (mode === 'flash') {
+        rememberBoard({ characterId: character, screen: writtenScreen(), flashedAt: Date.now() });
+      }
       setStep('waiting');
       setDone(await board.waitWelcomed(15000));
     } catch (e) {
