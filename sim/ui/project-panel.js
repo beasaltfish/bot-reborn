@@ -7,7 +7,7 @@ import { projectReason } from './project-copy.js';
 /** @typedef {{mode:'guided'|'free', evaluated?:boolean, project:ProjectView|null, progress:Progress[], selection:SelectionInfo, diagnoses:import('../diagnose.js').Hint[]}} State */
 /** @typedef {'project'|'diagnostics'} Tab */
 
-/** @param {{lang:string, focus(points:string[]):void, leave?():void, build?(id:string):void, demo?(id:string):void, step?(id:string):void, shopping?():void}} opts */
+/** @param {{lang:string, focus(points:string[]):void, leave?():void, build?(id:string):void, demo?(id:string):void, step?(id:string):void}} opts */
 export function createProjectPanel(opts) {
   const element = document.createElement('section');
   element.className = 'project-panel';
@@ -56,12 +56,6 @@ export function createProjectPanel(opts) {
       heading.append(child('h2', title === `project.${project.id}` ? project.name : title));
       heading.append(child('span', text('progress').replace('{done}', String(completed)).replace('{total}', String(current.progress.length))));
       element.append(heading);
-      const shopping = /** @type {HTMLButtonElement} */ (child('button', simText(opts.lang, 'shopping.open')));
-      shopping.type = 'button';
-      shopping.className = 'shopping-open';
-      shopping.dataset.action = 'shopping';
-      shopping.addEventListener('click', () => opts.shopping?.());
-      element.append(shopping);
       const goalKey = project.goalKey ?? `goal.${project.id}`;
       const goal = simText(opts.lang, goalKey);
       if (goal !== goalKey) element.append(child('p', goal));

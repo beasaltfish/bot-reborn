@@ -216,8 +216,12 @@
             "zh": "2.8 寸 320×240 IPS"
           },
           {
-            "en": "14-pin header, backlight LED pin",
-            "zh": "14 针排针，带背光 LED 引脚"
+            "en": "VCC 5 V: the module has its own regulator, 3V3 browns the panel out",
+            "zh": "VCC 接 5 V：模块自带稳压，接 3V3 会把屏拖垮"
+          },
+          {
+            "en": "14-pin header with a backlight LED pin, pins already soldered",
+            "zh": "14 针排针，带背光 LED 引脚，排针已焊好"
           }
         ],
         "priceUsd": [

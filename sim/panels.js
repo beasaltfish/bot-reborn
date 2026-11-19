@@ -158,7 +158,8 @@ export function createPanels(opts) {
   partsPanel.setAttribute('role', 'dialog');
   const partsBtn = el('button', { type: 'button', class: 'pill' }, [t('parts')]);
   const projectBtn = el('button', { type: 'button', class: 'pill' }, [simText(lang, 'project.button')]);
-  bar.prepend(partsBtn, projectBtn);
+  const shoppingBtn = el('button', { type: 'button', class: 'pill', 'data-action': 'shopping' }, [simText(lang, 'shopping.open')]);
+  bar.prepend(partsBtn, projectBtn, shoppingBtn);
   const shoppingView = createShoppingPanel({
     lang,
     bench: () => opts.bench?.() ?? /** @type {any} */ ({ placed: [], boards: [] }),
@@ -177,7 +178,7 @@ export function createPanels(opts) {
     // On a phone the sidebar leaves too little bench visible to frame two pins.
     if (window.innerWidth < 600) showProject(false);
     opts.focusProject?.(points);
-  }, shopping: () => showShopping(true), demo: id => runDemo(id, 'watch'), step: id => runDemo(id, 'step'), build: (id) => opts.build?.(id, planChoice()), leave: () => {
+  }, demo: id => runDemo(id, 'watch'), step: id => runDemo(id, 'step'), build: (id) => opts.build?.(id, planChoice()), leave: () => {
     projectSelect.value = '';
     projectView.showProject('');
     showDiagram(false);
@@ -227,6 +228,7 @@ export function createPanels(opts) {
   projectSelect.addEventListener('change', () => { opts.clearProjectFocus?.(); projectView.showProject(projectSelect.value); refreshProject(); });
   projectClose.addEventListener('click', () => showProject(false));
   projectBtn.addEventListener('click', () => { showParts(false); showDiagram(false); showProject(Boolean(projectPanel.hidden)); });
+  shoppingBtn.addEventListener('click', () => showShopping(true));
   const showParts = (/** @type {boolean} */ on) => {
     if (on && !thumbnails) { thumbnails = createPartThumbnails(); renderCatalogue(); }
     if (on) catalogue.open(); else catalogue.close();

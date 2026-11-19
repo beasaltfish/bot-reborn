@@ -2,6 +2,7 @@
 // check before paying, and a print button. It reads the bench on every render
 // so it always matches what is on the table.
 import { shoppingList, totalUsd } from '../shopping.js';
+import { screenById } from '../../core/screens.js';
 import { simText } from './strings.js';
 
 /**
@@ -56,11 +57,16 @@ export function createShoppingPanel({ lang, bench, plan, onClose }) {
     for (const line of list.lines) {
       const row = document.createElement('li');
       row.dataset.part = line.key;
-      const name = line.purchase.keywords[lang === 'zh' ? 'zh' : 'en'];
-      row.append(child('strong', `${name} ×${line.quantity}`));
+      const keywords = line.purchase.keywords[lang === 'zh' ? 'zh' : 'en'];
+      row.append(child('strong', `${keywords}${line.detail ? ` · ${line.detail}` : ''} ×${line.quantity}`));
       row.append(child('span', `$${line.purchase.priceUsd[0]}–${line.purchase.priceUsd[1]}`, 'shopping-price'));
       const specs = line.purchase.mustMatch.map((m) => m[lang === 'zh' ? 'zh' : 'en']).join(' · ');
       if (specs) row.append(child('p', `${text('shopping.spec')}: ${specs}`, 'shopping-spec'));
+      // The English words are what a search box anywhere takes, whatever the page language.
+      row.append(child('p', `${text('shopping.keywords')}: ${line.purchase.keywords.en}`, 'shopping-keywords'));
+      const alternatives = line.purchase.alternatives.map((a) => a[lang === 'zh' ? 'zh' : 'en']).join(' · ');
+      if (alternatives) row.append(child('p', `${text('shopping.alternatives')}: ${alternatives}`, 'shopping-alternatives'));
+      if (line.planned > 0) row.append(child('span', text('shopping.planned', { n: String(line.planned) }), 'shopping-planned'));
       rows.append(row);
       if (line.warning) {
         const warn = child('p', text(`shopping.warn.${line.warning === 'screen-unsupported-controller' ? 'unsupported' : 'unverified'}`));
@@ -70,6 +76,17 @@ export function createShoppingPanel({ lang, bench, plan, onClose }) {
       }
     }
     element.append(rows);
+
+    if (list.planScreens.length) {
+      const named = list.planScreens
+        .map((id) => screenById(id.slice('screen-'.length))?.label ?? id)
+        .join(', ');
+      const onBench = list.lines
+        .filter((line) => line.key.startsWith('screen-'))
+        .map((line) => screenById(line.key.slice('screen-'.length))?.label ?? line.key)
+        .join(', ');
+      element.append(child('p', text('shopping.planScreen', { wanted: named, have: onBench }), 'shopping-plan-screen'));
+    }
 
     const footer = document.createElement('div');
     footer.className = 'shopping-footer no-print';

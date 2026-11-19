@@ -3,13 +3,19 @@
 // from what is actually placed — not from a recipe — so a bench the user wired
 // themselves gets the same treatment.
 import { NO_PURCHASE, purchaseFor } from './devices/purchase.js';
+import { deviceByPart } from './devices/catalog.js';
 import { screenById } from '../core/screens.js';
 import { SCREEN_CONTROLLERS } from './firmware/body-boot.js';
 import { planSteps } from './plan.js';
 
 /**
  * @typedef {import('./devices/purchase.js').Purchase} Purchase
- * @typedef {{ key: string, quantity: number, purchase: Purchase, warning?: 'screen-unsupported-controller' | 'screen-unverified' }} Line
+ * @typedef {{
+ *   key: string, quantity: number, purchase: Purchase,
+ *   planned: number,                 // how many of them the selected project still needs
+ *   detail?: string,                 // the value a buyer has to name, e.g. "220 Ω"
+ *   warning?: 'screen-unsupported-controller' | 'screen-unverified',
+ * }} Line
  */
 
 // The order a build goes together in: the controller, then what hangs off it,
@@ -34,7 +40,7 @@ function rank(id) {
 /**
  * @param {import('./bench.js').Bench} bench
  * @param {import('./plan.js').Plan | null} [plan]  the project being built, if any
- * @returns {{ lines: Line[], warnings: string[] }}
+ * @returns {{ lines: Line[], warnings: string[], planScreens: string[] }}
  */
 export function shoppingList(bench, plan = null) {
   /** @type {Map<string, { part: string, bench: number, planned: number }>} */
@@ -45,9 +51,12 @@ export function shoppingList(bench, plan = null) {
     if (seen) seen[side] += 1;
     else counts.set(key, { part, bench: 0, planned: 0, [side]: 1 });
   };
-  /** @param {string} part */
-  const keyFor = (part, /** @type {Record<string, number|string|boolean>} */ properties) =>
-    part === 'resistor' ? `resistor|${String(properties.ohms)}` : part;
+  /** A project step carries no instance properties, so the schema default is the value to buy. */
+  const defaultOhms = /** @type {number} */ (deviceByPart('resistor')?.properties.ohms?.default ?? 220);
+  /** @param {string} part @param {Record<string, number|string|boolean>} properties */
+  const keyFor = (part, properties) => part === 'resistor'
+    ? `resistor|${String(properties.ohms ?? defaultOhms)}`
+    : part;
 
   for (const placed of bench.placed) {
     if (NO_PURCHASE.has(placed.part)) continue;
@@ -56,11 +65,27 @@ export function shoppingList(bench, plan = null) {
   // Buying happens before building, so a selected project contributes the parts
   // it still needs: the bench alone would list an incomplete build.
   let plannedBoards = 0;
+  /** @type {string[]} */
+  const benchScreens = [];
+  /** @type {string[]} */
+  const planScreens = [];
+  for (const placed of bench.placed) if (isScreen(placed.part)) benchScreens.push(placed.part);
   if (plan) {
     for (const step of planSteps(plan)) {
       if (step.kind === 'board') plannedBoards += 1;
       else if (step.kind === 'part' && !NO_PURCHASE.has(step.part)) {
-        note(step.part, keyFor(step.part, {}), 'planned');
+        // One screen is enough for a build: a project's panel replaces the one
+        // already on the bench instead of adding a second line to the order.
+        if (isScreen(step.part)) {
+          if (benchScreens.length) {
+            if (!benchScreens.includes(step.part) && !planScreens.includes(step.part)) planScreens.push(step.part);
+            continue;
+          }
+          if (!planScreens.includes(step.part)) planScreens.push(step.part);
+          note(step.part, step.part, 'planned');
+          continue;
+        }
+        note(step.part, keyFor(step.part, /** @type {any} */ (step).properties ?? {}), 'planned');
       }
     }
   }
@@ -70,6 +95,8 @@ export function shoppingList(bench, plan = null) {
   for (const [key, entry] of counts) {
     const quantity = Math.max(entry.bench, entry.planned);
     if (!quantity) continue;
+    const planned = Math.max(0, entry.planned - entry.bench);
+    const detail = entry.part === 'resistor' ? `${key.split('|')[1]} Ω` : undefined;
     if (isScreen(entry.part)) {
       const screen = screenById(entry.part.slice('screen-'.length));
       // Silently dropping a screen would leave a build that cannot light up.
@@ -77,32 +104,32 @@ export function shoppingList(bench, plan = null) {
       /** @type {Line['warning']} */
       const warning = !SCREEN_CONTROLLERS.has(screen.controller) ? 'screen-unsupported-controller'
         : screen.verified ? undefined : 'screen-unverified';
-      lines.push({ key, quantity, purchase: screen.buy, ...(warning ? { warning } : {}) });
+      lines.push({ key, quantity, purchase: screen.buy, planned, ...(warning ? { warning } : {}) });
       continue;
     }
     const purchase = purchaseFor(entry.part);
     if (!purchase) continue;
-    lines.push({ key, quantity, purchase });
+    lines.push({ key, quantity, purchase, planned, ...(detail ? { detail } : {}) });
   }
   // The board a part sits on is part of the build, and so is the wire.
   const boards = Math.max(bench.boards.length, plannedBoards);
   if (lines.length) {
     if (boards) {
       const breadboard = purchaseFor('breadboard');
-      if (breadboard) lines.push({ key: 'breadboard', quantity: boards, purchase: breadboard });
+      if (breadboard) lines.push({ key: 'breadboard', quantity: boards, purchase: breadboard, planned: 0 });
     }
     const jumperWires = purchaseFor('jumper-wires');
-    if (jumperWires) lines.push({ key: 'jumper-wires', quantity: 1, purchase: jumperWires });
+    if (jumperWires) lines.push({ key: 'jumper-wires', quantity: 1, purchase: jumperWires, planned: 0 });
     if (counts.has('esp32')) {
       const usbCable = purchaseFor('usb-cable');
-      if (usbCable) lines.push({ key: 'usb-cable', quantity: 1, purchase: usbCable });
+      if (usbCable) lines.push({ key: 'usb-cable', quantity: 1, purchase: usbCable, planned: 0 });
     }
   }
   lines.sort((a, b) => rank(a.key) - rank(b.key) || a.key.localeCompare(b.key));
   /** @type {string[]} */
   const warnings = [];
   for (const line of lines) if (line.warning && !warnings.includes(line.warning)) warnings.push(line.warning);
-  return { lines, warnings };
+  return { lines, warnings, planScreens };
 }
 
 /**

@@ -38,3 +38,11 @@ test('the default panel is priced and marked unverified, not unsupported', () =>
   assert.equal(line.warning, 'screen-unverified');
   assert.match(line.purchase.keywords.en, /ILI9341/);
 });
+
+test('the default panel names the 5 V supply its own regulator needs', () => {
+  const panel = SCREENS.find((s) => s.id === 'ili9341-ips');
+  assert.ok(panel?.buy);
+  const spec = panel.buy.mustMatch.map((m) => m.en).join(' ');
+  assert.match(spec, /5\s?V/i);
+  assert.match(spec, /regulator|LDO/i);
+});

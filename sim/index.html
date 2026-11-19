@@ -236,6 +236,8 @@
     #shopping-sheet .shopping-footer button { padding: 5px 9px; border: 1px solid var(--accent); border-radius: 7px; color: var(--accent); background: none; font: 600 12px var(--font); cursor: pointer; }
     #shopping-sheet .shopping-note { margin: 0; color: var(--ink-dim); }
     @media print {
+      /* The page is a fixed, un-scrollable canvas on screen; on paper it has to flow. */
+      html, body { height: auto; overflow: visible; background: #fff; }
       body > *:not(#shopping-sheet) { display: none !important; }
       #shopping-sheet { position: static; max-height: none; overflow: visible; border: 0; color: #000; background: #fff; }
       #shopping-sheet .no-print, #shopping-sheet > .close { display: none !important; }

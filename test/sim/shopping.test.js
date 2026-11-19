@@ -56,3 +56,33 @@ test('an unbuilt project still lists everything it needs', () => {
   assert.equal(byKey.get('screen-ili9341-ips')?.quantity, 1);
   assert.equal(byKey.get('breadboard')?.quantity, 2);
 });
+
+test('a planned resistor with no properties is priced at the schema default and shows its value', () => {
+  const plan = planById('button-led');
+  assert.ok(plan);
+  const { lines } = shoppingList(emptyBench(), plan);
+  const resistor = lines.find((l) => l.key.startsWith('resistor'));
+  assert.equal(resistor?.key, 'resistor|220');
+  assert.equal(resistor?.detail, '220 Ω');
+});
+
+test('a project screen replaces, never doubles, the screen already on the bench', () => {
+  const bench = { ...emptyBench(), placed: /** @type {any} */ ([
+    { id: 'scr', part: 'screen-st7735-160', at: { x: 0, z: 0 }, rot: 0, seated: false, burnt: false, properties: {} },
+  ]) };
+  const plan = planById('tarot');
+  assert.ok(plan);
+  const { lines, planScreens } = shoppingList(bench, plan);
+  assert.equal(lines.filter((l) => l.key.startsWith('screen-')).length, 1);
+  assert.equal(lines.find((l) => l.key.startsWith('screen-'))?.key, 'screen-st7735-160');
+  assert.deepEqual(planScreens, ['screen-ili9341-ips']);
+});
+
+test('a line says how much of it the project still needs', () => {
+  const plan = planById('button-led');
+  assert.ok(plan);
+  const { lines } = shoppingList(emptyBench(), plan);
+  assert.equal(lines.find((l) => l.key === 'button-module')?.quantity, 1);
+  assert.equal(lines.find((l) => l.key === 'button-module')?.planned, 1);
+  assert.equal(lines.find((l) => l.key === 'esp32')?.planned, 0);
+});

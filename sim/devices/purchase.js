@@ -18,15 +18,19 @@ const bi = (en, zh) => ({ en, zh });
 /** @type {Record<string, Purchase>} */
 export const PURCHASE = {
   esp32: {
-    keywords: bi('ESP32-S3 DevKitC development board', 'ESP32-S3 DevKitC 开发板'),
+    keywords: bi('ESP32-S3 DevKitC N16R8 development board', 'ESP32-S3 DevKitC N16R8 开发板'),
     mustMatch: [
       bi('ESP32-S3, not the ESP32 or S3 mini', '要 ESP32-S3，不是 ESP32 或 S3 mini'),
+      // The firmware keeps the pet's decoded picture in PSRAM and checks the 16 MB
+      // flash size (firmware/sdkconfig.defaults, screen_draw.c). A board without
+      // them boots and then leaves the screen blank.
+      bi('N16R8: 16 MB flash and 8 MB octal PSRAM', 'N16R8：16 MB flash 与 8 MB 八线 PSRAM'),
       bi('two USB-C ports (USB and UART)', '两个 USB-C 口（USB 与 UART）'),
-      bi('headers with 3V3, 5V, GND, GPIO 4-7 and 8-15', '排针要有 3V3、5V、GND、GPIO 4-7 与 8-15'),
+      bi('headers pre-soldered, with 3V3, 5V, GND, GPIO 4-7 and 8-15', '排针已焊好，有 3V3、5V、GND、GPIO 4-7 与 8-15'),
     ],
-    priceUsd: [8, 18],
-    alternatives: [bi('any ESP32-S3 devkit with the same header rows', '任何排针一致的 ESP32-S3 开发板')],
-    note: bi('Flashing needs Chrome or Edge over USB; the second port is for the console.', '刷板要 Chrome 或 Edge 走 USB；另一个口给串口。'),
+    priceUsd: [8, 20],
+    alternatives: [bi('any ESP32-S3 devkit with 16 MB flash and 8 MB octal PSRAM', '任何 16 MB flash、8 MB 八线 PSRAM 的 ESP32-S3 开发板')],
+    note: bi('Without the PSRAM the pet picture cannot be allocated and the screen stays dark. Flashing needs Chrome or Edge.', '没有 PSRAM 时装不下宠物画面，屏会一直黑着。刷板要 Chrome 或 Edge。'),
   },
   inmp441: {
     keywords: bi('INMP441 I2S microphone module', 'INMP441 I2S 麦克风模块'),
@@ -91,11 +95,11 @@ export const PURCHASE = {
   ssd1306: {
     keywords: bi('SSD1306 0.96 inch I2C OLED 128x64', 'SSD1306 0.96 寸 I2C OLED 128×64'),
     mustMatch: [
-      bi('I2C, four pins (GND, VCC, SCL, SDA)', 'I2C 四针（GND、VCC、SCL、SDA）'),
-      bi('3.3 V logic (the module regulator accepts 3.3-5 V)', '3.3 V 逻辑（模块稳压接受 3.3-5 V）'),
+      bi('I2C, four pins in the order GND, VCC, SCL, SDA', 'I2C 四针，顺序 GND、VCC、SCL、SDA'),
+      bi('VCC 2.7-3.6 V: this is the 3.3 V module, a 5 V-only board is a different one', 'VCC 2.7-3.6 V：这是 3.3 V 模块，只吃 5 V 的是另一种'),
     ],
     priceUsd: [2, 6],
-    alternatives: [bi('SH1106 0.96 inch I2C, if the listing says 128x64', 'SH1106 0.96 寸 I2C，标 128×64 的同款')],
+    alternatives: [bi('another SSD1306 128x64 I2C module that the listing rates for 3.3 V', '另一种标称 3.3 V 可用的 SSD1306 128×64 I2C 模块')],
     note: bi('The firmware drives this in the workbench only; the body firmware has no OLED driver yet.', '固件目前只在工作台里驱动它；真板固件还没有 OLED 驱动。'),
   },
   'hc-sr04': {
@@ -131,7 +135,7 @@ export const PURCHASE = {
       bi('screw terminals for the motors', '电机用接线端子'),
     ],
     priceUsd: [2, 6],
-    alternatives: [bi('DRV8833 module, if the firmware gains a driver for it', 'DRV8833 模块，前提是固件有它的驱动')],
+    alternatives: [bi('another TB6612FNG breakout with the same pin order', '另一种引脚顺序相同的 TB6612FNG 模块')],
     note: bi('Never wire the coils to the inputs; the firmware drives the inputs only.', '不要把电机线圈接到输入端；固件只驱动输入端。'),
   },
   'dc-motor-small': {
@@ -157,7 +161,7 @@ export const PURCHASE = {
       bi('3.3 V logic, module regulator accepts 5 V', '3.3 V 逻辑，模块稳压接受 5 V'),
     ],
     priceUsd: [2, 6],
-    alternatives: [bi('MPU-6500 breakout, if the firmware gains a driver for it', 'MPU-6500 模块，前提是固件有它的驱动')],
+    alternatives: [bi('another MPU-6050 GY-521 board; clone chips read the same registers', '另一种 MPU-6050 GY-521 模块；克隆芯片寄存器一致')],
     note: bi('Reads on a real board are untested; the wand has only been tried in the workbench.', '真板读数还没试过；签棒只在工作台里验证过。'),
   },
   'battery-4xaa': {
