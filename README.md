@@ -201,8 +201,8 @@ something the workbench can teach and the board cannot run yet.
 **ESP32 body:** hears, talks, shows a pet dog on a breadboard and drives a toy's
 motor inputs, all set up from the admin page. The admin page can also pick the
 screen, but no panel model is marked verified yet, so the picker is empty and
-says so; until one is lit and recorded, type `screen <id>` in the serial
-console. The tarot wand works in the simulator; the firmware reads it too, but
+says so; until one is lit and recorded, type `screen` in the serial console for
+the list, then `screen <id>` and `reboot` — the choice takes effect at boot. The tarot wand works in the simulator; the firmware reads it too, but
 that has not been tried on a real board yet.
 
 **Phone body:** works end to end on one robot and one phone, and is kept as it

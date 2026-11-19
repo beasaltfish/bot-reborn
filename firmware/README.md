@@ -112,7 +112,9 @@ decide.
 
 You can also pick the panel in the admin page's board setup, which writes the
 same `screen <id>` command for you; the picker lists only models somebody has
-lit on real glass, so the console stays the way to try a new one.
+lit on real glass, so the console stays the way to try a new one. Either way the
+choice takes effect at the next boot: `screen` lists the models, `screen <id>`
+picks one, `screen off` removes it, then `reboot`.
 
 **First light.** `screen_start()` runs a red / green / blue test, one second
 each, on a task below the audio tasks. `monitor` prints
