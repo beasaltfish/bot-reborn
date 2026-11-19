@@ -15,7 +15,7 @@ ITEM=
 MODEL=
 SHIP=0
 DRY=0
-TIMEOUT=2700
+TIMEOUT=3600
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -51,6 +51,10 @@ You are working in a git worktree on branch $BRANCH. One roadmap item, one PR.
 # Item $ITEM: $TITLE
 
 $BODY
+
+This item is one pull request's worth of work. If it turns out to need more than
+one sitting, stop early and say what is left, rather than half-finishing tasks:
+a red branch cannot be reviewed, and the loop keeps the worktree for a person.
 
 # How to work
 

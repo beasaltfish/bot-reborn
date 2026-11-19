@@ -29,6 +29,17 @@ What it does, in order:
    The agent's summary is not evidence.
 6. Only then: `--ship` pushes and opens the PR; without it, prints the two commands.
 
+## Sizing an item
+
+One item is one pull request a person could read in ten minutes. That is roughly
+one plan task, or two if they are mechanical. The default cap is 60 minutes
+(`--timeout 3600`); the first real run at 25 minutes ended mid-task, and the last
+commit had to be finished by hand.
+
+A bigger piece of work belongs in the roadmap as several items, in order, each
+with its own acceptance line. The loop runs them one at a time, on purpose: the
+review is the bottleneck, not the writing.
+
 ## When it stops
 
 - **Timeout** (default 2700 s) or a non-zero agent exit: exit 4, worktree kept,
