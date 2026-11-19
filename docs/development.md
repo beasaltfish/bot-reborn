@@ -68,7 +68,7 @@ npm start                # the brain on :8787, and the admin page in your browse
 npm run dev              # the same, for changing the pages: edits show without a build
 ```
 
-Tested on Node 24.13.1 (the floor is Node 20). `npm run setup` is a check, not
+Tested on Node 24.13.1; the floor is what the locked Vite accepts, `^20.19.0 || >=22.12.0`. `npm run setup` is a check, not
 an installer: it fetches the two models and builds the pages, and it names the
 next step for anything else it finds.
 

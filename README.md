@@ -114,7 +114,7 @@ touching a board.
 ## Five minutes, no parts
 
 1. **Start the brain** on a computer on the same Wi-Fi as the body. Three
-   commands; Node 20 or newer first.
+   commands; Node 20.19+ or 22.12+ first.
 
    ```bash
    npm install
