@@ -5,7 +5,7 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import { createServer } from 'node:net';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { modelsPresent } from './audio/sherpa-node.js';
@@ -63,16 +63,23 @@ export function nodeSupported(version) {
  * Presence is not enough: `fetch.sh` writes the VAD file before it checks the
  * hash, so a truncated download can sit there looking ready. The digest is the
  * same one the script checks — keep the two in step.
+ *
+ * Returns why the models cannot be trusted, so the message can say "corrupt"
+ * rather than "missing" when the files are there and wrong.
  * @param {string} [dir]
- * @returns {boolean}
+ * @returns {'missing' | 'corrupt' | null}
  */
+export function modelsProblem(dir = 'server/models') {
+  const base = isAbsolute(dir) ? dir : join(ROOT, dir);
+  const present = MODEL_FILES.filter((name) => existsSync(join(base, name)));
+  if (present.length !== MODEL_FILES.length) return 'missing';
+  const vad = readFileSync(join(base, 'silero_vad.onnx'));
+  return createHash('sha256').update(vad).digest('hex') === VAD_SHA256 ? null : 'corrupt';
+}
+
+/** @param {string} [dir] @returns {boolean} */
 export function modelsIntact(dir = 'server/models') {
-  const files = MODEL_FILES
-    .map((name) => ({ name, path: join(ROOT, dir, name) }))
-    .filter((f) => existsSync(f.path));
-  if (files.length !== MODEL_FILES.length) return false;
-  const vad = readFileSync(join(ROOT, dir, 'silero_vad.onnx'));
-  return createHash('sha256').update(vad).digest('hex') === VAD_SHA256;
+  return modelsProblem(dir) === null;
 }
 
 /**
@@ -83,6 +90,7 @@ export function modelsIntact(dir = 'server/models') {
  *   needsBuild?: boolean,
  *   build?: () => void,
  *   platform?: string,
+ *   modelsProblem?: 'missing' | 'corrupt' | null,
  * }} [deps]
  * @returns {Promise<Check[]>}
  */
@@ -106,10 +114,14 @@ export async function runChecks(deps = {}) {
     }),
   });
 
+  const problem = deps.modelsProblem ?? (models ? null : modelsProblem());
   checks.push({
     id: 'models',
     ok: models,
-    detail: models ? 'wake-word and VAD models present' : `models missing from ${MODELS_DIR}`,
+    detail: models ? 'wake-word and VAD models present'
+      : problem === 'corrupt'
+        ? `the model files in ${MODELS_DIR} look corrupt (a truncated or failed download)`
+        : `models missing from ${MODELS_DIR}`,
     ...(models ? {} : {
       // The script needs a POSIX shell; Windows gets the two files named instead.
       fix: platform === 'win32'

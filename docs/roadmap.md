@@ -27,7 +27,7 @@ waits for. `scripts/agent-loop.sh --item N` picks up `ready` items only.
   - done when: the default cap is 60 minutes, the prompt says an item is one PR's worth,
     and `docs/agent-loop.md` explains how to size an item so it fits
 
-- [ ] **5.** A2 failure path, end to end — ready
+- [x] **5.** A2 failure path, end to end — done
   - done when: a corrupted `silero_vad.onnx` makes `npm run setup` exit non-zero with a fix line,
     a rerun recovers, and the rehearsal is written down in `docs/first-build-walkthrough.md`
 

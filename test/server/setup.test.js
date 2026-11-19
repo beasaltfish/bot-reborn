@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { runChecks, TESTED_NODE, modelsIntact, ensureModels } from '../../server/setup.js';
+import { runChecks, TESTED_NODE, modelsIntact, modelsProblem, ensureModels } from '../../server/setup.js';
 
 test('a missing model file points at the fetch script on unix', async () => {
   const checks = await runChecks({ nodeVersion: TESTED_NODE, models: false, portFree: async () => true, needsBuild: false, platform: 'darwin' });
@@ -60,4 +60,19 @@ test('a failed fetch is a failure, not a success', async () => {
   assert.equal(await ensureModels({ present: () => present, run: () => { ran = true; present = true; return 0; } }), true);
   assert.equal(ran, true);
   assert.equal(await ensureModels({ present: () => true, run: () => 1 }), true);
+});
+
+test('a present but corrupted model is reported as such, not as missing', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'br-models-'));
+  try {
+    assert.equal(modelsProblem(dir), 'missing');
+    for (const name of ['encoder-epoch-13-avg-2-chunk-16-left-64.int8.onnx', 'decoder-epoch-13-avg-2-chunk-16-left-64.onnx', 'joiner-epoch-13-avg-2-chunk-16-left-64.int8.onnx', 'tokens.txt', 'silero_vad.onnx']) {
+      await writeFile(join(dir, name), 'not a model');
+    }
+    assert.equal(modelsProblem(dir), 'corrupt');
+    const checks = await runChecks({ nodeVersion: TESTED_NODE, models: modelsProblem(dir) === null, modelsProblem: modelsProblem(dir), portFree: async () => true, needsBuild: false, platform: 'darwin' });
+    assert.match(checks.find((c) => c.id === 'models')?.detail ?? '', /corrupt/i);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

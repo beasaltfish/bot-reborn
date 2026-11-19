@@ -44,3 +44,32 @@ free — A5 on a different machine will cover it.
   like an error the first time.
 - When a brain is already running here, the port check fails loudly even though the
   running one is fine.
+
+## 2026-11-19 · Setup's failure path (A2 rehearsal)
+
+Two runs, in a fresh clone, with the model files deliberately replaced by junk and
+`curl` replaced by a script that exits 22 (so the download cannot rescue them):
+
+```bash
+PATH="$TMP/bin:$PATH" PORT=8899 npm run setup   # exit 1
+```
+
+```
+The fetch script failed; its output is above.
+fail  models: the model files in server/models/ look corrupt (a truncated or failed download)
+      Run: sh server/models/fetch.sh
+Fix the lines marked fail, then run npm run setup again.
+```
+
+Then the same clone with a working `curl`:
+
+```bash
+PORT=8899 npm run setup                          # exit 0
+ok    models: wake-word and VAD models present
+next: npm start
+```
+
+What this proved, and the one thing it changed: a corrupt model used to be
+reported as **missing**, which sends a person looking for a file that is right
+there. `setup.js` now separates `missing` from `corrupt`; the rehearsal above is
+the before/after.
