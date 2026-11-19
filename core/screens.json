@@ -84,7 +84,37 @@
           "silk": "T_IRQ",
           "role": "NC"
         }
-      ]
+      ],
+      "buy": {
+        "keywords": {
+          "en": "ILI9341 2.4 inch 320x240 TFT SPI module",
+          "zh": "ILI9341 2.4 寸 320×240 TFT SPI 模块"
+        },
+        "mustMatch": [
+          {
+            "en": "controller ILI9341 printed on the module",
+            "zh": "模块上标 ILI9341"
+          },
+          {
+            "en": "14-pin header",
+            "zh": "14 针排针"
+          },
+          {
+            "en": "5 V module with its own regulator",
+            "zh": "5 V 供电，模块自带稳压"
+          }
+        ],
+        "priceUsd": [
+          6,
+          14
+        ],
+        "alternatives": [
+          {
+            "en": "any 2.4-2.8 inch ILI9341 320x240 module",
+            "zh": "任何 2.4-2.8 寸 ILI9341 320×240 模块"
+          }
+        ]
+      }
     },
     {
       "id": "ili9341-ips",
@@ -170,7 +200,37 @@
           "silk": "SD_CS",
           "role": "SD_CS"
         }
-      ]
+      ],
+      "buy": {
+        "keywords": {
+          "en": "ILI9341V 2.8 inch 320x240 IPS SPI 14 pin",
+          "zh": "ILI9341V 2.8 寸 320×240 IPS SPI 14 针"
+        },
+        "mustMatch": [
+          {
+            "en": "controller ILI9341V, not ST7789 (the two look identical)",
+            "zh": "要 ILI9341V，不是 ST7789（外观一样）"
+          },
+          {
+            "en": "2.8 inch 320x240 IPS",
+            "zh": "2.8 寸 320×240 IPS"
+          },
+          {
+            "en": "14-pin header, backlight LED pin",
+            "zh": "14 针排针，带背光 LED 引脚"
+          }
+        ],
+        "priceUsd": [
+          8,
+          16
+        ],
+        "alternatives": [
+          {
+            "en": "any ILI9341V 2.8 inch 320x240 SPI module; check the pin label, not the position",
+            "zh": "任何 ILI9341V 2.8 寸 320×240 SPI 模块；看引脚标签，不要看位置"
+          }
+        ]
+      }
     },
     {
       "id": "st7789-320",
@@ -232,7 +292,33 @@
           "silk": "BLK",
           "role": "BL"
         }
-      ]
+      ],
+      "buy": {
+        "keywords": {
+          "en": "ST7789 2.0 inch 320x240 IPS SPI module",
+          "zh": "ST7789 2.0 寸 320×240 IPS SPI 模块"
+        },
+        "mustMatch": [
+          {
+            "en": "controller ST7789 printed on the module",
+            "zh": "模块上标 ST7789"
+          },
+          {
+            "en": "3.3 V logic, 8-pin header",
+            "zh": "3.3 V 逻辑，8 针排针"
+          }
+        ],
+        "priceUsd": [
+          6,
+          14
+        ],
+        "alternatives": [
+          {
+            "en": "any ST7789 320x240 IPS module with the same 8 pins",
+            "zh": "任何 8 针同序的 ST7789 320×240 IPS 模块"
+          }
+        ]
+      }
     },
     {
       "id": "st7789-240",
@@ -290,7 +376,33 @@
           "silk": "BLK",
           "role": "BL"
         }
-      ]
+      ],
+      "buy": {
+        "keywords": {
+          "en": "ST7789 1.3 inch 240x240 IPS SPI module",
+          "zh": "ST7789 1.3 寸 240×240 IPS SPI 模块"
+        },
+        "mustMatch": [
+          {
+            "en": "controller ST7789, 240x240",
+            "zh": "控制器 ST7789，240×240"
+          },
+          {
+            "en": "3.3 V logic, 7-pin header",
+            "zh": "3.3 V 逻辑，7 针排针"
+          }
+        ],
+        "priceUsd": [
+          5,
+          12
+        ],
+        "alternatives": [
+          {
+            "en": "any ST7789 240x240 module; 1.54 inch versions share the wiring",
+            "zh": "任何 ST7789 240×240 模块；1.54 寸的同线序"
+          }
+        ]
+      }
     },
     {
       "id": "st7735-160",
@@ -352,7 +464,33 @@
           "silk": "VCC",
           "role": "VCC"
         }
-      ]
+      ],
+      "buy": {
+        "keywords": {
+          "en": "ST7735 1.8 inch 160x128 TFT SPI module",
+          "zh": "ST7735 1.8 寸 160×128 TFT SPI 模块"
+        },
+        "mustMatch": [
+          {
+            "en": "controller ST7735 printed on the module",
+            "zh": "模块上标 ST7735"
+          },
+          {
+            "en": "5 V module with its own regulator",
+            "zh": "5 V 供电，模块自带稳压"
+          }
+        ],
+        "priceUsd": [
+          4,
+          10
+        ],
+        "alternatives": [
+          {
+            "en": "any ST7735 160x128 module, 8-pin header",
+            "zh": "任何 ST7735 160×128、8 针模块"
+          }
+        ]
+      }
     },
     {
       "id": "gc9a01-round",
@@ -410,7 +548,33 @@
           "silk": "RST",
           "role": "RST"
         }
-      ]
+      ],
+      "buy": {
+        "keywords": {
+          "en": "GC9A01 1.28 inch round 240x240 IPS SPI",
+          "zh": "GC9A01 1.28 寸 圆形 240×240 IPS SPI"
+        },
+        "mustMatch": [
+          {
+            "en": "controller GC9A01, round glass",
+            "zh": "控制器 GC9A01，圆形屏"
+          },
+          {
+            "en": "3.3 V logic, 7-pin header",
+            "zh": "3.3 V 逻辑，7 针排针"
+          }
+        ],
+        "priceUsd": [
+          6,
+          14
+        ],
+        "alternatives": [
+          {
+            "en": "any GC9A01 240x240 round module",
+            "zh": "任何 GC9A01 240×240 圆形模块"
+          }
+        ]
+      }
     }
   ]
 }

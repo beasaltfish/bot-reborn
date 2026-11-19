@@ -3,6 +3,8 @@
 // from what is actually placed — not from a recipe — so a bench the user wired
 // themselves gets the same treatment.
 import { NO_PURCHASE, purchaseFor } from './devices/purchase.js';
+import { screenById } from '../core/screens.js';
+import { SCREEN_CONTROLLERS } from './firmware/body-boot.js';
 
 /**
  * @typedef {import('./devices/purchase.js').Purchase} Purchase
@@ -46,6 +48,16 @@ export function shoppingList(bench) {
   /** @type {Line[]} */
   const lines = [];
   for (const [key, entry] of counts) {
+    if (isScreen(entry.part)) {
+      const screen = screenById(entry.part.slice('screen-'.length));
+      // Silently dropping a screen would leave a build that cannot light up.
+      if (!screen?.buy) throw new Error(`screen ${entry.part} has no buy entry`);
+      /** @type {Line['warning']} */
+      const warning = !SCREEN_CONTROLLERS.has(screen.controller) ? 'screen-unsupported-controller'
+        : screen.verified ? undefined : 'screen-unverified';
+      lines.push({ key, quantity: entry.quantity, purchase: screen.buy, ...(warning ? { warning } : {}) });
+      continue;
+    }
     const purchase = purchaseFor(entry.part);
     if (!purchase) continue;
     lines.push({ key, quantity: entry.quantity, purchase });

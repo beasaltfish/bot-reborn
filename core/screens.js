@@ -9,6 +9,10 @@ import table from './screens.json' with { type: 'json' };
  * @typedef {'VCC'|'GND'|'CS'|'RST'|'DC'|'MOSI'|'SCK'|'BL'|'MISO'|'SD_CS'|'NC'} PinRole
  * @typedef {{ silk: string, role: PinRole }} ScreenPin
  * @typedef {{
+ *   keywords: { en: string, zh: string }, mustMatch: { en: string, zh: string }[],
+ *   priceUsd: [number, number], alternatives: { en: string, zh: string }[],
+ * }} ScreenBuy
+ * @typedef {{
  *   id: string, label: string,
  *   controller: 'ili9341' | 'st7789' | 'st7735' | 'gc9a01',
  *   w: number, h: number,                // landscape, as shown
@@ -22,6 +26,7 @@ import table from './screens.json' with { type: 'json' };
  *   pcb: { w: number, d: number },       // the board, mm
  *   glass: { w: number, d: number },     // the lit area, mm (a disc when round)
  *   pins: ScreenPin[],                   // header order, as printed on the module
+ *   buy?: ScreenBuy,                     // what to ask for when buying one
  * }} Screen
  */
 

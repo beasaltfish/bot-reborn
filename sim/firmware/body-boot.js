@@ -8,8 +8,8 @@ import { screenById } from '../../core/screens.js';
  * @typedef {{ afterMs: number, line?: string, led?: LedMode, link?: 'open'|'screen' }} BootEvent
  */
 
-/** The two panels whose identity response the firmware actually checks. */
-const IDENTITY = new Set(['ili9341', 'st7789']);
+/** The two controllers whose identity response the firmware actually checks. */
+export const SCREEN_CONTROLLERS = new Set(['ili9341', 'st7789']);
 
 /**
  * @param {{
@@ -40,7 +40,7 @@ export function bodyBoot({ settings, firmware, bench, outcome }) {
     // firmware actually checks. No MISO, an unknown answer, or a controller the
     // firmware cannot name: the real firmware says nothing, so this says nothing.
     const wired = outcome.screenModel ? screenById(outcome.screenModel) : undefined;
-    if (wired && IDENTITY.has(selected.controller) && IDENTITY.has(wired.controller)) {
+    if (wired && SCREEN_CONTROLLERS.has(selected.controller) && SCREEN_CONTROLLERS.has(wired.controller)) {
       at(0, {
         line: wired.controller === selected.controller
           ? `screen: panel identifies as ${selected.label}, as chosen`
