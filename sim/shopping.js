@@ -4,7 +4,7 @@
 // themselves gets the same treatment.
 import { NO_PURCHASE, purchaseFor } from './devices/purchase.js';
 import { deviceByPart } from './devices/catalog.js';
-import { screenById, FIRMWARE_CONTROLLERS } from '../core/screens.js';
+import { screenById, FIRMWARE_DRIVERS } from '../core/screens.js';
 import { planSteps } from './plan.js';
 
 /**
@@ -101,7 +101,7 @@ export function shoppingList(bench, plan = null) {
       // Silently dropping a screen would leave a build that cannot light up.
       if (!screen?.buy) throw new Error(`screen ${entry.part} has no buy entry`);
       /** @type {Line['warning']} */
-      const warning = !FIRMWARE_CONTROLLERS.has(screen.controller) ? 'screen-unsupported-controller'
+      const warning = !FIRMWARE_DRIVERS.has(screen.controller) ? 'screen-unsupported-controller'
         : screen.verified ? undefined : 'screen-unverified';
       lines.push({ key, quantity, purchase: screen.buy, planned, ...(warning ? { warning } : {}) });
       continue;

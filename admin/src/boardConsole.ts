@@ -11,7 +11,12 @@ export interface LinePort {
   close(): Promise<void>;
 }
 
-export interface BoardSettings { ssid: string; pass: string; token: string; url: string; screen: string }
+export interface BoardSettings {
+  ssid: string; pass: string; token: string; url: string;
+  screen: string;
+  /** False on firmware that predates the picker: no line was printed at all. */
+  screenKnown: boolean;
+}
 
 export type ConsoleReason = 'bad-ssid' | 'bad-pass' | 'bad-token' | 'bad-screen' | 'no-reply' | 'rejected' | 'not-welcomed';
 
@@ -81,8 +86,10 @@ export class BoardConsole {
       const listen = (line: string) => {
         if (line === 'board.end') {
           return done(() => resolve({
-            // `screen` is missing on firmware from before the picker existed: empty, not an error.
-            ssid: got.ssid ?? '', pass: got.pass ?? '', token: got.token ?? '', url: got.url ?? '', screen: got.screen ?? '',
+            // `screen` is missing on firmware from before the picker existed: say so
+            // rather than "no screen", so the page can leave the user's choice alone.
+            ssid: got.ssid ?? '', pass: got.pass ?? '', token: got.token ?? '', url: got.url ?? '',
+            screen: got.screen ?? '', screenKnown: Object.hasOwn(got, 'screen'),
           }));
         }
         const m = /^board\.(ssid|pass|token|url|screen)=(.*)$/.exec(line);
@@ -108,6 +115,11 @@ export class BoardConsole {
   async setScreen(id: string): Promise<void> {
     if (!/^[a-z0-9-]+$/.test(id)) throw new ConsoleError('bad-screen');
     await this.command(`screen ${id}\n`);
+  }
+
+  /** Remove the panel, so the board boots with no screen at all. */
+  async clearScreen(): Promise<void> {
+    await this.command('screen off\n');
   }
 
   /** The board restarts and answers nothing. */

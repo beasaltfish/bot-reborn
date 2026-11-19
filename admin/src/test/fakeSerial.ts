@@ -9,6 +9,9 @@ export function fakeSerial({ supported = true, answer = true, token = `${'0'.rep
   const emit = (line: string) => { queue.push(line); wake?.(); wake = null; };
   const written: string[] = [];
   const events: string[] = [];
+  // Opening the board again retires the previous reader, the way closing a real
+  // port does; without this a page that reads, then starts, listens twice.
+  let generation = 0;
   const port: LinePort = {
     write: async (line) => {
       written.push(line);
@@ -23,7 +26,9 @@ export function fakeSerial({ supported = true, answer = true, token = `${'0'.rep
       else if (line.startsWith('reboot')) emit('welcomed as Asten');
     },
     lines: (async function* () {
+      const mine = generation;
       for (;;) {
+        if (mine !== generation) return;
         while (queue.length) yield queue.shift() as string;
         await new Promise<void>((r) => { wake = r; });
       }
@@ -33,7 +38,18 @@ export function fakeSerial({ supported = true, answer = true, token = `${'0'.rep
   const flashed = {} as SerialPort;
   const serial = {
     supportsSerial: () => supported,
-    openBoard: vi.fn(async (known?: SerialPort) => { events.push(known === flashed ? 'open:flashed' : 'open'); return port; }),
+    openBoard: vi.fn(async (known?: SerialPort) => {
+      events.push(known === flashed ? 'open:flashed' : 'open');
+      generation += 1;
+      return { ...port, lines: (async function* () {
+        const mine = generation;
+        for (;;) {
+          if (mine !== generation) return;
+          while (queue.length) yield queue.shift() as string;
+          await new Promise<void>((r) => { wake = r; });
+        }
+      })() };
+    }),
     flashBoard: vi.fn(async (_url: string, onProgress: (p: number) => void) => { events.push('flash'); onProgress(50); return flashed; }),
   };
   return { serial, written, events };

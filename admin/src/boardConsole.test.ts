@@ -53,7 +53,7 @@ describe('BoardConsole', () => {
     f.emit('board.url=');
     f.emit('board.screen=ili9341-ips');
     f.emit('board.end');
-    await expect(read).resolves.toMatchObject({ screen: 'ili9341-ips' });
+    await expect(read).resolves.toMatchObject({ screen: 'ili9341-ips', screenKnown: true });
 
     const old = fakePort();
     const c2 = new BoardConsole(old.port);
@@ -64,7 +64,7 @@ describe('BoardConsole', () => {
     old.emit('board.token=00000000000000000000000000000001');
     old.emit('board.url=');
     old.emit('board.end');
-    await expect(readOld).resolves.toMatchObject({ screen: '' });
+    await expect(readOld).resolves.toMatchObject({ screen: '', screenKnown: false });
   });
 
   it('writes screen <id> and refuses anything that is not a model id', async () => {
@@ -75,9 +75,14 @@ describe('BoardConsole', () => {
     expect(f.written).toEqual(['screen ili9341-ips\n']);
     f.emit('screen saved');
     await done;
+    const cleared = c.clearScreen();
+    await settle();
+    expect(f.written).toEqual(['screen ili9341-ips\n', 'screen off\n']);
+    f.emit('screen saved');
+    await cleared;
     expect(await reason(c.setScreen('../etc'))).toBe('bad-screen');
     expect(await reason(c.setScreen('ILI9341 IPS'))).toBe('bad-screen');
-    expect(f.written).toEqual(['screen ili9341-ips\n']);
+    expect(f.written).toEqual(['screen ili9341-ips\n', 'screen off\n']);
   });
 
   it('refuses a name with a double quote, a short password, and writes nothing', async () => {
@@ -153,7 +158,7 @@ describe('BoardConsole', () => {
     f.emit('board.url=');
     f.emit('board.end');
     await expect(got).resolves.toEqual({
-      ssid: 'My Home  2.4G', pass: 'pa=ss word', token: '0123456789abcdef0123456789abcdef', url: '', screen: '',
+      ssid: 'My Home  2.4G', pass: 'pa=ss word', token: '0123456789abcdef0123456789abcdef', url: '', screen: '', screenKnown: false,
     });
   });
 

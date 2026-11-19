@@ -2,7 +2,7 @@
 // check before paying, and a print button. It reads the bench on every render
 // so it always matches what is on the table.
 import { shoppingList, totalUsd } from '../shopping.js';
-import { screenById } from '../../core/screens.js';
+import { screenById, screenLabel } from '../../core/screens.js';
 import { simText } from './strings.js';
 
 /**
@@ -79,11 +79,11 @@ export function createShoppingPanel({ lang, bench, plan, onClose }) {
 
     if (list.planScreens.length) {
       const named = list.planScreens
-        .map((id) => screenById(id.slice('screen-'.length))?.label ?? id)
+        .map((id) => { const s = screenById(id.slice('screen-'.length)); return s ? screenLabel(s, lang) : id; })
         .join(', ');
       const onBench = list.lines
         .filter((line) => line.key.startsWith('screen-'))
-        .map((line) => screenById(line.key.slice('screen-'.length))?.label ?? line.key)
+        .map((line) => { const s = screenById(line.key.slice('screen-'.length)); return s ? screenLabel(s, lang) : line.key; })
         .join(', ');
       element.append(child('p', text('shopping.planScreen', { wanted: named, have: onBench }), 'shopping-plan-screen'));
     }

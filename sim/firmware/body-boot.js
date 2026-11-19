@@ -1,7 +1,7 @@
 // The body firmware's boot, as a list of timed events. Pure: no timers, no
 // DOM. docs/superpowers/specs/2026-11-16-firmware-layer-design.md §8 and the
 // C in firmware/main/main.c are the authority for the order and the strings.
-import { screenById, FIRMWARE_CONTROLLERS } from '../../core/screens.js';
+import { screenById, IDENTITY_CONTROLLERS } from '../../core/screens.js';
 
 /**
  * @typedef {'NO_WIFI'|'CONNECTING'|'REJECTED'|'SLEEPING'|'LISTENING'|'CAPTURING'|'THINKING'|'SPEAKING'} LedMode
@@ -39,7 +39,7 @@ export function bodyBoot({ settings, firmware, bench, outcome }) {
     // firmware actually checks. No MISO, an unknown answer, or a controller the
     // firmware cannot name: the real firmware says nothing, so this says nothing.
     const wired = outcome.screenModel ? screenById(outcome.screenModel) : undefined;
-    if (wired && FIRMWARE_CONTROLLERS.has(selected.controller) && FIRMWARE_CONTROLLERS.has(wired.controller)) {
+    if (wired && IDENTITY_CONTROLLERS.has(selected.controller) && IDENTITY_CONTROLLERS.has(wired.controller)) {
       at(0, {
         line: wired.controller === selected.controller
           ? `screen: panel identifies as ${selected.label}, as chosen`

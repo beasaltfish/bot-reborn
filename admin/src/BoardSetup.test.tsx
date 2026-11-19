@@ -106,25 +106,29 @@ describe('the screen picker', () => {
   beforeEach(() => { installFakeApi([{ name: 'Asten' }]); });
 
   const screens = [
-    { id: 'ili9341-ips', label: 'ILI9341V 2.8" IPS', verified: true, controller: 'ili9341' },
+    { id: 'ili9341-ips', label: 'ILI9341V 2.8" IPS', labelZh: 'ILI9341V 2.8 寸 IPS', verified: true, controller: 'ili9341' },
     { id: 'st7735-160', label: 'ST7735 1.8" TFT', verified: true, controller: 'st7735' },
     { id: 'st7789-240', label: 'ST7789 1.3" IPS', verified: false, controller: 'st7789' },
   ] as unknown as Parameters<typeof BoardSetup>[0]['screens'];
+
+  async function fillFloor() {
+    await userEvent.type(await screen.findByLabelText(/wi-?fi name/i), 'HomeNet');
+    await userEvent.type(screen.getByLabelText(/wi-?fi password/i), 'secret12');
+    await userEvent.selectOptions(await screen.findByLabelText(/character/i), 'Asten');
+  }
 
   it('offers only panels that are verified and that the firmware drives', async () => {
     const { serial } = fakeSerial();
     render(<BoardSetup serial={serial} replyTimeoutMs={50} screens={screens} />);
     const picker = await screen.findByLabelText(/screen/i);
     const values = [...(picker as HTMLSelectElement).options].map((o) => o.value);
-    expect(values).toEqual(['', 'ili9341-ips']);
+    expect(values).toEqual(['keep', 'off', 'ili9341-ips']);
   });
 
   it('writes the screen before the single reboot', async () => {
     const { serial, written } = fakeSerial();
     render(<BoardSetup serial={serial} replyTimeoutMs={50} screens={screens} />);
-    await userEvent.type(await screen.findByLabelText(/wi-?fi name/i), 'HomeNet');
-    await userEvent.type(screen.getByLabelText(/wi-?fi password/i), 'secret12');
-    await userEvent.selectOptions(await screen.findByLabelText(/character/i), 'Asten');
+    await fillFloor();
     await userEvent.selectOptions(screen.getByLabelText(/screen/i), 'ili9341-ips');
     await userEvent.click(screen.getByRole('button', { name: /start/i }));
     await screen.findByText(/Connected to the brain as Asten/);
@@ -134,17 +138,47 @@ describe('the screen picker', () => {
     expect(order.filter((line) => line === 'reboot')).toHaveLength(1);
   });
 
-  it('says when the board holds a model the firmware cannot drive', async () => {
-    const { serial } = fakeSerial({ screen: 'st7735-160' });
+  it('leaves the board\'s screen alone unless the user changes it', async () => {
+    const { serial, written } = fakeSerial();
+    render(<BoardSetup serial={serial} replyTimeoutMs={50} screens={screens} />);
+    await fillFloor();
+    await userEvent.click(screen.getByRole('button', { name: /start/i }));
+    await screen.findByText(/Connected to the brain as Asten/);
+    expect(written.some((line) => line.startsWith('screen'))).toBe(false);
+  });
+
+  it('clears the screen when the user asks for no screen', async () => {
+    const { serial, written } = fakeSerial({ screen: 'ili9341-ips' });
+    render(<BoardSetup serial={serial} replyTimeoutMs={50} screens={screens} />);
+    await fillFloor();
+    await userEvent.selectOptions(screen.getByLabelText(/screen/i), 'off');
+    await userEvent.click(screen.getByRole('button', { name: /start/i }));
+    await screen.findByText(/Connected to the brain as Asten/);
+    const order = written.map((line) => line.trim());
+    expect(order).toContain('screen off');
+    expect(order.indexOf('screen off')).toBeLessThan(order.indexOf('reboot'));
+  });
+
+  it('names a model the page cannot offer, and never writes it back', async () => {
+    const { serial, written } = fakeSerial({ screen: 'st7735-160' });
     render(<BoardSetup serial={serial} replyTimeoutMs={50} screens={screens} />);
     await userEvent.click(await screen.findByLabelText(/change settings/i));
     await userEvent.click(screen.getByRole('button', { name: /read/i }));
-    expect(await screen.findByText(/does not offer/i)).toBeInTheDocument();
+    expect(await screen.findByText(/ST7735 1\.8/)).toBeInTheDocument();
+    await fillFloor();
+    await userEvent.click(screen.getByRole('button', { name: /start/i }));
+    await screen.findByText(/Connected to the brain as Asten/);
+    expect(written.some((line) => line.startsWith('screen'))).toBe(false);
   });
-});
 
-describe('the screen picker before anything is verified', () => {
-  beforeEach(() => { installFakeApi([{ name: 'Asten' }]); });
+  it('does not touch the choice when an older firmware has no screen line', async () => {
+    const { serial } = fakeSerial({ screen: undefined });
+    render(<BoardSetup serial={serial} replyTimeoutMs={50} screens={screens} />);
+    await userEvent.click(await screen.findByLabelText(/change settings/i));
+    await userEvent.click(screen.getByRole('button', { name: /read/i }));
+    expect(await screen.findByText(/Filled in from the board/)).toBeInTheDocument();
+    expect((screen.getByLabelText(/screen/i) as HTMLSelectElement).value).toBe('keep');
+  });
 
   it('says why there is nothing to pick instead of showing a dead dropdown', async () => {
     const { serial } = fakeSerial();

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SCREENS, screenById, sizeKey, frameSizes, DEFAULT_SIZE, verifiedProblem, FIRMWARE_CONTROLLERS } from '../core/screens.js';
+import { existsSync } from 'node:fs';
+import { SCREENS, screenById, sizeKey, frameSizes, DEFAULT_SIZE, verifiedProblem, FIRMWARE_DRIVERS, IDENTITY_CONTROLLERS, screenLabel } from '../core/screens.js';
 
 test('ids are unique and every screen names its pins by role', () => {
   assert.equal(new Set(SCREENS.map((s) => s.id)).size, SCREENS.length);
@@ -50,12 +51,37 @@ test('a verified screen with no record, or a record outside docs/hardware, is re
   );
   // An unverified screen is allowed to have no record; that is the whole point.
   assert.equal(verifiedProblem({ id: 'd', verified: false }, () => false), null);
-  for (const screen of SCREENS) assert.equal(verifiedProblem(screen, () => true), null, screen.id);
+  for (const screen of SCREENS) {
+    assert.equal(verifiedProblem(screen, (path) => existsSync(new URL(`../${path}`, import.meta.url))), null, screen.id);
+  }
 });
 
-test('the firmware drives exactly two controllers, and the sim reads the same list', () => {
-  assert.ok(FIRMWARE_CONTROLLERS.has('ili9341'));
-  assert.ok(FIRMWARE_CONTROLLERS.has('st7789'));
-  assert.ok(!FIRMWARE_CONTROLLERS.has('st7735'));
-  assert.ok(!FIRMWARE_CONTROLLERS.has('gc9a01'));
+test('a record path may not climb out of docs/hardware', () => {
+  const ok = () => true;
+  assert.match(
+    verifiedProblem({ id: 'e', verified: true, verifiedNote: 'docs/hardware/../secrets.md' }, ok) ?? '',
+    /docs\/hardware\//,
+  );
+  assert.match(
+    verifiedProblem({ id: 'f', verified: true, verifiedNote: '/etc/passwd' }, ok) ?? '',
+    /docs\/hardware\//,
+  );
+});
+
+test('the firmware has a driver for three controllers, and reads identity for two', () => {
+  assert.ok(FIRMWARE_DRIVERS.has('ili9341'));
+  assert.ok(FIRMWARE_DRIVERS.has('st7789'));
+  // screen.c has a gc9a01 branch; only its identity response goes unchecked.
+  assert.ok(FIRMWARE_DRIVERS.has('gc9a01'));
+  assert.ok(!FIRMWARE_DRIVERS.has('st7735'));
+  assert.ok(!IDENTITY_CONTROLLERS.has('gc9a01'));
+  assert.ok(IDENTITY_CONTROLLERS.has('ili9341'));
+});
+
+test('every screen has a Chinese label, and screenLabel picks by language', () => {
+  for (const screen of SCREENS) {
+    assert.ok(screen.labelZh, screen.id);
+    assert.equal(screenLabel(screen, 'zh'), screen.labelZh);
+    assert.equal(screenLabel(screen, 'en'), screen.label);
+  }
 });

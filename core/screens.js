@@ -13,7 +13,7 @@ import table from './screens.json' with { type: 'json' };
  *   priceUsd: [number, number], alternatives: { en: string, zh: string }[],
  * }} ScreenBuy
  * @typedef {{
- *   id: string, label: string,
+ *   id: string, label: string, labelZh?: string,   // zh name; the SKU stays
  *   controller: 'ili9341' | 'st7789' | 'st7735' | 'gc9a01',
  *   w: number, h: number,                // landscape, as shown
  *   invert: boolean, bgr: boolean,
@@ -35,15 +35,33 @@ import table from './screens.json' with { type: 'json' };
 export const SCREENS = /** @type {any} */ (table).screens;
 
 /**
- * The controllers the body firmware actually drives. It is a set because the
- * firmware's boot only checks an identity response for these two, and the
- * shopping list and the admin picker must not offer a panel that stays dark.
+ * Controllers the body firmware has a driver for (`screen.c` switches on all
+ * three). A panel whose controller is missing here stays dark whatever is done
+ * to the wiring, so the shopping list and the admin picker both consult it.
  */
-export const FIRMWARE_CONTROLLERS = new Set(['ili9341', 'st7789']);
+export const FIRMWARE_DRIVERS = new Set(['ili9341', 'st7789', 'gc9a01']);
+
+/**
+ * The controllers whose identity response the firmware actually reads back.
+ * That is narrower than the driver list: GC9A01 is driven but never asked who
+ * it is, so a missing answer there means nothing.
+ */
+export const IDENTITY_CONTROLLERS = new Set(['ili9341', 'st7789']);
 
 /** @param {string} id @returns {Screen | undefined} */
 export function screenById(id) {
   return SCREENS.find((s) => s.id === id);
+}
+
+/**
+ * The name to show a person. Model ids and SKUs are language-independent; the
+ * words around them are not.
+ * @param {{ label: string, labelZh?: string }} screen
+ * @param {string} lang
+ * @returns {string}
+ */
+export function screenLabel(screen, lang) {
+  return lang === 'zh' && screen.labelZh ? screen.labelZh : screen.label;
 }
 
 /** The directory name a size's frames live in, and what a hello reports. */
@@ -84,7 +102,10 @@ export function frameSizes() {
 export function verifiedProblem(screen, exists) {
   if (!screen.verified) return null;
   if (!screen.verifiedNote) return `verified screen ${screen.id} has no verifiedNote`;
-  if (!screen.verifiedNote.startsWith('docs/hardware/')) return `${screen.id}: verifiedNote must live in docs/hardware/`;
+  const note = screen.verifiedNote;
+  if (!note.startsWith('docs/hardware/') || note.includes('..') || note.startsWith('/')) {
+    return `${screen.id}: verifiedNote must live in docs/hardware/`;
+  }
   if (!exists(screen.verifiedNote)) return `${screen.id}: missing ${screen.verifiedNote}`;
   return null;
 }
