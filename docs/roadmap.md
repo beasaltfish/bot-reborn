@@ -23,7 +23,7 @@ waits for. `scripts/agent-loop.sh --item N` picks up `ready` items only.
   - done when: `docs/first-build-walkthrough.md` records one end-to-end build with real timings
     and every stop longer than two minutes explained
 
-- [ ] **4.** Loop budget: one item, one sitting — ready
+- [x] **4.** Loop budget: one item, one sitting — done
   - done when: the default cap is 60 minutes, the prompt says an item is one PR's worth,
     and `docs/agent-loop.md` explains how to size an item so it fits
 
