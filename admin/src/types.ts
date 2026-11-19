@@ -61,7 +61,13 @@ export interface Patch {
   savedReflexes?: SavedReflex[];
 }
 
-export interface Summary { id: string; name: string; ready: boolean; online: boolean; motion?: Motion | null }
+export interface Summary {
+  id: string; name: string; ready: boolean; online: boolean; motion?: Motion | null;
+  /** First time this brain saw the body connect, ms. Absent until it does. */
+  lastSeenAt?: number;
+  /** First time this brain sent the body an audible reply, ms. Absent until it does. */
+  lastSpokeAt?: number;
+}
 export interface Detail {
   id: string; name: string; token: string; config: Config; endpoints: Endpoint[]; savedReflexes: SavedReflex[]; online: boolean;
 }

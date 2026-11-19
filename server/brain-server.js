@@ -16,6 +16,7 @@ import { isLocalRequest } from './local-guard.js';
 import { lanAllowed, pathOf } from './pages.js';
 import { createDistPages, DIST_DIR, FIXTURES_DIR } from './dist-pages.js';
 import { createAdminApi } from './admin-api.js';
+import { createPresence } from './presence.js';
 
 /**
  * @param {{
@@ -32,6 +33,8 @@ import { createAdminApi } from './admin-api.js';
  */
 export function createBrainServer(opts) {
   const log = opts.log ?? console.log;
+  // Who this process has met and answered. Memory only: a restart forgets.
+  const presence = createPresence();
   /** @type {((req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) => Promise<void>) | null} */
   let api = null;
   /** @param {import('node:http').ServerResponse} res @param {number} status @param {string} text */
@@ -121,6 +124,7 @@ export function createBrainServer(opts) {
     onBody: (conn, who) => {
       const c = /** @type {import('./characters.js').Character} */ (admitted.get(who.id));
       admitted.delete(who.id);
+      presence.saw(c.id);
       // Fresh ears per body: the VAD holds the last body's half sentence.
       const robot = startRobot(conn, {
         config: c.config,
@@ -137,6 +141,8 @@ export function createBrainServer(opts) {
         // none, the animator still runs and show() is a no-op.
         screen: (pick) => screen.show(c.id, pick),
         log: (line) => log(`[${c.name}] ${line}`),
+        // The first time this body answers out loud: speech, or a pet's bark.
+        onSpoke: () => presence.spoke(c.id),
       });
       robots.set(c.id, robot);
       conn.onClose(() => {
@@ -147,7 +153,7 @@ export function createBrainServer(opts) {
   });
 
   api = createAdminApi({
-    dir: opts.dir, link, addresses: opts.addresses, fetch: opts.fetch,
+    dir: opts.dir, link, addresses: opts.addresses, fetch: opts.fetch, presence,
     // Only in dev mode: a way to draw a card before the wand has a message of its own.
     dev: opts.dev ? { draw: (id) => robots.get(id)?.drawCard() ?? false } : undefined,
   });

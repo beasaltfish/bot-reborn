@@ -25,7 +25,7 @@ export class PcmTts {
 
   /**
    * @param {TtsSource} source
-   * @param {{ mouth: import('../body/mouth.js').Mouth, timeoutMs?: number }} opts
+   * @param {{ mouth: Pick<import('../body/mouth.js').Mouth, 'play' | 'hush'>, timeoutMs?: number }} opts
    */
   constructor(source, opts) {
     this.#source = source;

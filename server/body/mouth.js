@@ -19,14 +19,14 @@ const realAfter = (ms, fn) => { const t = setTimeout(fn, ms); return () => clear
 
 export class Mouth {
   #sendAudio; #send; #now; #after; #slackMs;
-  /** @type {Int16Array[]} */ #queue = [];
+  /** @type {{ chunk: Int16Array, source?: string }[]} */ #queue = [];
   /** When the audio already sent will have finished playing, on our clock. */
   #sentUntil = 0;
   #pumpQueued = false;
   /** @type {Set<() => void>} */ #waiting = new Set();
 
   /**
-   * @param {{ sendAudio: (bytes: Uint8Array) => void, send: (msg: object) => void,
+   * @param {{ sendAudio: (bytes: Uint8Array, source?: string) => void, send: (msg: object) => void,
    *           now?: () => number, after?: (ms: number, fn: () => void) => () => void,
    *           slackMs?: number }} opts
    *   `slackMs` is added to what play() reports and to `done`. The body
@@ -43,16 +43,21 @@ export class Mouth {
 
   /**
    * @param {Int16Array} pcm 16 kHz mono
+   * @param {string} [source] what this clip is (a reply, an earcon, a sound
+   *   effect). It travels with every frame it queued, so a beep that happens
+   *   to go out during a reply is never mistaken for one.
    * @returns {{ ms: number, started: Promise<void>, done: Promise<void> }}
    *   `ms` from now until this clip has played out, plus the slack — the
    *   number earcon() and sfx() must return to the session.
    */
-  play(pcm) {
+  play(pcm, source) {
     const now = this.#now();
-    const queuedMs = this.#queue.reduce((n, c) => n + c.length, 0) / SAMPLES_PER_MS;
+    const queuedMs = this.#queue.reduce((n, c) => n + c.chunk.length, 0) / SAMPLES_PER_MS;
     const startsIn = Math.max(0, this.#sentUntil - now) + queuedMs;
     const clipMs = pcm.length / SAMPLES_PER_MS;
-    for (let i = 0; i < pcm.length; i += CHUNK) this.#queue.push(pcm.subarray(i, i + CHUNK));
+    for (let i = 0; i < pcm.length; i += CHUNK) {
+      this.#queue.push({ chunk: pcm.subarray(i, i + CHUNK), source });
+    }
     this.#pump();
     return {
       ms: Math.ceil(startsIn + clipMs + this.#slackMs),
@@ -86,8 +91,8 @@ export class Mouth {
     const now = this.#now();
     if (this.#sentUntil < now) this.#sentUntil = now;
     while (this.#queue.length > 0 && this.#sentUntil - now < LEAD_MS) {
-      const chunk = /** @type {Int16Array} */ (this.#queue.shift());
-      this.#sendAudio(int16ToBytes(chunk));
+      const { chunk, source } = /** @type {{ chunk: Int16Array, source?: string }} */ (this.#queue.shift());
+      this.#sendAudio(int16ToBytes(chunk), source);
       this.#sentUntil += chunk.length / SAMPLES_PER_MS;
     }
     if (this.#queue.length > 0 && !this.#pumpQueued) {

@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { request } from 'node:http';
+import { request, createServer } from 'node:http';
 import { createBrainServer } from '../../server/brain-server.js';
+import { createAdminApi } from '../../server/admin-api.js';
 import { createDistPages, FIXTURES_DIR } from '../../server/dist-pages.js';
 import { renderEarcons } from '../../server/audio/render.js';
 import { connectFakeBody } from '../../server/fake-body.js';
@@ -21,8 +22,7 @@ function dist() {
   return d;
 }
 
-async function rig() {
-  const chars = tempCharacters();
+async function rig(chars = tempCharacters()) {
   const server = createBrainServer({
     dir: chars.dir, pages: () => createDistPages({ dist: dist(), fixtures: FIXTURES_DIR }), fetch: fakeFetch(), sfx: new Map(), earcons: renderEarcons(),
     makeEars: () => ({ kws: { accept: () => [] }, vad: { accept() {}, detected: false, drain: () => [], clear() {} } }),
@@ -47,6 +47,99 @@ test('the list has names, readiness and presence — never keys or tokens', asyn
   assert.equal(status, 200);
   assert.deepEqual(body, [{ id: 'a', name: 'a', ready: true, online: false, motion: 'car' }]);
   await r.server.close();
+});
+
+test('the summary carries when a body was first seen and first spoke, and only for that body', async () => {
+  const chars = tempCharacters();
+  chars.add('a');
+  chars.add('b');
+  const presence = {
+    /** @param {string} id */
+    of: (id) => (id === 'a' ? { lastSeenAt: 111, lastSpokeAt: 222 } : {}),
+  };
+  const server = createServer(createAdminApi({
+    dir: chars.dir, link: { online: () => [], kick: () => false }, presence,
+  }));
+  await new Promise((resolve) => server.listen(0, () => resolve(undefined)));
+  try {
+    const port = /** @type {import('node:net').AddressInfo} */ (server.address()).port;
+    const body = await (await fetch(`http://127.0.0.1:${port}/api/characters`)).json();
+    const a = body.find((/** @type {any} */ c) => c.id === 'a');
+    const b = body.find((/** @type {any} */ c) => c.id === 'b');
+    assert.equal(a.lastSeenAt, 111);
+    assert.equal(a.lastSpokeAt, 222);
+    assert.equal('lastSeenAt' in b, false);
+    assert.equal('lastSpokeAt' in b, false);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('a body that connects is seen, a spoken reply is heard, and the wake beep is neither', async () => {
+  const chars = tempCharacters();
+  const me = chars.add('me');
+  /** @type {Float32Array[]} */
+  let segments = [];
+  const server = createBrainServer({
+    dir: chars.dir, pages: () => createDistPages({ dist: dist(), fixtures: FIXTURES_DIR }), fetch: fakeFetch(), sfx: new Map(), earcons: renderEarcons(),
+    makeEars: () => ({
+      kws: { accept: () => [] },
+      vad: {
+        accept() {}, detected: false,
+        drain() { const q = segments; segments = []; return q; },
+        clear() { segments = []; },
+      },
+    }),
+    log: () => {},
+  });
+  const port = await server.listen(0);
+  const body = await connectFakeBody(`ws://127.0.0.1:${port}/body`, { token: me.token });
+  /** @returns {Promise<any[]>} */
+  const list = async () => (await (await fetch(`http://127.0.0.1:${port}/api/characters`)).json());
+  try {
+    await body.waitFor((m) => m.type === 'state' && m.state === 'LISTENING');
+    const seen = await list();
+    assert.equal(typeof seen[0].lastSeenAt, 'number');
+    assert.equal(seen[0].lastSpokeAt, undefined, 'the wake earcon is not speech');
+
+    segments = [new Float32Array(16000).map((_, i) => 0.3 * Math.sin(i / 5))];
+    // The wake earcon shuts the ears for its own length; keep feeding frames
+    // the way a body does until the queued segment is taken.
+    const deadline = Date.now() + 3000;
+    while (!body.messages.some((m) => m.type === 'state' && m.state === 'THINKING')) {
+      if (Date.now() > deadline) throw new Error(`no THINKING; got ${JSON.stringify(body.messages)}`);
+      await body.sendPcm(new Int16Array(1600), { paceMs: 0 });
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    await body.waitFor((m) => m.type === 'state' && m.state === 'LISTENING'
+      && body.messages.some((x) => x.state === 'SPEAKING'), 10000);
+    const heard = await list();
+    assert.equal(typeof heard[0].lastSpokeAt, 'number');
+  } finally {
+    body.close();
+    await server.close();
+  }
+});
+
+test('a new brain has not met anyone, even a body the last one met', async () => {
+  const chars = tempCharacters();
+  const a = chars.add('a');
+  const first = await rig(chars);
+  const body = await connectFakeBody(`ws://127.0.0.1:${first.port}/body`, { token: a.token });
+  try {
+    await body.waitFor((m) => m.type === 'state');
+    assert.equal(typeof (await first.call('/api/characters')).body[0].lastSeenAt, 'number');
+  } finally {
+    body.close();
+    await first.server.close();
+  }
+
+  const second = await rig(chars);
+  try {
+    assert.equal((await second.call('/api/characters')).body[0].lastSeenAt, undefined);
+  } finally {
+    await second.server.close();
+  }
 });
 
 test('the list says how each character moves, so the bench can tell a pet', async () => {

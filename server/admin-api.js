@@ -16,8 +16,10 @@ const MAX_BODY = 64 * 1024;
 /**
  * @param {{ dir: string, link: { online(): string[], kick(id: string): boolean },
  *           addresses?: () => string[], fetch?: typeof fetch, checkTimeoutMs?: number,
- *           dev?: { draw(id: string): boolean } }} opts
+ *           dev?: { draw(id: string): boolean },
+ *           presence?: { of(id: string): { lastSeenAt?: number, lastSpokeAt?: number } } }} opts
  *   `dev` exists only when the brain was started with --dev (tarot mode spec §5).
+ *   `presence` is this process's memory; with none, the summary omits both times.
  */
 export function createAdminApi(opts) {
   const check = createCheckApi({ fetch: opts.fetch, timeoutMs: opts.checkTimeoutMs });
@@ -103,6 +105,7 @@ export function createAdminApi(opts) {
           // Never keys, never tokens: this is the call the page polls.
           return send(200, listCharacters(opts.dir).characters.map((c) => ({
             id: c.id, name: c.name, ready: ready(c.config), online: online.has(c.id), motion: c.config.body?.motion ?? null,
+            ...(opts.presence?.of(c.id) ?? {}),
           })));
         }
         if (req.method === 'POST') {

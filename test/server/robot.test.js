@@ -36,16 +36,21 @@ function fakeEars() {
   };
 }
 
-function rig(/** @type {Parameters<typeof fakeFetch>[0]} */ fetchOpts = {}, motion = 'car') {
+function rig(/** @type {Parameters<typeof fakeFetch>[0]} */ fetchOpts = {}, motion = 'car',
+  /** @type {Record<string, any>} */ overrides = {}) {
   const c = fakeConn();
   const e = fakeEars();
   const fetch = fakeFetch(fetchOpts);
   /** @type {string[]} */ const logged = [];
+  /** @type {number[]} */ const spoken = [];
   const config = readyConfig();
   config.body.motion = /** @type {any} */ (motion);
+  const sfx = new Map([[/** @type {const} */ ('bark'), new Int16Array(1600).fill(1200)]]);
   const robot = startRobot(c.conn, {
-    config, fetch, ears: e.ears, sfx: new Map(), earcons: renderEarcons(),
+    config, fetch, ears: e.ears, sfx, earcons: renderEarcons(),
     log: (l) => logged.push(l), slackMs: 0,
+    ...overrides,
+    onSpoke: () => spoken.push(1),
   });
   /**
    * One utterance: queue a segment, then keep feeding frames until the
@@ -57,10 +62,17 @@ function rig(/** @type {Parameters<typeof fakeFetch>[0]} */ fetchOpts = {}, moti
     await until(() => { c.feed(); return states(c.sent).includes('THINKING'); }, 3000,
       () => `no THINKING; states ${JSON.stringify(states(c.sent))}`);
   };
-  return { ...c, fetch, robot, speak, logged };
+  return { ...c, fetch, robot, speak, logged, spoken };
 }
 
 const states = (/** @type {any[]} */ sent) => sent.filter((m) => m.type === 'state').map((m) => m.state);
+
+/** The turn reached SPEAKING and then left it again. */
+const spokeAndFinished = (/** @type {any[]} */ sent) => {
+  const s = states(sent);
+  const speaking = s.indexOf('SPEAKING');
+  return speaking >= 0 && s.slice(speaking + 1).includes('LISTENING');
+};
 
 test('the body is told the state, and wakes straight into listening', async () => {
   const r = rig();
@@ -78,6 +90,52 @@ test('one utterance becomes a bounded move and a spoken reply', async () => {
   await until(() => states(r.sent).includes('SPEAKING'));
   assert.ok(r.audio.length > 0);
   assert.equal(r.fetch.calls.find((c) => c.url.endsWith('/audio/speech'))?.body.input, 'Going!');
+  r.robot.stop();
+});
+
+test('a real audible reply is reported once, and the wake beep is not one', async () => {
+  const r = rig();
+  assert.deepEqual(r.spoken, [], 'the wake earcon reached the body before anyone spoke');
+  await r.speak();
+  await until(() => states(r.sent).includes('SPEAKING'));
+  await until(() => r.spoken.length > 0, 3000, () => `states ${JSON.stringify(states(r.sent))}, audio ${r.audio.length}`);
+  await until(() => spokeAndFinished(r.sent));
+  assert.equal(r.spoken.length, 1);
+  r.robot.stop();
+});
+
+test('an empty reply clip is not something the brain said', async () => {
+  const r = rig({ tts: new Int16Array(0) });
+  await r.speak();
+  await until(() => spokeAndFinished(r.sent));
+  assert.deepEqual(r.spoken, []);
+  r.robot.stop();
+});
+
+test('audio the body never received is not something the brain said', async () => {
+  const r = rig();
+  r.conn.open = false;
+  await r.speak();
+  await until(() => spokeAndFinished(r.sent));
+  assert.deepEqual(r.spoken, []);
+  r.robot.stop();
+});
+
+test('a pet’s bark is an audible reply, and the wake beep is still not one', async () => {
+  const r = rig({ tool: { name: 'play_sound', args: { name: 'bark' } } }, 'pet', { petFrames: fakePetFrames() });
+  assert.deepEqual(r.spoken, [], 'the wake earcon reached the body before the dog answered');
+  await r.speak();
+  await until(() => r.spoken.length > 0, 3000, () => `states ${JSON.stringify(states(r.sent))}, audio ${r.audio.length}`);
+  assert.equal(r.spoken.length, 1);
+  assert.ok(r.audio.length > 0);
+  r.robot.stop();
+});
+
+test('a sound effect is not the reply when a talking body’s voice is empty', async () => {
+  const r = rig({ tool: { name: 'play_sound', args: { name: 'bark' } }, tts: new Int16Array(0) });
+  await r.speak();
+  await until(() => spokeAndFinished(r.sent));
+  assert.deepEqual(r.spoken, []);
   r.robot.stop();
 });
 
