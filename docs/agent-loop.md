@@ -42,6 +42,36 @@ What it does, in order:
 - Merging. Branch protection requires the CI check and one approval.
 - The stop decisions above.
 
+## Watching a run (tmux panes)
+
+The loop itself runs `opencode run` headless: no panes, because there is no
+interface to attach them to. Panes are for the sessions a person drives: each
+background specialist (`explorer`, `fixer`, `oracle`) gets its own tmux pane next
+to yours, and closes when it goes idle.
+
+The plugin decides whether it may open panes by looking for `TMUX_PANE` in the
+process that hosts it — the OpenCode server, not the client. So the server has to
+be born inside tmux:
+
+```bash
+opencode service stop      # kill the server that was started from the desktop
+tmux new -s oc
+opencode                   # the TUI starts a server that inherits TMUX_PANE
+```
+
+If panes still do not appear, the plugin log names the reason:
+
+```bash
+grep multiplex ~/.local/share/opencode/log/oh-my-opencode-slim.tui-*.log | tail -3
+```
+
+- `admission-mismatch` — `multiplexer.type` is `tmux` but the process has no
+  `TMUX_PANE`: the server was started outside tmux, or it is a stale one.
+- `adapter-not-found` / `host-unreachable` — tmux is not on `PATH` for that
+  process, or its socket cannot be reached.
+
+`"type": "auto"` follows whatever is detected instead of insisting on one adapter.
+
 ## Turning the gate on (done once, 2026-11-19)
 
 `main` requires the two CI jobs, with `strict` (a branch behind `main` must
