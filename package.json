@@ -8,6 +8,7 @@
   },
   "scripts": {
     "start": "node server/main.js",
+    "setup": "node server/setup.js",
     "add-character": "node server/tools/add-character.js",
     "build": "vite build",
     "dev": "node --watch-path=server --watch-path=core server/main.js --dev",

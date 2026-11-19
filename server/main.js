@@ -28,13 +28,13 @@ const PORT = Number(process.env.PORT ?? 8787);
 const DEV = process.argv.includes('--dev');
 
 if (!modelsPresent()) {
-  console.error('Models missing. Run: server/models/fetch.sh');
+  console.error('Models missing. Run: npm run setup');
   process.exit(1);
 }
 if (!DEV) try {
   prepareBuild();
 } catch (err) {
-  console.error(`The pages could not be built (${/** @type {Error} */ (err).message}), so the brain does not start: a phone would get pages older than the brain. Fix the error above and run npm start again.`);
+  console.error(`The pages could not be built (${/** @type {Error} */ (err).message}), so the brain does not start: a phone would get pages older than the brain. Fix the error above, or run: npm run setup`);
   process.exit(1);
 }
 for (const p of listCharacters().problems) console.error(`skipped ${p}`);
