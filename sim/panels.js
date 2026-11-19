@@ -11,6 +11,7 @@ import { SCREENS } from '../core/screens.js';
 import { catalogueView } from './ui/catalogue-model.js';
 import { createCataloguePanel } from './ui/catalogue-panel.js';
 import { createProjectPanel } from './ui/project-panel.js';
+import { createShoppingPanel } from './ui/shopping-panel.js';
 import { simText } from './ui/strings.js';
 import { createLanguageControl } from './ui/language-control.js';
 import { RECIPES, DEFAULT_SCREEN } from './recipes.js';
@@ -85,6 +86,7 @@ function pointName(point) {
  *   speed: number,
  *   rememberSpeed(x: number): void,
  *   firmwareDrivers?(): string[] | null,
+ *   bench?(): import('./bench.js').Bench,
  * }} opts
  */
 export function createPanels(opts) {
@@ -157,11 +159,25 @@ export function createPanels(opts) {
   const partsBtn = el('button', { type: 'button', class: 'pill' }, [t('parts')]);
   const projectBtn = el('button', { type: 'button', class: 'pill' }, [simText(lang, 'project.button')]);
   bar.prepend(partsBtn, projectBtn);
+  const shoppingView = createShoppingPanel({
+    lang,
+    bench: () => opts.bench?.() ?? /** @type {any} */ ({ placed: [], boards: [] }),
+    // The state's `project` is the full plan; ProjectView is the narrower shape the panel draws.
+    plan: () => /** @type {import('./plan.js').Plan | null} */ (opts.projectState?.(projectSelect.value, planChoice())?.project ?? null),
+    onClose: () => showShopping(false),
+  });
+  const shoppingPanel = el('div', { id: 'shopping-sheet', role: 'region', 'aria-label': simText(lang, 'shopping.title'), hidden: '' }, [
+    shoppingView.element,
+  ]);
+  const showShopping = (/** @type {boolean} */ on) => {
+    shoppingPanel.hidden = !on;
+    if (on) shoppingView.render();
+  };
   const projectView = createProjectPanel({ lang, focus: points => {
     // On a phone the sidebar leaves too little bench visible to frame two pins.
     if (window.innerWidth < 600) showProject(false);
     opts.focusProject?.(points);
-  }, demo: id => runDemo(id, 'watch'), step: id => runDemo(id, 'step'), build: (id) => opts.build?.(id, planChoice()), leave: () => {
+  }, shopping: () => showShopping(true), demo: id => runDemo(id, 'watch'), step: id => runDemo(id, 'step'), build: (id) => opts.build?.(id, planChoice()), leave: () => {
     projectSelect.value = '';
     projectView.showProject('');
     showDiagram(false);
@@ -216,7 +232,7 @@ export function createPanels(opts) {
     if (on) catalogue.open(); else catalogue.close();
   };
   partsBtn.addEventListener('click', () => { showProject(false); showDiagram(false); showParts(Boolean(partsPanel.hidden)); });
-  document.body.append(bar, bubble, status, picker, panel, partsPanel, projectPanel);
+  document.body.append(bar, bubble, status, picker, panel, partsPanel, projectPanel, shoppingPanel);
 
   const runBar = el('div', { id: 'runbar', role: 'status', hidden: '' });
   document.body.append(runBar);

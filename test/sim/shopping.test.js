@@ -45,3 +45,14 @@ test('an empty bench lists nothing and totals zero', () => {
   assert.deepEqual(lines, []);
   assert.deepEqual(totalUsd(lines), { low: 0, high: 0 });
 });
+
+test('an unbuilt project still lists everything it needs', () => {
+  const plan = planById('screen');
+  assert.ok(plan);
+  // The opening bench has one board and no screen; the list must still cover the build.
+  const { lines } = shoppingList(emptyBench(), plan);
+  const byKey = new Map(lines.map((l) => [l.key, l]));
+  assert.equal(byKey.get('esp32')?.quantity, 1);
+  assert.equal(byKey.get('screen-ili9341-ips')?.quantity, 1);
+  assert.equal(byKey.get('breadboard')?.quantity, 2);
+});

@@ -5,6 +5,7 @@
 import { NO_PURCHASE, purchaseFor } from './devices/purchase.js';
 import { screenById } from '../core/screens.js';
 import { SCREEN_CONTROLLERS } from './firmware/body-boot.js';
+import { planSteps } from './plan.js';
 
 /**
  * @typedef {import('./devices/purchase.js').Purchase} Purchase
@@ -32,22 +33,43 @@ function rank(id) {
 
 /**
  * @param {import('./bench.js').Bench} bench
+ * @param {import('./plan.js').Plan | null} [plan]  the project being built, if any
  * @returns {{ lines: Line[], warnings: string[] }}
  */
-export function shoppingList(bench) {
-  /** @type {Map<string, { part: string, quantity: number }>} */
+export function shoppingList(bench, plan = null) {
+  /** @type {Map<string, { part: string, bench: number, planned: number }>} */
   const counts = new Map();
+  /** @param {string} part @param {string} key @param {'bench' | 'planned'} side */
+  const note = (part, key, side) => {
+    const seen = counts.get(key);
+    if (seen) seen[side] += 1;
+    else counts.set(key, { part, bench: 0, planned: 0, [side]: 1 });
+  };
+  /** @param {string} part */
+  const keyFor = (part, /** @type {Record<string, number|string|boolean>} */ properties) =>
+    part === 'resistor' ? `resistor|${String(properties.ohms)}` : part;
+
   for (const placed of bench.placed) {
     if (NO_PURCHASE.has(placed.part)) continue;
-    // A resistor's value is the thing you buy: two 220s are one line, a 1k is another.
-    const key = placed.part === 'resistor' ? `resistor|${String(placed.properties.ohms)}` : placed.part;
-    const seen = counts.get(key);
-    if (seen) seen.quantity += 1;
-    else counts.set(key, { part: placed.part, quantity: 1 });
+    note(placed.part, keyFor(placed.part, placed.properties), 'bench');
   }
+  // Buying happens before building, so a selected project contributes the parts
+  // it still needs: the bench alone would list an incomplete build.
+  let plannedBoards = 0;
+  if (plan) {
+    for (const step of planSteps(plan)) {
+      if (step.kind === 'board') plannedBoards += 1;
+      else if (step.kind === 'part' && !NO_PURCHASE.has(step.part)) {
+        note(step.part, keyFor(step.part, {}), 'planned');
+      }
+    }
+  }
+
   /** @type {Line[]} */
   const lines = [];
   for (const [key, entry] of counts) {
+    const quantity = Math.max(entry.bench, entry.planned);
+    if (!quantity) continue;
     if (isScreen(entry.part)) {
       const screen = screenById(entry.part.slice('screen-'.length));
       // Silently dropping a screen would leave a build that cannot light up.
@@ -55,18 +77,19 @@ export function shoppingList(bench) {
       /** @type {Line['warning']} */
       const warning = !SCREEN_CONTROLLERS.has(screen.controller) ? 'screen-unsupported-controller'
         : screen.verified ? undefined : 'screen-unverified';
-      lines.push({ key, quantity: entry.quantity, purchase: screen.buy, ...(warning ? { warning } : {}) });
+      lines.push({ key, quantity, purchase: screen.buy, ...(warning ? { warning } : {}) });
       continue;
     }
     const purchase = purchaseFor(entry.part);
     if (!purchase) continue;
-    lines.push({ key, quantity: entry.quantity, purchase });
+    lines.push({ key, quantity, purchase });
   }
   // The board a part sits on is part of the build, and so is the wire.
+  const boards = Math.max(bench.boards.length, plannedBoards);
   if (lines.length) {
-    if (bench.boards.length) {
+    if (boards) {
       const breadboard = purchaseFor('breadboard');
-      if (breadboard) lines.push({ key: 'breadboard', quantity: bench.boards.length, purchase: breadboard });
+      if (breadboard) lines.push({ key: 'breadboard', quantity: boards, purchase: breadboard });
     }
     const jumperWires = purchaseFor('jumper-wires');
     if (jumperWires) lines.push({ key: 'jumper-wires', quantity: 1, purchase: jumperWires });
