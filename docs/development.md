@@ -63,10 +63,14 @@ were all found exactly that way.
 
 ```bash
 npm install
-server/models/fetch.sh   # once: the wake-word and VAD models
+npm run setup            # once: models, a Node check, one build — says what is missing
 npm start                # the brain on :8787, and the admin page in your browser
 npm run dev              # the same, for changing the pages: edits show without a build
 ```
+
+Tested on Node 24.13.1; the floor is what the locked Vite accepts, `^20.19.0 || >=22.12.0`. `npm run setup` is a check, not
+an installer: it fetches the two models and builds the pages, and it names the
+next step for anything else it finds.
 
 The admin page is at `http://localhost:8787/` and opens only on that machine,
 as does the wiring simulator at `/sim/`. The phone's page is at

@@ -5,6 +5,7 @@ import { BoardConsole, ConsoleError, type LinePort } from './boardConsole';
 function fakePort() {
   const queue: string[] = [];
   let wake: (() => void) | null = null;
+  let ended = false;
   const written: string[] = [];
   const port: LinePort = {
     write: async (line) => { written.push(line); },
@@ -12,6 +13,7 @@ function fakePort() {
       for (;;) {
         while (queue.length) yield queue.shift() as string;
         await new Promise<void>((r) => { wake = r; });
+        if (ended) return;
       }
     })(),
     close: async () => {},
@@ -19,6 +21,9 @@ function fakePort() {
   return {
     port, written,
     emit(line: string) { queue.push(line); wake?.(); wake = null; },
+    /** The USB link goes away, as it does when the board reboots. */
+    end() { ended = true; wake?.(); wake = null; },
+    get closed() { return ended; },
   };
 }
 
@@ -40,6 +45,58 @@ describe('BoardConsole', () => {
     expect(f.written).toEqual(['wifi "My Home" "secret12"\n']);
     f.emit('wifi saved');
     await expect(done).resolves.toBeUndefined();
+  });
+
+  it('reads the screen back, and treats a firmware without the line as no screen', async () => {
+    const f = fakePort();
+    const c = new BoardConsole(f.port);
+    const read = c.readSettings();
+    await settle();
+    f.emit('board.ssid=HomeNet');
+    f.emit('board.pass=secret12');
+    f.emit('board.token=00000000000000000000000000000001');
+    f.emit('board.url=');
+    f.emit('board.screen=ili9341-ips');
+    f.emit('board.end');
+    await expect(read).resolves.toMatchObject({ screen: 'ili9341-ips', screenKnown: true });
+
+    const old = fakePort();
+    const c2 = new BoardConsole(old.port);
+    const readOld = c2.readSettings();
+    await settle();
+    old.emit('board.ssid=HomeNet');
+    old.emit('board.pass=secret12');
+    old.emit('board.token=00000000000000000000000000000001');
+    old.emit('board.url=');
+    old.emit('board.end');
+    await expect(readOld).resolves.toMatchObject({ screen: '', screenKnown: false });
+  });
+
+  it('says the link dropped instead of waiting out the welcome timeout', async () => {
+    const f = fakePort();
+    const c = new BoardConsole(f.port, { replyTimeoutMs: 50 });
+    const waiting = reason(c.waitWelcomed(15000));
+    await settle();
+    f.end();
+    expect(await waiting).toBe('disconnected');
+  });
+
+  it('writes screen <id> and refuses anything that is not a model id', async () => {
+    const f = fakePort();
+    const c = new BoardConsole(f.port);
+    const done = c.setScreen('ili9341-ips');
+    await settle();
+    expect(f.written).toEqual(['screen ili9341-ips\n']);
+    f.emit('screen saved');
+    await done;
+    const cleared = c.clearScreen();
+    await settle();
+    expect(f.written).toEqual(['screen ili9341-ips\n', 'screen off\n']);
+    f.emit('screen saved');
+    await cleared;
+    expect(await reason(c.setScreen('../etc'))).toBe('bad-screen');
+    expect(await reason(c.setScreen('ILI9341 IPS'))).toBe('bad-screen');
+    expect(f.written).toEqual(['screen ili9341-ips\n', 'screen off\n']);
   });
 
   it('refuses a name with a double quote, a short password, and writes nothing', async () => {
@@ -115,7 +172,7 @@ describe('BoardConsole', () => {
     f.emit('board.url=');
     f.emit('board.end');
     await expect(got).resolves.toEqual({
-      ssid: 'My Home  2.4G', pass: 'pa=ss word', token: '0123456789abcdef0123456789abcdef', url: '',
+      ssid: 'My Home  2.4G', pass: 'pa=ss word', token: '0123456789abcdef0123456789abcdef', url: '', screen: '', screenKnown: false,
     });
   });
 

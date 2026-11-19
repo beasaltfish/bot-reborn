@@ -1,0 +1,38 @@
+# Test, typecheck and build every push and PR.
+#
+# This is the only gate the agent loop trusts: a PR that cannot pass this is a
+# PR nobody should read. It is deliberately not a required check until somebody
+# has watched it run green on this repository once.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  js:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # The wake-word and VAD models are not vendored; the tests that need them
+      # skip themselves when they are absent, and run here.
+      - run: sh server/models/fetch.sh
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run build
+
+  firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y cmake build-essential
+      - run: npm run firmware:test

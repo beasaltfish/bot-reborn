@@ -165,6 +165,7 @@ const panels = createPanels({
   leaveProject: () => { activeProject = null; },
   speed: speedFactor(Number(read(SPEED_KEY))),
   firmwareDrivers: () => firmwareFor(bench.board)?.drivers ?? null,
+  bench: () => bench,
   rememberSpeed: (/** @type {number} */ x) => write(SPEED_KEY, String(speedFactor(x))),
 });
 

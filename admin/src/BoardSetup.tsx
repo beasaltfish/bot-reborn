@@ -5,8 +5,9 @@ import { useEffect, useState } from 'react';
 import { api } from './api';
 import { BoardConsole, ConsoleError, checkWifi, type LinePort } from './boardConsole';
 import * as realSerial from './boardSerial';
-import { t } from './i18n';
+import { lang, t } from './i18n';
 import type { Summary } from './types';
+import { SCREENS, FIRMWARE_DRIVERS, screenLabel, type Screen } from '../../core/screens.js';
 
 export interface Serial {
   supportsSerial(): boolean;
@@ -16,12 +17,16 @@ export interface Serial {
 
 type Step = 'idle' | 'flashing' | 'saving' | 'waiting' | 'reading';
 
-export function BoardSetup({ serial = realSerial, replyTimeoutMs }: { serial?: Serial; replyTimeoutMs?: number }) {
+export function BoardSetup({ serial = realSerial, replyTimeoutMs, screens = SCREENS }: { serial?: Serial; replyTimeoutMs?: number; screens?: Screen[] }) {
   const [list, setList] = useState<Summary[] | null>(null);
   const [mode, setMode] = useState<'flash' | 'settings'>('flash');
   const [ssid, setSsid] = useState('');
   const [pass, setPass] = useState('');
   const [character, setCharacter] = useState('');
+  // 'keep' leaves the board's own setting alone; 'off' clears it; anything else
+  // is a model id the page offered. Never inferred from what the board reported.
+  const [screenChoice, setScreenChoice] = useState('keep');
+  const [boardScreen, setBoardScreen] = useState<string | null>(null);
   const [step, setStep] = useState<Step>('idle');
   const [percent, setPercent] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +42,8 @@ export function BoardSetup({ serial = realSerial, replyTimeoutMs }: { serial?: S
   if (!serial.supportsSerial()) return <p role="alert" className="board-error">{t('boardNeedsChrome')}</p>;
 
   const busy = step !== 'idle';
+  /** Only a panel that was lit on a real board, and that the firmware drives, may be offered. */
+  const offered = screens.filter((s) => s.verified && FIRMWARE_DRIVERS.has(s.controller));
 
   /** Fill the form with what the board holds: name, password, and the character whose token it carries. */
   async function readBoard() {
@@ -50,6 +57,10 @@ export function BoardSetup({ serial = realSerial, replyTimeoutMs }: { serial?: S
       const stored = await new BoardConsole(port, { replyTimeoutMs }).readSettings();
       setSsid(stored.ssid);
       setPass(stored.pass);
+      // A model this page cannot offer is reported, not written back: the board
+      // keeps working with what it has.
+      setBoardScreen(stored.screenKnown ? stored.screen : null);
+      setScreenChoice('keep');
       // The list holds no tokens: ask for each character's own (never regenerate).
       const details = await Promise.all((list ?? []).map((c) => api.get(c.id)));
       const match = details.find((d) => d.token === stored.token);
@@ -86,15 +97,30 @@ export function BoardSetup({ serial = realSerial, replyTimeoutMs }: { serial?: S
       await board.setWifi(ssid, pass);
       await board.useDiscovery();
       await board.setToken(token);
+      if (screenChoice === 'off') await board.clearScreen();
+      else if (screenChoice !== 'keep') await board.setScreen(screenChoice);
       await board.reboot();
       setStep('waiting');
       setDone(await board.waitWelcomed(15000));
     } catch (e) {
-      setError(explain(e));
+      // A reboot usually drops the USB-CDC link before the board can say
+      // anything. That is not a Wi-Fi failure: the board may be online.
+      if (e instanceof ConsoleError && e.reason === 'disconnected') setNote(t('boardRebootedNoConfirm'));
+      else setError(explain(e));
     } finally {
       setStep('idle');
       await port?.close().catch(() => {});
     }
+  }
+
+  /** The label the page shows: models carry a Chinese label beside the SKU. */
+  function label(s: Screen): string {
+    return screenLabel(s, lang);
+  }
+  /** A model the board reports may not be in the table at all; then its id is all we have. */
+  function nameOf(id: string): string {
+    const found = screens.find((s) => s.id === id);
+    return found ? label(found) : id;
   }
 
   return (
@@ -113,6 +139,19 @@ export function BoardSetup({ serial = realSerial, replyTimeoutMs }: { serial?: S
               {list.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </label>
+        )}
+        <label>{t('boardScreen')}
+          <select disabled={!offered.length} value={screenChoice} onChange={(e) => setScreenChoice(e.target.value)}>
+            <option value="keep">{t('boardScreenKeep')}</option>
+            <option value="off">{t('boardScreenNone')}</option>
+            {offered.map((s) => <option key={s.id} value={s.id}>{label(s)}</option>)}
+          </select>
+        </label>
+        {!offered.length && <p className="board-note">{t('boardScreenNoneYet')}</p>}
+        {boardScreen && !offered.some((s) => s.id === boardScreen) && (
+          <p role="alert" className="board-error">
+            {t('boardScreenUnsupported').replace('{model}', nameOf(boardScreen))}
+          </p>
         )}
         {mode === 'settings' && <button type="button" onClick={() => void readBoard()}>{t('boardRead')}</button>}
         <button type="button" onClick={() => void start()}>{t('boardStart')}</button>
@@ -134,6 +173,7 @@ function explain(e: unknown): string {
   if (e instanceof ConsoleError) {
     switch (e.reason) {
       case 'bad-ssid': return t('boardBadSsid');
+      case 'bad-screen': return t('boardScreenBad');
       case 'bad-pass': return t('boardBadPass');
       case 'no-reply': return t('boardNoReply');
       case 'rejected': return t('boardRejected') + e.message;

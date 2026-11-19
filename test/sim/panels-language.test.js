@@ -16,7 +16,7 @@ test('Chinese workbench exposes translated primary controls and recipe choices',
       projectState: (/** @type {string} */ id) => { const plan = planById(id); return { mode: plan ? 'guided' : 'free', evaluated: true, project: plan, progress: [], selection: null, diagnoses: [] }; },
     }));
     const labels = [...dom.window.document.querySelectorAll('#tools button')].map(button => button.textContent);
-    for (const label of ['元件', '项目', '接线总览', '下一步提示', '重置工作台']) assert.ok(labels.includes(label), label);
+    for (const label of ['元件', '项目', '购物清单', '接线总览', '下一步提示', '重置工作台']) assert.ok(labels.includes(label), label);
     panels.openProject('audio');
     const demo = /** @type {HTMLButtonElement} */ (dom.window.document.querySelector('#project-panel [data-action="demo"]'));
     assert.ok(demo); demo.click();

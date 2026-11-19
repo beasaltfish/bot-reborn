@@ -113,23 +113,27 @@ touching a board.
 
 ## Five minutes, no parts
 
-1. **Start the brain** on a computer on the same Wi-Fi as the body:
+1. **Start the brain** on a computer on the same Wi-Fi as the body. Three
+   commands; Node 20.19+ or 22.12+ first.
 
    ```bash
    npm install
-   server/models/fetch.sh   # the wake-word and VAD models, once
+   npm run setup   # the wake-word and VAD models, a Node check, one build
    npm start
    ```
 
-   The admin page opens in your browser.
+   `npm run setup` says what is missing and how to fix it. The admin page opens
+   in your browser.
 2. **Open the workbench:** <http://localhost:8787/sim/> (or the link in the
-   admin sidebar). It opens only on the computer the brain runs on.
-3. **Open Projects, pick Audio + screen, and press Demo.** An ESP32 gets a
-   microphone, an amp, a speaker and a screen in about forty seconds. Then
-   press **Build it for me** to get the same bench left standing, or Undo it and
-   wire it hole by hole yourself.
+   admin sidebar). It opens only on the computer the brain runs on — the
+   workbench is the brain's own page.
+3. **Open Projects, pick Audio + screen, then Shopping list.** That is what to
+   buy, with the spec to check on each listing and a rough price; print it.
+   Then press Demo to watch it go together in about forty seconds, or **Build
+   it for me** to leave the same bench standing and wire it up by hand.
 
 No parts, no keys, no hardware. When you want the real one, keep reading.
+macOS is what this has been walked through on; Windows is untested.
 
 ## Real hardware
 
@@ -195,9 +199,11 @@ something the workbench can teach and the board cannot run yet.
 ## Status and limits
 
 **ESP32 body:** hears, talks, shows a pet dog on a breadboard and drives a toy's
-motor inputs, all set up from the admin page. Choosing the screen from the admin
-page is still missing. The tarot wand works in the simulator; the firmware reads
-it too, but that has not been tried on a real board yet.
+motor inputs, all set up from the admin page. The admin page can also pick the
+screen, but no panel model is marked verified yet, so the picker is empty and
+says so; until one is lit and recorded, type `screen` in the serial console for
+the list, then `screen <id>` and `reboot` — the choice takes effect at boot. The tarot wand works in the simulator; the firmware reads it too, but
+that has not been tried on a real board yet.
 
 **Phone body:** works end to end on one robot and one phone, and is kept as it
 is. The simple-commands reflex was driven by a real voice on that car and the

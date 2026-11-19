@@ -11,9 +11,14 @@ export interface LinePort {
   close(): Promise<void>;
 }
 
-export interface BoardSettings { ssid: string; pass: string; token: string; url: string }
+export interface BoardSettings {
+  ssid: string; pass: string; token: string; url: string;
+  screen: string;
+  /** False on firmware that predates the picker: no line was printed at all. */
+  screenKnown: boolean;
+}
 
-export type ConsoleReason = 'bad-ssid' | 'bad-pass' | 'bad-token' | 'no-reply' | 'rejected' | 'not-welcomed';
+export type ConsoleReason = 'bad-ssid' | 'bad-pass' | 'bad-token' | 'bad-screen' | 'no-reply' | 'rejected' | 'not-welcomed' | 'disconnected';
 
 export class ConsoleError extends Error {
   reason: ConsoleReason;
@@ -37,6 +42,8 @@ export function checkWifi(ssid: string, pass: string): 'bad-ssid' | 'bad-pass' |
 export class BoardConsole {
   private listeners = new Set<(line: string) => void>();
   private welcomed: string | null = null;
+  private ended = false;
+  private enders = new Set<() => void>();
 
   constructor(private port: LinePort, private opts: { replyTimeoutMs?: number } = {}) {
     void this.pump();
@@ -50,7 +57,20 @@ export class BoardConsole {
         if (m) this.welcomed = m[1];
         for (const listen of [...this.listeners]) listen(line);
       }
-    } catch { /* the port went away; pending calls time out */ }
+    } catch { /* the port went away; that is what a reboot looks like */ }
+    finally {
+      // A reboot unplugs the USB-CDC device: waiting the full timeout for a
+      // welcome that can never arrive is how a good board gets blamed for Wi-Fi.
+      this.ended = true;
+      for (const end of [...this.enders]) end();
+      this.enders.clear();
+    }
+  }
+
+  /** Calls back once the port is gone; immediate when it already is. */
+  private onEnd(fn: () => void) {
+    if (this.ended) fn();
+    else this.enders.add(fn);
   }
 
   /** Write a command, then wait for the board's "… saved" or "error: …". */
@@ -62,6 +82,7 @@ export class BoardConsole {
         else if (/saved$/.test(reply)) done(resolve);
       };
       const timer = setTimeout(() => done(() => reject(new ConsoleError('no-reply'))), this.opts.replyTimeoutMs ?? REPLY_TIMEOUT_MS);
+      this.onEnd(() => done(() => reject(new ConsoleError('disconnected'))));
       this.listeners.add(listen);   // before the write: the answer can be instant
       this.port.write(line).catch((e) => done(() => reject(e)));
     });
@@ -81,10 +102,13 @@ export class BoardConsole {
       const listen = (line: string) => {
         if (line === 'board.end') {
           return done(() => resolve({
+            // `screen` is missing on firmware from before the picker existed: say so
+            // rather than "no screen", so the page can leave the user's choice alone.
             ssid: got.ssid ?? '', pass: got.pass ?? '', token: got.token ?? '', url: got.url ?? '',
+            screen: got.screen ?? '', screenKnown: Object.hasOwn(got, 'screen'),
           }));
         }
-        const m = /^board\.(ssid|pass|token|url)=(.*)$/.exec(line);
+        const m = /^board\.(ssid|pass|token|url|screen)=(.*)$/.exec(line);
         if (m) got[m[1]] = m[2];
       };
       const timer = setTimeout(() => done(() => reject(new ConsoleError('no-reply'))), this.opts.replyTimeoutMs ?? REPLY_TIMEOUT_MS);
@@ -103,6 +127,17 @@ export class BoardConsole {
     await this.command(`token ${token.toLowerCase()}\n`);
   }
 
+  /** Pick the panel; the board needs a reboot before it uses it. */
+  async setScreen(id: string): Promise<void> {
+    if (!/^[a-z0-9-]+$/.test(id)) throw new ConsoleError('bad-screen');
+    await this.command(`screen ${id}\n`);
+  }
+
+  /** Remove the panel, so the board boots with no screen at all. */
+  async clearScreen(): Promise<void> {
+    await this.command('screen off\n');
+  }
+
   /** The board restarts and answers nothing. */
   async reboot(): Promise<void> {
     this.welcomed = null;
@@ -119,6 +154,7 @@ export class BoardConsole {
         if (m) done(() => resolve(m[1]));
       };
       const timer = setTimeout(() => done(() => reject(new ConsoleError('not-welcomed'))), timeoutMs);
+      this.onEnd(() => done(() => reject(new ConsoleError('disconnected'))));
       this.listeners.add(listen);
     });
   }

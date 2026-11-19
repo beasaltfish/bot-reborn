@@ -129,9 +129,19 @@ test('judge: a slow answer times out as failed', async () => {
   const fetch = (/** @type {string} */ _u, /** @type {any} */ init) => new Promise((_, reject) => {
     init.signal.addEventListener('abort', () => reject(init.signal.reason));
   });
-  const v = await new Reflex(CFG, { fetch: /** @type {any} */ (fetch), timeoutMs: 10 }).judge('l', '');
-  assert.equal(v.verdict, 'failed');
-  assert.match(v.detail, /timeout/i);
+  // AbortSignal.timeout's timer is unref'ed: in a test process with nothing else
+  // running, the event loop drains before it fires, node --test reports the
+  // await as pending and cancels every later test in the file (Linux CI at
+  // Node 22). A real brain has sockets and audio holding the loop open; the test
+  // has to hold it itself.
+  const keepAlive = setInterval(() => {}, 5);
+  try {
+    const v = await new Reflex(CFG, { fetch: /** @type {any} */ (fetch), timeoutMs: 10 }).judge('l', '');
+    assert.equal(v.verdict, 'failed');
+    assert.match(v.detail, /timeout/i);
+  } finally {
+    clearInterval(keepAlive);
+  }
 });
 
 test('judge: the caller cancelling aborts the request too', async () => {
