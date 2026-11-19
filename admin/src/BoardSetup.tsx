@@ -103,7 +103,10 @@ export function BoardSetup({ serial = realSerial, replyTimeoutMs, screens = SCRE
       setStep('waiting');
       setDone(await board.waitWelcomed(15000));
     } catch (e) {
-      setError(explain(e));
+      // A reboot usually drops the USB-CDC link before the board can say
+      // anything. That is not a Wi-Fi failure: the board may be online.
+      if (e instanceof ConsoleError && e.reason === 'disconnected') setNote(t('boardRebootedNoConfirm'));
+      else setError(explain(e));
     } finally {
       setStep('idle');
       await port?.close().catch(() => {});

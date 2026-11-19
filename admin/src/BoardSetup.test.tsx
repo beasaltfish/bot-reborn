@@ -180,6 +180,15 @@ describe('the screen picker', () => {
     expect((screen.getByLabelText(/screen/i) as HTMLSelectElement).value).toBe('keep');
   });
 
+  it('treats a dropped link after the reboot as unconfirmed, not as a Wi-Fi failure', async () => {
+    const { serial } = fakeSerial({ dropAfterReboot: true });
+    render(<BoardSetup serial={serial} replyTimeoutMs={50} screens={screens} />);
+    await fillFloor();
+    await userEvent.click(screen.getByRole('button', { name: /start/i }));
+    expect(await screen.findByText(/cannot confirm/i)).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
   it('says why there is nothing to pick instead of showing a dead dropdown', async () => {
     const { serial } = fakeSerial();
     render(<BoardSetup serial={serial} replyTimeoutMs={50} screens={[]} />);

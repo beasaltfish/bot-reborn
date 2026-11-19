@@ -3,7 +3,7 @@
 import { vi } from 'vitest';
 import type { LinePort } from '../boardConsole';
 
-export function fakeSerial({ supported = true, answer = true, token = `${'0'.repeat(31)}1`, screen = '' }: { supported?: boolean; answer?: boolean; token?: string; screen?: string } = {}) {
+export function fakeSerial({ supported = true, answer = true, token = `${'0'.repeat(31)}1`, screen = '', dropAfterReboot = false }: { supported?: boolean; answer?: boolean; token?: string; screen?: string; dropAfterReboot?: boolean } = {}) {
   const queue: string[] = [];
   let wake: (() => void) | null = null;
   const emit = (line: string) => { queue.push(line); wake?.(); wake = null; };
@@ -23,7 +23,12 @@ export function fakeSerial({ supported = true, answer = true, token = `${'0'.rep
       else if (line.startsWith('show')) {
         for (const l of ['board.ssid=HomeNet', 'board.pass=secret12', `board.token=${token}`, 'board.url=', `board.screen=${screen}`, 'board.end']) emit(l);
       }
-      else if (line.startsWith('reboot')) emit('welcomed as Asten');
+      else if (line.startsWith('reboot')) {
+        // A real reboot re-enumerates the USB-CDC device: the link usually drops
+        // before the board can say anything.
+        if (dropAfterReboot) { generation += 1; wake?.(); wake = null; }
+        else emit('welcomed as Asten');
+      }
     },
     lines: (async function* () {
       const mine = generation;
