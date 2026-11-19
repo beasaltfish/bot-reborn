@@ -3,6 +3,7 @@
 // Writes also need X-Bot-Reborn: 1, which no page from elsewhere can send
 // without a preflight this server never answers (spec §4).
 
+import { createHash } from 'node:crypto';
 import { networkInterfaces } from 'node:os';
 import {
   listCharacters, characterById, createCharacter, patchCharacter,
@@ -14,17 +15,32 @@ import { listFirmwareSources, readFirmwareSource } from './firmware-sources.js';
 const MAX_BODY = 64 * 1024;
 
 /**
+ * A non-secret name for one pairing: the same token always has the same name,
+ * a re-created character with the same id and a different token does not.
+ * Domain-separated so the digest cannot be confused with any other use of a
+ * token's SHA-256. The token itself never leaves the detail response.
+ * @param {string} token
+ */
+export function setupIdFor(token) {
+  return createHash('sha256').update('bot-reborn.setup.v1\0').update(token).digest('hex');
+}
+
+/**
  * @param {{ dir: string, link: { online(): string[], kick(id: string): boolean },
  *           addresses?: () => string[], fetch?: typeof fetch, checkTimeoutMs?: number,
- *           dev?: { draw(id: string): boolean } }} opts
+ *           dev?: { draw(id: string): boolean },
+ *           presence?: { of(id: string, setupId?: string): { lastSeenAt?: number, lastSpokeAt?: number } },
+ *           bodyKind?: (setupId: string) => 'phone' | undefined }} opts
  *   `dev` exists only when the brain was started with --dev (tarot mode spec §5).
+ *   `presence` is this process's memory; with none, the summary omits both times.
+ *   `bodyKind` is this process's last admitted body kind for a pairing.
  */
 export function createAdminApi(opts) {
   const check = createCheckApi({ fetch: opts.fetch, timeoutMs: opts.checkTimeoutMs });
   /** @param {import('./characters.js').Character} c @param {Set<string>} online */
   const detail = (c, online) => ({
-    id: c.id, name: c.name, token: c.token, config: c.config, endpoints: c.endpoints ?? [],
-    savedReflexes: c.savedReflexes ?? [], online: online.has(c.id),
+    id: c.id, name: c.name, token: c.token, setupId: setupIdFor(c.token), config: c.config,
+    endpoints: c.endpoints ?? [], savedReflexes: c.savedReflexes ?? [], online: online.has(c.id),
   });
 
   /**
@@ -100,10 +116,18 @@ export function createAdminApi(opts) {
     try {
       if (id === undefined) {
         if (req.method === 'GET') {
-          // Never keys, never tokens: this is the call the page polls.
-          return send(200, listCharacters(opts.dir).characters.map((c) => ({
-            id: c.id, name: c.name, ready: ready(c.config), online: online.has(c.id), motion: c.config.body?.motion ?? null,
-          })));
+          // Never keys, never tokens: this is the call the page polls. The
+          // setup id names the pairing without being usable as its password.
+          return send(200, listCharacters(opts.dir).characters.map((c) => {
+            const setupId = setupIdFor(c.token);
+            const bodyKind = opts.bodyKind?.(setupId);
+            return {
+              id: c.id, name: c.name, ready: ready(c.config), online: online.has(c.id),
+              motion: c.config.body?.motion ?? null, setupId,
+              ...(bodyKind ? { bodyKind } : {}),
+              ...(opts.presence?.of(c.id, setupId) ?? {}),
+            };
+          }));
         }
         if (req.method === 'POST') {
           if (typeof body?.name !== 'string') return send(400, { error: 'name must be a string' });

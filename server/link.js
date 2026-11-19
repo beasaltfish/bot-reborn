@@ -24,8 +24,8 @@ import {
 
 /**
  * @param {{ server: import('node:http').Server,
- *           admit: (token: string) => { id: string, name: string } | string,
- *           onBody: (conn: BodyConn, who: { id: string, name: string }) => void,
+ *           admit: (token: string, hello: any) => { id: string, name: string, bodyKind?: 'phone' } | string,
+ *           onBody: (conn: BodyConn, who: { id: string, name: string, bodyKind?: 'phone' }) => void,
  *           heartbeatMs?: number, watchdogMs?: number, helloTimeoutMs?: number,
  *           allowedOrigins?: string[], log?: (line: string) => void }} opts
  */
@@ -104,7 +104,9 @@ export function createLink(opts) {
         const origin = req.headers.origin;
         if (origin && !allowed.has(origin) && !sameHost(origin, req.headers.host)) return reject('origin');
         if (typeof msg.token !== 'string') return reject('token');
-        const who = opts.admit(msg.token);
+        // The whole hello goes to admission: an optional body marker means
+        // nothing until the token (and origin, above) has been accepted.
+        const who = opts.admit(msg.token, msg);
         if (typeof who === 'string') return reject(who);
         if (active.has(who.id)) return reject('busy');
         id = who.id;

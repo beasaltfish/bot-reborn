@@ -62,7 +62,10 @@ export function connectBody(opts) {
     ws = socket;
     socket.binaryType = 'arraybuffer';
     socket.onopen = () => {
-      socket.send(encode({ type: 'hello', protocol: PROTOCOL, token: opts.token }));
+      // `body` is an optional marker for a brain that cares: this socket is a
+      // phone beside an FT232H, not a board with firmware to flash. A brain
+      // that does not know the field ignores it; the token still admits us.
+      socket.send(encode({ type: 'hello', protocol: PROTOCOL, token: opts.token, body: 'phone' }));
     };
     socket.onmessage = (ev) => {
       lastHeard = Date.now();

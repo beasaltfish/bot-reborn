@@ -15,7 +15,8 @@ import { listCharacters, findByToken, updateConfig, ready } from './characters.j
 import { isLocalRequest } from './local-guard.js';
 import { lanAllowed, pathOf } from './pages.js';
 import { createDistPages, DIST_DIR, FIXTURES_DIR } from './dist-pages.js';
-import { createAdminApi } from './admin-api.js';
+import { createAdminApi, setupIdFor } from './admin-api.js';
+import { createPresence } from './presence.js';
 
 /**
  * @param {{
@@ -32,6 +33,8 @@ import { createAdminApi } from './admin-api.js';
  */
 export function createBrainServer(opts) {
   const log = opts.log ?? console.log;
+  // Who this process has met and answered. Memory only: a restart forgets.
+  const presence = createPresence();
   /** @type {((req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) => Promise<void>) | null} */
   let api = null;
   /** @param {import('node:http').ServerResponse} res @param {number} status @param {string} text */
@@ -82,6 +85,13 @@ export function createBrainServer(opts) {
   /** Looked up when admitted, used when built: the same object in between. */
   /** @type {Map<string, import('./characters.js').Character>} */
   const admitted = new Map();
+  /**
+   * The last body kind admitted for a pairing, for this process only. A
+   * reconnect replaces it, so a board after a phone is a board again; a
+   * re-created character has a new setup id and inherits nothing.
+   * @type {Map<string, 'phone'>}
+   */
+  const bodyKinds = new Map();
 
   /**
    * A token to a character, read fresh at every hello so an edited file needs
@@ -112,15 +122,22 @@ export function createBrainServer(opts) {
     server: http,
     log,
     allowedOrigins: opts.allowedOrigins,
-    admit: (token) => {
+    admit: (token, hello) => {
       const who = tokenLookup(token);
       if (typeof who === 'string') return who;
       admitted.set(who.id, /** @type {import('./characters.js').Character} */ (who.character));
-      return { id: who.id, name: who.name };
+      // The optional marker is read only after the token was accepted; the
+      // link records it only after its own one-body-per-character admission,
+      // so a rejected second body cannot change what the summary says.
+      return { id: who.id, name: who.name, ...(hello?.body === 'phone' ? { bodyKind: /** @type {const} */ ('phone') } : {}) };
     },
     onBody: (conn, who) => {
       const c = /** @type {import('./characters.js').Character} */ (admitted.get(who.id));
       admitted.delete(who.id);
+      const setupId = setupIdFor(c.token);
+      if (who.bodyKind === 'phone') bodyKinds.set(setupId, 'phone');
+      else bodyKinds.delete(setupId);
+      presence.saw(c.id, setupId);
       // Fresh ears per body: the VAD holds the last body's half sentence.
       const robot = startRobot(conn, {
         config: c.config,
@@ -137,6 +154,8 @@ export function createBrainServer(opts) {
         // none, the animator still runs and show() is a no-op.
         screen: (pick) => screen.show(c.id, pick),
         log: (line) => log(`[${c.name}] ${line}`),
+        // The first time this body answers out loud: speech, or a pet's bark.
+        onSpoke: () => presence.spoke(c.id, setupId),
       });
       robots.set(c.id, robot);
       conn.onClose(() => {
@@ -147,7 +166,8 @@ export function createBrainServer(opts) {
   });
 
   api = createAdminApi({
-    dir: opts.dir, link, addresses: opts.addresses, fetch: opts.fetch,
+    dir: opts.dir, link, addresses: opts.addresses, fetch: opts.fetch, presence,
+    bodyKind: (setupId) => bodyKinds.get(setupId),
     // Only in dev mode: a way to draw a card before the wand has a message of its own.
     dev: opts.dev ? { draw: (id) => robots.get(id)?.drawCard() ?? false } : undefined,
   });

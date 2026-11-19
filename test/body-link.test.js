@@ -64,7 +64,7 @@ function rig(over = {}) {
 test('it says hello first, with its token, and is welcomed by name', () => {
   const r = rig();
   r.socket().open();
-  assert.deepEqual(r.socket().texts[0], { type: 'hello', protocol: PROTOCOL, token: 'ab'.repeat(16) });
+  assert.deepEqual(r.socket().texts[0], { type: 'hello', protocol: PROTOCOL, token: 'ab'.repeat(16), body: 'phone' });
   assert.equal(r.socket().binaryType, 'arraybuffer');
   r.socket().text({ type: 'welcome', name: 'Rex' });
   assert.deepEqual(r.events, ['welcome Rex']);

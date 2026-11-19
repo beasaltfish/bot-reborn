@@ -1,18 +1,86 @@
-import { describe, expect, it } from 'vitest';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { App } from './App';
+import { api } from './api';
+import { rememberBoard } from './boardMemory';
 import { installFakeApi } from './test/fakeApi';
-import type { EditorSlot } from './types';
+import type { EditorSlot, Summary } from './types';
 
 const slot = (p: EditorSlot) => <div data-testid="editor">{`${p.id}:${p.initialTab}`}</div>;
 
 describe('App', () => {
+  afterEach(() => localStorage.clear());
+
   it('offers only the first character when there are none', async () => {
     installFakeApi();
     render(<App pollMs={50} renderEditor={slot} />);
     expect(await screen.findByRole('button', { name: 'Create your first character' })).toBeInTheDocument();
     expect(screen.queryByText('Characters')).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'First-time setup' })).not.toBeInTheDocument();
+  });
+
+  it('places setup above the active editor and skips flashing after a phone connects', async () => {
+    const phone: Summary = { id: 'Pocket', name: 'Pocket', motion: 'none', ready: true, online: false };
+    const pet: Summary = { id: 'Rex', name: 'Rex', motion: 'pet', ready: false, online: false };
+    vi.spyOn(api, 'list').mockImplementation(async () => [{ ...phone }, { ...pet }]);
+    render(<App pollMs={50} renderEditor={slot} />);
+
+    const card = await screen.findByRole('region', { name: 'First-time setup' });
+    const editor = screen.getByTestId('editor');
+    expect(card.compareDocumentPosition(editor) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(editor).toHaveTextContent('Pocket:basic');
+    expect(within(card).getByRole('status')).toHaveTextContent('Next: Choose a body and screen');
+    expect(within(card).getByText('2 of 4 complete')).toBeVisible();
+
+    phone.online = true;
+    phone.lastSeenAt = 1;
+    await waitFor(() => expect(within(card).getByRole('status')).toHaveTextContent('Next: Hear the first reply'));
+    const rows = within(card).getAllByRole('listitem');
+    expect(within(rows[2]).getByText('From this brain')).toBeVisible();
+    expect(within(rows[3]).getByText('Skipped')).toBeVisible();
+    expect(within(card).getByText('3 of 4 complete')).toBeVisible();
+
+    phone.lastSpokeAt = 2;
+    expect(await within(card).findByText('Setup complete', { selector: 'summary' })).toBeVisible();
+
+    // A brain restart forgets the observations even if the character keeps its keys.
+    delete phone.lastSeenAt;
+    delete phone.lastSpokeAt;
+    phone.online = false;
+    await waitFor(() => expect(within(card).getByRole('status')).toHaveTextContent('Next: Choose a body and screen'));
+
+    await userEvent.click(screen.getByRole('button', { name: /Rex/ }));
+    const petCard = screen.getByRole('region', { name: 'First-time setup' });
+    expect(screen.getByTestId('editor')).toHaveTextContent('Rex:basic');
+    expect(within(petCard).getByRole('status')).toHaveTextContent('Next: Add three keys');
+    expect(within(petCard).getByText('1 of 5 complete')).toBeVisible();
+    expect(within(petCard).queryByText('Skipped')).not.toBeInTheDocument();
+  });
+
+  it('refreshes after editor saves and reads board memory on returning from board setup', async () => {
+    const pet: Summary = { id: 'Rex', name: 'Rex', motion: 'pet', ready: false, online: false };
+    vi.spyOn(api, 'list').mockImplementation(async () => [{ ...pet }]);
+    const editorWithSave = (p: EditorSlot) => <button onClick={p.onChanged}>Save editor changes</button>;
+    render(<App pollMs={60_000} renderEditor={editorWithSave} />);
+
+    const card = await screen.findByRole('region', { name: 'First-time setup' });
+    expect(within(card).getByRole('status')).toHaveTextContent('Next: Add three keys');
+    pet.ready = true;
+    await userEvent.click(screen.getByRole('button', { name: 'Save editor changes' }));
+    await waitFor(() => expect(within(card).getByRole('status')).toHaveTextContent('Next: Choose a body and screen'));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Set up a board' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Chrome or Edge/);
+    expect(screen.queryByRole('region', { name: 'First-time setup' })).not.toBeInTheDocument();
+    rememberBoard({ characterId: 'Rex', screen: null, flashedAt: 2 });
+    await userEvent.click(screen.getByRole('button', { name: /Rex/ }));
+
+    const returnedCard = screen.getByRole('region', { name: 'First-time setup' });
+    const rows = within(returnedCard).getAllByRole('listitem');
+    expect(within(rows[2]).getByText('In this browser')).toBeVisible();
+    expect(within(rows[3]).getByText('In this browser')).toBeVisible();
+    expect(within(returnedCard).getByRole('status')).toHaveTextContent('Next: Hear the first reply');
   });
 
   it('creates a character, lists it and opens it on the Ears tab', async () => {

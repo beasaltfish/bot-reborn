@@ -42,6 +42,20 @@ test('a second clip queues behind the first', async () => {
   assert.equal(started, true);
 });
 
+test('each frame keeps the source it was played as, so a queued beep is never a reply', async () => {
+  const clock = new FakeClock();
+  /** @type {Array<string | undefined>} */ const sources = [];
+  const mouth = new Mouth({
+    sendAudio: (b, source) => sources.push(source), send: () => {},
+    now: clock.now, after: clock.after,
+  });
+  mouth.play(new Int16Array(4800), 'reply');   // 300 ms: all three frames go at once
+  mouth.play(new Int16Array(1600), 'earcon');  // queued behind it
+  assert.deepEqual(sources, ['reply', 'reply', 'reply']);
+  await clock.advance(100);
+  assert.deepEqual(sources, ['reply', 'reply', 'reply', 'earcon']);
+});
+
 test('hush drops everything queued, settles every waiter, and tells the body', async () => {
   const { clock, chunks, msgs, mouth } = rig();
   const clip = mouth.play(new Int16Array(32000));

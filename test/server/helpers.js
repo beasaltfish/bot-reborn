@@ -17,7 +17,8 @@ export function readyConfig() {
 }
 
 /**
- * @param {{ heard?: string, reply?: string, steps?: object[], llmHangs?: boolean }} [opts]
+ * @param {{ heard?: string, reply?: string, steps?: object[], llmHangs?: boolean, tts?: Int16Array,
+ *           tool?: { name: string, args: object } }} [opts]
  * @returns {typeof fetch & { calls: { url: string, body: any, signal?: AbortSignal | null }[] }}
  */
 export function fakeFetch(opts = {}) {
@@ -36,13 +37,13 @@ export function fakeFetch(opts = {}) {
         role: 'assistant',
         content: opts.reply ?? 'Going!',
         tool_calls: [{ id: 'c1', type: 'function', function: {
-          name: 'move',
-          arguments: JSON.stringify({ steps: opts.steps ?? [{ drive: 'forward', steer: 'straight', duration_ms: 600 }] }),
+          name: opts.tool?.name ?? 'move',
+          arguments: JSON.stringify(opts.tool?.args ?? { steps: opts.steps ?? [{ drive: 'forward', steer: 'straight', duration_ms: 600 }] }),
         } }],
       } }] });
     }
     if (url.endsWith('/audio/speech')) {
-      return new Response(encodeWav(new Int16Array(3200).fill(2000), 16000));
+      return new Response(encodeWav(opts.tts ?? new Int16Array(3200).fill(2000), 16000));
     }
     throw new Error(`unexpected fetch ${url}`);
   });

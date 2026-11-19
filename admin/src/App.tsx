@@ -3,6 +3,9 @@ import { Brand } from './Brand';
 import { CharacterList } from './CharacterList';
 import { BoardSetup } from './BoardSetup';
 import { NewCharacter } from './NewCharacter';
+import { SetupCard } from './SetupCard';
+import { readBoardMemory } from './boardMemory';
+import { setupSteps } from './setup';
 import { useCharacters } from './useCharacters';
 import { t } from './i18n';
 import type { EditorSlot, TabName } from './types';
@@ -77,6 +80,8 @@ export function App({ pollMs = 2000, renderEditor }: {
     ?? list.find((c) => c.id === selected)
     ?? list.find((c) => c.id === remembered())
     ?? list[0] ?? null;
+  const steps = current && !creating && !board ? setupSteps({ characters: list, current, board: readBoardMemory() }) : [];
+  const next = steps.find((step) => !step.done && !step.optionalFor) ?? null;
   return (
     <>
       {banner}
@@ -97,13 +102,16 @@ export function App({ pollMs = 2000, renderEditor }: {
               onCancel={list.length > 0 ? () => setCreating(false) : undefined}
             />
           ) : current ? (
-            renderEditor({
-              id: current.id,
-              online: current.online,
-              initialTab,
-              onChanged: () => void refresh(),
-              onDeleted: () => { setSelected(null); void refresh(); },
-            })
+            <>
+              <SetupCard key={current.id} steps={steps} next={next} />
+              {renderEditor({
+                id: current.id,
+                online: current.online,
+                initialTab,
+                onChanged: () => void refresh(),
+                onDeleted: () => { setSelected(null); void refresh(); },
+              })}
+            </>
           ) : null}
         </main>
       </div>

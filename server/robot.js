@@ -43,7 +43,11 @@ export const ECHO_SLACK_MS = 300;
  *   petFrames?: import('./pet/frames.js').PetFrames,
  *   tarotFrames?: import('./tarot/frames.js').TarotFrames,
  *   screen?: (pick: import('./pet/frames.js').FramePick) => void,
+ *   onSpoke?: () => void,
  * }} deps
+ *   `onSpoke` runs once, the first time the robot actually answers out loud:
+ *   TTS for a talking body, a bark for a pet — not a beep, an empty clip, or
+ *   a body that already left.
  */
 export function startRobot(conn, deps) {
   const { config, ears, sfx, earcons } = deps;
@@ -68,11 +72,24 @@ export function startRobot(conn, deps) {
   const executor = makeExecutor(motion, conn, log, animator, tarotAnimator);
   animator?.start();
   tarotAnimator?.start();
+  let announcedReply = false;
   const mouth = new Mouth({
-    sendAudio: (bytes) => conn.sendAudio(bytes),
+    sendAudio: (bytes, source) => {
+      conn.sendAudio(bytes);
+      // Only a frame that was queued as the reply, is not empty, and reached
+      // a body that is still there counts. A wake beep or a sound effect is
+      // labelled as itself at playback, so it can never pass for the reply.
+      if (announcedReply || source !== 'reply' || !bytes?.length || !conn.open) return;
+      announcedReply = true;
+      deps.onSpoke?.();
+    },
     send: (msg) => conn.send(msg),
     slackMs: deps.slackMs ?? ECHO_SLACK_MS,
   });
+  // A pet's bark is its reply; for a talking body TTS is, unless the call
+  // site tagged it diagnostic (an apology). Both are labelled at the mouth,
+  // where the audio actually goes out.
+  const replySound = motion === 'pet' ? 'reply' : 'sound';
   const tts = new PcmTts(makeTtsSource(config.tts, net), { mouth });
   /** @type {(part: import('../core/strings.js').FaultPart, err: Error) => void} */
   const onFault = (part, err) => {
@@ -89,10 +106,10 @@ export function startRobot(conn, deps) {
     stt: makeStt(config.stt, net),
     tts,
     executor,
-    earcon: (name) => mouth.play(earcons[name]).ms,
+    earcon: (name) => mouth.play(earcons[name], 'earcon').ms,
     sfx: (name) => {
       const pcm = sfx.get(name);
-      return pcm ? mouth.play(pcm).ms : 0;
+      return pcm ? mouth.play(pcm, replySound).ms : 0;
     },
     config,
     onState: (state) => conn.send({ type: 'state', state }),

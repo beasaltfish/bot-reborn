@@ -123,7 +123,10 @@ touching a board.
    ```
 
    `npm run setup` says what is missing and how to fix it. The admin page opens
-   in your browser.
+   in your browser. Open a character to see what is left before the first
+   conversation. The card tells you what the brain knows—including whether
+   the character has replied out loud since startup—and what this browser
+   remembers about flashing a board.
 2. **Open the workbench:** <http://localhost:8787/sim/> (or the link in the
    admin sidebar). It opens only on the computer the brain runs on — the
    workbench is the brain's own page.
