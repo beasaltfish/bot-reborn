@@ -15,9 +15,17 @@
  * What a body is made of, as keys rather than sentences: the admin says them
  * in the reader's language, and a part number is the one thing that does not
  * translate.
- * @typedef {'board' | 'motor' | 'battery' | 'screen' | 'wand' | 'phone'} Need
+ * @typedef {'board' | 'mic' | 'amp' | 'motor' | 'battery' | 'ftdi' | 'chassis'
+ *   | 'screen' | 'wand' | 'phone'} Need
  */
 /** @typedef {'board' | 'phone' | 'none'} Source */
+/**
+ * One way of getting this body. The bill of materials belongs to the way and
+ * not to the body: a voice-only body is a board with a microphone and an amp,
+ * or it is the phone in your pocket, and those are different shopping lists
+ * for the same abilities.
+ * @typedef {{ source: Source, needs: Need[] }} Way
+ */
 
 /** The five fine-grained abilities a body can have, in the order the admin shows them. */
 export const CAPABILITIES = /** @type {const} */ (['hear', 'speak', 'show', 'move', 'sense']);
@@ -27,6 +35,11 @@ export const CAPABILITIES = /** @type {const} */ (['hear', 'speak', 'show', 'mov
  * @type {readonly Source[]}
  */
 export const SOURCES = ['board', 'phone', 'none'];
+
+/** Every part a way may ask for. A typo here would render as a blank chip. */
+export const NEEDS = [
+  'board', 'mic', 'amp', 'motor', 'battery', 'ftdi', 'chassis', 'screen', 'wand', 'phone',
+];
 
 /**
  * What an action needs before it means anything. An action is offered to the
@@ -55,8 +68,7 @@ export const BODY_FIRMWARE = 'body.bin';
  *   id: BodyId,
  *   label: string,
  *   labelZh: string,
- *   needs: Need[],
- *   sources: Source[],
+ *   ways: Way[],
  *   firmware: string | null,
  *   capabilities: Capability[],
  *   actions: ActionKind[],
@@ -73,8 +85,10 @@ export const BODIES = [
     id: 'car',
     label: 'Car',
     labelZh: '小车',
-    needs: ['board', 'motor', 'battery'],
-    sources: ['board', 'phone'],
+    ways: [
+      { source: 'board', needs: ['board', 'motor', 'battery'] },
+      { source: 'phone', needs: ['phone', 'ftdi', 'chassis'] },
+    ],
     firmware: BODY_FIRMWARE,
     capabilities: ['hear', 'speak', 'show', 'move'],
     actions: ['move', 'cruise', 'stop', 'sound'],
@@ -84,8 +98,7 @@ export const BODIES = [
     id: 'pet',
     label: 'Pet on a screen',
     labelZh: '屏幕宠物',
-    needs: ['board', 'screen'],
-    sources: ['board'],
+    ways: [{ source: 'board', needs: ['board', 'screen'] }],
     firmware: BODY_FIRMWARE,
     capabilities: ['hear', 'speak', 'show'],
     actions: ['pose', 'sound'],
@@ -95,8 +108,7 @@ export const BODIES = [
     id: 'tarot',
     label: 'Tarot reader',
     labelZh: '塔罗牌',
-    needs: ['board', 'screen', 'wand'],
-    sources: ['board'],
+    ways: [{ source: 'board', needs: ['board', 'screen', 'wand'] }],
     firmware: BODY_FIRMWARE,
     capabilities: ['hear', 'speak', 'show', 'sense'],
     actions: ['draw'],
@@ -106,8 +118,7 @@ export const BODIES = [
     id: 'dry-run',
     label: 'Dry run',
     labelZh: '演练',
-    needs: [],
-    sources: ['none'],
+    ways: [{ source: 'none', needs: [] }],
     firmware: null,
     capabilities: ['hear', 'speak', 'show', 'move'],
     actions: ['move', 'cruise', 'stop', 'sound'],
@@ -115,14 +126,17 @@ export const BODIES = [
   },
   {
     id: 'none',
-    label: 'Phone only',
-    labelZh: '只连手机',
-    needs: ['phone'],
-    sources: ['phone'],
-    firmware: null,
-    // The phone page draws a face — it is the head even when nothing else
-    // moves — so this body shows; it just has nothing to drive.
-    capabilities: ['hear', 'speak', 'show'],
+    label: 'Voice only',
+    labelZh: '只有声音',
+    // Not "the phone body": a board with a microphone and an amp is the same
+    // thing, and it drives nothing. What it shows is not promised either — a
+    // phone has a face, a bare board has no screen.
+    ways: [
+      { source: 'board', needs: ['board', 'mic', 'amp'] },
+      { source: 'phone', needs: ['phone'] },
+    ],
+    firmware: BODY_FIRMWARE,
+    capabilities: ['hear', 'speak'],
     actions: ['sound'],
     preview: 'voice',
   },
@@ -170,11 +184,12 @@ export function bodyProblem(body) {
     if (!(a in ACTION_NEEDS)) return `${row.id}: unknown action ${a}`;
     if (!row.capabilities.includes(ACTION_NEEDS[a])) return `${row.id}: ${a} needs ${ACTION_NEEDS[a]}`;
   }
-  if (!Array.isArray(row.sources) || row.sources.length === 0) return `${row.id}: no source`;
-  for (const s of row.sources) {
-    if (!SOURCES.includes(s)) return `${row.id}: unknown source ${s}`;
+  if (!Array.isArray(row.ways) || row.ways.length === 0) return `${row.id}: no way to get it`;
+  for (const w of row.ways) {
+    if (!SOURCES.includes(w.source)) return `${row.id}: unknown source ${w.source}`;
+    for (const n of w.needs) if (!NEEDS.includes(n)) return `${row.id}: unknown part ${n}`;
   }
-  const board = row.sources.includes('board');
+  const board = row.ways.some((w) => w.source === 'board');
   if (board && !row.firmware) return `${row.id}: a board body needs firmware`;
   if (!board && row.firmware !== null) return `${row.id}: only a board body has firmware`;
   if (!row.preview) return `${row.id}: no preview`;

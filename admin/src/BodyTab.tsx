@@ -25,7 +25,8 @@ const NEXT: Record<string, Key> = {
   board: 'bodyNextBoard', phone: 'bodyNextPhone', none: 'bodyNextNone',
 };
 const NEED: Record<string, Key> = {
-  board: 'needBoard', motor: 'needMotor', battery: 'needBattery',
+  board: 'needBoard', mic: 'needMic', amp: 'needAmp', motor: 'needMotor',
+  battery: 'needBattery', ftdi: 'needFtdi', chassis: 'needChassis',
   screen: 'needScreen', wand: 'needWand', phone: 'needPhone',
 };
 
@@ -59,8 +60,15 @@ export function BodyTab({ detail, update, onToken }: { detail: Detail; update(p:
                 checked={b.id === chosen} onChange={() => pick(b.id)}
               />
               <strong>{labelOf(b, lang)}</strong>
-              <span className="badges">{b.sources.map((src) => <span key={src} className="badge">{t(SOURCE[src])}</span>)}</span>
-              {b.needs.length > 0 && <small>{t('bodyNeeds')}: {b.needs.map((n) => t(NEED[n])).join(' · ')}</small>}
+              {/* One line per way: the badge is how you get it, the list is
+                  what that way costs you — they are different shopping lists
+                  for the same abilities. */}
+              {b.ways.map((w) => (
+                <span key={w.source} className="way">
+                  <span className="badge">{t(SOURCE[w.source])}</span>
+                  <span>{w.needs.length > 0 ? w.needs.map((n) => t(NEED[n])).join(' · ') : t('bodyNeedsNothing')}</span>
+                </span>
+              ))}
               <span className="caps">{b.capabilities.map((c) => t(CAP[c])).join(' · ')}</span>
             </label>
           );
@@ -73,8 +81,8 @@ export function BodyTab({ detail, update, onToken }: { detail: Detail; update(p:
             : <span>{name}</span>}
         </div>
         <small>{t('previewNote')}</small>
-        {body.sources.map((src) => <p key={src}>{t(NEXT[src])}</p>)}
-        {body.sources.includes('phone') && <PhoneLink token={detail.token} />}
+        {body.ways.map((w) => <p key={w.source}>{t(NEXT[w.source])}</p>)}
+        {body.ways.some((w) => w.source === 'phone') && <PhoneLink token={detail.token} />}
       </div>
     </div>
   );

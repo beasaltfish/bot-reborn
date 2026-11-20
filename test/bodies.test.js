@@ -17,28 +17,47 @@ test('an action without its capability is refused', () => {
   assert.match(bodyProblem({ id: 'x', label: 'X', labelZh: 'X', needs: [], source: 'none', firmware: null, capabilities: ['speak'], actions: ['pose'], preview: 'pet' }) ?? '', /pose/);
 });
 
-test('a board body needs firmware and a phone body must not have one', () => {
-  const base = { id: 'x', label: 'X', labelZh: 'X', needs: [], capabilities: ['speak'], actions: [], preview: 'face' };
-  assert.match(bodyProblem({ ...base, sources: ['board'], firmware: null }) ?? '', /firmware/);
-  assert.match(bodyProblem({ ...base, sources: ['phone'], firmware: 'body' }) ?? '', /firmware/);
-  assert.equal(bodyProblem({ ...base, sources: ['phone'], firmware: null }), null);
+test('a board way needs firmware and a phone way must not have one', () => {
+  const base = { id: 'x', label: 'X', labelZh: 'X', capabilities: ['speak'], actions: [], preview: 'face' };
+  assert.match(bodyProblem({ ...base, ways: [{ source: 'board', needs: [] }], firmware: null }) ?? '', /firmware/);
+  assert.match(bodyProblem({ ...base, ways: [{ source: 'phone', needs: [] }], firmware: 'body' }) ?? '', /firmware/);
+  assert.equal(bodyProblem({ ...base, ways: [{ source: 'phone', needs: [] }], firmware: null }), null);
   // A body reachable both ways is flashed for one of them and not the other.
-  assert.equal(bodyProblem({ ...base, sources: ['board', 'phone'], firmware: 'body.bin' }), null);
+  assert.equal(bodyProblem({ ...base, ways: [{ source: 'board', needs: [] }, { source: 'phone', needs: [] }], firmware: 'body.bin' }), null);
 });
 
-test('a body may be reached more than one way, and the card says so', () => {
-  assert.deepEqual(bodyById('car')?.sources, ['board', 'phone']);
-  assert.deepEqual(bodyById('pet')?.sources, ['board']);
-  assert.deepEqual(bodyById('none')?.sources, ['phone']);
-  // No source at all is a row nobody can follow.
-  assert.match(bodyProblem({ id: 'x', label: 'X', labelZh: 'X', needs: [], sources: [], firmware: null, capabilities: ['speak'], actions: [], preview: 'pet' }) ?? '', /source/);
-  assert.match(bodyProblem({ id: 'x', label: 'X', labelZh: 'X', needs: [], sources: ['telepathy'], firmware: null, capabilities: ['speak'], actions: [], preview: 'pet' }) ?? '', /telepathy/);
+test('a body may be reached more than one way, and each way says what it needs', () => {
+  const car = bodyById('car');
+  assert.deepEqual(car?.ways.map((w) => w.source), ['board', 'phone']);
+  assert.ok(car?.ways[0].needs.includes('motor'), 'a board car needs the motor driver');
+  assert.ok(car?.ways[1].needs.includes('ftdi'), 'a phone car needs the FT232H');
+  assert.deepEqual(bodyById('pet')?.ways.map((w) => w.source), ['board']);
+
+  // The same body, the same abilities, two different bills of materials.
+  const voice = bodyById('none');
+  assert.deepEqual(voice?.ways.map((w) => w.source), ['board', 'phone']);
+  assert.ok(voice?.ways[0].needs.includes('mic'), 'a board voice-only body needs a microphone');
+  assert.deepEqual(voice?.ways[1].needs, ['phone']);
+});
+
+test('a way nobody can follow is refused', () => {
+  const base = { id: 'x', label: 'X', labelZh: 'X', firmware: null, capabilities: ['speak'], actions: [], preview: 'pet' };
+  assert.match(bodyProblem({ ...base, ways: [] }) ?? '', /way/);
+  assert.match(bodyProblem({ ...base, ways: [{ source: 'telepathy', needs: [] }] }) ?? '', /telepathy/);
+  assert.match(bodyProblem({ ...base, ways: [{ source: 'phone', needs: ['unobtainium'] }] }) ?? '', /unobtainium/);
 });
 
 test('what a body senses with is in the list of things it needs', () => {
   const tarot = bodyById('tarot');
   assert.ok(tarot?.capabilities.includes('sense'));
-  assert.ok(tarot?.needs.includes('wand'), 'a tarot reader senses with the MPU-6050 wand');
+  const needs = tarot?.ways.flatMap((w) => w.needs) ?? [];
+  assert.ok(needs.includes('wand'), 'a tarot reader senses with the MPU-6050 wand');
+});
+
+test('a voice-only body does not borrow the phone\'s face', () => {
+  const voice = bodyById('none');
+  assert.deepEqual(voice?.capabilities, ['hear', 'speak']);
+  assert.equal(voice?.label, 'Voice only');
 });
 
 test('the label is the reader\'s language', () => {

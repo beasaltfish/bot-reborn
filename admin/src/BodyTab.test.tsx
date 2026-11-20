@@ -41,15 +41,19 @@ describe('BodyTab', () => {
     expect(screen.getByText(/not the firmware/i)).toBeInTheDocument();
   });
 
-  it('a body that needs no board is not sent to one', () => {
+  it('a voice-only body can be a board or a phone, and says what each needs', () => {
     renderTab(detail('none'));
-    expect(screen.queryByText(/flash it once/i)).toBeNull();
-    expect(screen.getByRole('radio', { name: /phone only/i })).toBeChecked();
+    const voice = screen.getByRole('radio', { name: /voice only/i });
+    expect(voice).toBeChecked();
+    const card = within(voice.closest('label') as HTMLElement);
+    expect(card.getByText(/board · microphone · speaker amp/)).toBeVisible();
+    expect(card.getByText(/^this phone$/)).toBeVisible();
   });
 
   it('a body that runs on a board or a phone gives both ways, not just one', () => {
     renderTab(detail('car'));
     expect(screen.getByText(/flash it once/i)).toBeInTheDocument();
+    expect(screen.getByText(/FT232H/)).toBeInTheDocument();
     expect(screen.getByText(/scan the QR code/i)).toBeInTheDocument();
   });
 
