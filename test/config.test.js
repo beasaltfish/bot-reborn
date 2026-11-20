@@ -404,6 +404,18 @@ test('a malformed prompts patch is dropped, and the template\'s own words apply'
   }
 });
 
+test('the page\'s "use the template" sends actions: null, which reads as inherited', () => {
+  // A PATCH merges and cannot drop a key, so the admin removes the override by
+  // sending null. It is not an actions list, so the next read drops it and the
+  // template's own actions apply again; an emptied trigger list stays explicit.
+  const c = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({
+    body: { id: 'toy', actions: null, triggers: [] },
+  }) }));
+  assert.equal('actions' in c.body, false);
+  assert.deepEqual(c.body.triggers, []);
+  assert.deepEqual(resolveBody(c.body.id, c.body).actions.map((a) => a.name), ['move', 'cruise', 'stop', 'play_sound']);
+});
+
 test('a body that carries actions is kept as written', () => {
   // A body of one's own is told apart by carrying actions, not by its id, so
   // an id the templates do not know is not a typo in this case. The actions

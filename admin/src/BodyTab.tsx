@@ -8,7 +8,8 @@
 // printed: five lines of "cannot" is a page that argues against itself, and
 // the badges above already say what it does.
 import { useEffect, useState } from 'react';
-import { BODIES, labelOf } from '../../core/bodies.js';
+import { TEMPLATES, labelOf } from '../../core/bodies.js';
+import { ActionsEditor } from './ActionsEditor';
 import { BodyDiagram } from './BodyDiagram';
 import { lang, t, type Key } from './i18n';
 import type { Detail, Motion, Patch } from './types';
@@ -35,9 +36,10 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
   // person editing prompts without hardware — and it is always shown when it is
   // already the choice, or the card would vanish from under them.
   const bench = new URLSearchParams(window.location.search).has('bench');
-  const shown = BODIES.filter((b) => bench || b.id !== 'dry-run' || b.id === chosen);
+  const bodies = Object.values(TEMPLATES);
+  const shown = bodies.filter((b) => bench || !b.hidden || b.id === chosen);
   // The fallback is the id config.js falls back to, not whatever sorts first.
-  const body = BODIES.find((b) => b.id === chosen) ?? BODIES.find((b) => b.id === 'toy') ?? BODIES[0];
+  const body = TEMPLATES[chosen] ?? TEMPLATES.toy;
   // Frame paths come from the brain: the admin bundle has no idea what the
   // render tools left on disk, and a guessed path is a broken picture.
   const [art, setArt] = useState<Record<string, string[]>>({});
@@ -78,6 +80,10 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
             </label>
           );
         })}
+        {/* Under the cards: the actions are this body's, and a body of one's
+            own is told apart by carrying them. Remounted on a switch, so the
+            box starts from the newly chosen body. */}
+        <ActionsEditor key={chosen} detail={detail} update={update} />
       </div>
       <div className="body-side">
         <div className="body-preview" data-testid="body-preview">

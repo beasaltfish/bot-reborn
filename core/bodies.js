@@ -82,13 +82,16 @@ import { SOUNDS } from './audio/sfx.js';
  */
 /**
  * The rest of `config.body`, as written by a person: which template it came
- * from, what to call it, and whatever they replaced.
+ * from, what to call it, and whatever they replaced. `null` on a list is how
+ * the admin removes an override: a PATCH merges and cannot drop a key, so it
+ * sends null, which reads exactly as absent here and is dropped on the next
+ * load by `core/config.js`.
  * @typedef {{
  *   template?: string,
  *   label?: Text,
  *   prompts?: Partial<Prompts>,
- *   actions?: Action[],
- *   triggers?: Trigger[],
+ *   actions?: Action[] | null,
+ *   triggers?: Trigger[] | null,
  * }} BodyPatch
  */
 
@@ -397,38 +400,6 @@ export const TEMPLATES = {
 /** In the admin's order. @type {BodyId[]} */
 export const TEMPLATE_IDS = /** @type {BodyId[]} */ (Object.keys(TEMPLATES));
 
-// TEMPORARY — deleted in Task 4, when `core/config.js` reads `TEMPLATE_IDS`.
-// Kept until then because it is the only list of body names config.js and
-// `test/sim/demo-capability.test.js` import.
-export const BODY_IDS = TEMPLATE_IDS;
-
-/**
- * The five rows, in the admin's order. TEMPORARY — deleted in Task 8, when
- * `admin/src/BodyTab.tsx` reads `TEMPLATES` (and `hidden`) directly. Derived,
- * so a template added below appears here without a second edit.
- */
-export const BODIES = Object.values(TEMPLATES);
-
-// The names the brain and the reflex editor compare against today. An action's
-// `kind` predates actions as data; until Task 6 and Task 8 read action names,
-// `play_sound` and `draw_card` have to answer to both their name and their kind.
-/** @type {Record<string, string>} */
-const LEGACY_KIND = { play_sound: 'sound', draw_card: 'draw' };
-
-/**
- * Body id → the names the brain may carry out. TEMPORARY — deleted in Task 7 /
- * Task 8, when the executor and `admin/src/reflexEdit.ts` read `body.actions`.
- * Derived from the templates, never hand-written, and carrying the legacy kind
- * beside the action name for the three readers that still ask for `sound`.
- * @type {Record<BodyId, readonly string[]>}
- */
-export const CAN_DO = /** @type {any} */ (Object.fromEntries(
-  Object.entries(TEMPLATES).map(([id, body]) => [
-    id,
-    body.actions.flatMap((a) => (LEGACY_KIND[a.name] ? [a.name, LEGACY_KIND[a.name]] : [a.name])),
-  ]),
-));
-
 /** @param {string} id @returns {Body | undefined} */
 export function bodyById(id) {
   const table = /** @type {Record<string, Body>} */ (TEMPLATES);
@@ -530,6 +501,12 @@ export function bodyProblem(body) {
   for (const action of row.actions) {
     const name = action?.name;
     if (typeof name !== 'string' || !NAME.test(name)) return `${id}: "${name}" is not an action name`;
+    // The caller adds this one to every body. An action with the same name
+    // would be offered twice and shadowed in `validate`, so it is refused here
+    // rather than by `toolsOf` throwing where nobody can see the body.
+    if (name === 'set_reply_language') {
+      return `${id}: ${name} is the tool that writes config, and a body action may not take its name`;
+    }
     if (names.has(name)) return `${id}: two actions are called ${name}`;
     names.add(name);
 

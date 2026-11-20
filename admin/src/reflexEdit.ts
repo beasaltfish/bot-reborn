@@ -3,31 +3,11 @@
 // options array (spec §2.1); the JSON view speaks the decision API's own
 // `questions` shape, so a question from training can be pasted as is.
 import { REFLEX_PRESETS } from '../../core/reflex-presets.js';
-import { CAN_DO } from '../../core/bodies.js';
 import { isPlain } from './merge';
-import type { Motion, ReflexConfig, ReflexQuestion, SavedReflex } from './types';
+import type { ReflexConfig, ReflexQuestion, SavedReflex } from './types';
 
 export const DRIVES = ['forward', 'backward'] as const;
 export const STEERS = ['left', 'right', 'straight'] as const;
-
-/**
- * The six actions a body can be asked for, by name, and the `CAN_DO` entry that
- * says whether it can: `play_sound` and `draw_card` predate actions as data and
- * answer to their legacy kinds (see `LEGACY_KIND` in core/bodies.js), the other
- * four answer to their own name.
- *
- * Total on purpose, and closed on purpose: the brain matches actions by name
- * (`validate()` drops an unknown one as "no such tool"), so a name outside this
- * table is refused at runtime however it is spelled, and the editor must say so.
- */
-const CAPABILITY: Record<string, string> = {
-  move: 'move',
-  cruise: 'cruise',
-  stop: 'stop',
-  pose: 'pose',
-  play_sound: 'sound',
-  draw_card: 'draw',
-};
 
 export function toUnsloth(q: ReflexQuestion): string {
   const criteria = Object.fromEntries(q.options.map((o) => [o.choice, o.description]));
@@ -81,14 +61,18 @@ export function presetPatch(id: string, saved: SavedReflex[] = []): Partial<Refl
   return structuredClone({ threshold: p.threshold, state: p.state, question: p.question as ReflexQuestion });
 }
 
-/** Spec §4: the kinds this question would fire that this body ignores. */
-export function unsupported(r: ReflexConfig, id: Motion): string[] {
-  const can = CAN_DO[id] ?? CAN_DO.toy;
+/**
+ * Spec §4: the actions this question would fire that this body does not carry.
+ * The body is the resolved one, so a body of one's own is judged by the names
+ * it actually declares — a `nod` action counts, and `play_sound`/`draw_card`
+ * are names, not the legacy `sound`/`draw` kinds. The brain matches actions by
+ * name (`validate()` drops an unknown one as "no such tool"), so anything else
+ * is refused at runtime and must be reported here.
+ */
+export function unsupported(r: ReflexConfig, body: { actions: ReadonlyArray<{ name: string }> }): string[] {
+  const can = new Set(body.actions.map((a) => a.name));
   const names = new Set(r.question?.options.flatMap((o) => o.actions.map((a) => a.name)) ?? []);
-  return [...names].filter((n) => {
-    const capability = CAPABILITY[n];
-    return capability === undefined || !can.includes(capability);
-  });
+  return [...names].filter((n) => !can.has(n));
 }
 
 export function freshChoice(q: ReflexQuestion): string {

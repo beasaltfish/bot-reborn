@@ -1,14 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { canDo, demoSkips, lookupCharacter } from '../../sim/capabilities.js';
-import { BODY_IDS, TEMPLATES } from '../../core/bodies.js';
+import { TEMPLATE_IDS, TEMPLATES } from '../../core/bodies.js';
 import { verbsOf } from '../../core/actions.js';
 
 /** @param {import('../../core/bodies.js').BodyId} id */
 const verbs = (id) => verbsOf(TEMPLATES[id].actions);
 
 test('every body is judged by the verbs it can run, and an empty demand always fits', () => {
-  for (const id of BODY_IDS) {
+  for (const id of TEMPLATE_IDS) {
     assert.equal(typeof canDo([], verbs(id)), 'boolean');
     assert.equal(canDo([], verbs(id)), true);
   }
@@ -33,11 +33,12 @@ test('a missing capability is explained, not blocked', () => {
   assert.equal(demoSkips(['dance'], verbs('toy'))[0].text, 'This step is skipped.');
 });
 
-test('a body id is still read through the temporary CAN_DO shim', () => {
-  // sim/main.js passes `character.motion` today; Task 8 deletes this path.
-  assert.equal(canDo(['pose'], 'toy'), false);
-  assert.equal(canDo(['move'], 'toy'), true);
-  assert.equal(canDo(['draw'], 'tarot'), true);
+test('only the verbs a body declares count — an id is not a capability', () => {
+  // sim/main.js passes `character.verbs`; a page that predates the field sends
+  // an empty list, and nothing is credited to it by name.
+  assert.equal(canDo(['move'], []), false);
+  assert.equal(canDo(['move'], ['drive']), true);
+  assert.equal(canDo(['draw'], ['draw']), true);
 });
 
 test('a remote brain never matches a local same-name character', () => {

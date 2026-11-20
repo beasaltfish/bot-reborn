@@ -40,6 +40,35 @@ export interface SavedReflex { name: string; threshold: number; state: string; q
 
 export type Motion = 'toy' | 'dry-run' | 'none' | 'pet' | 'tarot';
 
+/** One tool a body lets the model call: a name plus a program of verbs. The
+ * required fields are the ones `core/bodies.js`'s `Action` requires; the
+ * editor's JSON is parsed, not typed, so `bodyProblem` is what refuses it. */
+export interface BodyAction {
+  name: string;
+  label: { en: string; zh: string };
+  /** The tool description, straight into the prompt. */
+  say: string;
+  args?: Record<string, any>;
+  run: Array<{ verb: string; args?: Record<string, unknown>; each?: string }>;
+  returns?: true;
+  rules?: string;
+  timeoutMs?: number;
+}
+
+export interface BodyTrigger { on: 'shake' | 'button'; action: string }
+
+/** `config.body`: which template this character follows, and what it replaced.
+ * Absent keys inherit the template; `actions: null` is the wire form of
+ * "remove the override" that the page sends before a reload drops the key. */
+export interface BodyConfig {
+  id: Motion;
+  template?: Motion;
+  label?: { en: string; zh: string };
+  prompts?: { voice?: string; rules?: string[] };
+  actions?: BodyAction[] | null;
+  triggers?: BodyTrigger[] | null;
+}
+
 export interface Config {
   stt: LayerConfig;
   llm: LayerConfig;
@@ -49,8 +78,9 @@ export interface Config {
   replyLang: 'zh' | 'en' | null;
   bargeIn: boolean;
   wakeWord: boolean;
-  /** Which row of core/bodies.js this character is; old files said `motion`. */
-  body: { id: Motion };
+  /** Which template of core/bodies.js this character follows; old files said
+   * `motion`. */
+  body: BodyConfig;
   /** Empty means brain.js's DEFAULT_PERSONA. */
   persona: string;
 }

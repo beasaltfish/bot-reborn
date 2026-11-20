@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { TEMPLATES } from '../../core/bodies.js';
 import { BodyTab } from './BodyTab';
 import { installFakeApi } from './test/fakeApi';
 import type { Detail } from './types';
@@ -96,6 +97,13 @@ describe('BodyTab', () => {
     await vi.waitFor(() => expect(screen.getByTestId('body-preview').querySelector('image')?.getAttribute('href'))
       .toBe('/preview/tarot/320x240/back.jpg'));
     expect(screen.getByText(/not a simulation/i)).toBeInTheDocument();
+  });
+
+  it('offers the chosen body\'s actions under the cards, as the template has them', () => {
+    renderTab(detail('tarot'));
+    const box = screen.getByLabelText('Actions') as HTMLTextAreaElement;
+    expect(JSON.parse(box.value)).toEqual(TEMPLATES.tarot.actions);
+    expect(screen.getByText(/these are the template/i)).toBeInTheDocument();
   });
 
   it('a body with no art is still drawn, without a broken picture in it', async () => {

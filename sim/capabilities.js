@@ -2,7 +2,6 @@
 // are verbs — pose, draw, move — never body names and never action names: a car
 // character can still be plugged in for a screen demo; only the final pose is
 // skipped.
-import { CAN_DO } from '../core/bodies.js';
 import { simText } from './ui/strings.js';
 
 /**
@@ -16,25 +15,16 @@ const NEED_VERB = { move: 'drive' };
 /**
  * Whether a body can run every verb a demo needs. `verbs` is the summary's
  * `verbs` list (core/actions.js `verbsOf`), so the question is what the body can
- * do, not what its actions are called.
- *
- * A body id is still accepted for a page that predates the field: it is read
- * through the temporary CAN_DO shim, which Task 8 deletes along with this
- * branch.
+ * do, not what its actions are called. An old page without the field sends an
+ * empty list, and every demo step is then explained as skipped.
  * @param {string[]} needs
- * @param {string[] | string} verbs
+ * @param {string[]} verbs
  */
 export function canDo(needs, verbs) {
-  if (!Array.isArray(verbs)) {
-    // A page that predates `verbs`: CAN_DO lists action names, so the demo's
-    // need is matched exactly as written. Temporary until Task 8.
-    const actions = CAN_DO[/** @type {import('../core/bodies.js').BodyId} */ (verbs)] ?? [];
-    return needs.every((need) => actions.includes(need));
-  }
   return needs.every((need) => verbs.includes(NEED_VERB[need] ?? need));
 }
 
-/** @param {string[]} needs @param {string[] | string} verbs @param {'en'|'zh'} [lang] */
+/** @param {string[]} needs @param {string[]} verbs @param {'en'|'zh'} [lang] */
 export function demoSkips(needs, verbs, lang = 'en') {
   return needs.filter((need) => !canDo([need], verbs)).map((need) => {
     const key = `demo.skip.${need}`;

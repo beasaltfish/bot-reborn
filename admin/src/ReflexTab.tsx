@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { SOUNDS } from '../../core/audio/sfx.js';
 import { MIN_DURATION_MS } from '../../core/motion.js';
 import { POSES } from '../../core/poses.js';
+import { resolveBody } from '../../core/bodies.js';
 import { normalizeReflex, reflexMissing } from '../../core/config.js';
 import {
   DRIVES, STEERS, blankQuestion, freshChoice, fromUnsloth, presetIdOf, presetPatch, toUnsloth, unsupported,
@@ -23,7 +24,8 @@ export function ReflexTab({ config, saved, update, tryIt }:
   const [epoch, setEpoch] = useState(0);
   const replace = (p: Partial<ReflexConfig>) => { setEpoch((e) => e + 1); set(p); };
   const preset = presetIdOf(r, saved);
-  const ignored = unsupported(r, config.body.id);
+  // The resolved body, so an action of one's own is counted by its own name.
+  const ignored = unsupported(r, resolveBody(config.body.id, config.body));
   // The brain reads this through the same normalisation; when it would read
   // something else, the page says so rather than show what will not run.
   const read = normalizeReflex(r);

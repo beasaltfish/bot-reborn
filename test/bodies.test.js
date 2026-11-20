@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  BODIES, BODY_IDS, CAN_DO, TEMPLATES, TEMPLATE_IDS, bodyById, bodyProblem,
-  labelOf, resolveBody,
+  TEMPLATES, TEMPLATE_IDS, bodyById, bodyProblem, labelOf, resolveBody,
 } from '../core/bodies.js';
+
+/** Every template, in the admin's order. The table is the only list. */
+const BODIES = Object.values(TEMPLATES);
 
 /** The parts a way asks for, in order. A need is `{ part }`, not a bare string,
  * because the wand is a part that is optional. */
@@ -58,6 +60,17 @@ test('an action name must be one the model could call, and only once', () => {
   const body = row();
   assert.match(bodyProblem({ ...body, actions: [{ ...body.actions[1], name: 'Play Sound' }] }) ?? '', /Play Sound/);
   assert.match(bodyProblem({ ...body, actions: [body.actions[1], structuredClone(body.actions[1])] }) ?? '', /play_sound/);
+});
+
+test('the tool that writes config is not an action a body may take', () => {
+  // The caller adds it to every body; an action with its name would be offered
+  // twice and shadowed. `bodyProblem` says so where a person can read it,
+  // rather than `toolsOf` throwing when the body is put to work.
+  const body = row();
+  assert.match(
+    bodyProblem({ ...body, actions: [{ ...body.actions[1], name: 'set_reply_language' }] }) ?? '',
+    /set_reply_language.*may not take its name/,
+  );
 });
 
 test('a trigger has to name an action the body actually has', () => {
@@ -248,9 +261,10 @@ test('the label is the reader\'s language', () => {
   assert.equal(labelOf(bodyById('pet') ?? BODIES[0], 'zh'), '屏幕宠物');
 });
 
-// The table replaces CAN_DO, so it has to say exactly what CAN_DO said. A
-// tarot reader draws and nothing else: it has no wheels and it does not pose,
-// and what it says is the robot's audio, which is not a tool call.
+// The templates are the only list now: the reflex editor and the simulator
+// both read these names. A tarot reader draws and nothing else — it has no
+// wheels and it does not pose — and what it says is the robot's audio, which
+// is not a tool call.
 test('the actions are the ones the bodies already carry out', () => {
   const actions = Object.fromEntries(BODIES.map((b) => [b.id, b.actions.map((a) => a.name)]));
   assert.deepEqual(actions, {
@@ -260,15 +274,6 @@ test('the actions are the ones the bodies already carry out', () => {
     'dry-run': ['move', 'cruise', 'stop', 'play_sound'],
     none: ['play_sound'],
   });
-});
-
-// The one view the rest of the app kept asking for: a body id to the actions
-// it carries out. Derived, so it cannot drift from the table above. The legacy
-// kind (`sound`, `draw`) rides along until Task 6 / Task 8 stop comparing it.
-test('CAN_DO is the table, keyed by body id', () => {
-  assert.deepEqual(CAN_DO.tarot, ['draw_card', 'draw']);
-  assert.deepEqual(CAN_DO.toy, ['move', 'cruise', 'stop', 'play_sound', 'sound']);
-  assert.deepEqual(Object.keys(CAN_DO).sort(), [...TEMPLATE_IDS].sort());
 });
 
 test('a user copy resolves to its template until it carries actions', () => {
