@@ -45,8 +45,10 @@ export function demoSkips(needs, verbs, lang = 'en') {
 
 /**
  * A character's capabilities are only knowable on this brain. A remote brain
- * or a missing name gives null, never a same-name guess.
- * @param {{ name: string, motion: string }[]} list @param {string} name @param {boolean} remote
+ * or a missing name gives null, never a same-name guess. `verbs` is what the
+ * bench asks about; `motion` stays because a brain that predates the field
+ * still sends it.
+ * @param {{ name: string, motion: string, verbs?: string[] }[]} list @param {string} name @param {boolean} remote
  */
 export function lookupCharacter(list, name, remote) {
   if (remote) return null;

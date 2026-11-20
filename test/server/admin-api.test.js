@@ -273,10 +273,15 @@ test('the list carries verbs for the simulator, not action names', async () => {
   // The id stays beside it: an old tab still reads `motion`.
   assert.equal(pet.motion, 'pet');
 
-  // A body's own actions answer for it, not its template.
-  r.chars.add('cards', (cfg) => { cfg.body.id = 'toy'; });
+  // A body's own actions answer for it, not its template: this one is called
+  // `toy` and has no toy actions at all.
+  r.chars.add('cards', (cfg) => {
+    cfg.body.id = 'toy';
+    cfg.body.actions = [{ name: 'sit', run: [{ verb: 'pose', args: { pose: 'sit' } }] }];
+  });
   const toy = (await r.call('/api/characters')).body.find((/** @type {any} */ c) => c.id === 'cards');
-  assert.deepEqual(toy.verbs, ['drive', 'halt', 'voice']);
+  assert.deepEqual(toy.verbs, ['pose']);
+  assert.equal(toy.motion, 'toy', 'the template name is beside it, not instead of it');
   await r.server.close();
 });
 

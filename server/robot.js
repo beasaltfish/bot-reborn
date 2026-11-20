@@ -62,16 +62,20 @@ export function startRobot(conn, deps) {
   // whether its answer is spoken all come from here (core/bodies.js).
   const body = resolveBody(config.body?.id ?? 'toy', config.body);
   const verbs = new Set(verbsOf(body.actions));
+  // A body nobody is connected to has no screen either: its verbs are all only
+  // written down (makeExecutor), so building an animator here would draw frames
+  // for a body that never said it could show them.
+  const reached = connected(body);
   // A pet has nothing to drive: its body is the screen, and the animator is
   // what moves. Started here so a connected body is already showing idle. The
   // pose action is what asks for the screen — a body called `pet` whose actions
   // were replaced with pose-free ones has nothing to animate.
-  const animator = verbs.has('pose') && deps.petFrames
+  const animator = reached && verbs.has('pose') && deps.petFrames
     ? new Animator({ frames: deps.petFrames, show: (pick) => deps.screen?.(pick), log })
     : null;
   // A tarot reader's body is the screen too: the card back at rest, a shuffle
   // while it thinks. With no frames it has no animator and a blank screen.
-  const tarotAnimator = verbs.has('draw') && deps.tarotFrames
+  const tarotAnimator = reached && verbs.has('draw') && deps.tarotFrames
     ? new TarotAnimator({
       frames: deps.tarotFrames, show: (pick) => deps.screen?.(pick), log, lang: () => tarotLang(config),
     })
@@ -156,7 +160,7 @@ export function startRobot(conn, deps) {
      * @returns {boolean}
      */
     drawCard() {
-      return verbs.has('draw') && session.startTurn(() => brain.drawCard());
+      return drawsOnShake(body) && session.startTurn(() => brain.drawCard());
     },
     stop() {
       if (stopped) return;
@@ -177,29 +181,152 @@ export function startRobot(conn, deps) {
  * told which: a dry run is a car that never receives an order, and a still one
  * is a car with nothing to receive.
  *
- * The choice is what the body declared, not what it is called. A body with no
- * connected source has nothing to send to, so its orders are only written down.
- * A connected body is carried by whatever its verbs need that the link cannot
- * do by itself: motors go over the link (`drive` first — a body that can drive
- * must never have its orders swallowed), a screen is drawn here (`pose`, then
- * `draw`), and a body with only a voice needs nothing to move, which is the
- * still one at the end.
+ * The choice is what the body declared, not what it is called, and the
+ * carriers compose: a body may legally drive AND pose, and a body that only
+ * halts still has to hear `stop`. Each method goes to the carrier that owns
+ * its verb — motors over the link for `drive`/`cruise`/`stop`, the screen here
+ * for `pose`/`draw` — and a body with no connected source at all is carried by
+ * a log-only carrier for every verb.
  * @param {import('../core/bodies.js').Body} body
  * @param {import('./link.js').BodyConn} conn
  * @param {(line: string) => void} log
  * @param {{ pet: import('./pet/animator.js').Animator | null,
  *           tarot: import('./tarot/animator.js').TarotAnimator | null }} animators
+ * @returns {CompositeExecutor}
  */
 function makeExecutor(body, conn, log, animators) {
-  if (!connected(body)) return new DryRunExecutor(log);
   const verbs = new Set(verbsOf(body.actions));
-  if (verbs.has('drive')) return new RemoteExecutor((msg) => conn.send(msg));
-  // With no frames there is no face to move, so the fall-through below carries
-  // it: a body whose screen cannot be drawn on has nothing to receive.
-  if (verbs.has('pose') && animators.pet) return new PetExecutor(animators.pet);
-  // A tarot reader never gets car commands: with no animator its draws do nothing.
-  if (verbs.has('draw')) return new TarotExecutor(animators.tarot);
-  return new NoMotionExecutor();
+  if (!connected(body)) {
+    // Nothing is listening, so nothing is drawn either: every verb — the
+    // screen's included — is written down and no frame reaches `deps.screen`.
+    return new CompositeExecutor(new DryRunExecutor(log), new LogOnlyScreen(log));
+  }
+  // `halt` needs the link as much as `drive` does: a body that can only stop
+  // must still be told to. A body with neither has no motion to carry.
+  const motors = verbs.has('drive') || verbs.has('halt')
+    ? new RemoteExecutor((msg) => conn.send(msg))
+    : new NoMotionExecutor();
+  // With no frames there is no face to move, so the screen half is absent and
+  // a pose or draw resolves without drawing anything — a body whose screen
+  // cannot be drawn on has nothing to receive.
+  const screen = verbs.has('pose') && animators.pet
+    ? new PetExecutor(animators.pet)
+    : verbs.has('draw') ? new TarotExecutor(animators.tarot) : null;
+  return new CompositeExecutor(motors, screen);
+}
+
+/**
+ * One bounded move step, as the motors take it.
+ * @typedef {{ drive: string, steer: string, duration_ms: number }} MotionStep
+ */
+
+/**
+ * The executor the brain and the session talk to when the body has more than
+ * one carrier. It keeps the shapes they already know — `connected` and
+ * `generation` are the motors', because losing the link kills the motion first
+ * — and sends each verb to the carrier that owns it: `move`/`cruise`/`stop` to
+ * the motors, `pose`/`draw`/`reveal` to the screen. A carrier that is not there
+ * resolves at once, the way `executor.pose?.()` did before.
+ */
+class CompositeExecutor {
+  #motors;
+  /** @type {{
+   *   connected: boolean,
+   *   pose?(name: import('../core/poses.js').Pose): Promise<void>,
+   *   draw?(card: import('../core/tarot.js').Draw): Promise<void>,
+   *   reveal?(): Promise<void>,
+   * } | null} */
+  #screen;
+
+  /**
+   * @param {{
+   *   connected: boolean,
+   *   readonly generation: number,
+   *   move(steps: MotionStep[]): Promise<void>,
+   *   cruise(drive: string, steer: string): Promise<void>,
+   *   stop(): Promise<void>,
+   * }} motors
+   * @param {{
+   *   connected: boolean,
+   *   pose?(name: import('../core/poses.js').Pose): Promise<void>,
+   *   draw?(card: import('../core/tarot.js').Draw): Promise<void>,
+   *   reveal?(): Promise<void>,
+   * } | null} screen
+   */
+  constructor(motors, screen) {
+    this.#motors = motors;
+    this.#screen = screen;
+  }
+
+  get connected() { return this.#motors.connected; }
+
+  /** Losing the link takes both halves: the screen stops being fed with them. */
+  set connected(value) {
+    this.#motors.connected = value;
+    if (this.#screen) this.#screen.connected = value;
+  }
+
+  get generation() { return this.#motors.generation; }
+
+  /** @param {MotionStep[]} steps */
+  move(steps) { return this.#motors.move(steps); }
+
+  /** @param {string} drive @param {string} steer */
+  cruise(drive, steer) { return this.#motors.cruise(drive, steer); }
+
+  stop() { return this.#motors.stop(); }
+
+  /** @param {import('../core/poses.js').Pose} name */
+  pose(name) { return this.#screen?.pose?.(name) ?? Promise.resolve(); }
+
+  /** @param {import('../core/tarot.js').Draw} card */
+  draw(card) { return this.#screen?.draw?.(card) ?? Promise.resolve(); }
+
+  reveal() { return this.#screen?.reveal?.() ?? Promise.resolve(); }
+}
+
+/**
+ * The screen half of a body that is not connected at all. A pose is written
+ * down the way a move is, and no frame is drawn: "only logs" has to cover the
+ * screen verbs too, or a dry run would quietly paint a screen it cannot reach.
+ */
+class LogOnlyScreen {
+  /** The Brain's `stop()` on a body that has gone away sets this; nothing here reads it. */
+  connected = true;
+  /** @type {(line: string) => void} */
+  #log;
+
+  /** @param {(line: string) => void} log */
+  constructor(log) { this.#log = log; }
+
+  /** @param {import('../core/poses.js').Pose} name */
+  pose(name) {
+    this.#log(`dry-run: pose ${name}`);
+    return Promise.resolve();
+  }
+
+  draw() {
+    this.#log('dry-run: draw');
+    return Promise.resolve();
+  }
+
+  reveal() {
+    this.#log('dry-run: reveal');
+    return Promise.resolve();
+  }
+}
+
+/**
+ * Whether a shake reaches a returning draw on this body (tarot mode spec §5).
+ * The brain asks the same question inside `drawCard`; asking it here as well is
+ * what keeps a shake that draws nothing from taking a turn — a body whose
+ * trigger was emptied would otherwise enter THINKING and only then be refused.
+ * @param {import('../core/bodies.js').Body} body
+ */
+function drawsOnShake(body) {
+  const shake = (body.triggers ?? []).find((trigger) => trigger.on === 'shake');
+  const action = shake ? body.actions.find((candidate) => candidate.name === shake.action) : undefined;
+  return action?.returns === true;
 }
 
 /**
