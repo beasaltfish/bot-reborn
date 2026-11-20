@@ -319,11 +319,13 @@ export function resetSticky(cfg) {
  *
  * @typedef {{ baseURL: string, apiKey: string, model: string }} Layer
  *
- * The action names the admin's reflex editor can offer today. Not a parse
- * guarantee: `normalizeReflex` keeps any non-empty name, because a body of
- * one's own may carry an action the five templates do not. The admin type is
- * widened in Task 8, when the editor reads `body.actions` instead.
- * @typedef {{ name: 'move' | 'cruise' | 'stop' | 'play_sound' | 'pose' | 'draw_card', args: Record<string, unknown> }} ReflexCall
+ * One stored reflex action. `name` is whatever the file says: `normalizeReflex`
+ * keeps any non-empty name, because a body of one's own may carry an action
+ * the five templates do not, and the reflex must survive a switch of body and
+ * back. Whether an action exists is a question about the body, answered
+ * against `body.actions` when the trigger fires; the six names an editor
+ * offers are that editor's candidate list, not a fact about this type.
+ * @typedef {{ name: string, args: Record<string, unknown> }} ReflexCall
  * @typedef {{ choice: string, description: string, actions: ReflexCall[] }} ReflexOption
  * @typedef {{ name: string, instructions: string, options: ReflexOption[] }} ReflexQuestion
  * @typedef {Layer & { enabled: boolean, threshold: number, state: string, question: ReflexQuestion | null }} ReflexLayer

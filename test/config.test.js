@@ -398,4 +398,10 @@ test('a body that carries actions is kept as written', () => {
   assert.deepEqual(c.body.actions, actions);
   assert.equal(c.body.template, 'pet');
   assert.deepEqual(c.body.label, body.label);
+
+  // Through the real pair, not just the read: what saveConfig writes is what
+  // loadConfig reads back, the whole body as the user wrote it.
+  const store = fakeStorage();
+  saveConfig(/** @type {any} */ ({ ...defaultConfig(), body }), store);
+  assert.deepEqual(loadConfig(store).body, c.body, 'the same body after a save and a load');
 });

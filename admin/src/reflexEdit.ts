@@ -5,12 +5,18 @@
 import { REFLEX_PRESETS } from '../../core/reflex-presets.js';
 import { CAN_DO } from '../../core/bodies.js';
 import { isPlain } from './merge';
-import type { Motion, ReflexCall, ReflexConfig, ReflexQuestion, SavedReflex } from './types';
+import type { Motion, ReflexConfig, ReflexQuestion, SavedReflex } from './types';
 
 export const DRIVES = ['forward', 'backward'] as const;
 export const STEERS = ['left', 'right', 'straight'] as const;
 
-const KIND: Record<ReflexCall['name'], string> = { move: 'move', cruise: 'cruise', stop: 'stop', play_sound: 'sound', pose: 'pose', draw_card: 'draw' };
+/**
+ * The capability a reflex action answers to where the two names differ —
+ * `CAN_DO` carries both, see `LEGACY_KIND` in core/bodies.js. Any other name
+ * is its own, so a custom action is asked about by the name it was written
+ * with rather than mapped over a fixed list.
+ */
+const LEGACY_KIND: Record<string, string> = { play_sound: 'sound', draw_card: 'draw' };
 
 export function toUnsloth(q: ReflexQuestion): string {
   const criteria = Object.fromEntries(q.options.map((o) => [o.choice, o.description]));
@@ -68,7 +74,7 @@ export function presetPatch(id: string, saved: SavedReflex[] = []): Partial<Refl
 export function unsupported(r: ReflexConfig, id: Motion): string[] {
   const can = CAN_DO[id] ?? CAN_DO.toy;
   const names = new Set(r.question?.options.flatMap((o) => o.actions.map((a) => a.name)) ?? []);
-  return [...names].filter((n) => !can.includes(KIND[n]));
+  return [...names].filter((n) => !can.includes(LEGACY_KIND[n] ?? n));
 }
 
 export function freshChoice(q: ReflexQuestion): string {

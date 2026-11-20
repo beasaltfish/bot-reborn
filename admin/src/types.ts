@@ -20,7 +20,11 @@ export interface LayerConfig {
   prompt?: string;
 }
 
-export interface ReflexCall { name: 'move' | 'cruise' | 'stop' | 'play_sound' | 'pose' | 'draw_card'; args: Record<string, any> }
+/** The action names the reflex editor offers. A candidate list, not a parse
+ * guarantee: core/config.js keeps any non-empty name, so `ReflexCall.name` is
+ * a plain string and a call outside this list is shown as unsupported. */
+export type ReflexKind = 'move' | 'cruise' | 'stop' | 'play_sound' | 'pose' | 'draw_card';
+export interface ReflexCall { name: string; args: Record<string, any> }
 export interface ReflexOption { choice: string; description: string; actions: ReflexCall[] }
 export interface ReflexQuestion { name: string; instructions: string; options: ReflexOption[] }
 export interface ReflexConfig extends LayerConfig {
