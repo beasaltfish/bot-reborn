@@ -5,14 +5,16 @@
 //
 // It is deliberately not a validator for model output: the caller checks the
 // model's arguments against `action.args`, then hands them to `expand`, which
-// refuses a step the verb's own schema does not fit. One sentence per refusal,
-// because a drop with no reason cannot be debugged.
+// refuses a step the verb's own schema does not fit. A refusal is data, not a
+// sentence — `Drop` names the value and what it was expected to be — so the
+// caller can say it in the model's own words. A drop with no reason cannot be
+// debugged either way.
 //
 // The schema subset here is the whole of what an action may say. A keyword
 // outside it is refused by name rather than ignored: silently skipping
 // `pattern` would make an action that looks stricter than it is.
 
-import { VERBS } from './verbs.js';
+import { VERBS, VERB_NAMES } from './verbs.js';
 
 /** @typedef {import('./verbs.js').JsonSchemaSubset} JsonSchemaSubset */
 /** @typedef {import('./verbs.js').Verb} Verb */
@@ -42,6 +44,20 @@ import { VERBS } from './verbs.js';
  *   verb: string,
  *   args: Record<string, unknown>,
  * }} Step
+ */
+
+/**
+ * One refused value, as data. `where` is `args` for anything taken from the
+ * call's arguments, and `steps[N]` for element N of the array a step walks —
+ * `value` is then that element as the author wrote it, and `expect` is said in
+ * the item schema's words (`duration_ms`), not the verb's (`ms`), because the
+ * element is the thing the author can see. `expect` is a phrase, not a
+ * sentence: `move: step rejected — <json>; <expect>` is the caller's to build.
+ * @typedef {{
+ *   where: 'args' | `steps[${number}]`,
+ *   value: unknown,
+ *   expect: string,
+ * }} Drop
  */
 
 /**
@@ -81,17 +97,16 @@ export function actionProblem(action, opts) {
   const run = Array.isArray(action.run) ? action.run : [];
   if (run.length === 0) return `${name} has no steps to run`;
 
-  const word = action.args ? unsupportedWord(action.args) : null;
-  if (word) {
-    return `${name} uses "${word}" in its arguments, and this checker does not read that word`;
-  }
+  const malformed = action.args ? schemaProblem(action.args, 'arguments') : null;
+  if (malformed) return `${name} ${malformed}`;
 
   const properties = action.args?.properties ?? {};
   const declared = new Set(Object.keys(properties));
 
   for (const [i, step] of run.entries()) {
     const at = `step ${i + 1} of ${name}`;
-    if (!VERB_TABLE[step.verb]) return `${at} uses unknown verb "${step.verb}"`;
+    const verb = VERB_TABLE[step.verb];
+    if (!verb) return `${at} uses unknown verb "${step.verb}"`;
     if (!opts.has(step.verb)) return `this body does not have the verb ${step.verb}, which ${at} needs`;
 
     if (step.each !== undefined) {
@@ -99,9 +114,18 @@ export function actionProblem(action, opts) {
       if (properties[step.each]?.type !== 'array') return `${at} walks ${step.each}, which is not an array argument`;
     }
 
-    for (const ref of refs(step.args)) {
+    const used = refs(step.args);
+    for (const ref of used) {
       if (ref.startsWith('$each.')) {
         if (step.each === undefined) return `${at} uses ${ref} outside a step that walks an array`;
+        // A field the walked argument does not declare can never be filled, so
+        // every element would be dropped at call time for a typo the author
+        // could have been told about here.
+        const field = ref.slice('$each.'.length);
+        const fields = properties[step.each]?.items?.properties;
+        if (!fields || !Object.hasOwn(fields, field)) {
+          return `${at} uses ${ref}, but the elements of ${step.each} have no "${field}"`;
+        }
       } else if (!declared.has(ref.slice(1))) {
         return `${at} refers to ${ref}, but ${ref.slice(1)} is not one of its arguments`;
       }
@@ -109,6 +133,14 @@ export function actionProblem(action, opts) {
 
     const fixed = fixedValueProblem(step, opts);
     if (fixed) return fixed;
+
+    // A step that names no argument is the same value on every call, so the
+    // verb's own schema can judge it now: `drive: 'sideways'` becomes a refusal
+    // an author can read, instead of a step that vanishes at every call.
+    const literal = step.args ?? {};
+    if (used.length === 0 && !fits(literal, verb.args)) {
+      return `${at} gives ${step.verb} ${JSON.stringify(literal)}; ${expectationOf(verb.args)}`;
+    }
   }
   return null;
 }
@@ -119,12 +151,12 @@ export function actionProblem(action, opts) {
  * string that starts with `$` is a reference, and nothing else about it is
  * interpreted.
  *
- * An element that does not fit is one `dropped` and the rest still run, which
- * is what `move.steps` does today. A program naming a verb that does not exist
- * is not partly runnable at all, so it expands to nothing.
+ * An element that does not fit is one `Drop` and the rest still run, which is
+ * what `move.steps` does today. A program naming a verb that does not exist is
+ * not partly runnable at all, so it expands to nothing.
  * @param {Action} action
  * @param {Record<string, unknown>} args
- * @returns {{ steps: Step[], dropped: string[], hadDrive: boolean }}
+ * @returns {{ steps: Step[], dropped: Drop[], hadDrive: boolean }}
  */
 export function expand(action, args) {
   const name = action.name || 'this action';
@@ -132,37 +164,42 @@ export function expand(action, args) {
 
   const badAt = run.findIndex((step) => !VERB_TABLE[step.verb]);
   if (badAt >= 0) {
-    const bad = run[badAt].verb;
+    const expect = `one of the verbs: ${VERB_NAMES.join(', ')}`;
     return {
       steps: [],
-      // One reason per line of the program, so the count still tells the caller
+      // One Drop per line of the program, so the count still tells the caller
       // how much was lost — the whole action, not just the one bad line.
-      dropped: run.map((_, i) => (i === badAt
-        ? `${name}: step ${i + 1} uses unknown verb "${bad}" — the whole action is dropped`
-        : `${name}: step ${i + 1} not run — step ${badAt + 1} uses unknown verb "${bad}"`)),
+      dropped: run.map((step, i) => ({ where: at(i), value: step, expect })),
       hadDrive: false,
     };
   }
 
   /** @type {Step[]} */
   const steps = [];
-  /** @type {string[]} */
+  /** @type {Drop[]} */
   const dropped = [];
 
   for (const [i, step] of run.entries()) {
     const verb = VERB_TABLE[step.verb];
-    if (!verb) continue; // the scan above already answered this; keeps types honest
+    if (!verb) {
+      // The scan above already answered this. If it ever stops, fail loudly: a
+      // step that vanishes with no reason is the one bug this module refuses.
+      throw new Error(`${name}: step ${i + 1} names the unknown verb "${step.verb}"`);
+    }
 
     if (step.each === undefined) {
       const filled = fill(step.args ?? {}, args, null);
-      if (fits(filled, verb.args)) steps.push({ verb: step.verb, args: asRecord(filled) });
-      else dropped.push(`${name}: step ${i + 1} rejected — ${JSON.stringify(filled)} does not fit ${step.verb}`);
+      if (!fits(filled, verb.args)) {
+        dropped.push({ where: 'args', value: filled, expect: expectationOf(verb.args) });
+        continue;
+      }
+      steps.push({ verb: step.verb, args: asRecord(filled) });
       continue;
     }
 
     const list = args[step.each];
     if (!Array.isArray(list)) {
-      dropped.push(`${name}: step ${i + 1} walks ${step.each}, which is not an array — got ${JSON.stringify(list)}`);
+      dropped.push({ where: 'args', value: list, expect: `an array for ${step.each}` });
       continue;
     }
 
@@ -170,13 +207,15 @@ export function expand(action, args) {
     // program that could not start would be a worse answer than a shorter one.
     const max = action.args?.properties?.[step.each]?.maxItems;
     const elements = typeof max === 'number' ? list.slice(0, max) : list;
+    // The element is judged by the verb's schema but described by the action's
+    // item schema, so a reason about `duration_ms` keeps the field the author
+    // wrote even though the verb calls it `ms`.
+    const itemSchema = action.args?.properties?.[step.each]?.items;
 
     for (const [j, element] of elements.entries()) {
       const filled = fill(step.args ?? {}, args, element);
       if (fits(filled, verb.args)) steps.push({ verb: step.verb, args: asRecord(filled) });
-      // The element is printed as the author wrote it, so a reason about
-      // `duration_ms` is findable even though the verb calls it `ms`.
-      else dropped.push(`${name}: ${step.each}[${j}] rejected — ${JSON.stringify(element)} does not fit ${step.verb}`);
+      else dropped.push({ where: at(j), value: element, expect: expectationOf(itemSchema ?? verb.args) });
     }
   }
 
@@ -184,26 +223,121 @@ export function expand(action, args) {
 }
 
 /**
- * The first schema word this checker does not read, walking into `properties`,
- * `items` and `anyOf`. Values under `properties` are schemas; their keys are
- * argument names and may be anything.
- * @param {JsonSchemaSubset} schema
+ * The first thing this checker cannot read in a schema, as the rest of a
+ * sentence: a word outside the subset, or a node that is not a schema at all.
+ * Both are refused by name — a checker that crashed, or quietly skipped, on a
+ * hand-edited admin JSON would report an action as sound when it is not.
+ * @param {unknown} node
+ * @param {string} path how the node is written in the action, e.g. `arguments.properties.a`
  * @returns {string | null}
  */
-function unsupportedWord(schema) {
-  for (const key of Object.keys(schema)) {
-    if (!SCHEMA_WORDS.has(key)) return key;
+function schemaProblem(node, path) {
+  if (!isRecord(node)) return `has ${path}, which is not a schema`;
+
+  for (const key of Object.keys(node)) {
+    if (!SCHEMA_WORDS.has(key)) {
+      return `uses "${key}" in its arguments, and this checker does not read that word`;
+    }
   }
-  for (const sub of Object.values(schema.properties ?? {})) {
-    const word = unsupportedWord(sub);
-    if (word) return word;
+
+  const schema = /** @type {JsonSchemaSubset} */ (node);
+
+  // Values under `properties` are schemas; their keys are argument names and
+  // may be anything. `items` and `anyOf` are schemas too, so they are walked.
+  if (schema.properties !== undefined) {
+    if (!isRecord(schema.properties)) return `has ${path}.properties, which is not a schema map`;
+    for (const [arg, sub] of Object.entries(schema.properties)) {
+      const bad = schemaProblem(sub, `${path}.properties.${arg}`);
+      if (bad) return bad;
+    }
   }
-  for (const sub of schema.anyOf ?? []) {
-    const word = unsupportedWord(sub);
-    if (word) return word;
+  if (schema.anyOf !== undefined) {
+    if (!Array.isArray(schema.anyOf)) return `has ${path}.anyOf, which is not a list of schemas`;
+    for (const [i, sub] of schema.anyOf.entries()) {
+      const bad = schemaProblem(sub, `${path}.anyOf[${i}]`);
+      if (bad) return bad;
+    }
   }
-  if (schema.items) return unsupportedWord(schema.items);
+  if (schema.items !== undefined) {
+    const bad = schemaProblem(schema.items, `${path}.items`);
+    if (bad) return bad;
+  }
   return null;
+}
+
+/**
+ * What a value would have to be to fit `schema`, in the words of the schema
+ * itself: `drive must be one of forward/backward, steer one of left/right/
+ * straight, duration_ms an integer >= 300`. An object is described field by
+ * field, because that is what an author who got one field wrong needs to read;
+ * anything else is one bare clause.
+ * @param {unknown} schema
+ * @returns {string}
+ */
+export function expectationOf(schema) {
+  if (isRecord(schema) && schema.type === 'object' && isRecord(schema.properties)) {
+    const parts = Object.entries(schema.properties).map(([key, sub], i) => (
+      // "drive must be one of …, steer one of …": said once, then elided.
+      i === 0 ? `${key} must be ${clauseOf(sub)}` : `${key} ${clauseOf(sub)}`
+    ));
+    if (parts.length > 0) return parts.join(', ');
+  }
+  return `must be ${clauseOf(schema)}`;
+}
+
+/**
+ * The predicate half of an expectation — what the value itself has to be.
+ * @param {unknown} schema
+ * @returns {string}
+ */
+function clauseOf(schema) {
+  if (!isRecord(schema)) return 'a value this checker cannot describe';
+
+  if (Array.isArray(schema.enum)) return `one of ${schema.enum.map(shown).join('/')}`;
+  if (schema.const !== undefined) return `the word ${JSON.stringify(schema.const)}`;
+  if (Array.isArray(schema.anyOf)) {
+    const branches = schema.anyOf.map((branch) => clauseOf(branch));
+    return branches.length > 0 ? branches.join(' or ') : 'an allowed value';
+  }
+
+  switch (schema.type) {
+    case 'object': return 'an object';
+    case 'array': return 'an array';
+    case 'string': return 'a string';
+    case 'boolean': return 'a boolean';
+    case 'number': return 'a number';
+    case 'integer': {
+      const low = typeof schema.minimum === 'number' ? ` >= ${schema.minimum}` : '';
+      const high = typeof schema.maximum === 'number' ? ` <= ${schema.maximum}` : '';
+      return `an integer${low}${high}`;
+    }
+    default: return 'a value this checker cannot describe';
+  }
+}
+
+/**
+ * @param {unknown} value
+ * @returns {string}
+ */
+function shown(value) {
+  return typeof value === 'string' ? value : JSON.stringify(value);
+}
+
+/**
+ * `steps[N]`, typed as the literal so a `Drop` accepts it.
+ * @param {number} index
+ * @returns {`steps[${number}]`}
+ */
+function at(index) {
+  return `steps[${index}]`;
+}
+
+/**
+ * @param {unknown} value
+ * @returns {value is Record<string, unknown>}
+ */
+function isRecord(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
 /**

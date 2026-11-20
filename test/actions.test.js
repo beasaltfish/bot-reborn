@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { actionProblem, expand } from '../core/actions.js';
+import { actionProblem, expand, expectationOf } from '../core/actions.js';
+import { VERB_NAMES } from '../core/verbs.js';
 
 /** @type {{ poses: string[], clips: string[], has: (verb: string) => boolean }} */
 const OPTS = { poses: ['sit', 'shake', 'spin', 'stand', 'lie'], clips: ['hello', 'bye'], has: () => true };
@@ -103,8 +104,61 @@ test('an element dropped for bad args does not stop the rest', () => {
   ] });
   assert.equal(r.steps.length, 1);
   assert.deepEqual(r.steps[0], { verb: 'drive', args: { drive: 'forward', steer: 'straight', ms: 60000 } });
-  assert.equal(r.dropped.length, 2);
-  assert.match(r.dropped.join('\n'), /duration_ms/, 'the reason keeps the field the author wrote');
+  assert.deepEqual(r.dropped, [
+    {
+      where: 'steps[1]',
+      value: { drive: 'sideways', steer: 'left', duration_ms: 600 },
+      expect: 'drive must be one of forward/backward, steer one of left/right/straight, duration_ms an integer >= 1',
+    },
+    {
+      where: 'steps[2]',
+      value: { drive: 'forward', steer: 'straight', duration_ms: 0 },
+      expect: 'drive must be one of forward/backward, steer one of left/right/straight, duration_ms an integer >= 1',
+    },
+  ]);
+});
+
+test('a step whose own args do not fit is one drop about the arguments', () => {
+  const shout = action({
+    name: 'shout',
+    args: { type: 'object', properties: { clip: { type: 'string' } } },
+    run: [{ verb: 'voice', args: { clip: '$clip' } }],
+  });
+  const r = expand(shout, { clip: 5 });
+  assert.deepEqual(r.steps, []);
+  assert.deepEqual(r.dropped, [{ where: 'args', value: { clip: 5 }, expect: 'clip must be a string' }]);
+});
+
+test('an each argument that is not an array is one drop about the argument', () => {
+  const r = expand(MOVE, { steps: 'forward' });
+  assert.deepEqual(r.steps, []);
+  assert.deepEqual(r.dropped, [{ where: 'args', value: 'forward', expect: 'an array for steps' }]);
+  assert.equal(r.hadDrive, false);
+});
+
+test('an argument longer than maxItems is truncated, not refused', () => {
+  const six = Array.from({ length: 6 }, (_, i) => ({ drive: 'forward', steer: 'straight', duration_ms: 300 + i }));
+  const r = expand(MOVE, { steps: six });
+  assert.equal(r.steps.length, 5, 'maxItems: 5 keeps the first five');
+  assert.deepEqual(r.dropped, []);
+  assert.deepEqual(r.steps[4].args, { drive: 'forward', steer: 'straight', ms: 304 });
+});
+
+test('expand copies, so the caller\'s arguments are never changed', () => {
+  const element = Object.freeze({ drive: 'forward', steer: 'left', duration_ms: 600 });
+  const args = Object.freeze({ steps: Object.freeze([element]) });
+  const r = expand(MOVE, args);
+  assert.deepEqual(r.steps, [{ verb: 'drive', args: { drive: 'forward', steer: 'left', ms: 600 } }]);
+  assert.deepEqual(args.steps[0], { drive: 'forward', steer: 'left', duration_ms: 600 }, 'the element is untouched');
+  assert.notEqual(r.steps[0].args, element, 'the step gets its own object');
+
+  // A literal step's args are copied too, so freezing the action is safe.
+  const literal = action({
+    name: 'go',
+    run: [{ verb: 'drive', args: Object.freeze({ drive: 'forward', steer: 'left', ms: 'hold' }) }],
+  });
+  const out = expand(literal, {});
+  assert.deepEqual(out.steps, [{ verb: 'drive', args: { drive: 'forward', steer: 'left', ms: 'hold' } }]);
 });
 
 test('a missing verb stops the whole action', () => {
@@ -119,8 +173,70 @@ test('a missing verb stops the whole action', () => {
   const r = expand(mixed, {});
   assert.deepEqual(r.steps, []);
   assert.equal(r.dropped.length, mixed.run.length);
-  assert.match(r.dropped.join('\n'), /fly/);
+  assert.deepEqual(r.dropped[1], {
+    where: 'steps[1]',
+    value: { verb: 'fly' },
+    expect: `one of the verbs: ${VERB_NAMES.join(', ')}`,
+  });
   assert.equal(r.hadDrive, false);
+});
+
+test('the expectation is a phrase in the author\'s own field names', () => {
+  // `steps` items say `duration_ms`; the verb says `ms`. The element a person
+  // wrote is described in the words they used.
+  assert.equal(
+    expectationOf(MOVE.args?.properties?.steps?.items),
+    'drive must be one of forward/backward, steer one of left/right/straight, duration_ms an integer >= 1',
+  );
+  // The verb's own schema, where `hold` is the second shape of the same field.
+  assert.equal(
+    expectationOf({ anyOf: [{ type: 'integer', minimum: 1 }, { const: 'hold' }] }),
+    'must be an integer >= 1 or the word "hold"',
+  );
+});
+
+test('a hand-edited schema that is not a schema is refused, not thrown', () => {
+  const nullProperty = action({
+    name: 'broken',
+    args: /** @type {any} */ ({ type: 'object', properties: { a: null } }),
+    run: [{ verb: 'halt' }],
+  });
+  assert.match(actionProblem(nullProperty, OPTS) ?? '', /arguments\.properties\.a.*not a schema/);
+
+  const nullBranch = action({
+    name: 'branchless',
+    args: /** @type {any} */ ({ type: 'object', properties: { a: { anyOf: [null] } } }),
+    run: [{ verb: 'halt' }],
+  });
+  assert.match(actionProblem(nullBranch, OPTS) ?? '', /arguments\.properties\.a\.anyOf\[0\]/);
+});
+
+test('a $each field the walked argument does not have is refused', () => {
+  const typo = action({
+    name: 'move',
+    args: MOVE.args,
+    run: [{
+      verb: 'drive',
+      each: 'steps',
+      args: { drive: '$each.drive', steer: '$each.steer', ms: '$each.durration_ms' },
+    }],
+  });
+  assert.match(actionProblem(typo, OPTS) ?? '', /durration_ms/);
+});
+
+test('a literal step is held to the verb schema before any call', () => {
+  const sideways = action({
+    name: 'drift',
+    run: [{ verb: 'drive', args: { drive: 'sideways', steer: 'left', ms: 600 } }],
+  });
+  assert.match(actionProblem(sideways, OPTS) ?? '', /drive must be one of forward\/backward/);
+
+  // The two shapes of `ms`: an integer from 1 up, or the word hold.
+  const zero = action({ name: 'nudge', run: [{ verb: 'drive', args: { drive: 'forward', steer: 'left', ms: 0 } }] });
+  assert.match(actionProblem(zero, OPTS) ?? '', /an integer >= 1 or the word "hold"/);
+
+  const hold = action({ name: 'cruise', run: [{ verb: 'drive', args: { drive: 'forward', steer: 'left', ms: 'hold' } }] });
+  assert.equal(actionProblem(hold, OPTS), null, 'a legal literal step is still quiet');
 });
 
 test('a schema word outside the subset is refused by name', () => {
