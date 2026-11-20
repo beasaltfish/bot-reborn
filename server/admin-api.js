@@ -123,7 +123,7 @@ export function createAdminApi(opts) {
             const bodyKind = opts.bodyKind?.(setupId);
             return {
               id: c.id, name: c.name, ready: ready(c.config), online: online.has(c.id),
-              motion: c.config.body?.motion ?? null, setupId,
+              motion: c.config.body?.id ?? null, setupId,
               ...(bodyKind ? { bodyKind } : {}),
               ...(opts.presence?.of(c.id, setupId) ?? {}),
             };

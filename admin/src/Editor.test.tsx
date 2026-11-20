@@ -68,7 +68,7 @@ describe('Editor', () => {
     expect(screen.getByText('Takes effect the next time the body connects.')).toBeInTheDocument();
     await userEvent.selectOptions(body, 'dry-run');
     await waitFor(() => expect(fake.patches()).toHaveLength(1), { timeout: 2000 });
-    expect(fake.patches()[0].body).toEqual({ config: { body: { motion: 'dry-run' } } });
+    expect(fake.patches()[0].body).toEqual({ config: { body: { id: 'dry-run' } } });
   });
 
   it('renames through the name field', async () => {
@@ -384,7 +384,7 @@ it('pet: the body can be picked, and the preset fills in the three tricks', asyn
   expect(screen.getByRole('option', { name: 'Pet on a screen — poses and barks, never speaks' })).toBeInTheDocument();
   await userEvent.selectOptions(body, 'pet');
   await waitFor(() => expect(fake.patches()).toHaveLength(1), { timeout: 2000 });
-  expect(fake.patches()[0].body).toEqual({ config: { body: { motion: 'pet' } } });
+  expect(fake.patches()[0].body).toEqual({ config: { body: { id: 'pet' } } });
 });
 
 it('pet: the reflex preset writes a question the editor can show', async () => {
@@ -422,7 +422,7 @@ it('tarot: the body can be picked, in English', async () => {
   expect(screen.getByRole('option', { name: 'Tarot — draws a card and reads it aloud' })).toBeInTheDocument();
   await userEvent.selectOptions(body, 'tarot');
   await waitFor(() => expect(fake.patches()).toHaveLength(1), { timeout: 2000 });
-  expect(fake.patches()[0].body).toEqual({ config: { body: { motion: 'tarot' } } });
+  expect(fake.patches()[0].body).toEqual({ config: { body: { id: 'tarot' } } });
 });
 
 it('tarot: the reflex preset writes a question the editor can show', async () => {

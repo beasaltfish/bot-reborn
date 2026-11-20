@@ -23,7 +23,7 @@ export function ReflexTab({ config, saved, update, tryIt }:
   const [epoch, setEpoch] = useState(0);
   const replace = (p: Partial<ReflexConfig>) => { setEpoch((e) => e + 1); set(p); };
   const preset = presetIdOf(r, saved);
-  const ignored = unsupported(r, config.body.motion);
+  const ignored = unsupported(r, config.body.id);
   // The brain reads this through the same normalisation; when it would read
   // something else, the page says so rather than show what will not run.
   const read = normalizeReflex(r);

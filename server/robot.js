@@ -56,7 +56,7 @@ export function startRobot(conn, deps) {
   const net = deps.fetch ? { fetch: deps.fetch } : {};
 
   const pipeline = new RemotePipeline();
-  const motion = config.body.motion;
+  const motion = config.body.id;
   // A pet has nothing to drive: its body is the screen, and the animator is
   // what moves. Started here so a connected body is already showing idle.
   const animator = motion === 'pet' && deps.petFrames

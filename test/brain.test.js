@@ -278,8 +278,8 @@ function deferred() {
   return { promise, resolve };
 }
 
-/** @param {{ motion?: 'car' | 'dry-run' | 'none' | 'pet', reply?: any, gateMotion?: boolean, reflex?: any, holdSound?: boolean }} [opts] */
-function brainHarness({ motion = 'car', reply, gateMotion = false, reflex = null, holdSound = false } = {}) {
+/** @param {{ id?: 'car' | 'dry-run' | 'none' | 'pet', reply?: any, gateMotion?: boolean, reflex?: any, holdSound?: boolean }} [opts] */
+function brainHarness({ id = 'car', reply, gateMotion = false, reflex = null, holdSound = false } = {}) {
   /** @type {any[]} */
   const events = [];
   // Only populated when gateMotion is true. Every move/cruise call then gets
@@ -340,8 +340,8 @@ function brainHarness({ motion = 'car', reply, gateMotion = false, reflex = null
     soundGates.push(gate);
     await gate.promise;
   };
-  /** @type {{ lang: 'en' | 'zh', replyLang: 'en' | 'zh' | null, bargeIn: boolean, body: { motion: 'car' | 'dry-run' | 'none' | 'pet' } }} */
-  const config = { lang: 'zh', replyLang: null, bargeIn: true, body: { motion } };
+  /** @type {{ lang: 'en' | 'zh', replyLang: 'en' | 'zh' | null, bargeIn: boolean, body: { id: 'car' | 'dry-run' | 'none' | 'pet' } }} */
+  const config = { lang: 'zh', replyLang: null, bargeIn: true, body: { id } };
   /** @type {Array<'en' | 'zh' | null>} */
   const langChanges = [];
   /** @type {Array<[string, string]>} */
@@ -865,7 +865,7 @@ test('reflex fired: history holds the turn as a plain user line, no tool calls',
 test('reflex fired on a still body: the move is dropped and said why, and nothing asks the LLM', async () => {
   // Review focus 2: "it did not move" is the admin's config, so the trace
   // names the kind and the body, and the LLM does not get a second go.
-  const h = brainHarness({ motion: 'none', reply: say('never'), reflex: judgeSaying('fired', LEFT) });
+  const h = brainHarness({ id: 'none', reply: say('never'), reflex: judgeSaying('fired', LEFT) });
   await h.brain.handle('turn left');
   await new Promise((r) => setTimeout(r, 0));
   assert.equal(h.llm.calls.length, 0);
@@ -875,7 +875,7 @@ test('reflex fired on a still body: the move is dropped and said why, and nothin
 });
 
 test('reflex fired on a still body: a sound still plays', async () => {
-  const h = brainHarness({ motion: 'none', reply: say('never'), reflex: judgeSaying('fired', [...BARK, ...LEFT]) });
+  const h = brainHarness({ id: 'none', reply: say('never'), reflex: judgeSaying('fired', [...BARK, ...LEFT]) });
   await h.brain.handle('忘忘');
   await new Promise((r) => setTimeout(r, 0));
   assert.deepEqual(h.events, [{ op: 'sound', name: 'bark' }]);
@@ -991,13 +991,13 @@ test('car and dry-run are offered every tool but pose, none is offered no moving
 test('the car prompt is the one it always was, word for word', () => {
   const base = { replyLang: null };
   assert.equal(buildSystemPrompt(base), SYSTEM_PROMPT);
-  assert.equal(buildSystemPrompt({ ...base, body: { motion: 'car' } }), SYSTEM_PROMPT);
+  assert.equal(buildSystemPrompt({ ...base, body: { id: 'car' } }), SYSTEM_PROMPT);
   // dry-run is a car as far as the model knows: testing it must test the real prompt.
-  assert.equal(buildSystemPrompt({ ...base, body: { motion: 'dry-run' } }), SYSTEM_PROMPT);
+  assert.equal(buildSystemPrompt({ ...base, body: { id: 'dry-run' } }), SYSTEM_PROMPT);
 });
 
 test('the still prompt has no wheels in it, and the language add-on still applies', () => {
-  const p = buildSystemPrompt({ replyLang: 'en', body: { motion: 'none' } });
+  const p = buildSystemPrompt({ replyLang: 'en', body: { id: 'none' } });
   assert.ok(p.startsWith(SYSTEM_PROMPT_STILL));
   assert.doesNotMatch(SYSTEM_PROMPT_STILL, /drive ∈|steer|cruise|duration_ms|wheels instead of legs/);
   assert.match(SYSTEM_PROMPT_STILL, /never pretend you moved/);
@@ -1006,16 +1006,16 @@ test('the still prompt has no wheels in it, and the language add-on still applie
 
 test('a persona replaces who it is, and nothing the tools or the speaker need', () => {
   const persona = '你是一块刚接好线的面包板，还没有身体，有点自嘲。';
-  for (const motion of /** @type {const} */ (['car', 'none'])) {
-    const p = buildSystemPrompt({ replyLang: null, persona, body: { motion } });
-    assert.ok(p.startsWith(persona), motion);
-    assert.doesNotMatch(p, /curious, playful/, motion);
-    assert.match(p, /Your reply is read aloud/, motion);
+  for (const id of /** @type {const} */ (['car', 'none'])) {
+    const p = buildSystemPrompt({ replyLang: null, persona, body: { id } });
+    assert.ok(p.startsWith(persona), id);
+    assert.doesNotMatch(p, /curious, playful/, id);
+    assert.match(p, /Your reply is read aloud/, id);
   }
-  const car = buildSystemPrompt({ replyLang: null, persona, body: { motion: 'car' } });
+  const car = buildSystemPrompt({ replyLang: null, persona, body: { id: 'car' } });
   assert.match(car, /MUST call a tool/);
   assert.match(car, /wheels instead of legs/);
-  assert.match(buildSystemPrompt({ replyLang: null, persona, body: { motion: 'none' } }), /never pretend you moved/);
+  assert.match(buildSystemPrompt({ replyLang: null, persona, body: { id: 'none' } }), /never pretend you moved/);
 });
 
 test('an empty persona is the default one, and a long one is cut', () => {
@@ -1027,13 +1027,13 @@ test('an empty persona is the default one, and a long one is cut', () => {
 
 test('the face is the persona\'s to claim: no body part mentions one', () => {
   const persona = 'A bare circuit board.';
-  for (const motion of /** @type {const} */ (['car', 'none'])) {
-    assert.doesNotMatch(buildSystemPrompt({ replyLang: null, persona, body: { motion } }), /face/, motion);
+  for (const id of /** @type {const} */ (['car', 'none'])) {
+    assert.doesNotMatch(buildSystemPrompt({ replyLang: null, persona, body: { id } }), /face/, id);
   }
 });
 
 test('handle: the LLM is asked with the tools for this body', async () => {
-  const h = brainHarness({ motion: 'none', reply: say('我动不了呀。') });
+  const h = brainHarness({ id: 'none', reply: say('我动不了呀。') });
   await h.brain.handle('往前走');
   assert.deepEqual(h.llm.calls[0].tools.map((/** @type {any} */ t) => t.function.name).sort(),
     ['play_sound', 'set_reply_language']);
@@ -1049,7 +1049,7 @@ test('handle: with no car plugged in the LLM is asked as usual (no USB gate)', a
 });
 
 test('handle: none — a move the model makes up anyway is dropped, says why, and beeps nothing', async () => {
-  const h = brainHarness({ motion: 'none', reply: say('好的！', [
+  const h = brainHarness({ id: 'none', reply: say('好的！', [
     { id: 'm1', name: 'move', args: { steps: [{ drive: 'forward', steer: 'straight', duration_ms: 600 }] } },
     { id: 'c1', name: 'cruise', args: { drive: 'forward', steer: 'straight' } },
     { id: 's1', name: 'play_sound', args: { name: 'yip' } },
@@ -1087,7 +1087,7 @@ test('pose: rejected unless one of the three', () => {
 });
 
 test('pet prompt: a dog that poses and barks, no driving, no spoken rules', () => {
-  const p = buildSystemPrompt({ replyLang: 'zh', body: { motion: 'pet' } });
+  const p = buildSystemPrompt({ replyLang: 'zh', body: { id: 'pet' } });
   assert.match(p, /golden retriever/i);
   assert.match(p, /`pose`/);
   assert.doesNotMatch(p, /wheels|cruise|read aloud|Always reply in/);
@@ -1097,7 +1097,7 @@ test('the car and still prompts are unchanged by pet', () => {
   // The pet branch is a third body, not an edit to the first two: the words
   // that make the car a car and the still thing still are exactly as they were.
   assert.equal(buildSystemPrompt({ replyLang: null }), SYSTEM_PROMPT);
-  assert.equal(buildSystemPrompt({ replyLang: null, body: { motion: 'none' } }), SYSTEM_PROMPT_STILL);
+  assert.equal(buildSystemPrompt({ replyLang: null, body: { id: 'none' } }), SYSTEM_PROMPT_STILL);
   for (const p of [SYSTEM_PROMPT, SYSTEM_PROMPT_STILL]) {
     assert.doesNotMatch(p, /golden retriever|`pose`|never write words/i);
   }
@@ -1106,7 +1106,7 @@ test('the car and still prompts are unchanged by pet', () => {
 test('pet never speaks, even when the model writes words', async () => {
   // The user's call (spec §4.3): a dog barks. A model that answers in words
   // anyway is not sent to the voice, and the trace says why it went quiet.
-  const h = brainHarness({ motion: 'pet', reply: say('汪！', [
+  const h = brainHarness({ id: 'pet', reply: say('汪！', [
     { id: 'p1', name: 'pose', args: { name: 'sit' } },
     { id: 's1', name: 'play_sound', args: { name: 'bark' } },
   ]) });
@@ -1120,14 +1120,14 @@ test('pet never speaks, even when the model writes words', async () => {
 });
 
 test('pet: an LLM failure only beeps — the line saying so is words', async () => {
-  const h = brainHarness({ motion: 'pet', reply: new Error('401 from provider') });
+  const h = brainHarness({ id: 'pet', reply: new Error('401 from provider') });
   await h.brain.handle('坐下');
   assert.deepEqual(h.events, [{ op: 'earcon', name: 'error' }]);
   assert.equal(h.faults.length, 1, 'the fault still reaches the caller');
 });
 
 test('pose runs before the sound in the same turn, so the dog moves as it barks', async () => {
-  const h = brainHarness({ motion: 'pet', reply: say('', [
+  const h = brainHarness({ id: 'pet', reply: say('', [
     { id: 's1', name: 'play_sound', args: { name: 'bark' } },
     { id: 'p1', name: 'pose', args: { name: 'spin' } },
   ]) });
@@ -1137,7 +1137,7 @@ test('pose runs before the sound in the same turn, so the dog moves as it barks'
 });
 
 test('pet drops move/cruise/stop even if the model calls them', async () => {
-  const h = brainHarness({ motion: 'pet', reply: say('', [
+  const h = brainHarness({ id: 'pet', reply: say('', [
     { id: 'm1', name: 'move', args: { steps: [{ drive: 'forward', steer: 'straight', duration_ms: 600 }] } },
     { id: 'c1', name: 'cruise', args: { drive: 'forward', steer: 'straight' } },
     { id: 'x1', name: 'stop', args: {} },
@@ -1152,7 +1152,7 @@ test('pet drops move/cruise/stop even if the model calls them', async () => {
 });
 
 test('reflex fired on a pet: it poses and barks without asking the LLM', async () => {
-  const h = brainHarness({ motion: 'pet', reply: say('never'), reflex: judgeSaying('fired', [
+  const h = brainHarness({ id: 'pet', reply: say('never'), reflex: judgeSaying('fired', [
     { name: 'pose', args: { name: 'sit' }, rawArguments: '{"name":"sit"}' },
     ...BARK,
   ]) });

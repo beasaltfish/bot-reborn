@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BODIES, BODY_IDS, bodyById, bodyProblem } from '../core/bodies.js';
+import { BODIES, BODY_IDS, CAN_DO, bodyById, bodyProblem } from '../core/bodies.js';
 
 test('the five bodies exist, with unique ids and a preview each', () => {
   assert.deepEqual(BODY_IDS, ['car', 'pet', 'tarot', 'dry-run', 'none']);
@@ -37,3 +37,12 @@ test('the actions are the ones the bodies already carry out', () => {
     none: ['sound'],
   });
 });
+
+// The one view the rest of the app kept asking for: a body id to the actions
+// it carries out. Derived, so it cannot drift from the table above.
+test('CAN_DO is the table, keyed by body id', () => {
+  assert.deepEqual(CAN_DO.tarot, ['draw']);
+  assert.deepEqual(CAN_DO.car, ['move', 'cruise', 'stop', 'sound']);
+  assert.deepEqual(Object.keys(CAN_DO).sort(), [...BODY_IDS].sort());
+});
+

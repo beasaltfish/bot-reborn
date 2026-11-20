@@ -38,7 +38,7 @@ describe('syncLayers', () => {
   const base = { baseURL: '', apiKey: '', model: 'm' };
   const config = (over: any = {}) => ({
     stt: { ...base, prompt: '' }, llm: base, tts: { ...base, voice: '' }, reflex: base,
-    lang: 'en', replyLang: null, bargeIn: true, wakeWord: false, body: { motion: 'car' },
+    lang: 'en', replyLang: null, bargeIn: true, wakeWord: false, body: { id: 'car' },
     ...over,
   }) as any;
   const ep = { id: 'ep-1', name: 'Home', baseURL: 'http://10.0.0.5/v1', apiKey: 'k1', custom: true as const };

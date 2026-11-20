@@ -3,7 +3,7 @@
 // options array (spec §2.1); the JSON view speaks the decision API's own
 // `questions` shape, so a question from training can be pasted as is.
 import { REFLEX_PRESETS } from '../../core/reflex-presets.js';
-import { CAN_DO } from '../../core/config.js';
+import { CAN_DO } from '../../core/bodies.js';
 import { isPlain } from './merge';
 import type { Motion, ReflexCall, ReflexConfig, ReflexQuestion, SavedReflex } from './types';
 
@@ -65,8 +65,8 @@ export function presetPatch(id: string, saved: SavedReflex[] = []): Partial<Refl
 }
 
 /** Spec §4: the kinds this question would fire that this body ignores. */
-export function unsupported(r: ReflexConfig, motion: Motion): string[] {
-  const can = CAN_DO[motion] ?? CAN_DO.car;
+export function unsupported(r: ReflexConfig, id: Motion): string[] {
+  const can = CAN_DO[id] ?? CAN_DO.car;
   const names = new Set(r.question?.options.flatMap((o) => o.actions.map((a) => a.name)) ?? []);
   return [...names].filter((n) => !can.includes(KIND[n]));
 }

@@ -49,7 +49,7 @@ test('the phone\'s link carries a whole turn: welcome, audio up, a move and spee
 
 test('the phone advertises itself, so a car body is not asked to flash a board', async () => {
   const chars = tempCharacters();
-  const a = chars.add('Rex', (cfg) => { cfg.body.motion = 'car'; });
+  const a = chars.add('Rex', (cfg) => { cfg.body.id = 'car'; });
   const server = createBrainServer({
     dir: chars.dir, fetch: fakeFetch(), sfx: new Map(), earcons: renderEarcons(),
     makeEars: () => onceEars(), log: () => {},

@@ -28,8 +28,8 @@ export function BasicTab({ detail, update, onToken }: { detail: Detail; update(p
         <label>{t('motion')}
           <select
             aria-label={t('motion')}
-            value={c.body.motion}
-            onChange={(e) => update({ config: { body: { motion: e.target.value as Motion } } })}
+            value={c.body.id}
+            onChange={(e) => update({ config: { body: { id: e.target.value as Motion } } })}
           >
             <option value="car">{t('motionCar')}</option>
             <option value="dry-run">{t('motionDryRun')}</option>

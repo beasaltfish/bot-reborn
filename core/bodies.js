@@ -10,6 +10,7 @@
 
 /** @typedef {'hear' | 'speak' | 'show' | 'move' | 'sense'} Capability */
 /** @typedef {'move' | 'cruise' | 'stop' | 'sound' | 'pose' | 'draw'} ActionKind */
+/** @typedef {'car' | 'pet' | 'tarot' | 'dry-run' | 'none'} BodyId */
 
 /** The five fine-grained abilities a body can have, in the order the admin shows them. */
 export const CAPABILITIES = /** @type {const} */ (['hear', 'speak', 'show', 'move', 'sense']);
@@ -38,7 +39,7 @@ export const BODY_FIRMWARE = 'body.bin';
 
 /**
  * @typedef {{
- *   id: string,
+ *   id: BodyId,
  *   label: string,
  *   labelZh: string,
  *   needs: string[],
@@ -113,7 +114,15 @@ export const BODIES = [
 ];
 
 /** In the admin's order, so the first one is also the fallback. */
-export const BODY_IDS = /** @type {string[]} */ (BODIES.map((b) => b.id));
+export const BODY_IDS = /** @type {BodyId[]} */ (BODIES.map((b) => b.id));
+
+/**
+ * Body id → the action kinds the brain may carry out. Derived, because the
+ * brain used to keep its own copy of this, and a second copy is how a card
+ * comes to promise something the brain then refuses to do.
+ * @type {Record<BodyId, readonly string[]>}
+ */
+export const CAN_DO = /** @type {any} */ (Object.fromEntries(BODIES.map((b) => [b.id, b.actions])));
 
 /** @param {string} id @returns {Body | undefined} */
 export function bodyById(id) {
@@ -124,16 +133,20 @@ export function bodyById(id) {
  * What is wrong with a row, or null. Run by the tests and by anyone adding a
  * body: the failure to avoid is a card that promises a face the firmware
  * never shows, and a string in a table is exactly where that slips through.
- * @param {Body} body
+ *
+ * Takes any row, not a `Body`: it is handed the one somebody just wrote,
+ * before its shape can be trusted.
+ * @param {any} body
  * @returns {string | null}
  */
 export function bodyProblem(body) {
-  for (const a of body.actions) {
-    if (!(a in ACTION_NEEDS)) return `${body.id}: unknown action ${a}`;
-    if (!body.capabilities.includes(ACTION_NEEDS[a])) return `${body.id}: ${a} needs ${ACTION_NEEDS[a]}`;
+  /** @type {Body} */ const row = body;
+  for (const a of row.actions) {
+    if (!(a in ACTION_NEEDS)) return `${row.id}: unknown action ${a}`;
+    if (!row.capabilities.includes(ACTION_NEEDS[a])) return `${row.id}: ${a} needs ${ACTION_NEEDS[a]}`;
   }
-  if (body.source === 'board' && !body.firmware) return `${body.id}: a board body needs firmware`;
-  if (body.source !== 'board' && body.firmware !== null) return `${body.id}: only a board body has firmware`;
-  if (!body.preview) return `${body.id}: no preview`;
+  if (row.source === 'board' && !row.firmware) return `${row.id}: a board body needs firmware`;
+  if (row.source !== 'board' && row.firmware !== null) return `${row.id}: only a board body has firmware`;
+  if (!row.preview) return `${row.id}: no preview`;
   return null;
 }

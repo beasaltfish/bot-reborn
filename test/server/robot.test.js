@@ -45,7 +45,7 @@ function rig(/** @type {Parameters<typeof fakeFetch>[0]} */ fetchOpts = {}, moti
   /** @type {string[]} */ const logged = [];
   /** @type {number[]} */ const spoken = [];
   const config = readyConfig();
-  config.body.motion = /** @type {any} */ (motion);
+  config.body.id = /** @type {any} */ (motion);
   const sfx = new Map([[/** @type {const} */ ('bark'), new Int16Array(1600).fill(1200)]]);
   const robot = startRobot(c.conn, {
     config, fetch: customFetch ?? fetch, ears: e.ears, sfx, earcons: renderEarcons(),
@@ -224,7 +224,7 @@ test('a pet streams its lying rest at once, and stops when the robot stops', asy
   const e = fakeEars();
   /** @type {string[]} */ const shown = [];
   const config = readyConfig();
-  config.body.motion = 'pet';
+  config.body.id = 'pet';
   const robot = startRobot(c.conn, {
     config, fetch: fakeFetch(), ears: e.ears, sfx: new Map(), earcons: renderEarcons(),
     log: () => {}, slackMs: 0,
@@ -271,7 +271,7 @@ test('a tarot reader shows the card back at once, and stops when the robot stops
   const e = fakeEars();
   /** @type {string[]} */ const shown = [];
   const config = readyConfig();
-  config.body.motion = 'tarot';
+  config.body.id = 'tarot';
   const robot = startRobot(c.conn, {
     config, fetch: fakeFetch(), ears: e.ears, sfx: new Map(), earcons: renderEarcons(),
     log: () => {}, slackMs: 0,
@@ -291,7 +291,7 @@ test('a pet never builds the tarot screen, and a tarot reader never builds the p
     const e = fakeEars();
     /** @type {string[]} */ const shown = [];
     const config = readyConfig();
-    config.body.motion = motion;
+    config.body.id = motion;
     const robot = startRobot(c.conn, {
       config, fetch: fakeFetch(), ears: e.ears, sfx: new Map(), earcons: renderEarcons(),
       log: () => {}, slackMs: 0,
@@ -308,7 +308,7 @@ test('a tarot reader with no frames still connects: a blank screen, and it can b
   const e = fakeEars();
   /** @type {string[]} */ const shown = [];
   const config = readyConfig();
-  config.body.motion = 'tarot';
+  config.body.id = 'tarot';
   const robot = startRobot(c.conn, {
     config, fetch: fakeFetch(), ears: e.ears, sfx: new Map(), earcons: renderEarcons(),
     log: () => {}, slackMs: 0,

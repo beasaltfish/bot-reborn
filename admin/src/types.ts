@@ -45,7 +45,8 @@ export interface Config {
   replyLang: 'zh' | 'en' | null;
   bargeIn: boolean;
   wakeWord: boolean;
-  body: { motion: Motion };
+  /** Which row of core/bodies.js this character is; old files said `motion`. */
+  body: { id: Motion };
   /** Empty means brain.js's DEFAULT_PERSONA. */
   persona: string;
 }

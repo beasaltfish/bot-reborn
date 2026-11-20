@@ -41,14 +41,14 @@ test('the tarot prompt: its own body, the reading limits, and no dog', () => {
 });
 
 test('the tarot prompt follows the recorded reply language, and adds none when there is none', () => {
-  const tarot = { body: { motion: /** @type {const} */ ('tarot') } };
+  const tarot = { body: { id: /** @type {const} */ ('tarot') } };
   assert.match(buildSystemPrompt({ replyLang: 'en', ...tarot }), /Always reply in English/);
   assert.match(buildSystemPrompt({ replyLang: 'zh', ...tarot }), /Always reply in Chinese/);
   assert.doesNotMatch(buildSystemPrompt({ replyLang: null, ...tarot }), /Always reply in/);
 });
 
 test('the tarot prompt keeps the persona, and tells the model not to describe the picture', () => {
-  const p = buildSystemPrompt({ replyLang: null, persona: 'You are Madame Rue.', body: { motion: 'tarot' } });
+  const p = buildSystemPrompt({ replyLang: null, persona: 'You are Madame Rue.', body: { id: 'tarot' } });
   assert.match(p, /^You are Madame Rue\./);
   assert.match(p, /do not describe what is drawn on the card/i);
   assert.match(p, /not a prediction/i);
@@ -63,9 +63,9 @@ import { t } from '../core/strings.js';
 /**
  * A tarot brain whose every side effect lands, in order, in `events`: the
  * model's calls, the executor's draw and reveal, and what is spoken.
- * @param {{ replies?: any[], llmFails?: Error, hang?: boolean, motion?: any, reflex?: any, onDraw?: () => void }} [opts]
+ * @param {{ replies?: any[], llmFails?: Error, hang?: boolean, id?: any, reflex?: any, onDraw?: () => void }} [opts]
  */
-function tarotHarness({ replies = [], llmFails, hang = false, motion = 'tarot', reflex = null, onDraw = () => {} } = {}) {
+function tarotHarness({ replies = [], llmFails, hang = false, id = 'tarot', reflex = null, onDraw = () => {} } = {}) {
   /** @type {any[]} */ const events = [];
   /** @type {any[]} */ const calls = [];
   /** @type {Array<{ ms: number, fn: () => void, live: boolean }>} */ const timers = [];
@@ -95,7 +95,7 @@ function tarotHarness({ replies = [], llmFails, hang = false, motion = 'tarot', 
   /** @type {string[]} */ const traced = [];
   const brain = new Brain({
     llm, executor, tts, earcon: () => {}, sound: async () => {}, reflex,
-    config: { lang: 'en', replyLang: null, bargeIn: true, body: { motion } },
+    config: { lang: 'en', replyLang: null, bargeIn: true, body: { id } },
     rng: () => 0,
     after: (ms, fn) => { const timer = { ms, fn, live: true }; timers.push(timer); return () => { timer.live = false; }; },
     onFault: (part, err) => faults.push([part, err.message]),
@@ -198,7 +198,7 @@ test('a reflex that fires draw_card draws, then the model reads it once', async 
 });
 
 test('a reflex that fires a pet pose still ends the turn with no model call', async () => {
-  const h = tarotHarness({ motion: 'pet', reflex: firing(['pose']) });
+  const h = tarotHarness({ id: 'pet', reflex: firing(['pose']) });
   await h.brain.handle('sit');
   await new Promise((r) => setTimeout(r, 0));
   assert.equal(h.calls.length, 0);
@@ -206,7 +206,7 @@ test('a reflex that fires a pet pose still ends the turn with no model call', as
 });
 
 test('a draw fired for a body that cannot draw is dropped with a trace line, and no model call', async () => {
-  const h = tarotHarness({ motion: 'car', reflex: firing(['draw_card']) });
+  const h = tarotHarness({ id: 'car', reflex: firing(['draw_card']) });
   await h.brain.handle('draw a card');
   assert.equal(h.calls.length, 0);
   assert.deepEqual(ops(h.events), []);

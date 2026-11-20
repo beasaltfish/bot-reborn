@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CONFIG_KEY, STICKY, MOTIONS, REFLEX_TOOLS, defaultConfig, loadConfig, saveConfig, resetSticky, layerReady,
-  reflexReady, reflexMissing, normalizeReflex, CAN_DO, DEFAULT_STATE } from '../core/config.js';
+import { CONFIG_KEY, STICKY, REFLEX_TOOLS, defaultConfig, loadConfig, saveConfig, resetSticky, layerReady,
+  reflexReady, reflexMissing, normalizeReflex, DEFAULT_STATE } from '../core/config.js';
 
 /** A localStorage stand-in. The real one is not available in node, and every
  * function under test takes it as a parameter for exactly this reason. */
@@ -290,42 +290,42 @@ test('normalizeReflex: bad options and bad actions are dropped one by one', () =
   assert.deepEqual(q?.options[3].actions, []);
 });
 
-test('CAN_DO: a car and a dry run do everything, a still body only makes sounds, a pet poses', () => {
-  assert.deepEqual(CAN_DO.car, ['move', 'cruise', 'stop', 'sound']);
-  assert.deepEqual(CAN_DO['dry-run'], CAN_DO.car);
-  assert.deepEqual(CAN_DO.none, ['sound']);
-  assert.deepEqual(CAN_DO.pet, ['pose', 'sound']);
-});
-
-test('MOTIONS: a pet and a tarot reader are body kinds the admin can pick', () => {
-  assert.deepEqual([...MOTIONS], ['car', 'dry-run', 'none', 'pet', 'tarot']);
-});
-
-test('CAN_DO: a tarot body draws and does nothing else; its reflex may call draw_card', () => {
-  assert.deepEqual(CAN_DO.tarot, ['draw']);
+test('a reflex may call every action a body can carry out, and draw_card', () => {
   assert.ok(REFLEX_TOOLS.includes('draw_card'));
+  assert.ok(REFLEX_TOOLS.includes('pose'));
 });
 
-test('body.motion defaults to car, and an old config gets it too', () => {
-  assert.deepEqual(defaultConfig().body, { motion: 'car' });
+test('body.id defaults to car, and a config with no body gets it too', () => {
+  assert.deepEqual(defaultConfig().body, { id: 'car' });
   const old = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ wakeWord: true }) }));
-  assert.deepEqual(old.body, { motion: 'car' });
+  assert.deepEqual(old.body, { id: 'car' });
 });
 
-test('a stored motion survives the read', () => {
-  for (const motion of ['car', 'dry-run', 'none', 'pet', 'tarot']) {
-    const c = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ body: { motion } }) }));
-    assert.equal(c.body.motion, motion);
+test('a stored body.id survives the read', () => {
+  for (const id of ['car', 'dry-run', 'none', 'pet', 'tarot']) {
+    const c = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ body: { id } }) }));
+    assert.equal(c.body.id, id);
   }
 });
 
-test('a motion that is not one of the three reads as car', () => {
+test('an old body.motion becomes body.id, and the old key is gone', () => {
+  const saved = { name: 'A', body: { motion: 'pet' } };
+  const c = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify(saved) }));
+  assert.equal(c.body.id, 'pet');
+  // The default file written before this field was renamed: same five names.
+  assert.equal('motion' in c.body, false);
+  // An id wins over a leftover motion, so a half-migrated file is not a trap.
+  const both = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ body: { id: 'tarot', motion: 'pet' } }) }));
+  assert.equal(both.body.id, 'tarot');
+});
+
+test('a body that is not one of the five reads as car', () => {
   // A hand-edited file with a typo must still drive a car the way it did
   // before the field existed, not crash and not silently become "none".
-  for (const motion of ['Car', 'dryrun', 42, null, '']) {
-    const c = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ body: { motion } }) }));
-    assert.equal(c.body.motion, 'car', `motion ${JSON.stringify(motion)}`);
+  for (const body of [{ id: 'Car' }, { id: 'dryrun' }, { id: 42 }, { id: null }, { id: '' }, { motion: 'bogus' }]) {
+    const c = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ body }) }));
+    assert.equal(c.body.id, 'car', `body ${JSON.stringify(body)}`);
   }
   const notObject = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ body: 'car' }) }));
-  assert.equal(notObject.body.motion, 'car');
+  assert.equal(notObject.body.id, 'car');
 });

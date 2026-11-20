@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { canDo, demoSkips, lookupCharacter } from '../../sim/capabilities.js';
-import { MOTIONS } from '../../core/config.js';
+import { BODY_IDS } from '../../core/bodies.js';
 
-test('every motion is evaluated against CAN_DO', () => {
-  for (const motion of MOTIONS) assert.equal(typeof canDo([], motion), 'boolean');
+test('every body is evaluated against CAN_DO', () => {
+  for (const id of BODY_IDS) assert.equal(typeof canDo([], id), 'boolean');
 });
 
 test('a tarot character needs no action for the audio demo', () => {

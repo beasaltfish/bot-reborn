@@ -5,9 +5,9 @@ import { Brain, MAX_TOOL_ROUNDS } from '../core/brain.js';
 
 /**
  * A scripted model: the nth call to chat() gets the nth reply (the last one repeats).
- * @param {{ replies: any[], returning?: any, returningTools?: any, motion?: any }} opts
+ * @param {{ replies: any[], returning?: any, returningTools?: any, id?: any }} opts
  */
-function harness({ replies, returning, returningTools, motion = 'car' }) {
+function harness({ replies, returning, returningTools, id = 'car' }) {
   /** @type {any[]} */ const events = [];
   /** @type {any[]} */ const calls = [];
   const llm = {
@@ -27,7 +27,7 @@ function harness({ replies, returning, returningTools, motion = 'car' }) {
   };
   const brain = new Brain({
     llm, executor, tts, earcon: () => {}, sound: async () => {},
-    config: { lang: 'en', replyLang: null, bargeIn: true, body: { motion } },
+    config: { lang: 'en', replyLang: null, bargeIn: true, body: { id } },
     returning, returningTools, trace: () => {},
   });
   return { brain, events, calls };

@@ -211,7 +211,7 @@ async function sayHello(url, hello) {
 
 test('a connected phone says so without changing how the character moves, and the marker clears on reconnect', async () => {
   const r = await rig();
-  const car = r.chars.add('car', (cfg) => { cfg.body.motion = 'car'; });
+  const car = r.chars.add('car', (cfg) => { cfg.body.id = 'car'; });
   const phone = await sayHello(`ws://127.0.0.1:${r.port}/body`, { token: car.token, body: 'phone' });
   try {
     assert.equal(phone.msgs[0].type, 'welcome');
@@ -251,7 +251,7 @@ test('the phone marker is ignored when admission fails', async () => {
 
 test('the list says how each character moves, so the bench can tell a pet', async () => {
   const r = await rig();
-  r.chars.add('petty', (cfg) => { cfg.body.motion = 'pet'; });
+  r.chars.add('petty', (cfg) => { cfg.body.id = 'pet'; });
   const { body } = await r.call('/api/characters');
   assert.equal(body[0].motion, 'pet');
   await r.server.close();

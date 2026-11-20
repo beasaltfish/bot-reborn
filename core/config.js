@@ -6,15 +6,9 @@
 // in one line, and flat stays backward compatible: a config written before a
 // field existed is simply missing that key.
 
-export const CONFIG_KEY = 'voicebot.config';
+import { BODY_IDS } from './bodies.js';
 
-/**
- * How this character's body moves (body motion spec §2). Only the brain reads
- * it: a body is never told, so firmware never has to understand it.
- * `dry-run` drives nothing and logs what a car would have done; `none` is a
- * body with no wheels at all, and the LLM is not offered moving.
- */
-export const MOTIONS = /** @type {const} */ (['car', 'dry-run', 'none', 'pet', 'tarot']);
+export const CONFIG_KEY = 'voicebot.config';
 
 /**
  * What a configured reflex may do: the LLM's own tools, minus
@@ -22,24 +16,6 @@ export const MOTIONS = /** @type {const} */ (['car', 'dry-run', 'none', 'pet', '
  * (configurable reflex spec §2.2).
  */
 export const REFLEX_TOOLS = /** @type {const} */ (['move', 'cruise', 'stop', 'play_sound', 'pose', 'draw_card']);
-
-/**
- * Which Action kinds each body carries out (configurable reflex spec §3.3).
- * Known from the admin's config, never reported by the body. A new body is
- * one row here. Every body plays sound: it plays the robot's audio anyway.
- * @type {Record<Motion, readonly string[]>}
- */
-export const CAN_DO = {
-  car: ['move', 'cruise', 'stop', 'sound'],
-  'dry-run': ['move', 'cruise', 'stop', 'sound'],
-  none: ['sound'],
-  // A pet has no wheels. It poses and it barks; sound is in the list because
-  // every body plays the robot's audio anyway.
-  pet: ['pose', 'sound'],
-  // A tarot reader has no wheels and does not pose: it draws a card, and what
-  // it says is the robot's audio like any other body's.
-  tarot: ['draw'],
-};
 
 /** The format beasaltfish/robot-simple-commands was trained on (spec §2.4). */
 export const DEFAULT_STATE = 'Robot said: "{robot}"\nPerson said: "{person}"';
@@ -95,6 +71,21 @@ export function reflexReady(r) {
 }
 
 const isPlain = (/** @type {unknown} */ v) => typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/**
+ * Which body this character has, from a file that may predate the field.
+ *
+ * `motion` was the old name for the same five values, so an old file loads
+ * unchanged. A typo must not take a car's wheels away: one it does not
+ * recognise is a car, the body every character had before this existed.
+ * @param {unknown} body
+ * @returns {{ id: Motion }}
+ */
+function bodyOf(body) {
+  const p = /** @type {any} */ (isPlain(body) ? body : {});
+  const raw = p.id ?? p.motion;
+  return { id: BODY_IDS.includes(raw) ? raw : 'car' };
+}
 
 /**
  * Spec §2.3: field by field, so one bad value costs that value and not the
@@ -194,7 +185,7 @@ export function defaultConfig(_navLang = globalThis.navigator?.language) {
     // knock on an open door. On, it brings back SLEEPING and §5.2's doze.
     wakeWord: false,
     // car: every character made before this field existed had one.
-    body: { motion: 'car' },
+    body: { id: 'car' },
     // Who it is, in the admin's words; empty is brain.js's DEFAULT_PERSONA.
     // Only this part of the system prompt is theirs (see buildSystemPrompt).
     persona: '',
@@ -247,9 +238,10 @@ export function loadConfig(storage = globalThis.localStorage) {
       bargeIn: p.bargeIn ?? d.bargeIn,
       ttsPath: p.ttsPath ?? d.ttsPath,
       wakeWord: p.wakeWord ?? d.wakeWord,
-      // Anything but the three names reads as car, the robot as it was before
-      // this field existed — a typo must not take a car's wheels away.
-      body: { motion: MOTIONS.includes(p.body?.motion) ? p.body.motion : d.body.motion },
+      // The id wins over a leftover `motion`, so a half-migrated file is not
+      // a trap; anything but the five names reads as car, the body every
+      // character had before this field existed.
+      body: bodyOf(p.body),
       persona: typeof p.persona === 'string' ? p.persona : d.persona,
       // Spread over the default, so a config stored before this field existed
       // loads as "never measured" rather than as undefined. Reading
@@ -299,12 +291,12 @@ export function resetSticky(cfg) {
  *   bargeIn: boolean,
  *   ttsPath: 'webaudio' | 'loopback' | 'speechSynthesis',
  *   wakeWord: boolean,
- *   body: { motion: Motion },
+ *   body: { id: Motion },
  *   persona: string,
  *   calibration: Calibration,
  * }} Config
  *
- * @typedef {typeof MOTIONS[number]} Motion
+ * @typedef {import('./bodies.js').BodyId} Motion
  *
  * @typedef {{
  *   steerSwapped: boolean | null,

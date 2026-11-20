@@ -8,7 +8,7 @@
 import { MIN_DURATION_MS } from './motion.js';
 import { SOUNDS } from './audio/sfx.js';
 import { t } from './strings.js';
-import { CAN_DO } from './config.js';
+import { CAN_DO } from './bodies.js';
 import { drawRandom, describeDraw } from './tarot.js';
 import { POSES } from './poses.js';
 
@@ -153,19 +153,19 @@ const MOTION_TOOLS = new Set(['move', 'cruise', 'stop']);
  * `pose` is a pet's alone: it is the one action that needs a body that is a
  * whole cartoon animal, and offering it to a car would be offering it a tool
  * the validator then drops on every use.
- * @param {import('./config.js').Motion} [motion]
+ * @param {import('./config.js').Motion} [id]
  */
-export function toolsFor(motion = 'car') {
-  if (motion === 'pet') {
+export function toolsFor(id = 'car') {
+  if (id === 'pet') {
     return TOOLS.filter((t) => t.function.name === 'pose' || t.function.name === 'play_sound');
   }
   // A tarot reader is offered the one tool and no other: it has no wheels, no
   // pose, no bark, and what language it answers in is the persona's business.
-  if (motion === 'tarot') return TOOLS.filter((t) => t.function.name === 'draw_card');
+  if (id === 'tarot') return TOOLS.filter((t) => t.function.name === 'draw_card');
   // Neither pose nor draw_card is any other body's: offering a car a tool the
   // validator then drops on every use would only teach the model to try it.
   const others = TOOLS.filter((t) => t.function.name !== 'pose' && t.function.name !== 'draw_card');
-  return motion === 'none'
+  return id === 'none'
     ? others.filter((t) => !MOTION_TOOLS.has(t.function.name))
     : others;
 }
@@ -255,23 +255,23 @@ const RULES_TAROT = `- To draw a card, call \`draw_card\`. It gives you the card
 - Your reply is read aloud. Use plain spoken language — no markdown, no lists, no code blocks.`;
 
 /**
- * @param {{ replyLang: 'zh' | 'en' | null, persona?: string, body?: { motion: import('./config.js').Motion } }} cfg
+ * @param {{ replyLang: 'zh' | 'en' | null, persona?: string, body?: { id: import('./config.js').Motion } }} cfg
  * @returns {string}
  */
 export function buildSystemPrompt(cfg) {
-  const motion = cfg.body?.motion;
+  const id = cfg.body?.id;
   const persona = cfg.persona?.trim().slice(0, MAX_PERSONA) || DEFAULT_PERSONA;
   // A pet gets no reply-language line either: there is no reply to put in a
   // language, and the model reading one would only learn to write one.
-  if (motion === 'pet') return [persona, BODY_PET, RULES_PET].join('\n\n');
-  if (motion === 'tarot') {
+  if (id === 'pet') return [persona, BODY_PET, RULES_PET].join('\n\n');
+  if (id === 'tarot') {
     const reader = [persona, BODY_TAROT, RULES_TAROT].join('\n\n');
     return cfg.replyLang
       ? `${reader}\nAlways reply in ${LANG_NAME[cfg.replyLang]}, regardless of which language the user speaks.`
       : reader;
   }
 
-  const still = motion === 'none';
+  const still = id === 'none';
   const rules = still
     ? `${RULES_STILL}\n${RULES_SPOKEN}`
     : `${RULES_WHEELS}\n${RULES_SPOKEN}\n- duration_ms: default 600; use ${MIN_DURATION_MS} for "just a little".`;
@@ -290,11 +290,11 @@ export function buildSystemPrompt(cfg) {
 /** The default creature on wheels, as the tests read it. */
 export const SYSTEM_PROMPT = buildSystemPrompt({ replyLang: null });
 /** The default creature with no body that moves (body motion spec §3, §4.1 ②). */
-export const SYSTEM_PROMPT_STILL = buildSystemPrompt({ replyLang: null, body: { motion: 'none' } });
+export const SYSTEM_PROMPT_STILL = buildSystemPrompt({ replyLang: null, body: { id: 'none' } });
 /** The tarot reader on a screen (tarot mode spec §7). */
-export const SYSTEM_PROMPT_TAROT = buildSystemPrompt({ replyLang: null, body: { motion: 'tarot' } });
+export const SYSTEM_PROMPT_TAROT = buildSystemPrompt({ replyLang: null, body: { id: 'tarot' } });
 /** The cartoon dog on a screen (pet screen spec §4.3). */
-export const SYSTEM_PROMPT_PET = buildSystemPrompt({ replyLang: null, body: { motion: 'pet' } });
+export const SYSTEM_PROMPT_PET = buildSystemPrompt({ replyLang: null, body: { id: 'pet' } });
 
 // --- The validator (spec §6.6) ---------------------------------------------
 //
@@ -455,7 +455,7 @@ export class Brain {
    *   returningTools?: ReadonlySet<string>,
    *   rng?: () => number,
    *   after?: (ms: number, fn: () => void) => () => void,
-   *   config: { lang: 'en' | 'zh', replyLang: 'zh' | 'en' | null, bargeIn: boolean, body?: { motion: import('./config.js').Motion } },
+   *   config: { lang: 'en' | 'zh', replyLang: 'zh' | 'en' | null, bargeIn: boolean, body?: { id: import('./config.js').Motion } },
    *   onReplyLangChange?: (lang: 'en' | 'zh' | null) => void,
    *   onFault?: (part: import('./strings.js').FaultPart, err: Error) => void,
    *   trace?: (line: string) => void,
@@ -548,7 +548,7 @@ export class Brain {
       try {
         reply = await this.#llm.chat(
           [{ role: 'system', content: buildSystemPrompt(this.#config) }, ...this.#history],
-          tools ?? toolsFor(this.#config.body?.motion),
+          tools ?? toolsFor(this.#config.body?.id),
           { signal: turn.signal },
         );
       } catch (err) {
@@ -560,7 +560,7 @@ export class Brain {
         if (turn.signal.aborted) return;
         this.#fail('llm', /** @type {Error} */ (err));
         // A pet has no voice to say it with: the earcon is its whole apology.
-        if (this.#motion() !== 'pet') await this.#say(t(this.#config.lang, 'apiFailed'), turn, { kind: 'diagnostic' });
+        if (this.#bodyId() !== 'pet') await this.#say(t(this.#config.lang, 'apiFailed'), turn, { kind: 'diagnostic' });
         return;
       }
 
@@ -628,8 +628,8 @@ export class Brain {
     // motion spec §4.1 ④). A body was offered no moving and a model that
     // moves anyway is dropped like any other refused call. Not a refusal the
     // person should hear: the sentence beside it is the answer.
-    const motion = this.#motion();
-    const can = CAN_DO[motion] ?? CAN_DO.car;
+    const id = this.#bodyId();
+    const can = CAN_DO[id] ?? CAN_DO.car;
     const refused = actions.filter((a) => !can.includes(a.kind));
     if (refused.length > 0) {
       // The wording is the car's, kept: "this body cannot move" is what the
@@ -641,7 +641,7 @@ export class Brain {
       actions = actions.filter((a) => can.includes(a.kind));
       // A pet and a still body were never offered moving, so a dropped move is
       // not something to beep about: it is the model going off-script.
-      if (motion === 'none' || motion === 'pet') hadMoveIntent = false;
+      if (id === 'none' || id === 'pet') hadMoveIntent = false;
     }
 
     // One line per turn, whatever happened. `calls: []` next to a sentence
@@ -683,7 +683,7 @@ export class Brain {
     // The user's call (pet screen spec §4.3): a dog barks, it does not talk.
     // The reply is not shown or spoken anywhere; the trace is the only place
     // that can answer "the model wrote a sentence, why is it silent".
-    if (this.#motion() === 'pet') {
+    if (this.#bodyId() === 'pet') {
       if (reply.text) this.#trace(`[turn] pet does not speak: ${JSON.stringify(reply.text)}`);
       return;
     }
@@ -691,7 +691,7 @@ export class Brain {
   }
 
   /** @returns {import('./config.js').Motion} */
-  #motion() { return this.#config.body?.motion ?? 'car'; }
+  #bodyId() { return this.#config.body?.id ?? 'car'; }
 
   /**
    * Every spoken line goes through here.
@@ -750,11 +750,11 @@ export class Brain {
   async #reflexTurn(text, calls) {
     const { actions: valid, reasons } = validate(calls);
     for (const why of reasons) this.#trace(`[reflex] dropped — ${why}`);
-    const motion = this.#config.body?.motion ?? 'car';
-    const can = CAN_DO[motion] ?? CAN_DO.car;
+    const id = this.#config.body?.id ?? 'car';
+    const can = CAN_DO[id] ?? CAN_DO.car;
     const actions = valid.filter((a) => {
       if (can.includes(a.kind)) return true;
-      this.#trace(`[reflex] ${a.kind} dropped: body "${motion}" does not do ${a.kind}`);
+      this.#trace(`[reflex] ${a.kind} dropped: body "${id}" does not do ${a.kind}`);
       return false;
     });
     // A draw is the one reflex that does not end the turn: the card is the
@@ -813,7 +813,7 @@ export class Brain {
    * @returns {Promise<string>}
    */
   async #drawForTurn() {
-    if (this.#motion() !== 'tarot') return 'error: this body does not draw cards';
+    if (this.#bodyId() !== 'tarot') return 'error: this body does not draw cards';
     return describeDraw(this.#turnCard ?? await this.#startDraw());
   }
 
@@ -849,7 +849,7 @@ export class Brain {
    * does this; for any other it is a line in the trace.
    */
   async drawCard() {
-    if (this.#motion() !== 'tarot') {
+    if (this.#bodyId() !== 'tarot') {
       this.#trace('[tarot] drawCard ignored: this body is not a tarot reader');
       return;
     }
