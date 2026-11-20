@@ -17,7 +17,11 @@
  * translate.
  * @typedef {'board' | 'mic' | 'amp' | 'toy' | 'ftdi' | 'screen' | 'wand' | 'phone'} Need
  */
-/** @typedef {'board' | 'phone' | 'none'} Source */
+/**
+ * How a body is reached. `phone` and its USB board are kept in the vocabulary
+ * because the phone page still runs — it is just not offered in the admin
+ * until the ESP32 path is settled (2026-11-20).
+ * @typedef {'board' | 'phone' | 'none'} Source */
 /**
  * One way of getting this body. The bill of materials belongs to the way and
  * not to the body: a voice-only body is a board with a microphone and an amp,
@@ -87,10 +91,7 @@ export const BODIES = [
     // Not "the phone body": a board with a microphone and an amp is the same
     // thing, and it drives nothing. What it shows is not promised either — a
     // phone has a face, a bare board has no screen.
-    ways: [
-      { source: 'board', needs: ['board', 'mic', 'amp'] },
-      { source: 'phone', needs: ['phone'] },
-    ],
+    ways: [{ source: 'board', needs: ['board', 'mic', 'amp'] }],
     firmware: BODY_FIRMWARE,
     capabilities: ['hear', 'speak'],
     actions: ['sound'],
@@ -134,10 +135,7 @@ export const BODIES = [
     // A board brings the ears and the voice; the toy brings the motors and the
     // chassis. A phone brings its own mic and speaker, and needs the USB board
     // to tap the toy's four motor inputs.
-    ways: [
-      { source: 'board', needs: ['toy', 'board', 'mic', 'amp'] },
-      { source: 'phone', needs: ['toy', 'phone', 'ftdi'] },
-    ],
+    ways: [{ source: 'board', needs: ['toy', 'board', 'mic', 'amp'] }],
     firmware: BODY_FIRMWARE,
     capabilities: ['hear', 'speak', 'show', 'move'],
     actions: ['move', 'cruise', 'stop', 'sound'],

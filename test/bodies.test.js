@@ -28,10 +28,9 @@ test('a board way needs firmware and a phone way must not have one', () => {
 
 test('a body may be reached more than one way, and each way says what it needs', () => {
   const toy = bodyById('toy');
-  assert.deepEqual(toy?.ways.map((w) => w.source), ['board', 'phone']);
-  assert.ok(toy?.ways[0].needs.includes('toy'), 'the toy is what both ways drive');
+  assert.deepEqual(toy?.ways.map((w) => w.source), ['board']);
+  assert.ok(toy?.ways[0].needs.includes('toy'), 'the toy is the thing being driven');
   assert.ok(toy?.ways[0].needs.includes('mic'), 'a board needs ears to hear the order');
-  assert.ok(toy?.ways[1].needs.includes('ftdi'), 'a phone needs the USB board to tap the motors');
   assert.deepEqual(bodyById('pet')?.ways.map((w) => w.source), ['board']);
   // Every board body hears and speaks, so every board list has a mic and an amp.
   for (const b of BODIES) {
@@ -40,11 +39,20 @@ test('a body may be reached more than one way, and each way says what it needs',
     }
   }
 
-  // The same body, the same abilities, two different bills of materials.
+  // Two bodies on the same board, two different bills of materials.
   const voice = bodyById('none');
-  assert.deepEqual(voice?.ways.map((w) => w.source), ['board', 'phone']);
+  assert.deepEqual(voice?.ways.map((w) => w.source), ['board']);
   assert.ok(voice?.ways[0].needs.includes('mic'), 'a board voice-only body needs a microphone');
-  assert.deepEqual(voice?.ways[1].needs, ['phone']);
+});
+
+// The phone page still works, but it is not offered as a way to get a body
+// until the ESP32 path is settled: one body, one way, one thing to explain.
+test('no body offers the phone while the ESP32 path is being settled', () => {
+  for (const b of BODIES) {
+    assert.ok(!b.ways.some((w) => w.source === 'phone'), b.id);
+  }
+  // A dry run still has no hardware at all; everything else is a board build.
+  assert.deepEqual(bodyById('dry-run')?.ways.map((w) => w.source), ['none']);
 });
 
 test('a way nobody can follow is refused', () => {

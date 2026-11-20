@@ -10,7 +10,6 @@
 import { useEffect, useState } from 'react';
 import { BODIES, labelOf } from '../../core/bodies.js';
 import { BodyDiagram } from './BodyDiagram';
-import { PhoneLink } from './PhoneLink';
 import { lang, t, type Key } from './i18n';
 import type { Detail, Motion, Patch } from './types';
 
@@ -29,7 +28,7 @@ const NEED: Record<string, Key> = {
   screen: 'needScreen', wand: 'needWand', phone: 'needPhone',
 };
 
-export function BodyTab({ detail, update, onToken }: { detail: Detail; update(p: Patch): void; onToken(token: string): void }) {
+export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): void }) {
   const chosen = detail.config.body.id;
   // A dry run is a bench tool: it moves nothing and shows nothing, and next to
   // four real bodies it reads as a fifth one. `?bench` brings it back for the
@@ -86,7 +85,6 @@ export function BodyTab({ detail, update, onToken }: { detail: Detail; update(p:
         </div>
         <small>{t('previewNote')}</small>
         {body.ways.map((w) => <p key={w.source}>{t(NEXT[w.source])}</p>)}
-        {body.ways.some((w) => w.source === 'phone') && <PhoneLink token={detail.token} />}
       </div>
     </div>
   );

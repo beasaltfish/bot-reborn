@@ -16,8 +16,7 @@ const detail = (id: 'toy' | 'pet' | 'tarot' | 'dry-run' | 'none' = 'pet'): Detai
   }, endpoints: [], savedReflexes: [], online: false,
 });
 
-const renderTab = (d = detail(), update = vi.fn(), onToken = vi.fn()) =>
-  render(<BodyTab detail={d} update={update} onToken={onToken} />);
+const renderTab = (d = detail(), update = vi.fn()) => render(<BodyTab detail={d} update={update} />);
 
 afterEach(() => { vi.unstubAllGlobals(); });
 
@@ -62,32 +61,25 @@ describe('BodyTab', () => {
     expect(screen.getByText(/not the firmware/i)).toBeInTheDocument();
   });
 
-  it('a voice-only body can be a board or a phone, and says what each needs', () => {
+  it('a voice-only body is a board with ears and a voice, and nothing else', () => {
     renderTab(detail('none'));
     const voice = screen.getByRole('radio', { name: /voice only/i });
     expect(voice).toBeChecked();
     const card = within(voice.closest('label') as HTMLElement);
-    expect(card.getByText(/board · microphone · speaker amp/)).toBeVisible();
-    expect(card.getByText(/^this phone$/)).toBeVisible();
+    expect(card.getByText(/ESP32-S3 board · microphone · speaker amp/)).toBeVisible();
   });
 
-  it('a body that runs on a board or a phone gives both ways, not just one', () => {
+  it('a body that runs on a board says so, once', () => {
     renderTab(detail('toy'));
     expect(screen.getByText(/flash it once/i)).toBeInTheDocument();
-    expect(screen.getByText(/FT232H/)).toBeInTheDocument();
-    expect(screen.getByText(/scan the QR code/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/flash it once/i)).toHaveLength(1);
   });
 
-  it('pairs the phone on the body it belongs to, not on Basic', async () => {
+  it('does not offer the phone body yet', () => {
     installFakeApi();
-    renderTab(detail('none'));
-    expect(await screen.findByText(`http://192.168.1.5:8787/phone/#token=${'ab'.repeat(16)}`)).toBeInTheDocument();
-  });
-
-  it('a board-only body does not offer the phone', () => {
-    installFakeApi();
-    renderTab(detail('pet'));
+    renderTab(detail('toy'));
     expect(screen.queryByText(/\/phone\/#token=/)).toBeNull();
+    expect(screen.queryByText(/scan the QR code/i)).toBeNull();
   });
 
   it('picking a body writes its id', async () => {
