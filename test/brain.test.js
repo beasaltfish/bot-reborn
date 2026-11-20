@@ -278,8 +278,8 @@ function deferred() {
   return { promise, resolve };
 }
 
-/** @param {{ id?: 'car' | 'dry-run' | 'none' | 'pet', reply?: any, gateMotion?: boolean, reflex?: any, holdSound?: boolean }} [opts] */
-function brainHarness({ id = 'car', reply, gateMotion = false, reflex = null, holdSound = false } = {}) {
+/** @param {{ id?: 'toy' | 'dry-run' | 'none' | 'pet', reply?: any, gateMotion?: boolean, reflex?: any, holdSound?: boolean }} [opts] */
+function brainHarness({ id = 'toy', reply, gateMotion = false, reflex = null, holdSound = false } = {}) {
   /** @type {any[]} */
   const events = [];
   // Only populated when gateMotion is true. Every move/cruise call then gets
@@ -340,7 +340,7 @@ function brainHarness({ id = 'car', reply, gateMotion = false, reflex = null, ho
     soundGates.push(gate);
     await gate.promise;
   };
-  /** @type {{ lang: 'en' | 'zh', replyLang: 'en' | 'zh' | null, bargeIn: boolean, body: { id: 'car' | 'dry-run' | 'none' | 'pet' } }} */
+  /** @type {{ lang: 'en' | 'zh', replyLang: 'en' | 'zh' | null, bargeIn: boolean, body: { id: 'toy' | 'dry-run' | 'none' | 'pet' } }} */
   const config = { lang: 'zh', replyLang: null, bargeIn: true, body: { id } };
   /** @type {Array<'en' | 'zh' | null>} */
   const langChanges = [];
@@ -988,11 +988,11 @@ test('car and dry-run are offered every tool but pose, none is offered no moving
   assert.deepEqual(names('none'), ['play_sound', 'set_reply_language']);
 });
 
-test('the car prompt is the one it always was, word for word', () => {
+test('the driving prompt is the one it always was, word for word', () => {
   const base = { replyLang: null };
   assert.equal(buildSystemPrompt(base), SYSTEM_PROMPT);
-  assert.equal(buildSystemPrompt({ ...base, body: { id: 'car' } }), SYSTEM_PROMPT);
-  // dry-run is a car as far as the model knows: testing it must test the real prompt.
+  assert.equal(buildSystemPrompt({ ...base, body: { id: 'toy' } }), SYSTEM_PROMPT);
+  // dry-run is a toy as far as the model knows: testing it must test the real prompt.
   assert.equal(buildSystemPrompt({ ...base, body: { id: 'dry-run' } }), SYSTEM_PROMPT);
 });
 
@@ -1006,15 +1006,15 @@ test('the still prompt has no wheels in it, and the language add-on still applie
 
 test('a persona replaces who it is, and nothing the tools or the speaker need', () => {
   const persona = '你是一块刚接好线的面包板，还没有身体，有点自嘲。';
-  for (const id of /** @type {const} */ (['car', 'none'])) {
+  for (const id of /** @type {const} */ (['toy', 'none'])) {
     const p = buildSystemPrompt({ replyLang: null, persona, body: { id } });
     assert.ok(p.startsWith(persona), id);
     assert.doesNotMatch(p, /curious, playful/, id);
     assert.match(p, /Your reply is read aloud/, id);
   }
-  const car = buildSystemPrompt({ replyLang: null, persona, body: { id: 'car' } });
-  assert.match(car, /MUST call a tool/);
-  assert.match(car, /wheels instead of legs/);
+  const driving = buildSystemPrompt({ replyLang: null, persona, body: { id: 'toy' } });
+  assert.match(driving, /MUST call a tool/);
+  assert.match(driving, /wheels instead of legs/);
   assert.match(buildSystemPrompt({ replyLang: null, persona, body: { id: 'none' } }), /never pretend you moved/);
 });
 
@@ -1027,7 +1027,7 @@ test('an empty persona is the default one, and a long one is cut', () => {
 
 test('the face is the persona\'s to claim: no body part mentions one', () => {
   const persona = 'A bare circuit board.';
-  for (const id of /** @type {const} */ (['car', 'none'])) {
+  for (const id of /** @type {const} */ (['toy', 'none'])) {
     assert.doesNotMatch(buildSystemPrompt({ replyLang: null, persona, body: { id } }), /face/, id);
   }
 });
@@ -1170,5 +1170,5 @@ test('a car drops a pose the reflex fired, and says why', async () => {
   await h.brain.handle('坐下');
   await new Promise((r) => setTimeout(r, 0));
   assert.deepEqual(h.events, []);
-  assert.match(h.traced.join('\n'), /\[reflex\] pose dropped: body "car" does not do pose/);
+  assert.match(h.traced.join('\n'), /\[reflex\] pose dropped: body "toy" does not do pose/);
 });

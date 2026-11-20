@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { BODIES, BODY_IDS, CAN_DO, bodyById, bodyProblem, labelOf } from '../core/bodies.js';
 
 test('the five bodies exist, with unique ids and a preview each', () => {
-  assert.deepEqual(BODY_IDS, ['car', 'pet', 'tarot', 'dry-run', 'none']);
+  assert.deepEqual(BODY_IDS, ['toy', 'pet', 'tarot', 'dry-run', 'none']);
   for (const body of BODIES) {
     assert.equal(bodyProblem(body), null, body.id);
     assert.ok(body.label && body.labelZh, body.id);
@@ -27,11 +27,18 @@ test('a board way needs firmware and a phone way must not have one', () => {
 });
 
 test('a body may be reached more than one way, and each way says what it needs', () => {
-  const car = bodyById('car');
-  assert.deepEqual(car?.ways.map((w) => w.source), ['board', 'phone']);
-  assert.ok(car?.ways[0].needs.includes('motor'), 'a board car needs the motor driver');
-  assert.ok(car?.ways[1].needs.includes('ftdi'), 'a phone car needs the FT232H');
+  const toy = bodyById('toy');
+  assert.deepEqual(toy?.ways.map((w) => w.source), ['board', 'phone']);
+  assert.ok(toy?.ways[0].needs.includes('toy'), 'the toy is what both ways drive');
+  assert.ok(toy?.ways[0].needs.includes('mic'), 'a board needs ears to hear the order');
+  assert.ok(toy?.ways[1].needs.includes('ftdi'), 'a phone needs the USB board to tap the motors');
   assert.deepEqual(bodyById('pet')?.ways.map((w) => w.source), ['board']);
+  // Every board body hears and speaks, so every board list has a mic and an amp.
+  for (const b of BODIES) {
+    for (const w of b.ways.filter((x) => x.source === 'board')) {
+      assert.ok(w.needs.includes('mic') && w.needs.includes('amp'), b.id);
+    }
+  }
 
   // The same body, the same abilities, two different bills of materials.
   const voice = bodyById('none');
@@ -55,11 +62,11 @@ test('what a body senses with is in the list of things it needs', () => {
 });
 
 test('the driving body is a toy with wheels, not a category called car', () => {
-  const car = bodyById('car');
-  assert.equal(car?.label, 'Toy on wheels');
-  assert.equal(car?.labelZh, '会动的玩具');
+  const toy = bodyById('toy');
+  assert.equal(toy?.label, 'Toy on wheels');
+  assert.equal(toy?.labelZh, '会动的玩具');
   // The parts a buyer shops for, not a chip number: the model lives in docs/hardware.md.
-  assert.deepEqual(car?.ways[0].needs, ['board', 'motor', 'battery']);
+  assert.deepEqual(toy?.ways[0].needs, ['toy', 'board', 'mic', 'amp']);
 });
 
 test('a voice-only body does not borrow the phone\'s face', () => {
@@ -79,7 +86,7 @@ test('the label is the reader\'s language', () => {
 test('the actions are the ones the bodies already carry out', () => {
   const actions = Object.fromEntries(BODIES.map((b) => [b.id, [...b.actions]]));
   assert.deepEqual(actions, {
-    car: ['move', 'cruise', 'stop', 'sound'],
+    toy: ['move', 'cruise', 'stop', 'sound'],
     pet: ['pose', 'sound'],
     tarot: ['draw'],
     'dry-run': ['move', 'cruise', 'stop', 'sound'],
@@ -91,7 +98,7 @@ test('the actions are the ones the bodies already carry out', () => {
 // it carries out. Derived, so it cannot drift from the table above.
 test('CAN_DO is the table, keyed by body id', () => {
   assert.deepEqual(CAN_DO.tarot, ['draw']);
-  assert.deepEqual(CAN_DO.car, ['move', 'cruise', 'stop', 'sound']);
+  assert.deepEqual(CAN_DO.toy, ['move', 'cruise', 'stop', 'sound']);
   assert.deepEqual(Object.keys(CAN_DO).sort(), [...BODY_IDS].sort());
 });
 

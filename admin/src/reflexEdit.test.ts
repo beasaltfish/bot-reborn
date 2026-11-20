@@ -84,7 +84,7 @@ describe('presets', () => {
 describe('unsupported', () => {
   it('lists the configured kinds this body does not do', () => {
     const r = withQ(REFLEX_PRESETS[1].question);
-    expect(unsupported(r, 'car')).toEqual([]);
+    expect(unsupported(r, 'toy')).toEqual([]);
     expect(unsupported(r, 'dry-run')).toEqual([]);
     expect(unsupported(r, 'none').sort()).toEqual(['cruise', 'move', 'stop']);
     expect(unsupported(withQ(REFLEX_PRESETS[0].question), 'none')).toEqual([]);
@@ -110,7 +110,7 @@ describe('the pet preset', () => {
   it('is named by itself, and a pet is the only body that does all of it', () => {
     expect(presetIdOf(withQ(pet.question))).toBe('pet');
     expect(unsupported(withQ(pet.question), 'pet')).toEqual([]);
-    expect(unsupported(withQ(pet.question), 'car')).toEqual(['pose']);
+    expect(unsupported(withQ(pet.question), 'toy')).toEqual(['pose']);
   });
 
   it('copies its threshold, state and question like any other', () => {
@@ -127,9 +127,9 @@ describe('the tarot preset', () => {
     expect(presetIdOf(tarot)).toBe('tarot');
   });
 
-  it('draws only on a tarot body: a car would ignore draw_card', () => {
+  it('draws only on a tarot body: a toy would ignore draw_card', () => {
     expect(unsupported(tarot, 'tarot')).toEqual([]);
-    expect(unsupported(tarot, 'car')).toEqual(['draw_card']);
+    expect(unsupported(tarot, 'toy')).toEqual(['draw_card']);
     expect(unsupported(tarot, 'pet')).toEqual(['draw_card']);
   });
 });

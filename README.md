@@ -199,7 +199,7 @@ capabilities is the next step.
 
 | Body | Hears | Speaks | Shows | Moves | Senses | Runs on |
 |---|---|---|---|---|---|---|
-| Toy on wheels | yes | yes | a face | drives, cruises, stops | — | the ESP32 board flashed once, or a phone + FT232H |
+| Toy on wheels | yes | yes | a face | drives, cruises, stops | — | a $4 toy robot + the ESP32 board, or a phone + FT232H |
 | Pet on a screen | yes | yes | a dog | — | — | the ESP32 board + a screen |
 | Tarot reader | yes | yes | cards | — | draws a card | the ESP32 board + a screen + a wand |
 | Dry run | yes | yes | nowhere to show it | logged, never sent | — | no hardware at all |

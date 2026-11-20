@@ -7,7 +7,7 @@ import { Brain, MAX_TOOL_ROUNDS } from '../core/brain.js';
  * A scripted model: the nth call to chat() gets the nth reply (the last one repeats).
  * @param {{ replies: any[], returning?: any, returningTools?: any, id?: any }} opts
  */
-function harness({ replies, returning, returningTools, id = 'car' }) {
+function harness({ replies, returning, returningTools, id = 'toy' }) {
   /** @type {any[]} */ const events = [];
   /** @type {any[]} */ const calls = [];
   const llm = {

@@ -25,8 +25,7 @@ const NEXT: Record<string, Key> = {
   board: 'bodyNextBoard', phone: 'bodyNextPhone', none: 'bodyNextNone',
 };
 const NEED: Record<string, Key> = {
-  board: 'needBoard', mic: 'needMic', amp: 'needAmp', motor: 'needMotor',
-  battery: 'needBattery', ftdi: 'needFtdi', chassis: 'needChassis',
+  board: 'needBoard', mic: 'needMic', amp: 'needAmp', toy: 'needToy', ftdi: 'needFtdi',
   screen: 'needScreen', wand: 'needWand', phone: 'needPhone',
 };
 

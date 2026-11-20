@@ -36,7 +36,7 @@ function fakeEars() {
   };
 }
 
-function rig(/** @type {Parameters<typeof fakeFetch>[0]} */ fetchOpts = {}, motion = 'car',
+function rig(/** @type {Parameters<typeof fakeFetch>[0]} */ fetchOpts = {}, motion = 'toy',
   /** @type {Record<string, any>} */ overrides = {}) {
   const c = fakeConn();
   const e = fakeEars();
@@ -109,7 +109,7 @@ test('an audible STT apology is not an audible reply', async () => {
   const base = fakeFetch();
   const fetch = /** @type {any} */ ((/** @type {string} */ url, /** @type {RequestInit} */ init) =>
     url.endsWith('/audio/transcriptions') ? Promise.reject(new Error('stt down')) : base(url, init));
-  const r = rig({}, 'car', { fetch });
+  const r = rig({}, 'toy', { fetch });
   const before = r.audio.length;
   await r.speak();
   await until(() => spokeAndFinished(r.sent), 3000, () => `states ${JSON.stringify(states(r.sent))}`);
@@ -128,7 +128,7 @@ test('an LLM apology does not count, and the next real answer does', async () =>
     }
     return base(url, init);
   });
-  const r = rig({}, 'car', { fetch });
+  const r = rig({}, 'toy', { fetch });
   const before = r.audio.length;
   await r.speak();
   await until(() => spokeAndFinished(r.sent), 3000, () => `states ${JSON.stringify(states(r.sent))}`);
@@ -339,7 +339,7 @@ test('drawCard on a tarot reader starts a turn that asks the model once, with no
 });
 
 test('drawCard on any other body does nothing', async () => {
-  const r = rig({}, 'car');
+  const r = rig({}, 'toy');
   assert.equal(r.robot.drawCard(), false);
   await new Promise((resolve) => setTimeout(resolve, 50));
   assert.equal(r.fetch.calls.filter((c) => c.url.endsWith('/chat/completions')).length, 0);
@@ -356,7 +356,7 @@ test('a shake message from a tarot body draws a card; a second one while busy ad
 });
 
 test('a shake message to a car does nothing', async () => {
-  const r = rig({}, 'car');
+  const r = rig({}, 'toy');
   r.message({ type: 'shake' });
   await new Promise((resolve) => setTimeout(resolve, 50));
   assert.equal(r.fetch.calls.filter((c) => c.url.endsWith('/chat/completions')).length, 0);

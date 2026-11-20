@@ -49,7 +49,7 @@ test('the phone\'s link carries a whole turn: welcome, audio up, a move and spee
 
 test('the phone advertises itself, so a car body is not asked to flash a board', async () => {
   const chars = tempCharacters();
-  const a = chars.add('Rex', (cfg) => { cfg.body.id = 'car'; });
+  const a = chars.add('Rex', (cfg) => { cfg.body.id = 'toy'; });
   const server = createBrainServer({
     dir: chars.dir, fetch: fakeFetch(), sfx: new Map(), earcons: renderEarcons(),
     makeEars: () => onceEars(), log: () => {},
@@ -63,7 +63,7 @@ test('the phone advertises itself, so a car body is not asked to flash a board',
   try {
     await until(() => link.welcomed);
     const list = await (await fetch(`http://127.0.0.1:${port}/api/characters`)).json();
-    assert.equal(list[0].motion, 'car');
+    assert.equal(list[0].motion, 'toy');
     assert.equal(list[0].bodyKind, 'phone');
   } finally {
     link.close();

@@ -296,16 +296,24 @@ test('a reflex may call every action a body can carry out, and draw_card', () =>
 });
 
 test('body.id defaults to car, and a config with no body gets it too', () => {
-  assert.deepEqual(defaultConfig().body, { id: 'car' });
+  assert.deepEqual(defaultConfig().body, { id: 'toy' });
   const old = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ wakeWord: true }) }));
-  assert.deepEqual(old.body, { id: 'car' });
+  assert.deepEqual(old.body, { id: 'toy' });
 });
 
 test('a stored body.id survives the read', () => {
-  for (const id of ['car', 'dry-run', 'none', 'pet', 'tarot']) {
+  for (const id of ['toy', 'dry-run', 'none', 'pet', 'tarot']) {
     const c = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ body: { id } }) }));
     assert.equal(c.body.id, id);
   }
+});
+
+test('the body that drives kept its old id readable', () => {
+  /** @param {any} body */
+  const load = (body) => loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ body }) }));
+  assert.equal(load({ id: 'car' }).body.id, 'toy', 'a file saved before the rename');
+  assert.equal(load({ motion: 'car' }).body.id, 'toy', 'a file saved before the field was renamed');
+  assert.equal(load({ id: 'toy' }).body.id, 'toy');
 });
 
 test('an old body.motion becomes body.id, and the old key is gone', () => {
@@ -324,8 +332,8 @@ test('a body that is not one of the five reads as car', () => {
   // before the field existed, not crash and not silently become "none".
   for (const body of [{ id: 'Car' }, { id: 'dryrun' }, { id: 42 }, { id: null }, { id: '' }, { motion: 'bogus' }]) {
     const c = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ body }) }));
-    assert.equal(c.body.id, 'car', `body ${JSON.stringify(body)}`);
+    assert.equal(c.body.id, 'toy', `body ${JSON.stringify(body)}`);
   }
   const notObject = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ body: 'car' }) }));
-  assert.equal(notObject.body.id, 'car');
+  assert.equal(notObject.body.id, 'toy');
 });

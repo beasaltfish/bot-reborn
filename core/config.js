@@ -83,8 +83,10 @@ const isPlain = (/** @type {unknown} */ v) => typeof v === 'object' && v !== nul
  */
 function bodyOf(body) {
   const p = /** @type {any} */ (isPlain(body) ? body : {});
-  const raw = p.id ?? p.motion;
-  return { id: BODY_IDS.includes(raw) ? raw : 'car' };
+  // `car` was this body's id until 2026-11-20: what you own is a toy you
+  // tapped the motors of, not a category. A saved character keeps working.
+  const raw = p.id === 'car' || p.motion === 'car' ? 'toy' : (p.id ?? p.motion);
+  return { id: BODY_IDS.includes(raw) ? raw : 'toy' };
 }
 
 /**
@@ -185,7 +187,7 @@ export function defaultConfig(_navLang = globalThis.navigator?.language) {
     // knock on an open door. On, it brings back SLEEPING and §5.2's doze.
     wakeWord: false,
     // car: every character made before this field existed had one.
-    body: { id: 'car' },
+    body: { id: 'toy' },
     // Who it is, in the admin's words; empty is brain.js's DEFAULT_PERSONA.
     // Only this part of the system prompt is theirs (see buildSystemPrompt).
     persona: '',

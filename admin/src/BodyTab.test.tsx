@@ -5,7 +5,7 @@ import { BodyTab } from './BodyTab';
 import { installFakeApi } from './test/fakeApi';
 import type { Detail } from './types';
 
-const detail = (id: 'car' | 'pet' | 'tarot' | 'dry-run' | 'none' = 'pet'): Detail => ({
+const detail = (id: 'toy' | 'pet' | 'tarot' | 'dry-run' | 'none' = 'pet'): Detail => ({
   id: 'A', name: 'A', token: 'ab'.repeat(16), config: {
     stt: { baseURL: '', apiKey: '', model: '', prompt: '' },
     llm: { baseURL: '', apiKey: '', model: '' },
@@ -32,7 +32,7 @@ describe('BodyTab', () => {
   });
 
   it('keeps the bench-only dry run out of the picker unless it is asked for', () => {
-    renderTab(detail('car'));
+    renderTab(detail('toy'));
     expect(screen.getAllByRole('radio')).toHaveLength(4);
     expect(screen.queryByRole('radio', { name: /dry run/i })).toBeNull();
   });
@@ -40,7 +40,7 @@ describe('BodyTab', () => {
   it('shows the dry run for a bench run', () => {
     window.history.replaceState({}, '', '/?bench');
     try {
-      renderTab(detail('car'));
+      renderTab(detail('toy'));
       expect(screen.getAllByRole('radio')).toHaveLength(5);
     } finally {
       window.history.replaceState({}, '', '/');
@@ -72,7 +72,7 @@ describe('BodyTab', () => {
   });
 
   it('a body that runs on a board or a phone gives both ways, not just one', () => {
-    renderTab(detail('car'));
+    renderTab(detail('toy'));
     expect(screen.getByText(/flash it once/i)).toBeInTheDocument();
     expect(screen.getByText(/FT232H/)).toBeInTheDocument();
     expect(screen.getByText(/scan the QR code/i)).toBeInTheDocument();
@@ -94,7 +94,7 @@ describe('BodyTab', () => {
     const update = vi.fn();
     renderTab(detail('none'), update);
     await userEvent.click(screen.getByRole('radio', { name: /toy on wheels/i }));
-    expect(update).toHaveBeenCalledWith({ config: { body: { id: 'car' } } });
+    expect(update).toHaveBeenCalledWith({ config: { body: { id: 'toy' } } });
   });
 
   it('draws the chosen body with the frames the brain has, and says it is not a simulation', async () => {

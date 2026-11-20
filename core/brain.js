@@ -155,7 +155,7 @@ const MOTION_TOOLS = new Set(['move', 'cruise', 'stop']);
  * the validator then drops on every use.
  * @param {import('./config.js').Motion} [id]
  */
-export function toolsFor(id = 'car') {
+export function toolsFor(id = 'toy') {
   if (id === 'pet') {
     return TOOLS.filter((t) => t.function.name === 'pose' || t.function.name === 'play_sound');
   }
@@ -629,7 +629,7 @@ export class Brain {
     // moves anyway is dropped like any other refused call. Not a refusal the
     // person should hear: the sentence beside it is the answer.
     const id = this.#bodyId();
-    const can = CAN_DO[id] ?? CAN_DO.car;
+    const can = CAN_DO[id] ?? CAN_DO.toy;
     const refused = actions.filter((a) => !can.includes(a.kind));
     if (refused.length > 0) {
       // The wording is the car's, kept: "this body cannot move" is what the
@@ -691,7 +691,7 @@ export class Brain {
   }
 
   /** @returns {import('./config.js').Motion} */
-  #bodyId() { return this.#config.body?.id ?? 'car'; }
+  #bodyId() { return this.#config.body?.id ?? 'toy'; }
 
   /**
    * Every spoken line goes through here.
@@ -750,8 +750,8 @@ export class Brain {
   async #reflexTurn(text, calls) {
     const { actions: valid, reasons } = validate(calls);
     for (const why of reasons) this.#trace(`[reflex] dropped — ${why}`);
-    const id = this.#config.body?.id ?? 'car';
-    const can = CAN_DO[id] ?? CAN_DO.car;
+    const id = this.#config.body?.id ?? 'toy';
+    const can = CAN_DO[id] ?? CAN_DO.toy;
     const actions = valid.filter((a) => {
       if (can.includes(a.kind)) return true;
       this.#trace(`[reflex] ${a.kind} dropped: body "${id}" does not do ${a.kind}`);

@@ -33,7 +33,7 @@ describe('SetupCard', () => {
   });
 
   it('points at the Body tab, not at a Basic setting that no longer exists', () => {
-    const steps = stepsFor({ motion: 'car', bodyKind: 'phone', ready: true, lastSeenAt: 1 });
+    const steps = stepsFor({ motion: 'toy', bodyKind: 'phone', ready: true, lastSeenAt: 1 });
     render(<SetupCard steps={steps} next={steps[3]} />);
     const bodyRows = screen.getAllByRole('listitem').filter((row) => row.dataset.step === 'body-screen');
     const notes = bodyRows.map((row) => row.textContent ?? '').join(' ');
@@ -42,7 +42,7 @@ describe('SetupCard', () => {
   });
 
   it('shows the skipped row but excludes it from phone progress', () => {
-    const steps = stepsFor({ motion: 'car', bodyKind: 'phone', ready: true, lastSeenAt: 1 });
+    const steps = stepsFor({ motion: 'toy', bodyKind: 'phone', ready: true, lastSeenAt: 1 });
     render(<SetupCard steps={steps} next={steps[4]} />);
 
     const rows = screen.getAllByRole('listitem');
@@ -94,7 +94,7 @@ describe('SetupCard', () => {
     expect(screen.getByText(/本次启动以来/)).toBeVisible();
     expect(screen.getByRole('status')).toHaveTextContent('下一步：填入三把密钥');
 
-    const phone = stepsFor({ motion: 'car', bodyKind: 'phone', ready: true, lastSeenAt: 1 });
+    const phone = stepsFor({ motion: 'toy', bodyKind: 'phone', ready: true, lastSeenAt: 1 });
     view.rerender(<ChineseSetupCard steps={phone} next={phone[4]} />);
     expect(screen.getByText(/扫描「手机」区的二维码/)).toBeVisible();
     expect(screen.getByText('已跳过')).toBeVisible();

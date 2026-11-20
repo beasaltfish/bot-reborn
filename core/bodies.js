@@ -10,13 +10,12 @@
 
 /** @typedef {'hear' | 'speak' | 'show' | 'move' | 'sense'} Capability */
 /** @typedef {'move' | 'cruise' | 'stop' | 'sound' | 'pose' | 'draw'} ActionKind */
-/** @typedef {'car' | 'pet' | 'tarot' | 'dry-run' | 'none'} BodyId */
+/** @typedef {'toy' | 'pet' | 'tarot' | 'dry-run' | 'none'} BodyId */
 /**
  * What a body is made of, as keys rather than sentences: the admin says them
  * in the reader's language, and a part number is the one thing that does not
  * translate.
- * @typedef {'board' | 'mic' | 'amp' | 'motor' | 'battery' | 'ftdi' | 'chassis'
- *   | 'screen' | 'wand' | 'phone'} Need
+ * @typedef {'board' | 'mic' | 'amp' | 'toy' | 'ftdi' | 'screen' | 'wand' | 'phone'} Need
  */
 /** @typedef {'board' | 'phone' | 'none'} Source */
 /**
@@ -37,9 +36,7 @@ export const CAPABILITIES = /** @type {const} */ (['hear', 'speak', 'show', 'mov
 export const SOURCES = ['board', 'phone', 'none'];
 
 /** Every part a way may ask for. A typo here would render as a blank chip. */
-export const NEEDS = [
-  'board', 'mic', 'amp', 'motor', 'battery', 'ftdi', 'chassis', 'screen', 'wand', 'phone',
-];
+export const NEEDS = ['board', 'mic', 'amp', 'toy', 'ftdi', 'screen', 'wand', 'phone'];
 
 /**
  * What an action needs before it means anything. An action is offered to the
@@ -82,26 +79,29 @@ export const BODY_FIRMWARE = 'body.bin';
 /** @type {readonly Body[]} */
 export const BODIES = [
   {
-    id: 'car',
+    id: 'toy',
     // Not "Car": what you own is a cheap toy whose motors you tapped. The id
     // stays `car` because that is what the firmware, the tools and every saved
     // character already say.
     label: 'Toy on wheels',
     labelZh: '会动的玩具',
+    // A board brings the ears and the voice; the toy brings the motors and the
+    // chassis. A phone brings its own mic and speaker, and needs the USB board
+    // to tap the toy's four motor inputs.
     ways: [
-      { source: 'board', needs: ['board', 'motor', 'battery'] },
-      { source: 'phone', needs: ['phone', 'ftdi', 'chassis'] },
+      { source: 'board', needs: ['toy', 'board', 'mic', 'amp'] },
+      { source: 'phone', needs: ['toy', 'phone', 'ftdi'] },
     ],
     firmware: BODY_FIRMWARE,
     capabilities: ['hear', 'speak', 'show', 'move'],
     actions: ['move', 'cruise', 'stop', 'sound'],
-    preview: 'car',
+    preview: 'toy',
   },
   {
     id: 'pet',
     label: 'Pet on a screen',
     labelZh: '屏幕宠物',
-    ways: [{ source: 'board', needs: ['board', 'screen'] }],
+    ways: [{ source: 'board', needs: ['board', 'mic', 'amp', 'screen'] }],
     firmware: BODY_FIRMWARE,
     capabilities: ['hear', 'speak', 'show'],
     actions: ['pose', 'sound'],
@@ -111,7 +111,7 @@ export const BODIES = [
     id: 'tarot',
     label: 'Tarot reader',
     labelZh: '塔罗牌',
-    ways: [{ source: 'board', needs: ['board', 'screen', 'wand'] }],
+    ways: [{ source: 'board', needs: ['board', 'mic', 'amp', 'screen', 'wand'] }],
     firmware: BODY_FIRMWARE,
     capabilities: ['hear', 'speak', 'show', 'sense'],
     actions: ['draw'],
@@ -125,7 +125,7 @@ export const BODIES = [
     firmware: null,
     capabilities: ['hear', 'speak', 'show', 'move'],
     actions: ['move', 'cruise', 'stop', 'sound'],
-    preview: 'car',
+    preview: 'toy',
   },
   {
     id: 'none',

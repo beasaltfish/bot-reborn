@@ -66,7 +66,7 @@ export function presetPatch(id: string, saved: SavedReflex[] = []): Partial<Refl
 
 /** Spec §4: the kinds this question would fire that this body ignores. */
 export function unsupported(r: ReflexConfig, id: Motion): string[] {
-  const can = CAN_DO[id] ?? CAN_DO.car;
+  const can = CAN_DO[id] ?? CAN_DO.toy;
   const names = new Set(r.question?.options.flatMap((o) => o.actions.map((a) => a.name)) ?? []);
   return [...names].filter((n) => !can.includes(KIND[n]));
 }

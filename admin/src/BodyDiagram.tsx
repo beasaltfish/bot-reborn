@@ -29,14 +29,14 @@ function Board({ x, y, w = 84, h = 44 }: { x: number; y: number; w?: number; h?:
   );
 }
 
-type Kind = 'car' | 'pet' | 'tarot' | 'voice' | 'dry-run';
+type Kind = 'toy' | 'pet' | 'tarot' | 'voice' | 'dry-run';
 
 export function BodyDiagram({ kind, frames, label }: { kind: Kind | string; frames: string[]; label: string }) {
   const frame = useFrameCycle(frames);
   return (
     <svg viewBox="0 0 280 176" role="img" aria-label={label} className="body-diagram">
       <title>{label}</title>
-      {kind === 'car' || kind === 'dry-run' ? <Car /> : null}
+      {kind === 'toy' || kind === 'dry-run' ? <Car /> : null}
       {kind === 'pet' || kind === 'tarot' ? <Screen frame={frame} /> : null}
       {kind === 'pet' || kind === 'tarot' ? <Board x={20} y={66} h={52} /> : null}
       {kind === 'pet' || kind === 'tarot' ? (

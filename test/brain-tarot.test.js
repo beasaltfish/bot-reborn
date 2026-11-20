@@ -12,7 +12,7 @@ test('toolsFor: a tarot body is offered draw_card and nothing else', () => {
 });
 
 test('toolsFor: every other body gets exactly the tools it had before tarot', () => {
-  assert.deepEqual(names('car'), ['cruise', 'move', 'play_sound', 'set_reply_language', 'stop']);
+  assert.deepEqual(names('toy'), ['cruise', 'move', 'play_sound', 'set_reply_language', 'stop']);
   assert.deepEqual(names('dry-run'), ['cruise', 'move', 'play_sound', 'set_reply_language', 'stop']);
   assert.deepEqual(names('none'), ['play_sound', 'set_reply_language']);
   assert.deepEqual(names('pet'), ['play_sound', 'pose']);
@@ -206,11 +206,11 @@ test('a reflex that fires a pet pose still ends the turn with no model call', as
 });
 
 test('a draw fired for a body that cannot draw is dropped with a trace line, and no model call', async () => {
-  const h = tarotHarness({ id: 'car', reflex: firing(['draw_card']) });
+  const h = tarotHarness({ id: 'toy', reflex: firing(['draw_card']) });
   await h.brain.handle('draw a card');
   assert.equal(h.calls.length, 0);
   assert.deepEqual(ops(h.events), []);
-  assert.match(h.traced.join('\n'), /draw dropped: body "car" does not do draw/);
+  assert.match(h.traced.join('\n'), /draw dropped: body "toy" does not do draw/);
 });
 
 test('a turn cancelled while the card is being drawn still turns it over, and nothing fires later', async () => {

@@ -67,7 +67,7 @@ describe('Editor', () => {
     expect(screen.queryByLabelText('Body')).toBeNull();
     await userEvent.click(screen.getByRole('tab', { name: 'Body' }));
     expect(screen.getAllByRole('radio')).toHaveLength(4);
-    expect(fake.chars.get('A')?.config.body.id).toBe('car');
+    expect(fake.chars.get('A')?.config.body.id).toBe('toy');
   });
 
   it('renames through the name field', async () => {

@@ -48,7 +48,7 @@ test('the list has names, readiness and presence — never keys or tokens', asyn
   const { status, body } = await r.call('/api/characters');
   assert.equal(status, 200);
   assert.deepEqual(body, [{
-    id: 'a', name: 'a', ready: true, online: false, motion: 'car', setupId: setupIdFor(a.token),
+    id: 'a', name: 'a', ready: true, online: false, motion: 'toy', setupId: setupIdFor(a.token),
   }]);
   await r.server.close();
 });
@@ -211,12 +211,12 @@ async function sayHello(url, hello) {
 
 test('a connected phone says so without changing how the character moves, and the marker clears on reconnect', async () => {
   const r = await rig();
-  const car = r.chars.add('car', (cfg) => { cfg.body.id = 'car'; });
+  const car = r.chars.add('car', (cfg) => { cfg.body.id = 'toy'; });
   const phone = await sayHello(`ws://127.0.0.1:${r.port}/body`, { token: car.token, body: 'phone' });
   try {
     assert.equal(phone.msgs[0].type, 'welcome');
     const withPhone = (await r.call('/api/characters')).body[0];
-    assert.equal(withPhone.motion, 'car');
+    assert.equal(withPhone.motion, 'toy');
     assert.equal(withPhone.bodyKind, 'phone');
 
     phone.ws.close();
