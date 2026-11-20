@@ -13,20 +13,16 @@
 // lives only in a comment drifts away from the code that enforces it.
 
 /**
- * Mirrors `core/bodies.js`'s Capability: what a body must have for this verb to
- * mean anything. Kept local until bodies.js grows the verbs in Task 3.
- * @typedef {'hear' | 'speak' | 'show' | 'move' | 'sense'} Capability
- */
-
-/**
- * The part of JSON Schema an action's parameters and a verb's arguments may
- * use. Deliberately small: the validator stays a handful of explicit checks
+ * The part of JSON Schema a verb's arguments may use. Deliberately small: the
+ * checker in Task 2's `core/actions.js` stays a handful of explicit cases
  * rather than a schema engine.
  * @typedef {{
  *   type?: 'object' | 'array' | 'string' | 'integer' | 'number' | 'boolean',
  *   properties?: Record<string, JsonSchemaSubset>,
  *   required?: string[],
  *   enum?: readonly (string | number)[],
+ *   const?: string | number,
+ *   anyOf?: JsonSchemaSubset[],
  *   items?: JsonSchemaSubset,
  *   maxItems?: number,
  *   minimum?: number,
@@ -39,17 +35,16 @@
  */
 
 /**
- * One bounded primitive. Flags, not branches: the brain reads `cancelsRest`,
- * `first` and `last` off the record instead of keeping a list of names in
- * `#dispatch`.
+ * One bounded primitive. Flags here are properties of the verb itself; "must
+ * be the last step of a program" is not one of them — that belongs to a
+ * program, because the same `drive` is both `move` (in the middle) and
+ * `cruise` (last, holding).
  * @typedef {{
- *   needs: Capability,
+ *   needs: import('./bodies.js').Capability,
  *   args: JsonSchemaSubset,
  *   bounded: string,
- *   hold?: true,        // a driver that keeps renewing it — the old `cruise`
- *   cancelsRest?: true, // everything queued after it is void
+ *   cancelsRest?: true, // the turn becomes only this verb — earlier steps go too
  *   first?: true,       // runs before speech, so the face agrees with the words
- *   last?: true,        // nothing may follow it in a program
  *   returns?: true,     // its result goes back to the model, which is asked again
  * }} Verb
  */
@@ -60,15 +55,22 @@ const DRIVE_VALUES = ['forward', 'backward'];
 const STEER_VALUES = ['left', 'right', 'straight'];
 
 /**
- * The wire frame a body is sent. `ms` is capped at 1 s because the firmware
- * stops a motor that has not been re-ordered within a second; anything longer
- * is the carrier's job to slice, not the model's to ask for.
+ * How long to drive. Two shapes, because the model has two intents: a number
+ * of milliseconds, with no upper bound (a long drive is sliced into wire
+ * frames by the carrier), or the word `hold`, which the brain keeps renewing
+ * until something stops it. The 1 s the firmware enforces is a frame size, not
+ * a limit on the request.
  */
-const MS_MIN = 1;
-const MS_MAX = 1000;
+/** @type {JsonSchemaSubset} */
+const MS = {
+  anyOf: [
+    { type: 'integer', minimum: 1 },
+    { const: 'hold' },
+  ],
+};
 
 /** @type {Record<VerbName, Verb>} */
-export const VERBS = Object.freeze({
+export const VERBS = {
   drive: {
     needs: 'move',
     args: {
@@ -77,12 +79,10 @@ export const VERBS = Object.freeze({
       properties: {
         drive: { enum: DRIVE_VALUES },
         steer: { enum: STEER_VALUES },
-        ms: { type: 'integer', minimum: MS_MIN, maximum: MS_MAX },
+        ms: MS,
       },
     },
-    hold: true,
-    last: true,
-    bounded: 'the firmware stops a motor it has not heard about for 1 s; hold is renewed by the brain LEAD_MS ahead, and a duration longer than 1 s is sliced into wire frames by the carrier',
+    bounded: 'the firmware stops a motor it has not heard about for 1 s: a hold is renewed by the brain LEAD_MS ahead, and any duration longer than 1 s is sliced into 1 s wire frames by the carrier',
   },
   halt: {
     needs: 'move',
@@ -115,7 +115,7 @@ export const VERBS = Object.freeze({
     returns: true,
     bounded: 'the card turns over after 20 s without a reading (READING_TIMEOUT_MS)',
   },
-});
+};
 
 /**
  * The five names, in the order above. Closed: an action may not invent one.
@@ -123,15 +123,16 @@ export const VERBS = Object.freeze({
  * over it does not need a cast.
  * @type {readonly VerbName[]}
  */
-export const VERB_NAMES = Object.freeze(/** @type {VerbName[]} */ (Object.keys(VERBS)));
+export const VERB_NAMES = /** @type {VerbName[]} */ (Object.keys(VERBS));
 
 /**
- * What a body needs to run this verb; empty for a name that is not a verb, so
- * an action using one is simply refused rather than half-run.
+ * What a body needs in order to run this verb, or `null` for a name that is not
+ * a verb at all. This answers "what does it require", not "does the body have
+ * it" — the body's own capability list answers that.
  * @param {string} name
- * @returns {Capability[]}
+ * @returns {import('./bodies.js').Capability[] | null}
  */
 export function verbNeeds(name) {
   const verb = VERBS[/** @type {VerbName} */ (name)];
-  return verb ? [verb.needs] : [];
+  return verb ? [verb.needs] : null;
 }
