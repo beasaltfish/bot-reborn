@@ -1,0 +1,139 @@
+// One table for what a body is: the hardware it needs, how you get it, and
+// what it can do. The admin draws its cards from it, the brain reads what the
+// model may call from it, and the simulator asks it what a demo can show.
+//
+// "Body" used to mean three things at once — who is running the firmware, what
+// the thing can do, and how it moves. Only the middle one is a decision a
+// person makes, so only the middle one is here. `dry-run` is the proof: it
+// looks like a car and drives nothing, and the difference is in how the brain
+// carries the actions out, not in what the body can do.
+
+/** @typedef {'hear' | 'speak' | 'show' | 'move' | 'sense'} Capability */
+/** @typedef {'move' | 'cruise' | 'stop' | 'sound' | 'pose' | 'draw'} ActionKind */
+
+/** The five fine-grained abilities a body can have, in the order the admin shows them. */
+export const CAPABILITIES = /** @type {const} */ (['hear', 'speak', 'show', 'move', 'sense']);
+
+/**
+ * What an action needs before it means anything. An action is offered to the
+ * model only by a body that can carry it out, so a body that claims `pose`
+ * without `show` would be promising a face it does not have.
+ * @type {Record<ActionKind, Capability>}
+ */
+export const ACTION_NEEDS = {
+  move: 'move',
+  cruise: 'move',
+  stop: 'move',
+  pose: 'show',
+  draw: 'sense',
+  sound: 'speak',
+};
+
+/**
+ * The artifact a board is flashed with, from firmware/release/. One firmware
+ * for every board body: what differs between a car, a pet and a tarot reader
+ * is what the brain sends it, not what the board runs.
+ */
+export const BODY_FIRMWARE = 'body.bin';
+
+/**
+ * @typedef {{
+ *   id: string,
+ *   label: string,
+ *   labelZh: string,
+ *   needs: string[],
+ *   source: 'board' | 'phone' | 'none',
+ *   firmware: string | null,
+ *   capabilities: Capability[],
+ *   actions: ActionKind[],
+ *   preview: string,
+ * }} Body
+ */
+
+// Order is the admin's: the bodies most people have, then the bench-only two.
+// `actions` is exactly what the brain may call, and nothing here adds a
+// capability the body did not have before this table existed.
+/** @type {readonly Body[]} */
+export const BODIES = [
+  {
+    id: 'car',
+    label: 'Car',
+    labelZh: '小车',
+    needs: ['ESP32-S3 board', 'TB6612 motor driver', 'battery pack'],
+    source: 'board',
+    firmware: BODY_FIRMWARE,
+    capabilities: ['hear', 'speak', 'show', 'move'],
+    actions: ['move', 'cruise', 'stop', 'sound'],
+    preview: 'car',
+  },
+  {
+    id: 'pet',
+    label: 'Pet on a screen',
+    labelZh: '屏幕宠物',
+    needs: ['ESP32-S3 board', 'SSD1306 screen'],
+    source: 'board',
+    firmware: BODY_FIRMWARE,
+    capabilities: ['hear', 'speak', 'show'],
+    actions: ['pose', 'sound'],
+    preview: 'pet',
+  },
+  {
+    id: 'tarot',
+    label: 'Tarot reader',
+    labelZh: '塔罗牌',
+    needs: ['ESP32-S3 board', 'SSD1306 screen'],
+    source: 'board',
+    firmware: BODY_FIRMWARE,
+    capabilities: ['hear', 'speak', 'show', 'sense'],
+    actions: ['draw'],
+    preview: 'tarot',
+  },
+  {
+    id: 'dry-run',
+    label: 'Dry run',
+    labelZh: '演练',
+    needs: [],
+    source: 'none',
+    firmware: null,
+    capabilities: ['hear', 'speak', 'show', 'move'],
+    actions: ['move', 'cruise', 'stop', 'sound'],
+    preview: 'car',
+  },
+  {
+    id: 'none',
+    label: 'No moving parts',
+    labelZh: '无身体',
+    needs: ['phone'],
+    source: 'phone',
+    firmware: null,
+    capabilities: ['hear', 'speak'],
+    actions: ['sound'],
+    preview: 'voice',
+  },
+];
+
+/** In the admin's order, so the first one is also the fallback. */
+export const BODY_IDS = /** @type {string[]} */ (BODIES.map((b) => b.id));
+
+/** @param {string} id @returns {Body | undefined} */
+export function bodyById(id) {
+  return BODIES.find((b) => b.id === id);
+}
+
+/**
+ * What is wrong with a row, or null. Run by the tests and by anyone adding a
+ * body: the failure to avoid is a card that promises a face the firmware
+ * never shows, and a string in a table is exactly where that slips through.
+ * @param {Body} body
+ * @returns {string | null}
+ */
+export function bodyProblem(body) {
+  for (const a of body.actions) {
+    if (!(a in ACTION_NEEDS)) return `${body.id}: unknown action ${a}`;
+    if (!body.capabilities.includes(ACTION_NEEDS[a])) return `${body.id}: ${a} needs ${ACTION_NEEDS[a]}`;
+  }
+  if (body.source === 'board' && !body.firmware) return `${body.id}: a board body needs firmware`;
+  if (body.source !== 'board' && body.firmware !== null) return `${body.id}: only a board body has firmware`;
+  if (!body.preview) return `${body.id}: no preview`;
+  return null;
+}
