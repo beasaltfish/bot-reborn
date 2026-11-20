@@ -10,6 +10,9 @@ import { createCharacter, saveCharacter, listCharacters } from '../../server/cha
 
 export function readyConfig() {
   const cfg = defaultConfig('en');
+  // These server tests are about a body with wheels, so they say so: a new
+  // character now starts as `none`, and nothing here should infer a car.
+  cfg.body = { id: 'toy' };
   cfg.stt = { baseURL: 'http://stt', apiKey: 'k', model: 'm', prompt: '' };
   cfg.llm = { baseURL: 'http://llm', apiKey: 'k', model: 'm' };
   cfg.tts = { baseURL: 'http://tts', apiKey: 'k', model: 'm', voice: 'v' };

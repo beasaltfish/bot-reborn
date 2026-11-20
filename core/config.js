@@ -6,16 +6,20 @@
 // in one line, and flat stays backward compatible: a config written before a
 // field existed is simply missing that key.
 
-import { BODY_IDS } from './bodies.js';
+import { TEMPLATE_IDS, TEMPLATES } from './bodies.js';
 
 export const CONFIG_KEY = 'voicebot.config';
 
 /**
- * What a configured reflex may do: the LLM's own tools, minus
- * set_reply_language, which writes config and is not an action
- * (configurable reflex spec §2.2).
+ * Every action some body can carry out, derived from the templates rather
+ * than listed a second time. It is no longer what a reflex is filtered
+ * against: the body is not known when a reflex is parsed, and "this body does
+ * not have that action" is answered against `body.actions` when the trigger
+ * fires. Kept as the answer to "can any body do this at all?".
  */
-export const REFLEX_TOOLS = /** @type {const} */ (['move', 'cruise', 'stop', 'play_sound', 'pose', 'draw_card']);
+export const REFLEX_TOOLS = [
+  ...new Set(Object.values(TEMPLATES).flatMap((body) => body.actions.map((a) => a.name))),
+];
 
 /** The format beasaltfish/robot-simple-commands was trained on (spec §2.4). */
 export const DEFAULT_STATE = 'Robot said: "{robot}"\nPerson said: "{person}"';
@@ -73,20 +77,51 @@ export function reflexReady(r) {
 const isPlain = (/** @type {unknown} */ v) => typeof v === 'object' && v !== null && !Array.isArray(v);
 
 /**
- * Which body this character has, from a file that may predate the field.
+ * The configurable half of a body, copied key by key and only when the shape
+ * allows it. Never invent a key: an absent one means "follow the template",
+ * and an empty list a file did not contain is not the same thing. Anything
+ * wrong deeper than this is `bodyProblem`'s job, when the body is written.
+ * @param {any} p
+ * @returns {BodyPatch}
+ */
+function patchOf(p) {
+  /** @type {BodyPatch} */
+  const patch = {};
+  if (typeof p.template === 'string') patch.template = p.template;
+  if (isPlain(p.label)) patch.label = p.label;
+  if (isPlain(p.prompts)) patch.prompts = p.prompts;
+  if (Array.isArray(p.actions)) patch.actions = p.actions;
+  if (Array.isArray(p.triggers)) patch.triggers = p.triggers;
+  return patch;
+}
+
+/**
+ * Which body this character has, from a file that may predate the field. The
+ * result is the patch, not a resolved body: `resolveBody` belongs to the brain
+ * and the admin, which are the only places that know a template's actions.
+ *
+ * The three cases differ on purpose:
+ * - no `body` key at all — every character written before this field existed
+ *   was a car, so it is a toy;
+ * - an id the templates know (or the old `car`) — that id and the rest of the
+ *   patch, as saved;
+ * - an id nobody knows — `none`, plus the patch keys whose shape is right. A
+ *   typo must not claim wheels; a body of one's own is told apart by carrying
+ *   `actions`, not by its id.
  *
  * `motion` was the old name for the same five values, so an old file loads
- * unchanged. A typo must not take a car's wheels away: one it does not
- * recognise is a car, the body every character had before this existed.
+ * unchanged.
  * @param {unknown} body
- * @returns {{ id: Motion }}
+ * @returns {BodyConfig}
  */
 function bodyOf(body) {
+  if (body === undefined) return { id: 'toy' };
   const p = /** @type {any} */ (isPlain(body) ? body : {});
   // `car` was this body's id until 2026-11-20: what you own is a toy you
   // tapped the motors of, not a category. A saved character keeps working.
-  const raw = p.id === 'car' || p.motion === 'car' ? 'toy' : (p.id ?? p.motion);
-  return { id: BODY_IDS.includes(raw) ? raw : 'toy' };
+  const raw = p.id ?? p.motion;
+  const id = raw === 'car' ? 'toy' : raw;
+  return { id: TEMPLATE_IDS.includes(id) ? id : 'none', ...patchOf(p) };
 }
 
 /**
@@ -122,7 +157,10 @@ function normalizeQuestion(q) {
       || typeof o.description !== 'string') continue;
     seen.add(o.choice);
     const actions = (Array.isArray(o.actions) ? o.actions : [])
-      .filter((/** @type {any} */ a) => isPlain(a) && REFLEX_TOOLS.includes(a.name) && isPlain(a.args))
+      // Shape only. Whether this body has the action is a trigger-time
+      // question (and the editor's); dropping it here would lose the saved
+      // option for good when the user switches body and back.
+      .filter((/** @type {any} */ a) => isPlain(a) && typeof a.name === 'string' && a.name !== '' && isPlain(a.args))
       .map((/** @type {any} */ a) => ({ name: a.name, args: a.args }));
     options.push({ choice: o.choice, description: o.description, actions });
   }
@@ -186,8 +224,10 @@ export function defaultConfig(_navLang = globalThis.navigator?.language) {
     // called, the way opening an app is: the name on top of that is a second
     // knock on an open door. On, it brings back SLEEPING and §5.2's doze.
     wakeWord: false,
-    // car: every character made before this field existed had one.
-    body: { id: 'toy' },
+    // No body until somebody picks one: a new character is not a car by
+    // accident. A file that predates the field still reads as the car it was
+    // (`bodyOf`), so old characters keep working.
+    body: { id: 'none' },
     // Who it is, in the admin's words; empty is brain.js's DEFAULT_PERSONA.
     // Only this part of the system prompt is theirs (see buildSystemPrompt).
     persona: '',
@@ -240,9 +280,8 @@ export function loadConfig(storage = globalThis.localStorage) {
       bargeIn: p.bargeIn ?? d.bargeIn,
       ttsPath: p.ttsPath ?? d.ttsPath,
       wakeWord: p.wakeWord ?? d.wakeWord,
-      // The id wins over a leftover `motion`, so a half-migrated file is not
-      // a trap; anything but the five names reads as car, the body every
-      // character had before this field existed.
+      // The patch as saved: `bodyOf` normalises the id over a leftover
+      // `motion` and keeps the rest of the patch, but does not resolve a body.
       body: bodyOf(p.body),
       persona: typeof p.persona === 'string' ? p.persona : d.persona,
       // Spread over the default, so a config stored before this field existed
@@ -279,7 +318,12 @@ export function resetSticky(cfg) {
  * }} StorageLike
  *
  * @typedef {{ baseURL: string, apiKey: string, model: string }} Layer
- * @typedef {{ name: typeof REFLEX_TOOLS[number], args: Record<string, unknown> }} ReflexCall
+ *
+ * The action names the admin's reflex editor can offer today. Not a parse
+ * guarantee: `normalizeReflex` keeps any non-empty name, because a body of
+ * one's own may carry an action the five templates do not. The admin type is
+ * widened in Task 8, when the editor reads `body.actions` instead.
+ * @typedef {{ name: 'move' | 'cruise' | 'stop' | 'play_sound' | 'pose' | 'draw_card', args: Record<string, unknown> }} ReflexCall
  * @typedef {{ choice: string, description: string, actions: ReflexCall[] }} ReflexOption
  * @typedef {{ name: string, instructions: string, options: ReflexOption[] }} ReflexQuestion
  * @typedef {Layer & { enabled: boolean, threshold: number, state: string, question: ReflexQuestion | null }} ReflexLayer
@@ -293,11 +337,13 @@ export function resetSticky(cfg) {
  *   bargeIn: boolean,
  *   ttsPath: 'webaudio' | 'loopback' | 'speechSynthesis',
  *   wakeWord: boolean,
- *   body: { id: Motion },
+ *   body: BodyConfig,
  *   persona: string,
  *   calibration: Calibration,
  * }} Config
  *
+ * @typedef {import('./bodies.js').BodyPatch} BodyPatch
+ * @typedef {BodyPatch & { id: import('./bodies.js').BodyId }} BodyConfig
  * @typedef {import('./bodies.js').BodyId} Motion
  *
  * @typedef {{
