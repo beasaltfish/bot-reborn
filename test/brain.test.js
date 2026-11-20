@@ -373,6 +373,19 @@ test('validate is where the body gate lives: no program for an action it lacks',
   assert.deepEqual(r.reasons, ['draw: this body does not draw']);
 });
 
+test('validate without a body authorises nothing but the fixed tool', () => {
+  // A body is required. With none the body has no actions, so the reference
+  // catalogue may phrase a refusal but may not hand back a program — the fixed
+  // config tool is the only thing a caller with no turn can still run.
+  const r = validate([
+    call('draw_card', {}, 'c1'),
+    call('set_reply_language', { lang: 'en' }, 'c2'),
+  ]);
+  assert.deepEqual(r.actions, []);
+  assert.deepEqual(r.reasons, ['draw: this body does not draw']);
+  assert.equal(r.replyLang, 'en');
+});
+
 test('hadMoveIntent means a drive verb, not the move capability a halt shares', () => {
   assert.equal(validate([call('stop', {})], TOY).hadMoveIntent, false,
     'a halt needs move, but a turn that only stops is not a failed move');
@@ -702,6 +715,118 @@ test('two drive steps are one executor.move, so a later stop cannot leave a queu
   await flushMicrotasks();
   assert.equal(h.events.filter((e) => e.op === 'move').length, 1,
     'the second step must not run after the stop');
+});
+
+test('a cancelled turn does not resume when its motion ends', async () => {
+  // Reproduced: `[move, cruise]`, the move waits, `cancel()`; the next turn
+  // sends `stop`; the move's gate is released and the old loop — whose
+  // cancellation check sat BEFORE the flush — went on to cruise. The check now
+  // happens after every await and before every command.
+  const h = brainHarness({ gateMotion: true, reply: (/** @type {number} */ n) => (n === 1
+    ? say('', [
+      { id: 'm1', name: 'move', args: { steps: [{ drive: 'forward', steer: 'straight', duration_ms: 600 }] } },
+      { id: 'c1', name: 'cruise', args: { drive: 'forward', steer: 'straight' } },
+    ])
+    : say('', [{ id: 'c2', name: 'stop', args: {} }])) });
+
+  await h.brain.handle('forward, then keep going');
+  await flushMicrotasks();
+  assert.equal(h.events.filter((e) => e.op === 'move').length, 1);
+
+  h.brain.cancel();
+  await h.brain.handle('stop');
+  h.motionGates[0].resolve();
+  await flushMicrotasks();
+
+  assert.deepEqual(h.events.filter((e) => e.op !== 'earcon' && e.op !== 'speak').map((e) => e.op),
+    ['move', 'stop'], 'the cancelled turn must not send its next step');
+});
+
+test('a later turn takes the body even when the old one was never cancelled', async () => {
+  // The signal cannot see this: nobody pressed stop, a new turn simply began.
+  // The generation is what says the old dispatch no longer owns the body, so a
+  // bark queued behind a move must not land after the new turn's stop.
+  const h = brainHarness({ gateMotion: true, reply: (/** @type {number} */ n) => (n === 1
+    ? say('', [
+      { id: 'm1', name: 'move', args: { steps: [{ drive: 'forward', steer: 'straight', duration_ms: 600 }] } },
+      { id: 's1', name: 'play_sound', args: { name: 'bark' } },
+    ])
+    : say('', [{ id: 'c2', name: 'stop', args: {} }])) });
+
+  await h.brain.handle('forward, then bark');
+  await flushMicrotasks();
+  await h.brain.handle('stop');
+  h.motionGates[0].resolve();
+  await flushMicrotasks();
+
+  assert.deepEqual(h.events.filter((e) => e.op !== 'earcon' && e.op !== 'speak').map((e) => e.op),
+    ['move', 'stop'], 'the stale step must not run inside the new turn');
+});
+
+test('a pose the model put after a hold is dropped, not lifted in front of it', async () => {
+  // The order today's dispatch had: truncate at the cruise FIRST, then move
+  // poses to the front. A step-level flatten that partitions poses first keeps
+  // a pose queued behind a hold, which is a step the old code dropped — and a
+  // hold has no end of its own, so anything behind it would run in a stale turn.
+  const pose = PET.actions.find((/** @type {any} */ a) => a.name === 'pose');
+  const h = brainHarness({
+    actions: [...TOY.actions, pose],
+    reply: say('', [
+      { id: 'c1', name: 'cruise', args: { drive: 'forward', steer: 'straight' } },
+      { id: 'p1', name: 'pose', args: { name: 'sit' } },
+    ]),
+  });
+
+  await h.brain.handle('keep going, then sit');
+  await flushMicrotasks();
+
+  assert.deepEqual(h.events.filter((e) => e.op !== 'earcon'), [
+    { op: 'cruise', drive: 'forward', steer: 'straight' },
+  ], 'the pose is behind the hold and gone');
+});
+
+test('a halt that expands to nothing does not swallow the turn', async () => {
+  // The halt check read the action's DEFINITION, so a stop whose `each` list is
+  // empty still counted: `draw_card + brake([])` neither drew nor stopped. It
+  // is decided from the same expanded steps dispatch sees now.
+  const brake = {
+    name: 'brake',
+    label: { en: 'Brake', zh: '刹' },
+    say: 'Stop for the listed beats.',
+    args: {
+      type: 'object',
+      properties: { until: { type: 'array', maxItems: 3, items: { type: 'integer' } } },
+    },
+    run: [{ verb: 'halt', each: 'until', args: {} }],
+  };
+  const draw = TAROT.actions.find((/** @type {any} */ a) => a.name === 'draw_card');
+  const h = brainHarness({
+    actions: [draw, brake],
+    reply: (/** @type {number} */ n) => (n === 1
+      ? say('', [
+        { id: 'd1', name: 'draw_card', args: {} },
+        { id: 'b1', name: 'brake', args: { until: [] } },
+      ])
+      : say('The card says wait.')),
+  });
+
+  await h.brain.handle('draw, then brake for nothing');
+
+  assert.equal(h.events.filter((e) => e.op === 'draw').length, 1, 'the draw is not withheld');
+  assert.deepEqual(h.events.filter((e) => e.op === 'stop'), [], 'and nothing halts');
+  assert.equal(h.llm.calls.length, 2, 'the model reads the card');
+
+  // The complement: a halt the program really expands to still takes the turn.
+  const g = brainHarness({
+    actions: [draw, brake],
+    reply: say('', [
+      { id: 'd1', name: 'draw_card', args: {} },
+      { id: 'b1', name: 'brake', args: { until: [1] } },
+    ]),
+  });
+  await g.brain.handle('draw, then brake');
+  assert.deepEqual(g.events.filter((e) => e.op === 'draw'), [], 'a legal halt wins over the draw');
+  assert.deepEqual(g.events.filter((e) => e.op === 'stop'), [{ op: 'stop' }]);
 });
 
 test('steps are sorted, not programs: a bark beats a pose+hold that used to go first', async () => {
@@ -1437,6 +1562,35 @@ test('a renamed draw action is validated before it runs', async () => {
   assert.match(tool.content, /pick: rejected/);
 });
 
+test('a renamed draw does not run when every walked element is refused', async () => {
+  // `#returningPlan` expanded the raw arguments, so a `pick` whose `each` list
+  // was `['bad']` still found a `draw` step and drew a card — while `validate`
+  // had just dropped the only element and produced no program. The returning
+  // path is judged by the same check now, element by element.
+  const h = brainHarness({
+    actions: [{
+      name: 'pick',
+      label: { en: 'Pick', zh: '抽' },
+      say: 'Pick cards by their number.',
+      args: {
+        type: 'object',
+        required: ['cards'],
+        properties: { cards: { type: 'array', items: { type: 'integer' } } },
+      },
+      run: [{ verb: 'draw', each: 'cards', args: {} }],
+      returns: true,
+    }],
+    reply: (/** @type {number} */ n) => (n === 1
+      ? say('', [{ id: 'p1', name: 'pick', args: { cards: ['bad'] } }])
+      : say('No card then.')),
+  });
+  await h.brain.handle('pick a card');
+
+  assert.deepEqual(h.events.filter((e) => e.op === 'draw'), [], 'nothing is drawn');
+  const tool = h.llm.calls[1].messages.find((/** @type {any} */ m) => m.role === 'tool');
+  assert.match(tool.content, /^error: pick: step rejected — "bad"; must be an integer$/);
+});
+
 test('the body\'s own schema refuses what it does not allow', async () => {
   // The reference `move` takes `steps`; this body's `nudge` takes a size. A
   // validator with a hardcoded action table could not answer this call at all.
@@ -1466,6 +1620,54 @@ test('the body\'s own schema refuses what it does not allow', async () => {
     { op: 'move', steps: [{ drive: 'forward', steer: 'straight', duration_ms: 300 }] },
     { op: 'earcon', name: 'done' },
   ]);
+});
+
+test('the root schema is the judge, a top-level anyOf included', () => {
+  // The property walk missed a root `anyOf`: `{}` was accepted for an action
+  // that requires one of two shapes, while `fitsSchema` refused it. One shared
+  // checker now answers for the whole schema; the arrays a step walks are left
+  // to `expand`, so one bad element still costs one step and not the call.
+  const body = resolveBody('none');
+  body.actions = [{
+    name: 'drive',
+    label: { en: 'Drive', zh: '开' },
+    say: 'Drive by steps, or by one direction.',
+    args: {
+      anyOf: [
+        {
+          type: 'object',
+          required: ['steps'],
+          properties: { steps: { type: 'array', items: { type: 'integer', minimum: 1 } } },
+        },
+        {
+          type: 'object',
+          required: ['drive', 'steer'],
+          properties: { drive: { enum: ['forward', 'backward'] }, steer: { enum: ['left', 'right'] } },
+        },
+      ],
+    },
+    run: [{ verb: 'drive', args: { drive: '$drive', steer: '$steer', ms: 600 } }],
+  }];
+
+  const empty = validate([call('drive', {})], body);
+  assert.deepEqual(empty.actions, [], 'neither branch accepts {}');
+  assert.match(empty.reasons[0], /^drive: rejected — \{\};/);
+
+  const one = validate([call('drive', { drive: 'forward', steer: 'left' })], body);
+  assert.deepEqual(/** @type {any} */ (one.actions[0]).steps,
+    [{ verb: 'drive', args: { drive: 'forward', steer: 'left', ms: 600 } }]);
+
+  // A root written without `type` still reads as an object schema: the old
+  // walk judged `required` directly, and a shared checker must not be more
+  // lenient than the code it replaced.
+  body.actions = [{
+    name: 'tap',
+    label: { en: 'Tap', zh: '碰' },
+    say: 'Tap on command.',
+    args: { required: ['who'], properties: { who: { enum: ['me'] } } },
+    run: [{ verb: 'drive', args: { drive: '$who', steer: 'straight', ms: 300 } }],
+  }];
+  assert.deepEqual(validate([call('tap', {})], body).actions, []);
 });
 
 test('a program that halts becomes the halt, whatever else it asked for', async () => {

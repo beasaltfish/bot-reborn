@@ -210,12 +210,24 @@ export const SYSTEM_PROMPT_PET = buildSystemPrompt({ replyLang: null, body: reso
  * @typedef {{ name: string, steps: ProgramStep[] }} Program
  */
 
+/**
+ * A returning call, with the decision already made: `handler` is null when the
+ * call may not run (the refusal is then the result the model reads), and `args`
+ * are the arguments as judged — the walked arrays pruned element by element.
+ * @typedef {{
+ *   handler: ((args: any, signal?: AbortSignal) => Promise<string> | string) | null,
+ *   action: import('./bodies.js').Action | null,
+ *   args: any,
+ *   refusal: string[] | null,
+ * }} ReturningPlan
+ */
+
 /** The executor's own step: the same three fields the wire frame has. */
 /** @typedef {{ drive: string, steer: string, duration_ms: number }} MoveStep */
 
 /**
  * Every action the five templates define, by name. A call is judged against the
- * body's own definition of it when the body carries one; this is the fallback
+ * body's own definition of it when the body carries one; this is the phrasebook
  * for a call to an action the body does not have, which is still refused where
  * the body's answer is known — "this body cannot move" is a better sentence
  * than "no such tool" when the tool exists and this body simply dropped it.
@@ -251,9 +263,8 @@ const NO_ARGS = { type: 'object', properties: {} };
  *   actions are the only ones this validator authorises: a call to one the body
  *   does not carry is refused here, in the sentence the reference definition can
  *   still phrase (`draw: this body does not draw`). `REFERENCE_ACTIONS` is only
- *   that phrasebook — it never makes an action executable. No body at all judges
- *   every known action, which is what a caller with no turn (a saved reflex, a
- *   test) needs.
+ *   that phrasebook — it never makes an action executable. A body is required:
+ *   no body means no actions, and nothing but the fixed tool can run.
  * @returns {{ actions: Program[], replyLang: 'zh'|'en'|'auto'|null, dropped: number,
  *             reasons: string[], hadMoveIntent: boolean }}
  */
@@ -271,9 +282,10 @@ export function validate(toolCalls, body) {
   const own = new Map((body?.actions ?? []).map((action) => [action.name, action]));
 
   for (const call of toolCalls) {
-    const action = call.name === 'set_reply_language'
-      ? undefined
-      : body ? own.get(call.name) : REFERENCE_ACTIONS.get(call.name);
+    // No body is no actions: a body is required, and without one nothing but
+    // the fixed config tool may run. The reference catalogue still phrases the
+    // refusal below — it never authorises a program.
+    const action = call.name === 'set_reply_language' ? undefined : own.get(call.name);
 
     // A program with a `drive` is a movement attempt even when its arguments
     // are unreadable or every one of its steps is refused, and that is what
@@ -298,20 +310,16 @@ export function validate(toolCalls, body) {
       // The tool exists in the reference catalogue but not on this body; the
       // reference is allowed to phrase the refusal, not to run it. A name no
       // body has is still "no such tool".
-      const reference = body ? REFERENCE_ACTIONS.get(call.name) : undefined;
+      const reference = REFERENCE_ACTIONS.get(call.name);
       drop(reference ? referenceRefusal(reference) : `${call.name}: no such tool`);
       continue;
     }
 
-    const wrong = argsProblem(action, args);
-    if (wrong) { drop(wrong); continue; }
-
-    const usable = usableArgs(action, args);
-    for (const why of usable.reasons) drop(why);
-    const { steps, dropped } = expand(action, usable.args);
-    for (const refused of dropped) drop(refusalFor(action, refused));
+    const checked = checkCall(action, args);
+    if (checked.rejected) { drop(checked.rejected); continue; }
+    for (const why of checked.reasons) drop(why);
     // Rule 4: if every step died, dispatch nothing.
-    if (steps.length > 0) actions.push({ name: action.name, steps });
+    if (checked.steps.length > 0) actions.push({ name: action.name, steps: checked.steps });
   }
 
   return { actions, replyLang, dropped: reasons.length, reasons, hadMoveIntent };
@@ -339,41 +347,97 @@ function argsProblem(action, args) {
   // instead, which is the one failure that used to go unreported: a model that
   // flattens the schema (drive/steer/duration_ms at the top level, no wrapper)
   // produced a turn with zero actions AND zero drops.
-  for (const step of Array.isArray(action.run) ? action.run : []) {
-    if (step.each === undefined) continue;
-    if (!Array.isArray(/** @type {any} */ (args)?.[step.each])) {
-      return `${action.name}: no ${step.each} array — got ${JSON.stringify(args)}`;
+  const walked = walkNames(action);
+  for (const each of walked) {
+    if (!Array.isArray(/** @type {any} */ (args)?.[each])) {
+      return `${action.name}: no ${each} array — got ${JSON.stringify(args)}`;
     }
   }
 
   // An action that takes nothing (`stop`, `draw_card`) ignores what came: it
   // never read its arguments, and a validator that refuses an empty list now
   // where it accepted one before is a refusal nobody asked for.
-  const properties = schema.properties ?? {};
   if (!args || typeof args !== 'object' || Array.isArray(args)) {
-    return Object.keys(properties).length > 0 || (schema.required ?? []).length > 0 ? rejected : null;
+    return Object.keys(schema.properties ?? {}).length > 0 || (schema.required ?? []).length > 0
+      ? rejected
+      : null;
   }
 
-  for (const key of schema.required ?? []) {
-    if (!(key in args)) return rejected;
-  }
-  for (const [key, sub] of Object.entries(properties)) {
-    if (!(key in args)) continue;
-    if (isWalked(action, key)) continue;
-    if (!fitsSchema(args[key], sub)) return rejected;
-  }
-  return null;
+  // The ROOT schema is the judge, through the one checker both modules share:
+  // walking only `properties` missed a root `anyOf` (the verb's own union) and
+  // accepted `{}` for an action that requires one of two shapes. The arrays a
+  // step walks are replaced by "an array" first, so their elements stay
+  // `usableArgs`' business — one bad element costs one step, not the call.
+  const root = withoutWalked(schema, walked);
+  // A body may write `{ required, properties }` without `type`; the old walk
+  // read that as an object schema, and `fitsSchema` alone calls a missing type
+  // "cannot tell" and would accept anything. An action's arguments are an
+  // object by contract, so it is judged as one.
+  const judged = root.type === undefined && root.anyOf === undefined
+    && (root.properties !== undefined || root.required !== undefined)
+    ? { ...root, type: 'object' }
+    : root;
+  return fitsSchema(args, judged) ? null : rejected;
 }
 
 /**
- * Whether an argument is the one a program walks, element by element. Its
- * elements are `expand`'s to refuse; the top level has nothing to add.
+ * The names of the array arguments the action's program walks, once each.
  * @param {import('./bodies.js').Action} action
- * @param {string} key
- * @returns {boolean}
+ * @returns {Set<string>}
  */
-function isWalked(action, key) {
-  return (Array.isArray(action.run) ? action.run : []).some((step) => step.each === key);
+function walkNames(action) {
+  /** @type {Set<string>} */
+  const names = new Set();
+  for (const step of Array.isArray(action.run) ? action.run : []) {
+    if (step.each !== undefined) names.add(step.each);
+  }
+  return names;
+}
+
+/**
+ * The action's schema with every walked array reduced to its type, through
+ * `anyOf` and `properties`, so the root can be judged without judging elements
+ * that `expand` will refuse one at a time.
+ * @param {any} schema
+ * @param {Set<string>} walked
+ * @returns {any}
+ */
+function withoutWalked(schema, walked) {
+  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return schema;
+  const out = { ...schema };
+  if (Array.isArray(schema.anyOf)) out.anyOf = schema.anyOf.map((/** @type {any} */ branch) => withoutWalked(branch, walked));
+  if (schema.properties && typeof schema.properties === 'object' && !Array.isArray(schema.properties)) {
+    /** @type {Record<string, any>} */
+    const properties = {};
+    for (const [key, sub] of Object.entries(schema.properties)) {
+      properties[key] = walked.has(key) ? { type: 'array' } : withoutWalked(sub, walked);
+    }
+    out.properties = properties;
+  }
+  return out;
+}
+
+/**
+ * What this call would actually run, judged exactly once: the arguments
+ * against the action's own (root) schema, the walked arrays element by element,
+ * then the program expanded and each refused step phrased. Shared by `validate`
+ * and the returning path so a handler is never run on arguments the validator
+ * would refuse to give a program — a renamed draw would otherwise draw on an
+ * array whose every element `validate` had just dropped.
+ * @param {import('./bodies.js').Action} action
+ * @param {any} args
+ * @returns {{ rejected: string | null, steps: ProgramStep[], args: any, reasons: string[] }}
+ */
+function checkCall(action, args) {
+  const wrong = argsProblem(action, args);
+  if (wrong) return { rejected: wrong, steps: [], args, reasons: [] };
+
+  const usable = usableArgs(action, args);
+  const { steps, dropped } = expand(action, usable.args);
+  /** @type {string[]} */
+  const reasons = [...usable.reasons];
+  for (const refused of dropped) reasons.push(refusalFor(action, refused));
+  return { rejected: null, steps, args: usable.args, reasons };
 }
 
 /**
@@ -490,12 +554,17 @@ function orderedSteps(programs) {
   const halt = flat.find((step) => VERB_TABLE[step.verb]?.cancelsRest);
   if (halt) return [halt];
 
-  const posed = flat.filter((step) => VERB_TABLE[step.verb]?.first);
-  const rest = flat.filter((step) => !VERB_TABLE[step.verb]?.first);
-  const sorted = [...posed, ...rest];
+  // The hold truncates FIRST, in the model's own order: a pose the model put
+  // after a hold is dropped, not lifted in front of it by the pose partition.
+  // That is the order the old program-level `#dispatch` had (the cruise slice,
+  // then poses moved to the front), and it is why nothing may follow a hold.
+  const hold = flat.findIndex((step) => holds(step));
+  const kept = hold === -1 ? flat : flat.slice(0, hold + 1);
 
-  const hold = sorted.findIndex((step) => holds(step));
-  return hold === -1 ? sorted : sorted.slice(0, hold + 1);
+  // Then poses go first, stable, among what survived.
+  const posed = kept.filter((step) => VERB_TABLE[step.verb]?.first);
+  const rest = kept.filter((step) => !VERB_TABLE[step.verb]?.first);
+  return [...posed, ...rest];
 }
 
 /**
@@ -535,13 +604,16 @@ function referenceRefusal(action) {
   const steps = action.run ?? [];
   if (steps.some((step) => step.verb === 'draw')) return `${subject}: this body does not draw`;
   if (steps.some((step) => step.verb === 'pose')) return `${subject}: this body cannot pose`;
-  if (steps.some((step) => step.verb === 'drive' || step.verb === 'halt')) return `${subject}: this body cannot move`;
-  return `${subject}: this body cannot make a sound`;
+  // One sentence for everything else, verbatim as the old filter said it: a
+  // sound is not moving either, and "cannot make a sound" was invented here.
+  return `${subject}: this body cannot move`;
 }
 
 /**
- * Whether this call is a `halt` the turn can actually run. Argument checks are
- * the same ones `validate` makes, so a malformed stop does not swallow a draw.
+ * Whether this call is a `halt` the turn can actually run. The judgement is
+ * `validate`'s — the same expanded steps dispatch will see — so a stop whose
+ * `each` list expands to nothing does not swallow a draw, and a malformed stop
+ * does not either.
  * @param {{ name: string, args: any }} call
  * @param {import('./bodies.js').Body} body
  * @returns {boolean}
@@ -549,8 +621,9 @@ function referenceRefusal(action) {
 function haltsCall(call, body) {
   const action = body.actions.find((candidate) => candidate.name === call.name);
   if (!action || action.returns || call.args === null) return false;
-  if (argsProblem(action, call.args)) return false;
-  return (action.run ?? []).some((step) => VERB_TABLE[step.verb]?.cancelsRest);
+  const { rejected, steps } = checkCall(action, call.args);
+  if (rejected) return false;
+  return steps.some((step) => VERB_TABLE[step.verb]?.cancelsRest);
 }
 
 /**
@@ -608,6 +681,14 @@ export class Brain {
   #beeped = false;
   /** @type {AbortController | null} */
   #turn = null;
+  /**
+   * The generation of the turn in flight. Every `#dispatch` records it, and a
+   * step awaited behind a move checks it again after every await: a move that
+   * ends inside a LATER turn wakes the old loop with a live signal, and only
+   * this can tell it that the body has been taken. `cancel()` is the signal's
+   * half; a new turn is this one's.
+   */
+  #dispatchGen = 0;
   /** @type {object[]} */ #history = [];
 
   /**
@@ -690,6 +771,9 @@ export class Brain {
     // worse than one that never works.
     const turn = new AbortController();
     this.#turn = turn;
+    // A new turn takes the body: whatever a previous turn's dispatch still has
+    // queued must not send when its move finally ends.
+    this.#dispatchGen++;
     this.#turnCard = null;
 
     // Configurable reflex spec §3: asked before the LLM, never beside it.
@@ -801,8 +885,7 @@ export class Brain {
    * names tools that are not body actions; those still look up by name.
    * @param {{ name: string, args: any, rawArguments: string }} call
    * @param {import('./bodies.js').Body} body
-   * @returns {{ handler: (args: any, signal?: AbortSignal) => Promise<string> | string,
-   *             action: import('./bodies.js').Action | null } | null}
+   * @returns {ReturningPlan | null}
    */
   #returningPlan(call, body) {
     const returning = this.#returningTools ?? returningToolsOf(body);
@@ -811,34 +894,43 @@ export class Brain {
     const action = body.actions.find((candidate) => candidate.name === call.name && candidate.returns);
     if (!action) {
       const byName = this.#returning[call.name];
-      return byName ? { handler: byName, action: null } : null;
+      return byName ? { handler: byName, action: null, args: call.args, refusal: null } : null;
     }
 
-    const args = call.args && typeof call.args === 'object' && !Array.isArray(call.args) ? call.args : {};
-    const verb = expand(action, args).steps[0]?.verb;
-    const handler = verb ? this.#returning[verb] : this.#returning[call.name];
-    return handler ? { handler, action } : null;
+    // The same judgement `validate` makes, element by element. A handler is not
+    // run on arguments the validator would refuse to give a program: a renamed
+    // draw whose `each` list is all bad would otherwise draw a card while
+    // `validate` produced zero steps for it.
+    const checked = call.args === null ? null : checkCall(action, call.args);
+    if (!checked || checked.rejected || checked.steps.length === 0) {
+      const refusal = checked?.rejected ? [checked.rejected] : checked?.reasons ?? [];
+      return { handler: null, action, args: call.args, refusal };
+    }
+    const verb = checked.steps[0].verb;
+    const handler = this.#returning[verb] ?? this.#returning[call.name];
+    return handler ? { handler, action, args: checked.args, refusal: null } : null;
   }
 
   /**
    * One returning tool's result as the text the model reads. A tool that throws
    * is not a failed turn: its message is the result, and the model says what
    * it likes about that. A body action whose arguments do not fit its own
-   * schema is not run at all; the model reads the refusal as the result.
+   * schema — or whose program expands to no step at all — is not run; the model
+   * reads the refusal as the result.
    * @param {{ name: string, args: any, rawArguments: string }} call
-   * @param {{ handler: (args: any, signal?: AbortSignal) => Promise<string> | string,
-   *           action: import('./bodies.js').Action | null }} plan
+   * @param {{ handler: ((args: any, signal?: AbortSignal) => Promise<string> | string) | null,
+   *           action: import('./bodies.js').Action | null,
+   *           args: any, refusal: string[] | null }} plan
    * @param {AbortController} turn
    * @returns {Promise<string>}
    */
   async #runReturning(call, plan, turn) {
     if (call.args === null) return `error: the arguments were not valid JSON — ${call.rawArguments}`;
-    if (plan.action) {
-      const wrong = argsProblem(plan.action, call.args);
-      if (wrong) return `error: ${wrong}`;
+    if (plan.handler === null) {
+      return `error: ${(plan.refusal ?? []).join('; ') || `${call.name}: nothing to run`}`;
     }
     try {
-      return String(await plan.handler(call.args, turn.signal));
+      return String(await plan.handler(plan.args, turn.signal));
     } catch (err) {
       return `error: ${/** @type {Error} */ (err).message}`;
     }
@@ -1095,6 +1187,7 @@ export class Brain {
     this.#beeped = false;
     const turn = new AbortController();
     this.#turn = turn;
+    this.#dispatchGen++;
     this.#turnCard = null;
     const card = await this.#startDraw();
     this.#pushUser(`[The person shook the wand and drew a card.]\n${describeDraw(card)}`);
@@ -1165,6 +1258,16 @@ export class Brain {
     // `orderedSteps`.
     const ordered = orderedSteps(programs);
 
+    // Which dispatch is the live one. The signal says the user cancelled; the
+    // generation says a later turn has taken the body, which the signal cannot:
+    // a step that was awaiting a move wakes up inside that later turn, and a
+    // turn nobody cancelled still must not drive there. Both are checked after
+    // every await and before every command — checking only at the top of the
+    // loop let `[move, cruise]` resume a cancelled turn and cruise after the
+    // stop.
+    const gen = this.#dispatchGen;
+    const live = () => gen === this.#dispatchGen && !signal?.aborted;
+
     // Sequential inside, unawaited outside: each step still waits for the
     // previous one's motion to end (which is what restores the ordering the
     // awaited version had), while handle() returns immediately — the
@@ -1187,13 +1290,14 @@ export class Brain {
       let frames = [];
       const flush = async () => {
         if (frames.length === 0) return;
+        if (!live()) { frames = []; return; }
         const batch = frames;
         frames = [];
         await this.#executor.move(batch);
       };
 
       for (const step of ordered) {
-        if (signal?.aborted) {
+        if (!live()) {
           // A stop voids the queue, including a batch not yet sent.
           frames = [];
           return;
@@ -1206,7 +1310,12 @@ export class Brain {
         // No `await` when there is nothing to flush: the first step must run
         // synchronously, as the old loop did, or the 'done' beep would land
         // before the bark it is meant to follow.
-        if (frames.length > 0) await flush();
+        if (frames.length > 0) {
+          await flush();
+          // The await is where a cancel lands; the step behind it is the one
+          // the emergency stop exists to prevent.
+          if (!live()) return;
+        }
         await this.#run(step);
       }
       await flush();

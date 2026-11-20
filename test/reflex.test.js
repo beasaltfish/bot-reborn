@@ -4,6 +4,18 @@ import { Reflex, fillState, criteriaOf, TIMEOUT_MS } from '../core/reflex.js';
 import { REFLEX_PRESETS } from '../core/reflex-presets.js';
 import { DEFAULT_STATE, normalizeReflex } from '../core/config.js';
 import { validate } from '../core/brain.js';
+import { resolveBody } from '../core/bodies.js';
+
+/**
+ * A body every preset fits. A reflex is written before a body is known, and
+ * `validate` judges a call against the body it will run on now — so the body
+ * these tests hand it is the union of what the templates carry. No template is
+ * picked: the presets are the superset's, not one body's.
+ * @type {import('../core/bodies.js').Body}
+ */
+const PRESET_BODY = /** @type {any} */ ({
+  actions: ['toy', 'pet', 'tarot'].flatMap((id) => resolveBody(id).actions),
+});
 
 /** @type {import('../core/config.js').ReflexCall[]} */
 const LEFT = [{ name: 'move', args: { steps: [{ drive: 'forward', steer: 'left', duration_ms: 600 }] } }];
@@ -74,7 +86,7 @@ test('judge: a confident choice with actions fires, and hands back its calls', a
   assert.equal(v.verdict, 'fired');
   assert.equal(v.detail, 'left 0.97');
   assert.deepEqual(v.calls, [{ name: 'move', args: LEFT[0].args, rawArguments: JSON.stringify(LEFT[0].args) }]);
-  assert.equal(validate(/** @type {any} */ (v.calls)).reasons.length, 0, 'the calls are validate()\'s input');
+  assert.equal(validate(/** @type {any} */ (v.calls), PRESET_BODY).reasons.length, 0, 'the calls are validate()\'s input');
 });
 
 test('judge: exactly at the threshold fires, just below passes', async () => {
@@ -189,7 +201,7 @@ test('presets: every configured action passes validate() untouched', () => {
   for (const p of REFLEX_PRESETS) {
     for (const o of p.question.options) {
       const calls = o.actions.map((a) => ({ ...a, rawArguments: JSON.stringify(a.args) }));
-      const { actions, reasons } = validate(/** @type {any} */ (calls));
+      const { actions, reasons } = validate(/** @type {any} */ (calls), PRESET_BODY);
       assert.deepEqual(reasons, [], `${p.id}/${o.choice}`);
       assert.equal(actions.length, o.actions.length, `${p.id}/${o.choice}`);
     }
