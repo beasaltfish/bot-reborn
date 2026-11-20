@@ -208,8 +208,9 @@ the actions the model may call.
 
 A body's actions are yours to edit. The Body tab holds them as JSON, and once
 you write your own the body keeps them instead of following the template; the
-model is then offered those actions (plus the one fixed language tool) and the
-prompt is built from that body's own words. Nothing is compiled and nothing is
+model is then offered those actions, plus the fixed tools its template names
+(the language setting, for a body that speaks words), and the prompt is
+built from that body's own words. Nothing is compiled and nothing is
 flashed for this — an action is a program of the five verbs the hardware already
 answers (`drive`, `halt`, `voice`, `pose`, `draw`). The parts list is the other
 half: it is what to buy, and it is fixed by the template.

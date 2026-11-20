@@ -137,10 +137,11 @@ function promptsOf(p) {
  *   was a car, so it is a toy;
  * - an id the templates know (or the old `car`) — that id and the rest of the
  *   patch, as saved;
- * - an id nobody knows — kept when the patch carries `actions` or `template`
- *   (a body of one's own), otherwise `none` plus the patch keys whose shape is
- *   right. A typo must not claim wheels; a body of one's own is told apart by
- *   carrying `actions`, not by its id.
+ * - an id nobody knows — kept when it is a string and the patch carries
+ *   `actions` or `template` (a body of one's own), otherwise `none` plus the
+ *   patch keys whose shape is right. A typo must not claim wheels; a body of
+ *   one's own is told apart by carrying `actions`, not by its id, and an id
+ *   that is not a string is no id at all.
  *
  * `motion` was the old name for the same five values, so an old file loads
  * unchanged.
@@ -159,7 +160,15 @@ function bodyOf(body) {
   // own. `actions` (its own program) or `template` (the base it copied) is
   // that claim; without either the id must not claim wheels. Keeping the id is
   // what lets the admin show "my-dog" instead of rewriting it to "Voice only".
-  if (TEMPLATE_IDS.includes(id) || patch.actions !== undefined || patch.template !== undefined) {
+  //
+  // The id must be a string to be kept. A file with `actions` and no id used
+  // to yield `{ id: undefined }`, which the brain reads as `toy`
+  // (`body?.id ?? 'toy'`) and the admin as `none` (`resolveBody`) — one file,
+  // two bodies. No id, nothing to keep: the fallback is the same one a typo
+  // gets. Tested on `raw` because that is the value as stored; `car` has
+  // already become a string above.
+  if (typeof raw === 'string'
+    && (TEMPLATE_IDS.includes(id) || patch.actions !== undefined || patch.template !== undefined)) {
     return { id, ...patch };
   }
   return { id: 'none', ...patch };

@@ -445,3 +445,29 @@ test('a body that carries actions is kept as written, id included', () => {
   saveConfig(/** @type {any} */ ({ ...defaultConfig(), body }), store);
   assert.deepEqual(loadConfig(store).body, c.body, 'the same body after a save and a load');
 });
+
+test('an actions-only body with no id has one face, and it is not the toy', () => {
+  // `actions` alone says the body is one's own, but there is no id to keep.
+  // `{ id: undefined }` would read as `toy` in the brain (`body?.id ?? 'toy'`)
+  // and as `none` in the admin (`resolveBody`): one file, two bodies. The
+  // fallback is `none`, so both sides agree.
+  const actions = [{
+    name: 'pose',
+    label: { en: 'Pose', zh: '做个动作' },
+    say: 'Sit.',
+    args: { type: 'object', properties: { name: { enum: ['sit'] } } },
+    run: [{ verb: 'pose', args: { pose: '$name' } }],
+  }];
+  const c = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ body: { actions } }) }));
+  assert.equal(c.body.id, 'none');
+  // What the brain resolves from the stored body, and what the admin resolves
+  // from the id it reads back: the same body either way.
+  const asBrain = resolveBody(c.body.id ?? 'toy', c.body);
+  const asAdmin = resolveBody(c.body.id, c.body);
+  assert.equal(asBrain.id, 'none');
+  assert.equal(asAdmin.id, 'none');
+  assert.equal(asBrain.template, 'none');
+  assert.equal(asAdmin.template, 'none');
+  assert.deepEqual(asAdmin.actions.map((a) => a.name), ['pose']);
+  assert.deepEqual(asAdmin.fixedTools, ['set_reply_language']);
+});

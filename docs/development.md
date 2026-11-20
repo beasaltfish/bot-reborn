@@ -68,8 +68,9 @@ Three layers; only the actions are a person's to write.
   when to call it, an optional args schema, and a `run` program of verbs
   (`core/actions.js` checks the shape; `expand` fills an argument into each
   step and drops one that does not fit). `toolsOf(body)` in `core/brain.js`
-  turns a body's actions into tools, and the caller adds the one fixed
-  `set_reply_language`.
+  turns a body's actions into tools, then appends the fixed tools the
+  template names in `fixedTools`: only `set_reply_language` exists, and
+  `pet` and `tarot` name none.
 
 A **body** is a template (`TEMPLATES` in `core/bodies.js`): its capabilities, its
 ways (the source and the parts each one costs), its actions, its prompts, its
