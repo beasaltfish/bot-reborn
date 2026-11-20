@@ -83,8 +83,11 @@ export const BODY_FIRMWARE = 'body.bin';
 export const BODIES = [
   {
     id: 'car',
-    label: 'Car',
-    labelZh: '小车',
+    // Not "Car": what you own is a cheap toy whose motors you tapped. The id
+    // stays `car` because that is what the firmware, the tools and every saved
+    // character already say.
+    label: 'Toy on wheels',
+    labelZh: '会动的玩具',
     ways: [
       { source: 'board', needs: ['board', 'motor', 'battery'] },
       { source: 'phone', needs: ['phone', 'ftdi', 'chassis'] },

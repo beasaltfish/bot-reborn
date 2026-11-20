@@ -54,6 +54,14 @@ test('what a body senses with is in the list of things it needs', () => {
   assert.ok(needs.includes('wand'), 'a tarot reader senses with the MPU-6050 wand');
 });
 
+test('the driving body is a toy with wheels, not a category called car', () => {
+  const car = bodyById('car');
+  assert.equal(car?.label, 'Toy on wheels');
+  assert.equal(car?.labelZh, '会动的玩具');
+  // The parts a buyer shops for, not a chip number: the model lives in docs/hardware.md.
+  assert.deepEqual(car?.ways[0].needs, ['board', 'motor', 'battery']);
+});
+
 test('a voice-only body does not borrow the phone\'s face', () => {
   const voice = bodyById('none');
   assert.deepEqual(voice?.capabilities, ['hear', 'speak']);
@@ -61,8 +69,8 @@ test('a voice-only body does not borrow the phone\'s face', () => {
 });
 
 test('the label is the reader\'s language', () => {
-  assert.equal(labelOf(bodyById('car') ?? BODIES[0], 'en'), 'Car');
-  assert.equal(labelOf(bodyById('car') ?? BODIES[0], 'zh'), '小车');
+  assert.equal(labelOf(bodyById('pet') ?? BODIES[0], 'en'), 'Pet on a screen');
+  assert.equal(labelOf(bodyById('pet') ?? BODIES[0], 'zh'), '屏幕宠物');
 });
 
 // The table replaces CAN_DO, so it has to say exactly what CAN_DO said. A

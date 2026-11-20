@@ -93,7 +93,7 @@ describe('BodyTab', () => {
   it('picking a body writes its id', async () => {
     const update = vi.fn();
     renderTab(detail('none'), update);
-    await userEvent.click(screen.getByRole('radio', { name: /^car/i }));
+    await userEvent.click(screen.getByRole('radio', { name: /toy on wheels/i }));
     expect(update).toHaveBeenCalledWith({ config: { body: { id: 'car' } } });
   });
 
