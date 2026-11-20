@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  SYSTEM_PROMPT, SYSTEM_PROMPT_STILL, DEFAULT_PERSONA, MAX_PERSONA, toolsOf, buildSystemPrompt, validate, Brain,
+  SYSTEM_PROMPT, SYSTEM_PROMPT_STILL, DEFAULT_PERSONA, MAX_PERSONA, SET_REPLY_LANGUAGE,
+  toolsOf, buildSystemPrompt, validate, Brain,
 } from '../core/brain.js';
 import { MIN_DURATION_MS } from '../phone/executor.js';
 import { KEYWORDS } from '../core/strings.js';
@@ -16,9 +17,10 @@ const STILL = resolveBody('none');
 const DRY = resolveBody('dry-run');
 
 /** @param {import('../core/bodies.js').Body} body @param {string} name @returns {any} */
-const byName = (body, name) => toolsOf(body).find((t) => t.function.name === name);
+const byName = (body, name) => [...toolsOf(body), SET_REPLY_LANGUAGE]
+  .find((t) => t.function.name === name);
 /** @param {import('../core/bodies.js').Body} body @returns {string[]} */
-const namesOf = (body) => toolsOf(body).map((t) => t.function.name).sort();
+const namesOf = (body) => [...toolsOf(body), SET_REPLY_LANGUAGE].map((t) => t.function.name).sort();
 
 test('the seven tool names are the seven, and each body chooses among them', () => {
   // The names are fixed by the product (spec §6.2); which of them a body is
@@ -297,11 +299,18 @@ test('validate: play_sound with an unknown name is dropped, with a reason', () =
 
 test('the tools are the body actions, and nothing else', () => {
   // The list is read, not written: an action of one's own appears without an
-  // edit here, and the one fixed tool comes last.
+  // edit here. The fixed config tool is the caller's to add, so it is not in
+  // `toolsOf` — the advertised list is the body, whole.
   const body = resolveBody('none');
   body.actions = [{ ...body.actions[0], name: 'whistle', say: 'Whistle a note.' }];
-  assert.deepEqual(toolsOf(body).map((t) => t.function.name), ['whistle', 'set_reply_language']);
+  assert.deepEqual(toolsOf(body).map((t) => t.function.name), ['whistle']);
   assert.equal(byName(body, 'whistle').function.description, 'Whistle a note.');
+});
+
+test('set_reply_language is reserved: a body action may not claim it', () => {
+  const body = resolveBody('none');
+  body.actions = [{ ...body.actions[0], name: 'set_reply_language' }];
+  assert.throws(() => toolsOf(body), /set_reply_language/);
 });
 
 test('a rejected step says what the model sent and what was expected, word for word', () => {
@@ -323,17 +332,18 @@ test('a rejected step says what the model sent and what was expected, word for w
   assert.equal(r.dropped, 1);
 });
 
-test('an action this body does not have is judged by the reference, and refused by the turn', async () => {
-  // The body gate moved out of a CAN_DO table and into the body's own actions;
-  // the sentence is the one the admin has been reading since a body became a
-  // config field. A name no body has is still "no such tool".
+test('an action this body does not have is refused by the validator, in the old words', async () => {
+  // The body gate is the body's own actions, and `validate` is where it is
+  // applied: the reference catalogue still phrases the refusal — the sentence
+  // the admin has been reading since a body became a config field — but never
+  // makes the action executable. A name no body has is still "no such tool".
   const h = brainHarness({ id: 'none', reply: say('', [
     { id: 'd1', name: 'draw_card', args: {} },
   ]) });
   await h.brain.handle('抽一张牌');
   await new Promise((r) => setTimeout(r, 0));
   assert.deepEqual(h.events, [], 'nothing is drawn and nothing is said');
-  assert.match(h.traced.join('\n'), /dropped — draw_card: this body cannot move/);
+  assert.match(h.traced.join('\n'), /dropped — draw: this body does not draw/);
 
   const unknown = validate([call('fly', {})], TOY);
   assert.deepEqual(unknown.reasons, ['fly: no such tool']);
@@ -352,6 +362,62 @@ test('a refused move keeps its count and its other steps', () => {
   assert.equal(r.dropped, 2);
   assert.match(r.reasons[0], /^move: step rejected — \{"drive":"sideways"/);
   assert.match(r.reasons[1], /^move: step rejected — \{"drive":"forward","steer":"diagonally"/);
+});
+
+test('validate is where the body gate lives: no program for an action it lacks', () => {
+  // `REFERENCE_ACTIONS` phrases the refusal; it does not authorise execution.
+  // Before this, validate returned an executable draw for a body that cannot
+  // draw and only the turn refused it.
+  const r = validate([call('draw_card', {})], STILL);
+  assert.deepEqual(r.actions, []);
+  assert.deepEqual(r.reasons, ['draw: this body does not draw']);
+});
+
+test('hadMoveIntent means a drive verb, not the move capability a halt shares', () => {
+  assert.equal(validate([call('stop', {})], TOY).hadMoveIntent, false,
+    'a halt needs move, but a turn that only stops is not a failed move');
+  assert.equal(validate([call('move', { steps: [{ drive: 'forward', steer: 'straight', duration_ms: 600 }] })], TOY)
+    .hadMoveIntent, true);
+});
+
+test('one walked array is judged once, even when two steps walk it', () => {
+  // The shared checker called per `each` step counted the same bad element
+  // twice: one refusal became two drops.
+  const body = resolveBody('none');
+  body.actions = [{
+    name: 'double',
+    label: { en: 'Double', zh: '两次' },
+    say: 'Drive the same steps twice.',
+    args: {
+      type: 'object',
+      required: ['steps'],
+      properties: {
+        steps: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['drive', 'steer', 'duration_ms'],
+            properties: {
+              drive: { enum: ['forward'] },
+              steer: { enum: ['straight'] },
+              duration_ms: { type: 'integer', minimum: MIN_DURATION_MS },
+            },
+          },
+        },
+      },
+    },
+    run: [
+      { verb: 'drive', each: 'steps', args: { drive: '$each.drive', steer: '$each.steer', ms: '$each.duration_ms' } },
+      { verb: 'drive', each: 'steps', args: { drive: '$each.drive', steer: '$each.steer', ms: '$each.duration_ms' } },
+    ],
+  }];
+  const r = validate([call('double', { steps: [
+    { drive: 'sideways', steer: 'straight', duration_ms: 600 },
+    { drive: 'forward', steer: 'straight', duration_ms: 600 },
+  ] })], body);
+  assert.equal(r.reasons.length, 1, 'the shared element is refused once, not once per step');
+  assert.match(r.reasons[0], /^double: step rejected/);
+  assert.equal(/** @type {any} */ (r.actions[0]).steps.length, 2, 'the good element still runs both steps');
 });
 
 /**
@@ -403,6 +469,9 @@ function brainHarness({ id = 'toy', actions, reply, gateMotion = false, reflex =
     stop() { events.push({ op: 'stop' }); return Promise.resolve(); },
     /** @param {any} name */
     async pose(name) { events.push({ op: 'pose', name }); },
+    /** @param {any} card */
+    async draw(card) { events.push({ op: 'draw', card }); },
+    async reveal() { events.push({ op: 'reveal' }); },
   };
   const llm = {
     /** @type {any[]} */
@@ -605,6 +674,66 @@ test('handle: actions run one at a time, so the second cannot outrun the first',
   await flushMicrotasks();
   assert.deepEqual(h.events.filter((e) => e.op === 'cruise'),
     [{ op: 'cruise', drive: 'forward', steer: 'straight' }]);
+});
+
+test('two drive steps are one executor.move, so a later stop cannot leave a queued step', async () => {
+  // Reproduced in review: dispatching each step separately made a two-step
+  // `move` two executor calls. A stop from the NEXT turn cancelled only the
+  // first; when that call resolved, this turn's loop woke up and ran the
+  // queued second step inside the stop's turn — move:left → stop → move:right.
+  // The gates here are the controlled clock: the first motion is held open
+  // while the next turn sends its stop, then released by hand.
+  const steps = [
+    { drive: 'forward', steer: 'left', duration_ms: 600 },
+    { drive: 'forward', steer: 'right', duration_ms: 600 },
+  ];
+  const h = brainHarness({ gateMotion: true, reply: (/** @type {number} */ n) => (n === 1
+    ? say('', [{ id: 'm1', name: 'move', args: { steps } }])
+    : say('', [{ id: 'c1', name: 'stop', args: {} }])) });
+
+  await h.brain.handle('left, then right');
+  await flushMicrotasks();
+  const moved = h.events.filter((e) => e.op === 'move');
+  assert.equal(moved.length, 1, 'both steps go in one call');
+  assert.deepEqual(moved[0].steps, steps);
+
+  await h.brain.handle('stop');
+  h.motionGates[0].resolve();
+  await flushMicrotasks();
+  assert.equal(h.events.filter((e) => e.op === 'move').length, 1,
+    'the second step must not run after the stop');
+});
+
+test('steps are sorted, not programs: a bark beats a pose+hold that used to go first', async () => {
+  // `[bark, pose+hold]` used to dispatch the whole pose program first, which
+  // put the bark behind a hold — a step with no end of its own. The flatten
+  // sorts the steps: pose first (its verb says so), then the bark, and the hold
+  // last.
+  const guard = {
+    name: 'guard',
+    label: { en: 'Guard', zh: '看守' },
+    say: 'Sit, then hold ground.',
+    args: { type: 'object', properties: {} },
+    run: [
+      { verb: 'pose', args: { pose: 'sit' } },
+      { verb: 'drive', args: { drive: 'forward', steer: 'straight', ms: 'hold' } },
+    ],
+  };
+  const h = brainHarness({
+    actions: [...TOY.actions, guard],
+    reply: say('', [
+      { id: 's1', name: 'play_sound', args: { name: 'bark' } },
+      { id: 'g1', name: 'guard', args: {} },
+    ]),
+  });
+  await h.brain.handle('sit and guard');
+  await flushMicrotasks();
+
+  assert.deepEqual(h.events.filter((e) => e.op !== 'earcon'), [
+    { op: 'pose', name: 'sit' },
+    { op: 'sound', name: 'bark' },
+    { op: 'cruise', drive: 'forward', steer: 'straight' },
+  ]);
 });
 
 test('handle: a cruise ends its turn — what follows is dropped, not deferred', async () => {
@@ -1226,6 +1355,86 @@ test('an action of one\'s own runs through the same executor', async () => {
   assert.deepEqual(h.llm.calls[0].tools.map((/** @type {any} */ t) => t.function.name),
     ['whistle', 'set_reply_language'], 'the model is offered what this body has');
   assert.deepEqual(h.events, [{ op: 'sound', name: 'yip' }], 'and no done beep: a whistle is its answer');
+});
+
+test('a renamed draw action still draws and returns its result', async () => {
+  // The returning path used to be keyed by the action's name (`draw_card`), so
+  // a renamed action that runs `draw` called a handler that was not there, drew
+  // nothing and never gave the model a result. The handler is chosen by the
+  // expanded verb now.
+  const h = brainHarness({
+    actions: [{
+      name: 'pick',
+      label: { en: 'Pick', zh: '抽' },
+      say: 'Pick a card.',
+      args: { type: 'object', properties: {} },
+      run: [{ verb: 'draw', args: {} }],
+      returns: true,
+    }],
+    reply: (/** @type {number} */ n) => (n === 1
+      ? say('', [{ id: 'p1', name: 'pick', args: {} }])
+      : say('A fresh start.')),
+  });
+  await h.brain.handle('pick a card');
+
+  assert.equal(h.events.filter((e) => e.op === 'draw').length, 1);
+  assert.equal(h.llm.calls.length, 2, 'the model reads the result, then answers');
+  const tool = h.llm.calls[1].messages.find((/** @type {any} */ m) => m.role === 'tool');
+  assert.match(tool.content, /^Card drawn: /);
+  assert.deepEqual(h.events.filter((e) => e.op === 'speak'), [{ op: 'speak', text: 'A fresh start.' }]);
+});
+
+test('a halt in the same turn wins over a returning call', async () => {
+  // "Halt anywhere is the turn" includes a returning call: the body's draw is
+  // withheld before it can run, so the card is not drawn and the model is not
+  // asked again.
+  const h = brainHarness({
+    actions: [{
+      name: 'pick',
+      label: { en: 'Pick', zh: '抽' },
+      say: 'Pick a card.',
+      args: { type: 'object', properties: {} },
+      run: [{ verb: 'draw', args: {} }],
+      returns: true,
+    }, TOY.actions.find((a) => a.name === 'stop')],
+    reply: say('', [
+      { id: 'p1', name: 'pick', args: {} },
+      { id: 'c1', name: 'stop', args: {} },
+    ]),
+  });
+  await h.brain.handle('draw, then stop');
+  await flushMicrotasks();
+
+  assert.deepEqual(h.events.filter((e) => e.op === 'draw'), [], 'the card is not drawn');
+  assert.equal(h.llm.calls.length, 1, 'no second round for a reading');
+  assert.deepEqual(h.events.filter((e) => e.op === 'stop' || e.op === 'move'), [{ op: 'stop' }]);
+});
+
+test('a renamed draw action is validated before it runs', async () => {
+  // An action's arguments are its own schema's to judge, even on the returning
+  // path; a refusal is the result the model reads, and nothing is drawn.
+  const h = brainHarness({
+    actions: [{
+      name: 'pick',
+      label: { en: 'Pick', zh: '抽' },
+      say: 'Pick a card for a person.',
+      args: {
+        type: 'object',
+        required: ['who'],
+        properties: { who: { enum: ['me', 'you'] } },
+      },
+      run: [{ verb: 'draw', args: {} }],
+      returns: true,
+    }],
+    reply: (/** @type {number} */ n) => (n === 1
+      ? say('', [{ id: 'p1', name: 'pick', args: { who: 'nobody' } }])
+      : say('No card then.')),
+  });
+  await h.brain.handle('pick a card');
+
+  assert.deepEqual(h.events.filter((e) => e.op === 'draw'), []);
+  const tool = h.llm.calls[1].messages.find((/** @type {any} */ m) => m.role === 'tool');
+  assert.match(tool.content, /pick: rejected/);
 });
 
 test('the body\'s own schema refuses what it does not allow', async () => {

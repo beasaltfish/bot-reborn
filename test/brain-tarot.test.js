@@ -2,11 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  toolsOf, validate, buildSystemPrompt, SYSTEM_PROMPT_TAROT,
+  SET_REPLY_LANGUAGE, toolsOf, validate, buildSystemPrompt, SYSTEM_PROMPT_TAROT,
 } from '../core/brain.js';
 import { resolveBody } from '../core/bodies.js';
 
-const names = (/** @type {any} */ m) => toolsOf(resolveBody(m)).map((t) => t.function.name).sort();
+const names = (/** @type {any} */ m) => [...toolsOf(resolveBody(m)), SET_REPLY_LANGUAGE]
+  .map((t) => t.function.name).sort();
 
 test('toolsOf: a tarot body is offered draw_card and the language tool', () => {
   assert.deepEqual(names('tarot'), ['draw_card', 'set_reply_language']);
@@ -213,7 +214,7 @@ test('a draw fired for a body that cannot draw is dropped with a trace line, and
   await h.brain.handle('draw a card');
   assert.equal(h.calls.length, 0);
   assert.deepEqual(ops(h.events), []);
-  assert.match(h.traced.join('\n'), /draw_card dropped: body "toy" does not do draw_card/);
+  assert.match(h.traced.join('\n'), /draw dropped: body "toy" does not do draw/);
 });
 
 test('a turn cancelled while the card is being drawn still turns it over, and nothing fires later', async () => {

@@ -9,7 +9,7 @@ import { t } from './strings.js';
 import { TEMPLATES, resolveBody } from './bodies.js';
 import { drawRandom, describeDraw } from './tarot.js';
 import { VERBS } from './verbs.js';
-import { expand, expectationOf } from './actions.js';
+import { expand, expectationOf, fitsSchema } from './actions.js';
 
 const HISTORY_ROUNDS = 6;
 
@@ -53,11 +53,13 @@ const LANG_NAME = { zh: 'Chinese', en: 'English' };
 
 /**
  * The one tool that is not an action. It writes the language preference into
- * the config, not the body, so every body is offered it and no body can add one
- * (spec §6.2, rule 5).
+ * the config, not the body, so the caller adds it to every body's list and no
+ * body may add one of its own (spec §6.2, rule 5). Exported because a caller
+ * beyond the brain (`server/check-api.js`) asks a provider to accept the same
+ * list.
  * @type {Tool}
  */
-const SET_REPLY_LANGUAGE = {
+export const SET_REPLY_LANGUAGE = {
   type: 'function',
   function: {
     name: 'set_reply_language',
@@ -72,31 +74,41 @@ const SET_REPLY_LANGUAGE = {
 
 /**
  * The tools a body is offered: one per action it carries, in its own order,
- * described by the words the body wrote, plus `set_reply_language`. No branch
- * on an id: a body that cannot pose is a body with no pose action.
+ * described by the words the body wrote. No branch on an id: a body that
+ * cannot pose is a body with no pose action. `set_reply_language` is the
+ * caller's to add — it is not an action, and `TOOLS` was a second answer to
+ * this question, so it is gone.
+ *
+ * `set_reply_language` is a reserved name: a body action that claimed it would
+ * be offered twice, and the fixed tool would shadow it in `validate`.
  * @param {import('./bodies.js').Body} body
  * @returns {Tool[]}
  */
 export function toolsOf(body) {
-  return [
-    ...body.actions.map((action) => ({
+  return body.actions.map((action) => {
+    if (action.name === 'set_reply_language') {
+      throw new Error(`"${action.name}" is the tool that writes config, and a body action may not take its name`);
+    }
+    return {
       type: /** @type {const} */ ('function'),
       function: {
         name: action.name,
         description: action.say,
         parameters: action.args ?? { type: 'object', properties: {} },
       },
-    })),
-    SET_REPLY_LANGUAGE,
-  ];
+    };
+  });
 }
 
 /**
- * The toy's tools. Kept as a name because the admin's Test button
- * (`server/check-api.js`) asks a provider to accept the tools a toy is offered
- * and has no body of its own to hand. `toolsOf` is what the brain asks.
+ * What the brain hands a provider: the body's own actions plus the one fixed
+ * tool. Kept as a function so no caller has to remember the order.
+ * @param {import('./bodies.js').Body} body
+ * @returns {Tool[]}
  */
-export const TOOLS = toolsOf(resolveBody('toy'));
+function toolsWithConfig(body) {
+  return [...toolsOf(body), SET_REPLY_LANGUAGE];
+}
 
 /**
  * Tools whose result goes back to the model, which is asked again with it
@@ -236,11 +248,12 @@ const NO_ARGS = { type: 'object', properties: {} };
  *
  * @param {Array<{ id?: string, name: string, args: object | null, rawArguments: string }>} toolCalls
  * @param {import('./bodies.js').Body} [body] the body the turn runs on. Its own
- *   definition of an action decides the action's arguments and program; a call
- *   to one it does not carry falls back to the reference definition, so the
- *   refusal below can say what was wrong with it and the caller can say that
- *   this body does not do it. No body at all judges every known action, which is
- *   what a caller with no turn (a saved reflex, a test) needs.
+ *   actions are the only ones this validator authorises: a call to one the body
+ *   does not carry is refused here, in the sentence the reference definition can
+ *   still phrase (`draw: this body does not draw`). `REFERENCE_ACTIONS` is only
+ *   that phrasebook — it never makes an action executable. No body at all judges
+ *   every known action, which is what a caller with no turn (a saved reflex, a
+ *   test) needs.
  * @returns {{ actions: Program[], replyLang: 'zh'|'en'|'auto'|null, dropped: number,
  *             reasons: string[], hadMoveIntent: boolean }}
  */
@@ -260,15 +273,13 @@ export function validate(toolCalls, body) {
   for (const call of toolCalls) {
     const action = call.name === 'set_reply_language'
       ? undefined
-      : own.get(call.name) ?? REFERENCE_ACTIONS.get(call.name);
+      : body ? own.get(call.name) : REFERENCE_ACTIONS.get(call.name);
 
-    // An action that asks the body to go somewhere is a movement attempt even
-    // when its arguments are unreadable or every one of its steps is refused,
-    // and that is what earns the "I could not do that" beep. A pose is not: its
-    // steps need no `move`.
-    if (action && (action.run ?? []).some((step) => VERB_TABLE[step.verb]?.needs === 'move')) {
-      hadMoveIntent = true;
-    }
+    // A program with a `drive` is a movement attempt even when its arguments
+    // are unreadable or every one of its steps is refused, and that is what
+    // earns the "I could not do that" beep. A `halt` needs `move` too, but a
+    // turn that only stops is not a failed move (design §4.3).
+    if (action && drives(action.run ?? [])) hadMoveIntent = true;
 
     if (call.args === null) {
       drop(`${call.name}: arguments were not valid JSON — ${call.rawArguments}`);
@@ -284,7 +295,11 @@ export function validate(toolCalls, body) {
     }
 
     if (!action) {
-      drop(`${call.name}: no such tool`);
+      // The tool exists in the reference catalogue but not on this body; the
+      // reference is allowed to phrase the refusal, not to run it. A name no
+      // body has is still "no such tool".
+      const reference = body ? REFERENCE_ACTIONS.get(call.name) : undefined;
+      drop(reference ? referenceRefusal(reference) : `${call.name}: no such tool`);
       continue;
     }
 
@@ -375,8 +390,13 @@ function usableArgs(action, args) {
   /** @type {string[]} */
   const reasons = [];
   const out = { ...args };
+  // Two steps may walk the same array; its elements are judged once. Judging
+  // it per step counted the same bad element twice and wrote the same reason
+  // twice — one refusal, two drops.
+  const walkedOnce = new Set();
   for (const step of Array.isArray(action.run) ? action.run : []) {
-    if (step.each === undefined) continue;
+    if (step.each === undefined || walkedOnce.has(step.each)) continue;
+    walkedOnce.add(step.each);
     const list = /** @type {any[]} */ (args[step.each]);
     const walked = action.args?.properties?.[step.each];
     const max = walked?.maxItems;
@@ -388,49 +408,6 @@ function usableArgs(action, args) {
     });
   }
   return { args: out, reasons };
-}
-
-/**
- * Whether a value fits a schema of the subset the actions are written in. The
- * same vocabulary `core/actions.js` reads, kept here because a call is judged
- * against the action's own schema — which can be stricter than the verb it runs
- * (`duration_ms` starts at 300; `drive.ms` at 1). A schema that says nothing is
- * "cannot tell", not "no": `expand` still applies the verb.
- * @param {unknown} value
- * @param {import('./verbs.js').JsonSchemaSubset | undefined} schema
- * @returns {boolean}
- */
-function fitsSchema(value, schema) {
-  if (!schema || typeof schema !== 'object') return true;
-  if (Array.isArray(schema.anyOf)) return schema.anyOf.some((branch) => fitsSchema(value, branch));
-  if (schema.const !== undefined) return value === schema.const;
-  if (Array.isArray(schema.enum)) return schema.enum.includes(/** @type {string | number} */ (value));
-
-  switch (schema.type) {
-    case 'object': {
-      if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-      const obj = /** @type {Record<string, unknown>} */ (value);
-      for (const key of schema.required ?? []) if (!(key in obj)) return false;
-      for (const [key, sub] of Object.entries(schema.properties ?? {})) {
-        if (key in obj && !fitsSchema(obj[key], sub)) return false;
-      }
-      return true;
-    }
-    case 'array': {
-      if (!Array.isArray(value)) return false;
-      return schema.items ? value.every((item) => fitsSchema(item, schema.items)) : true;
-    }
-    case 'integer': {
-      if (!Number.isInteger(value)) return false;
-      const n = /** @type {number} */ (value);
-      return (schema.minimum === undefined || n >= schema.minimum)
-        && (schema.maximum === undefined || n <= schema.maximum);
-    }
-    case 'number': return typeof value === 'number' && Number.isFinite(value);
-    case 'string': return typeof value === 'string';
-    case 'boolean': return typeof value === 'boolean';
-    default: return true;
-  }
 }
 
 /**
@@ -477,33 +454,54 @@ function moves(steps) {
 }
 
 /**
- * The step that voids the rest of the turn, as a program of one step, or null.
- * The first one wins: a turn that says "stop" anywhere means "stop".
- * @param {Program[]} programs
- * @returns {Program | null}
+ * Whether these steps include a `drive`. `hadMoveIntent` means this, and only
+ * this: a `halt` needs the `move` capability too, but a turn that only stops is
+ * not a movement attempt that failed (design §4.3).
+ * @param {Array<{ verb: string }>} steps
+ * @returns {boolean}
  */
-function halting(programs) {
-  for (const program of programs) {
-    const step = program.steps.find((s) => VERB_TABLE[s.verb]?.cancelsRest);
-    if (step) return { name: program.name, steps: [step] };
-  }
-  return null;
+function drives(steps) {
+  return steps.some((step) => step.verb === 'drive');
 }
 
 /**
- * Whether a program opens the turn: one of its steps runs before the reply is
- * spoken, so the face agrees with the words.
- * @param {Program} program
- * @returns {boolean}
+ * The turn's steps in the order they run, sorted as steps rather than as
+ * programs. Sorting whole programs was the bug: a `[voice, pose]` turn let the
+ * pose's program go first and turn the bark into a second thing, and a
+ * `[bark, pose+hold]` turn put the bark behind a hold. The rules are the verbs'
+ * own flags:
+ *
+ * - a step that cancels the rest (a `halt`) anywhere makes the turn that step
+ *   alone, whatever else was asked for — returning calls are carried out
+ *   before this, so their programs are dropped here like any other;
+ * - a step that runs before speech (`pose`) comes first, stable, so two keep
+ *   the model's order and the face agrees with the words that follow;
+ * - a holding `drive` (`ms: "hold"`) has no end of its own, so it must be last:
+ *   anything the model put after it is dropped rather than deferred into the
+ *   next turn (the reason the old program-level truncation existed).
+ * @param {Program[]} programs
+ * @returns {ProgramStep[]}
  */
-function aims(program) {
-  return program.steps.some((step) => VERB_TABLE[step.verb]?.first);
+function orderedSteps(programs) {
+  /** @type {ProgramStep[]} */
+  const flat = [];
+  for (const program of programs) flat.push(...program.steps);
+
+  const halt = flat.find((step) => VERB_TABLE[step.verb]?.cancelsRest);
+  if (halt) return [halt];
+
+  const posed = flat.filter((step) => VERB_TABLE[step.verb]?.first);
+  const rest = flat.filter((step) => !VERB_TABLE[step.verb]?.first);
+  const sorted = [...posed, ...rest];
+
+  const hold = sorted.findIndex((step) => holds(step));
+  return hold === -1 ? sorted : sorted.slice(0, hold + 1);
 }
 
 /**
  * Whether a step has no end of its own: `ms: "hold"`, the word `drive`'s schema
  * allows instead of a number (core/verbs.js). Awaiting one strands everything
- * behind it, so a program that ends on one is dispatched last.
+ * behind it, so it is ordered last and nothing may follow it.
  * @param {ProgramStep | undefined} step
  * @returns {boolean}
  */
@@ -512,15 +510,59 @@ function holds(step) {
 }
 
 /**
- * What the trace says about an action this body does not carry: today's
- * sentence, with the action's own name. A pose is not moving, so it says it
- * cannot pose; everything else says it cannot move.
- * @param {Program} program
+ * The name a program is reported under: its old kind when the action has one
+ * (`play_sound → sound`, `draw_card → draw`), else the action's own name. The
+ * trace and the refusal sentence were frozen in the kinds, not the tool names.
+ * @param {string} name
  * @returns {string}
  */
-function refusalOf(program) {
-  const trick = program.steps.some((step) => step.verb === 'pose');
-  return `${program.name}: this body cannot ${trick ? 'pose' : 'move'}`;
+function kindOf(name) {
+  if (name === 'play_sound') return 'sound';
+  if (name === 'draw_card') return 'draw';
+  return name;
+}
+
+/**
+ * Why this body cannot carry out a reference action it does not have, in the
+ * sentence the admin has been reading since a body became a config field. The
+ * verb the action runs decides the words; the action's kind decides the
+ * subject.
+ * @param {import('./bodies.js').Action} action
+ * @returns {string}
+ */
+function referenceRefusal(action) {
+  const subject = kindOf(action.name);
+  const steps = action.run ?? [];
+  if (steps.some((step) => step.verb === 'draw')) return `${subject}: this body does not draw`;
+  if (steps.some((step) => step.verb === 'pose')) return `${subject}: this body cannot pose`;
+  if (steps.some((step) => step.verb === 'drive' || step.verb === 'halt')) return `${subject}: this body cannot move`;
+  return `${subject}: this body cannot make a sound`;
+}
+
+/**
+ * Whether this call is a `halt` the turn can actually run. Argument checks are
+ * the same ones `validate` makes, so a malformed stop does not swallow a draw.
+ * @param {{ name: string, args: any }} call
+ * @param {import('./bodies.js').Body} body
+ * @returns {boolean}
+ */
+function haltsCall(call, body) {
+  const action = body.actions.find((candidate) => candidate.name === call.name);
+  if (!action || action.returns || call.args === null) return false;
+  if (argsProblem(action, call.args)) return false;
+  return (action.run ?? []).some((step) => VERB_TABLE[step.verb]?.cancelsRest);
+}
+
+/**
+ * Whether this call is one of the body's own returning actions. A halt
+ * elsewhere in the turn is the whole turn, returning calls included — but an
+ * injected returning tool is not a body action and keeps its mechanism.
+ * @param {{ name: string }} call
+ * @param {import('./bodies.js').Body} body
+ * @returns {boolean}
+ */
+function bodyReturns(call, body) {
+  return body.actions.some((action) => action.name === call.name && action.returns);
 }
 
 /**
@@ -551,7 +593,7 @@ function stepDetail(step) {
 export class Brain {
   #llm; #executor; #tts; #earcon; #sound; #config; #onReplyLangChange; #onFault; #trace;
   #reflex;
-  /** Returning tools this brain can run: name → handler (tarot mode spec §4). @type {Record<string, (args: any, signal?: AbortSignal) => Promise<string> | string>} */
+  /** Returning tools this brain can run, by verb or injected tool name (tarot mode spec §4). @type {Record<string, ((args: any, signal?: AbortSignal) => Promise<string> | string) | undefined>} */
   #returning;
   /** The body's returning tools, when the caller named them; else read from the body. @type {ReadonlySet<string> | null} */
   #returningTools;
@@ -602,9 +644,12 @@ export class Brain {
     // turn goes to the LLM exactly as before.
     this.#reflex = deps.reflex ?? null;
     // What a returning tool does is the caller's: the Brain only knows to run
-    // it, write its result back and ask again. `returningTools` is injectable
-    // so a test can prove the mechanism is not specific to one tool.
-    this.#returning = { draw_card: () => this.#drawForTurn(), ...deps.returning };
+    // it, write its result back and ask again. The default is keyed by VERB,
+    // because that is what a renamed draw action still expands to; injected
+    // handlers keep their own names (`returningTools` may name a tool no body
+    // carries). `returningTools` is injectable so a test can prove the
+    // mechanism is not specific to one tool.
+    this.#returning = { draw: () => this.#drawForTurn(), ...deps.returning };
     this.#rng = deps.rng ?? Math.random;
     this.#after = deps.after ?? ((ms, fn) => {
       const id = setTimeout(fn, ms);
@@ -686,7 +731,7 @@ export class Brain {
               body,
             }),
           }, ...this.#history],
-          tools ?? toolsOf(body),
+          tools ?? toolsWithConfig(body),
           { signal: turn.signal },
         );
       } catch (err) {
@@ -697,8 +742,9 @@ export class Brain {
         // the apiFailed line would be the answer to the user changing their mind.
         if (turn.signal.aborted) return;
         this.#fail('llm', /** @type {Error} */ (err));
-        // A pet has no voice to say it with: the earcon is its whole apology.
-        if (this.#bodyId() !== 'pet') await this.#say(t(this.#config.lang, 'apiFailed'), turn, { kind: 'diagnostic' });
+        // A body that answers in clips has no voice to say it with: the earcon
+        // is its whole apology (design §4.4).
+        if (body.reply !== 'clips') await this.#say(t(this.#config.lang, 'apiFailed'), turn, { kind: 'diagnostic' });
         return;
       }
 
@@ -706,8 +752,17 @@ export class Brain {
       this.#history.push(reply.rawMessage);
       // Every call needs a paired `tool` message or the NEXT request is rejected —
       // including calls we are about to drop. A returning tool's is its result.
-      const returning = this.#returningTools ?? returningToolsOf(body);
-      const handled = reply.toolCalls.filter((/** @type {{ name: string }} */ c) => returning.has(c.name) && this.#returning[c.name]);
+      // A halt anywhere in the reply is the whole turn; a body's own returning
+      // action is carried out before dispatch, so it has to be withheld here
+      // (design: returning calls included). An injected returning tool is not a
+      // body action and keeps its own mechanism.
+      const haltWins = reply.toolCalls.some((/** @type {any} */ c) => haltsCall(c, body));
+      const handled = reply.toolCalls
+        .map((/** @type {any} */ c) => ({
+          call: c,
+          plan: haltWins && bodyReturns(c, body) ? null : this.#returningPlan(c, body),
+        }))
+        .filter((/** @type {any} */ h) => h.plan !== null);
       const goOn = handled.length > 0 && round < MAX_TOOL_ROUNDS;
       // An abort in the middle of the calls must not leave the rest without a
       // result: the next request would be rejected until the history is
@@ -715,7 +770,10 @@ export class Brain {
       // placeholder, and only then does the turn stop.
       let stopped = false;
       for (const call of reply.toolCalls) {
-        const content = !stopped && goOn && handled.includes(call) ? await this.#runReturning(call, turn) : 'ok';
+        const handledCall = handled.find((/** @type {any} */ h) => h.call === call);
+        const content = !stopped && goOn && handledCall && handledCall.plan
+          ? await this.#runReturning(call, handledCall.plan, turn)
+          : 'ok';
         this.#history.push({ role: 'tool', tool_call_id: call.id, content });
         if (turn.signal.aborted) stopped = true;
       }
@@ -727,23 +785,60 @@ export class Brain {
         return;
       }
 
-      await this.#carryOut(reply, handled, turn, !goOn);
+      await this.#carryOut(reply, handled.map((/** @type {any} */ h) => h.call), turn, !goOn);
       if (!goOn) return;
     }
   }
 
   /**
+   * How a call returns a result, if it does. A body action says `returns` and
+   * what it runs, so the handler is chosen by the expanded **verb** (`draw`),
+   * not by the action's name: a renamed `pick` that runs `draw` draws a card and
+   * gets its result, exactly as `draw_card` does. The action's arguments are
+   * judged before the handler runs, with the same check `validate` uses.
+   *
+   * An injected `returningTools`/`returning` pair (the mechanism's own tests)
+   * names tools that are not body actions; those still look up by name.
+   * @param {{ name: string, args: any, rawArguments: string }} call
+   * @param {import('./bodies.js').Body} body
+   * @returns {{ handler: (args: any, signal?: AbortSignal) => Promise<string> | string,
+   *             action: import('./bodies.js').Action | null } | null}
+   */
+  #returningPlan(call, body) {
+    const returning = this.#returningTools ?? returningToolsOf(body);
+    if (!returning.has(call.name)) return null;
+
+    const action = body.actions.find((candidate) => candidate.name === call.name && candidate.returns);
+    if (!action) {
+      const byName = this.#returning[call.name];
+      return byName ? { handler: byName, action: null } : null;
+    }
+
+    const args = call.args && typeof call.args === 'object' && !Array.isArray(call.args) ? call.args : {};
+    const verb = expand(action, args).steps[0]?.verb;
+    const handler = verb ? this.#returning[verb] : this.#returning[call.name];
+    return handler ? { handler, action } : null;
+  }
+
+  /**
    * One returning tool's result as the text the model reads. A tool that throws
    * is not a failed turn: its message is the result, and the model says what
-   * it likes about that.
+   * it likes about that. A body action whose arguments do not fit its own
+   * schema is not run at all; the model reads the refusal as the result.
    * @param {{ name: string, args: any, rawArguments: string }} call
+   * @param {{ handler: (args: any, signal?: AbortSignal) => Promise<string> | string,
+   *           action: import('./bodies.js').Action | null }} plan
    * @param {AbortController} turn
    * @returns {Promise<string>}
    */
-  async #runReturning(call, turn) {
+  async #runReturning(call, plan, turn) {
     if (call.args === null) return `error: the arguments were not valid JSON — ${call.rawArguments}`;
+    if (plan.action) {
+      const wrong = argsProblem(plan.action, call.args);
+      if (wrong) return `error: ${wrong}`;
+    }
     try {
-      return String(await this.#returning[call.name](call.args, turn.signal));
+      return String(await plan.handler(call.args, turn.signal));
     } catch (err) {
       return `error: ${/** @type {Error} */ (err).message}`;
     }
@@ -764,22 +859,12 @@ export class Brain {
     const checked = validate(reply.toolCalls.filter((/** @type {any} */ c) => !handled.includes(c)), body);
     const { replyLang, reasons } = checked;
     let { actions, hadMoveIntent } = checked;
-    // Every body carries out what its actions say it does and nothing else
-    // (body motion spec §4.1 ④). A body was offered no moving and a model that
-    // moves anyway is dropped like any other refused call. Not a refusal the
-    // person should hear: the sentence beside it is the answer.
-    const can = new Set(body.actions.map((action) => action.name));
-    const refused = actions.filter((action) => !can.has(action.name));
-    if (refused.length > 0) {
-      // The wording is the car's, kept: "this body cannot move" is what the
-      // admin has been reading since a body became a config field. A pose is
-      // not moving, so it says its own name.
-      for (const action of refused) reasons.push(refusalOf(action));
-      actions = actions.filter((action) => can.has(action.name));
-      // A body that was never offered moving does not beep about a dropped
-      // move: it is the model going off-script.
-      if (!body.actions.some((action) => moves(action.run ?? []))) hadMoveIntent = false;
-    }
+    // The validator already refused every action this body does not have, so
+    // everything left is executable. What it cannot know is whether the body
+    // can move at all: a body that was never offered moving does not beep about
+    // a dropped move — that is the model going off-script, and the sentence
+    // beside it is the answer (body motion spec §4.1 ④).
+    if (!body.actions.some((action) => drives(action.run ?? []))) hadMoveIntent = false;
 
     // One line per turn, whatever happened. `calls: []` next to a sentence
     // about going forward is the whole diagnosis of "it read the parameters
@@ -820,8 +905,10 @@ export class Brain {
     // The user's call (pet screen spec §4.3): a dog barks, it does not talk.
     // The reply is not shown or spoken anywhere; the trace is the only place
     // that can answer "the model wrote a sentence, why is it silent".
-    if (this.#bodyId() === 'pet') {
-      if (reply.text) this.#trace(`[turn] pet does not speak: ${JSON.stringify(reply.text)}`);
+    // A body that answers in clips has no TTS to put words through, whatever
+    // its id is (design §4.4).
+    if (body.reply === 'clips') {
+      if (reply.text) this.#trace(`[turn] ${body.id} does not speak: ${JSON.stringify(reply.text)}`);
       return;
     }
     if (speak && reply.text) await this.#say(reply.text, turn);
@@ -900,15 +987,20 @@ export class Brain {
     // before it is judged: an action of another body is not a malformed call.
     const can = new Set(body.actions.map((action) => action.name));
     for (const call of calls) {
-      if (!can.has(call.name)) this.#trace(`[reflex] ${call.name} dropped: body "${id}" does not do ${call.name}`);
+      if (!can.has(call.name)) {
+        const subject = kindOf(call.name);
+        this.#trace(`[reflex] ${subject} dropped: body "${id}" does not do ${subject}`);
+      }
     }
     const { actions, reasons } = validate(calls.filter((call) => can.has(call.name)), body);
     for (const why of reasons) this.#trace(`[reflex] dropped — ${why}`);
     // A draw is the one reflex that does not end the turn: the card is the
     // reflex's answer, and the reading of it is still the model's (tarot mode
-    // spec §3). Everything else a reflex fires is as it always was.
+    // spec §3). Everything else a reflex fires is as it always was. A halt
+    // anywhere is the whole turn, returning calls included.
     const returning = returningToolsOf(body);
-    const drawing = actions.some((action) => returning.has(action.name));
+    const halted = actions.some((action) => action.steps.some((step) => VERB_TABLE[step.verb]?.cancelsRest));
+    const drawing = !halted && actions.some((action) => returning.has(action.name));
     const others = actions.filter((action) => !returning.has(action.name));
     const did = others.map(describeProgram);
     if (drawing) {
@@ -987,12 +1079,17 @@ export class Brain {
 
   /**
    * A card with no one speaking: the wand was shaken. Draw, shuffle, ask the
-   * model for the reading once, with no tools, and say it. Only a tarot body
-   * does this; for any other it is a line in the trace.
+   * model for the reading once, with no tools, and say it. What a shake does is
+   * the body's `triggers`, not its id: only a body whose shake reaches a
+   * returning draw does this; for any other it is a line in the trace
+   * (design §4.4).
    */
   async drawCard() {
-    if (this.#bodyId() !== 'tarot') {
-      this.#trace('[tarot] drawCard ignored: this body is not a tarot reader');
+    const body = this.#body();
+    const shake = (body.triggers ?? []).find((trigger) => trigger.on === 'shake');
+    const action = shake ? body.actions.find((candidate) => candidate.name === shake.action) : undefined;
+    if (!action?.returns) {
+      this.#trace('[tarot] drawCard ignored: this body has no shake trigger that draws');
       return;
     }
     this.#beeped = false;
@@ -1061,54 +1158,24 @@ export class Brain {
    *   the car after the emergency stop.
    */
   #dispatch(programs, signal) {
-    // A step that cancels the rest is the whole turn. Spec §6.2 argues for
-    // `move.steps` over parallel tool calls but never says what happens when a
-    // provider emits parallel calls anyway — and they do. The loop used to
-    // start every action without awaiting the previous one, and
-    // executor.move() runs synchronously all the way to device.transferOut()
-    // before it yields, so a [move, stop] turn put a full MAX_COAST_MS of
-    // forward bytes on the bus BEFORE the purge. The generation counter bumped,
-    // the renewal loop died, and the car drove a second anyway: a hole in
-    // §4.4's guarantee reachable from ordinary LLM output. Dropping the rest is
-    // right rather than merely ordering them — a turn that says both "go" and
-    // "stop" is a turn whose only safe reading is "stop". It deliberately does
-    // not look at WHERE the stop sits: `[stop, move]` run in order is safe by
-    // itself, but "the user said stop and the model helpfully appended a move"
-    // has exactly that shape, and dropping one extra action costs less than
-    // moving after a stop. A program that both drives and halts becomes the
-    // halt alone for the same reason.
-    //
-    // A program that ends on a holding step then has to be the last thing of
-    // the turn. Its renewal loop has no end condition — executor.cruise() only
-    // resolves once something else bumps the generation — so awaiting it
-    // strands everything behind it. The damage is not that those steps never
-    // run: it is that they run LATE. The next turn's action bumps the
-    // generation, the stranded hold finally returns, and this loop resumes
-    // INSIDE that later turn, running a stale step that preempts the live one —
-    // say "right", drive left, because "left" was queued behind a hold ten
-    // seconds ago. The generation counter cannot catch that; it guards the
-    // executor's own loops, not a for-loop here holding a previous turn's
-    // array.
-    /** @type {Program[]} */
-    let ordered;
-    const halted = halting(programs);
-    if (halted) {
-      ordered = [halted];
-    } else {
-      const last = programs.findIndex((program) => holds(program.steps.at(-1)));
-      ordered = last === -1 ? programs : programs.slice(0, last + 1);
-    }
-
-    // A step that runs before speech goes first (pet screen spec §4.6): a trick
-    // and its bark are one gesture, and a bark that lands a second before the
-    // dog sits reads as two unrelated things. Stable, so two of them keep the
-    // model's order.
-    ordered = [...ordered.filter(aims), ...ordered.filter((program) => !aims(program))];
+    // Sort the turn's STEPS, not its programs (design: `#dispatch` flattens
+    // first). Program-level sorting turned `[voice, pose]` into a pose before
+    // the bark and `[bark, pose+hold]` into a bark behind a hold; the steps
+    // themselves are what the verb flags describe. The rules live in
+    // `orderedSteps`.
+    const ordered = orderedSteps(programs);
 
     // Sequential inside, unawaited outside: each step still waits for the
     // previous one's motion to end (which is what restores the ordering the
     // awaited version had), while handle() returns immediately — the
     // non-blocking property test/brain.test.js pins.
+    //
+    // Consecutive numeric `drive` steps are ONE `executor.move([...])`. Sent
+    // one at a time, a two-step `move` became two executor calls, so a `stop`
+    // from a later turn cancelled only the first and the queued second step ran
+    // afterwards — `move:left → stop → move:right`, reproduced. One call is one
+    // thing for the generation counter to cancel. A hold-drive is
+    // `executor.cruise`, has no end of its own, and is last by `orderedSteps`.
     //
     // The catch is here because nothing awaits this. The executor reports write
     // failures through its own onError; this only covers the unexpected, and
@@ -1116,12 +1183,33 @@ export class Brain {
     // earcon and after the spoken reply, whenever the rejection surfaces. That
     // is fine: a last-resort guard, not the normal error path.
     (async () => {
-      for (const program of ordered) {
-        for (const step of program.steps) {
-          if (signal?.aborted) return;
-          await this.#run(step);
+      /** @type {MoveStep[]} */
+      let frames = [];
+      const flush = async () => {
+        if (frames.length === 0) return;
+        const batch = frames;
+        frames = [];
+        await this.#executor.move(batch);
+      };
+
+      for (const step of ordered) {
+        if (signal?.aborted) {
+          // A stop voids the queue, including a batch not yet sent.
+          frames = [];
+          return;
         }
+        const args = /** @type {any} */ (step.args);
+        if (step.verb === 'drive' && args.ms !== 'hold') {
+          frames.push({ drive: args.drive, steer: args.steer, duration_ms: args.ms });
+          continue;
+        }
+        // No `await` when there is nothing to flush: the first step must run
+        // synchronously, as the old loop did, or the 'done' beep would land
+        // before the bark it is meant to follow.
+        if (frames.length > 0) await flush();
+        await this.#run(step);
       }
+      await flush();
     })().catch(() => this.#earcon('error'));
   }
 

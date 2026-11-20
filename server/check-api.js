@@ -12,7 +12,8 @@ import { toInt16 } from '../core/audio/pcm.js';
 import { encodeWav } from '../core/providers/stt-openai-compat.js';
 import { OpenAiCompatLlm } from '../core/providers/llm-openai-compat.js';
 import { Reflex } from '../core/reflex.js';
-import { TOOLS, buildSystemPrompt } from '../core/brain.js';
+import { SET_REPLY_LANGUAGE, toolsOf, buildSystemPrompt } from '../core/brain.js';
+import { resolveBody } from '../core/bodies.js';
 import { parseWav } from './audio/pcm.js';
 import { FIXTURES_DIR } from './dist-pages.js';
 import { makeStt, makeTtsSource } from './providers/pick.js';
@@ -53,7 +54,8 @@ export function createCheckApi(opts = {}) {
           toInt16(wav.samples), wav.rate);
       } else if (layer === 'llm') {
         text = await checkLlm(new OpenAiCompatLlm(config, { ...net, timeoutMs }), {
-          tools: TOOLS, systemPrompt: buildSystemPrompt({ replyLang: null }),
+          tools: [...toolsOf(resolveBody('toy')), SET_REPLY_LANGUAGE],
+          systemPrompt: buildSystemPrompt({ replyLang: null }),
         });
       } else {
         text = await checkReflex(new Reflex(config, net), String(body?.heard ?? 'hello'), String(body?.robotSaid ?? ''));

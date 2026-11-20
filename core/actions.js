@@ -144,7 +144,7 @@ export function actionProblem(action, opts) {
     // verb's own schema can judge it now: `drive: 'sideways'` becomes a refusal
     // an author can read, instead of a step that vanishes at every call.
     const literal = step.args ?? {};
-    if (used.length === 0 && !fits(literal, verb.args)) {
+    if (used.length === 0 && !fitsSchema(literal, verb.args)) {
       return `${at} gives ${step.verb} ${JSON.stringify(literal)}; ${expectationOf(verb.args)}`;
     }
   }
@@ -200,7 +200,7 @@ export function expand(action, args) {
 
     if (step.each === undefined) {
       const filled = fill(step.args ?? {}, args, null);
-      if (!fits(filled, verb.args)) {
+      if (!fitsSchema(filled, verb.args)) {
         dropped.push({ where: 'args', value: filled, expect: expectationOf(verb.args) });
         continue;
       }
@@ -225,7 +225,7 @@ export function expand(action, args) {
 
     for (const [j, element] of elements.entries()) {
       const filled = fill(step.args ?? {}, args, element);
-      if (fits(filled, verb.args)) steps.push({ verb: step.verb, args: asRecord(filled) });
+      if (fitsSchema(filled, verb.args)) steps.push({ verb: step.verb, args: asRecord(filled) });
       else dropped.push({ where: at(j), value: element, expect: expectationOf(itemSchema ?? verb.args) });
     }
   }
@@ -377,31 +377,42 @@ function isRecord(value) {
 }
 
 /**
- * Whether a filled value fits a verb's schema. `anyOf` tries each branch —
- * `ms` is why: an integer from 1 up, or the literal `hold`, and no upper bound.
+ * Whether a filled value fits a schema of the subset actions are written in.
+ * This is the one checker both `actions.js` and the brain use: a second copy
+ * drifted on an unknown `type` and on a top-level `anyOf`, and two answers to
+ * the same question is how a value ends up accepted in one place and refused
+ * in the other.
+ *
+ * A schema that says nothing (`undefined`, a non-object, or no `type` at all)
+ * is "cannot tell", not "no": the caller still applies its verb. A type outside
+ * the subset is refused — nothing is known to be allowed. `anyOf` tries each
+ * branch, top-level included; `ms` is why (an integer from 1 up, or `hold`).
  * @param {unknown} value
- * @param {JsonSchemaSubset} schema
+ * @param {JsonSchemaSubset | undefined} schema
  * @returns {boolean}
  */
-function fits(value, schema) {
-  if (schema.anyOf) return schema.anyOf.some((branch) => fits(value, branch));
+export function fitsSchema(value, schema) {
+  if (!schema || typeof schema !== 'object') return true;
+  if (Array.isArray(schema.anyOf)) return schema.anyOf.some((branch) => fitsSchema(value, branch));
   if (schema.const !== undefined) return value === schema.const;
-  if (schema.enum) return schema.enum.includes(/** @type {string | number} */ (value));
+  if (Array.isArray(schema.enum)) return schema.enum.includes(/** @type {string | number} */ (value));
 
   switch (schema.type) {
+    case undefined:
+      return true;
     case 'object': {
       if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
       const obj = /** @type {Record<string, unknown>} */ (value);
       for (const key of schema.required ?? []) if (!(key in obj)) return false;
       for (const [key, sub] of Object.entries(schema.properties ?? {})) {
-        if (key in obj && !fits(obj[key], sub)) return false;
+        if (key in obj && !fitsSchema(obj[key], sub)) return false;
       }
       return true;
     }
     case 'array': {
       if (!Array.isArray(value)) return false;
       const items = schema.items;
-      return items ? value.every((item) => fits(item, items)) : true;
+      return items ? value.every((item) => fitsSchema(item, items)) : true;
     }
     case 'integer': {
       if (!Number.isInteger(value)) return false;
@@ -416,7 +427,6 @@ function fits(value, schema) {
     case 'boolean':
       return typeof value === 'boolean';
     default:
-      // No type and no const/enum/anyOf: nothing is known to be allowed.
       return false;
   }
 }
