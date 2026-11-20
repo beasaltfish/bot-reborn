@@ -1,5 +1,5 @@
 export type LayerName = 'stt' | 'llm' | 'tts' | 'reflex';
-export type TabName = 'basic' | LayerName;
+export type TabName = 'basic' | 'body' | LayerName;
 
 /** One provider a character talks to, and the key for it. See server/endpoints.js. */
 export interface Endpoint {

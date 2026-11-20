@@ -3,15 +3,19 @@ import { api } from './api';
 import { deepMerge } from './merge';
 import { useAutoSave } from './useAutoSave';
 import { BasicTab } from './BasicTab';
+import { BodyTab } from './BodyTab';
 import { LayerTab } from './LayerTab';
 import { ReflexSwitch, ReflexTab } from './ReflexTab';
 import { Dot } from './CharacterList';
 import { runCheck, runTry, type CheckFn, type TryFn } from './checks';
 import { t, type Key } from './i18n';
-import type { Detail, EditorSlot, Patch, TabName } from './types';
+import type { Detail, EditorSlot, LayerName, Patch, TabName } from './types';
+
+const LAYERS: LayerName[] = ['stt', 'llm', 'tts'];
+const isLayer = (name: TabName): name is LayerName => LAYERS.includes(name as LayerName);
 
 const TABS: Array<[TabName, Key]> = [
-  ['basic', 'tabBasic'], ['stt', 'tabStt'], ['llm', 'tabLlm'], ['tts', 'tabTts'], ['reflex', 'tabReflex'],
+  ['basic', 'tabBasic'], ['body', 'tabBody'], ['stt', 'tabStt'], ['llm', 'tabLlm'], ['tts', 'tabTts'], ['reflex', 'tabReflex'],
 ];
 
 export function Editor(props: EditorSlot & { check?: CheckFn; tryReflex?: TryFn }) {
@@ -71,9 +75,11 @@ export function Editor(props: EditorSlot & { check?: CheckFn; tryReflex?: TryFn 
       <div role="tabpanel" className="panel">
         {save.error && <p role="alert" className="error">{t('saveFailed')}{save.error}</p>}
         {tab === 'reflex' && <ReflexSwitch reflex={detail.config.reflex} update={update} />}
-        {tab === 'basic'
-          ? <BasicTab detail={detail} update={update} onToken={(token) => setDetail((d) => (d ? { ...d, token } : d))} />
-          : <LayerTab key={tab} id={id} layer={tab} config={detail.config} endpoints={detail.endpoints} update={update} check={props.check ?? runCheck} />}
+        {tab === 'basic' && <BasicTab detail={detail} update={update} onToken={(token) => setDetail((d) => (d ? { ...d, token } : d))} />}
+        {tab === 'body' && <BodyTab detail={detail} update={update} />}
+        {isLayer(tab) && (
+          <LayerTab key={tab} id={id} layer={tab} config={detail.config} endpoints={detail.endpoints} update={update} check={props.check ?? runCheck} />
+        )}
         {tab === 'reflex' && <ReflexTab config={detail.config} saved={detail.savedReflexes ?? []} update={update} tryIt={props.tryReflex ?? runTry} />}
       </div>
     </section>

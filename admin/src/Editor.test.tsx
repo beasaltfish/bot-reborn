@@ -60,15 +60,14 @@ describe('Editor', () => {
     expect(fake.patches()[0].body).toEqual({ config: { bargeIn: false } });
   });
 
-  it('picks how the body moves, and says when it takes effect', async () => {
+  it('gives the body its own tab, and Basic no longer picks one', async () => {
     const fake = installFakeApi([{ name: 'A' }]);
     render(<Editor {...props()} />);
-    const body = await screen.findByLabelText('Body');
-    expect(body).toHaveValue('car');
-    expect(screen.getByText('Takes effect the next time the body connects.')).toBeInTheDocument();
-    await userEvent.selectOptions(body, 'dry-run');
-    await waitFor(() => expect(fake.patches()).toHaveLength(1), { timeout: 2000 });
-    expect(fake.patches()[0].body).toEqual({ config: { body: { id: 'dry-run' } } });
+    expect(await screen.findByRole('tab', { name: 'Body' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Body')).toBeNull();
+    await userEvent.click(screen.getByRole('tab', { name: 'Body' }));
+    expect(screen.getAllByRole('radio')).toHaveLength(5);
+    expect(fake.chars.get('A')?.config.body.id).toBe('car');
   });
 
   it('renames through the name field', async () => {
@@ -227,8 +226,8 @@ describe('Editor', () => {
 
   it('reflex: says which configured actions this body will ignore', async () => {
     installFakeApi([{ name: 'A' }]);
-    render(<Editor {...props()} />);
-    await userEvent.selectOptions(await screen.findByLabelText('Body'), 'none');
+    render(<Editor {...props({ initialTab: 'body' })} />);
+    await userEvent.click(await screen.findByRole('radio', { name: /no moving parts/i }));
     await userEvent.click(screen.getByRole('tab', { name: 'Reflex' }));
     await userEvent.selectOptions(screen.getByLabelText('Reflex preset'), 'commands');
     expect(screen.getByRole('note')).toHaveTextContent(/move/);
@@ -377,14 +376,15 @@ describe('Editor', () => {
   });
 });
 
-it('pet: the body can be picked, and the preset fills in the three tricks', async () => {
+it('pet: the body is picked from its card, and the patch says pet', async () => {
   const fake = installFakeApi([{ name: 'A' }]);
-  render(<Editor {...props()} />);
-  const body = await screen.findByLabelText('Body');
-  expect(screen.getByRole('option', { name: 'Pet on a screen — poses and barks, never speaks' })).toBeInTheDocument();
-  await userEvent.selectOptions(body, 'pet');
+  render(<Editor {...props({ initialTab: 'body' })} />);
+  const pet = await screen.findByRole('radio', { name: /pet on a screen/i });
+  expect(pet).not.toBeChecked();
+  await userEvent.click(pet);
   await waitFor(() => expect(fake.patches()).toHaveLength(1), { timeout: 2000 });
   expect(fake.patches()[0].body).toEqual({ config: { body: { id: 'pet' } } });
+  expect(pet).toBeChecked();
 });
 
 it('pet: the reflex preset writes a question the editor can show', async () => {
@@ -415,14 +415,15 @@ it('pet: an action can be a pose, and the pose is picked from the three', async 
     .toEqual([{ name: 'pose', args: { name: 'spin' } }]), { timeout: 2000 });
 });
 
-it('tarot: the body can be picked, in English', async () => {
+it('tarot: the body is picked from its card, in English', async () => {
   const fake = installFakeApi([{ name: 'A' }]);
-  render(<Editor {...props()} />);
-  const body = await screen.findByLabelText('Body');
-  expect(screen.getByRole('option', { name: 'Tarot — draws a card and reads it aloud' })).toBeInTheDocument();
-  await userEvent.selectOptions(body, 'tarot');
+  render(<Editor {...props({ initialTab: 'body' })} />);
+  const tarot = await screen.findByRole('radio', { name: /tarot reader/i });
+  expect(tarot).not.toBeChecked();
+  await userEvent.click(tarot);
   await waitFor(() => expect(fake.patches()).toHaveLength(1), { timeout: 2000 });
   expect(fake.patches()[0].body).toEqual({ config: { body: { id: 'tarot' } } });
+  expect(tarot).toBeChecked();
 });
 
 it('tarot: the reflex preset writes a question the editor can show', async () => {
