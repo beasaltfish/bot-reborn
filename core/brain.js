@@ -9,7 +9,7 @@ import { t } from './strings.js';
 import { TEMPLATES, resolveBody } from './bodies.js';
 import { drawRandom, describeDraw } from './tarot.js';
 import { VERBS } from './verbs.js';
-import { expand, expectationOf, fitsSchema } from './actions.js';
+import { expand, expectationOf, fitsSchema, withoutWalked } from './actions.js';
 
 const HISTORY_ROUNDS = 6;
 
@@ -354,27 +354,23 @@ function argsProblem(action, args) {
     }
   }
 
-  // An action that takes nothing (`stop`, `draw_card`) ignores what came: it
-  // never read its arguments, and a validator that refuses an empty list now
-  // where it accepted one before is a refusal nobody asked for.
-  if (!args || typeof args !== 'object' || Array.isArray(args)) {
-    return Object.keys(schema.properties ?? {}).length > 0 || (schema.required ?? []).length > 0
-      ? rejected
-      : null;
-  }
-
   // The ROOT schema is the judge, through the one checker both modules share:
   // walking only `properties` missed a root `anyOf` (the verb's own union) and
   // accepted `{}` for an action that requires one of two shapes. The arrays a
   // step walks are replaced by "an array" first, so their elements stay
   // `usableArgs`' business — one bad element costs one step, not the call.
+  //
+  // The value handed to it is the one the model sent, whatever its shape: a
+  // list is not turned into an object, so a root that only accepts objects
+  // refuses `[]` exactly as it refuses `{}`. An action that takes nothing is
+  // declared with an empty object schema, so a non-object argument is now
+  // refused there too — it never read one to begin with.
   const root = withoutWalked(schema, walked);
   // A body may write `{ required, properties }` without `type`; the old walk
   // read that as an object schema, and `fitsSchema` alone calls a missing type
-  // "cannot tell" and would accept anything. An action's arguments are an
-  // object by contract, so it is judged as one.
-  const judged = root.type === undefined && root.anyOf === undefined
-    && (root.properties !== undefined || root.required !== undefined)
+  // "cannot tell". An action's arguments are an object by contract, so it is
+  // judged as one — beside any `anyOf` the root also carries.
+  const judged = root.type === undefined && (root.properties !== undefined || root.required !== undefined)
     ? { ...root, type: 'object' }
     : root;
   return fitsSchema(args, judged) ? null : rejected;
@@ -392,29 +388,6 @@ function walkNames(action) {
     if (step.each !== undefined) names.add(step.each);
   }
   return names;
-}
-
-/**
- * The action's schema with every walked array reduced to its type, through
- * `anyOf` and `properties`, so the root can be judged without judging elements
- * that `expand` will refuse one at a time.
- * @param {any} schema
- * @param {Set<string>} walked
- * @returns {any}
- */
-function withoutWalked(schema, walked) {
-  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return schema;
-  const out = { ...schema };
-  if (Array.isArray(schema.anyOf)) out.anyOf = schema.anyOf.map((/** @type {any} */ branch) => withoutWalked(branch, walked));
-  if (schema.properties && typeof schema.properties === 'object' && !Array.isArray(schema.properties)) {
-    /** @type {Record<string, any>} */
-    const properties = {};
-    for (const [key, sub] of Object.entries(schema.properties)) {
-      properties[key] = walked.has(key) ? { type: 'array' } : withoutWalked(sub, walked);
-    }
-    out.properties = properties;
-  }
-  return out;
 }
 
 /**
@@ -682,11 +655,13 @@ export class Brain {
   /** @type {AbortController | null} */
   #turn = null;
   /**
-   * The generation of the turn in flight. Every `#dispatch` records it, and a
-   * step awaited behind a move checks it again after every await: a move that
-   * ends inside a LATER turn wakes the old loop with a live signal, and only
-   * this can tell it that the body has been taken. `cancel()` is the signal's
-   * half; a new turn is this one's.
+   * The generation of the commands in flight. Every `#dispatch` that sends a
+   * command — `move`, `cruise`, `stop` — bumps it, and `cancel()` bumps it; a
+   * step awaited behind a move checks it after every await. It is not the
+   * turn: a speak-only turn disturbs nothing, and a new dispatch takes over
+   * only when it sends commands. A move that ends inside a LATER turn wakes the
+   * old loop with a live signal, and only this can tell it that the body has
+   * been taken.
    */
   #dispatchGen = 0;
   /** @type {object[]} */ #history = [];
@@ -754,7 +729,12 @@ export class Brain {
    * it — a wake word heard during THINKING, the user talking over the reply
    * when `bargeIn` is on, and the emergency stop button (§4.1 layer 2).
    */
-  cancel() { this.#turn?.abort(); }
+  cancel() {
+    // An explicit cancel takes the body even when the aborted turn dispatched
+    // nothing: the stop button and the wake word must void a live queue.
+    this.#dispatchGen++;
+    this.#turn?.abort();
+  }
 
   /** Spec §6.4: cleared when the session times out back to SLEEPING. */
   resetHistory() { this.#history = []; }
@@ -771,9 +751,8 @@ export class Brain {
     // worse than one that never works.
     const turn = new AbortController();
     this.#turn = turn;
-    // A new turn takes the body: whatever a previous turn's dispatch still has
-    // queued must not send when its move finally ends.
-    this.#dispatchGen++;
+    // A turn is not a command: a speak-only turn leaves whatever a previous
+    // dispatch still has queued alone. `#dispatch` and `cancel()` take the body.
     this.#turnCard = null;
 
     // Configurable reflex spec §3: asked before the LLM, never beside it.
@@ -1187,7 +1166,7 @@ export class Brain {
     this.#beeped = false;
     const turn = new AbortController();
     this.#turn = turn;
-    this.#dispatchGen++;
+    // A draw sends no command, so it does not take the body; see #dispatch.
     this.#turnCard = null;
     const card = await this.#startDraw();
     this.#pushUser(`[The person shook the wand and drew a card.]\n${describeDraw(card)}`);
@@ -1258,13 +1237,20 @@ export class Brain {
     // `orderedSteps`.
     const ordered = orderedSteps(programs);
 
-    // Which dispatch is the live one. The signal says the user cancelled; the
-    // generation says a later turn has taken the body, which the signal cannot:
-    // a step that was awaiting a move wakes up inside that later turn, and a
-    // turn nobody cancelled still must not drive there. Both are checked after
-    // every await and before every command — checking only at the top of the
-    // loop let `[move, cruise]` resume a cancelled turn and cruise after the
-    // stop.
+    // Which dispatch is live. The signal says the user cancelled; the
+    // generation says a later command has taken the body, which the signal
+    // cannot: a step that was awaiting a move wakes up inside a later turn, and
+    // a turn nobody cancelled still must not drive there. Both are checked
+    // after every await and before every command — checking only at the top of
+    // the loop let `[move, cruise]` resume a cancelled turn and cruise after
+    // the stop.
+    //
+    // A new dispatch takes over only when it sends commands: only `move`,
+    // `cruise` and `stop` bump the generation. A turn that speaks, barks or
+    // poses leaves a live queue alone, because it commands nothing; `cancel()`
+    // bumps on its own for the explicit stop.
+    const commands = ordered.some((step) => step.verb === 'drive' || step.verb === 'halt');
+    if (commands) this.#dispatchGen++;
     const gen = this.#dispatchGen;
     const live = () => gen === this.#dispatchGen && !signal?.aborted;
 

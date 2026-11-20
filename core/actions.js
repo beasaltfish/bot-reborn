@@ -387,28 +387,32 @@ function isRecord(value) {
  * is "cannot tell", not "no": the caller still applies its verb. A type outside
  * the subset is refused — nothing is known to be allowed. `anyOf` tries each
  * branch, top-level included; `ms` is why (an integer from 1 up, or `hold`).
+ * The branch is one constraint, not the whole schema: a root `required`
+ * written beside the union still has to hold, as it did in the validator this
+ * replaced.
  * @param {unknown} value
  * @param {JsonSchemaSubset | undefined} schema
  * @returns {boolean}
  */
 export function fitsSchema(value, schema) {
   if (!schema || typeof schema !== 'object') return true;
-  if (Array.isArray(schema.anyOf)) return schema.anyOf.some((branch) => fitsSchema(value, branch));
+  if (Array.isArray(schema.anyOf) && !schema.anyOf.some((branch) => fitsSchema(value, branch))) {
+    return false;
+  }
   if (schema.const !== undefined) return value === schema.const;
   if (Array.isArray(schema.enum)) return schema.enum.includes(/** @type {string | number} */ (value));
 
   switch (schema.type) {
     case undefined:
-      return true;
-    case 'object': {
-      if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-      const obj = /** @type {Record<string, unknown>} */ (value);
-      for (const key of schema.required ?? []) if (!(key in obj)) return false;
-      for (const [key, sub] of Object.entries(schema.properties ?? {})) {
-        if (key in obj && !fitsSchema(obj[key], sub)) return false;
-      }
-      return true;
-    }
+      // A schema that names fields is an object schema without the word — a
+      // root is often written that way — and its `required` must hold beside
+      // whichever branch the value chose. A schema with no constraints at all
+      // is still "cannot tell".
+      return schema.required === undefined && schema.properties === undefined
+        ? true
+        : fitsObject(value, schema);
+    case 'object':
+      return fitsObject(value, schema);
     case 'array': {
       if (!Array.isArray(value)) return false;
       const items = schema.items;
@@ -429,6 +433,54 @@ export function fitsSchema(value, schema) {
     default:
       return false;
   }
+}
+
+/**
+ * The object half of `fitsSchema`: a record, its `required` keys, and whatever
+ * properties it carries. Shared by `type: 'object'` and by a schema that names
+ * fields without naming its type.
+ * @param {unknown} value
+ * @param {JsonSchemaSubset} schema
+ * @returns {boolean}
+ */
+function fitsObject(value, schema) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const obj = /** @type {Record<string, unknown>} */ (value);
+  for (const key of schema.required ?? []) if (!(key in obj)) return false;
+  for (const [key, sub] of Object.entries(schema.properties ?? {})) {
+    if (key in obj && !fitsSchema(obj[key], sub)) return false;
+  }
+  return true;
+}
+
+/**
+ * The schema with the arrays a program walks reduced to their type, so the root
+ * can be judged without judging elements `expand` will refuse one at a time.
+ * Only the exact argument the step names is exempt: an object schema's own
+ * level (the root and its `anyOf` branches) is where arguments live, and a
+ * `steps` nested inside `meta` is a different field with its own schema.
+ * @param {any} schema
+ * @param {ReadonlySet<string>} walked
+ * @param {boolean} [argumentLevel] whether this node holds arguments themselves
+ * @returns {any}
+ */
+export function withoutWalked(schema, walked, argumentLevel = true) {
+  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return schema;
+  const out = { ...schema };
+  if (Array.isArray(schema.anyOf)) {
+    out.anyOf = schema.anyOf.map((/** @type {any} */ branch) => withoutWalked(branch, walked, argumentLevel));
+  }
+  if (schema.properties && typeof schema.properties === 'object' && !Array.isArray(schema.properties)) {
+    /** @type {Record<string, any>} */
+    const properties = {};
+    for (const [key, sub] of Object.entries(schema.properties)) {
+      properties[key] = argumentLevel && walked.has(key)
+        ? { type: 'array' }
+        : withoutWalked(sub, walked, false);
+    }
+    out.properties = properties;
+  }
+  return out;
 }
 
 /**

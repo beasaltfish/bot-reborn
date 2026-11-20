@@ -742,10 +742,53 @@ test('a cancelled turn does not resume when its motion ends', async () => {
     ['move', 'stop'], 'the cancelled turn must not send its next step');
 });
 
+test('a speak-only turn does not take the body from a live queue', async () => {
+  // The generation used to bump at the start of every turn, so a turn that
+  // only spoke killed the cruise waiting behind a move: `move → cruise` became
+  // `move`. It is the command that takes the body, not the turn.
+  const h = brainHarness({ gateMotion: true, reply: (/** @type {number} */ n) => (n === 1
+    ? say('', [
+      { id: 'm1', name: 'move', args: { steps: [{ drive: 'forward', steer: 'straight', duration_ms: 600 }] } },
+      { id: 'c1', name: 'cruise', args: { drive: 'forward', steer: 'straight' } },
+    ])
+    : say('A pleasant afternoon.')) });
+
+  await h.brain.handle('forward, then keep going');
+  await flushMicrotasks();
+  await h.brain.handle('nice day');
+  h.motionGates[0].resolve();
+  await flushMicrotasks();
+
+  assert.deepEqual(h.events.filter((e) => e.op === 'cruise'),
+    [{ op: 'cruise', drive: 'forward', steer: 'straight' }],
+    'the queued cruise must survive a turn that only speaks');
+});
+
+test('a later turn that sends stop kills the queued cruise', async () => {
+  // The counterpart: `[move, cruise]` waiting behind a gate, then a stop from
+  // another turn. The stop is a command, so it takes the body and the cruise
+  // must not follow it.
+  const h = brainHarness({ gateMotion: true, reply: (/** @type {number} */ n) => (n === 1
+    ? say('', [
+      { id: 'm1', name: 'move', args: { steps: [{ drive: 'forward', steer: 'straight', duration_ms: 600 }] } },
+      { id: 'c1', name: 'cruise', args: { drive: 'forward', steer: 'straight' } },
+    ])
+    : say('', [{ id: 'c2', name: 'stop', args: {} }])) });
+
+  await h.brain.handle('forward, then keep going');
+  await flushMicrotasks();
+  await h.brain.handle('stop');
+  h.motionGates[0].resolve();
+  await flushMicrotasks();
+
+  assert.deepEqual(h.events.filter((e) => e.op !== 'earcon' && e.op !== 'speak').map((e) => e.op),
+    ['move', 'stop'], 'the stop takes the body and voids the cruise');
+});
+
 test('a later turn takes the body even when the old one was never cancelled', async () => {
   // The signal cannot see this: nobody pressed stop, a new turn simply began.
-  // The generation is what says the old dispatch no longer owns the body, so a
-  // bark queued behind a move must not land after the new turn's stop.
+  // The new turn's stop is the command that takes the body, so a bark queued
+  // behind a move must not land after it.
   const h = brainHarness({ gateMotion: true, reply: (/** @type {number} */ n) => (n === 1
     ? say('', [
       { id: 'm1', name: 'move', args: { steps: [{ drive: 'forward', steer: 'straight', duration_ms: 600 }] } },
@@ -1668,6 +1711,95 @@ test('the root schema is the judge, a top-level anyOf included', () => {
     run: [{ verb: 'drive', args: { drive: '$who', steer: 'straight', ms: 300 } }],
   }];
   assert.deepEqual(validate([call('tap', {})], body).actions, []);
+});
+
+test('root constraints and branch constraints both hold', () => {
+  // `anyOf` used to return its branch's verdict and skip the rest of the same
+  // schema, so a root `required: ['ok']` beside the union was never read:
+  // `{x:1}` ran. Both have to hold.
+  const body = resolveBody('none');
+  body.actions = [{
+    name: 'aim',
+    label: { en: 'Aim', zh: '瞄准' },
+    say: 'Aim with a note that says it is allowed.',
+    args: {
+      type: 'object',
+      required: ['ok'],
+      anyOf: [{
+        type: 'object',
+        required: ['x'],
+        properties: { x: { type: 'integer' } },
+      }],
+    },
+    run: [{ verb: 'halt', args: {} }],
+  }];
+
+  const branchOnly = validate([call('aim', { x: 1 })], body);
+  assert.deepEqual(branchOnly.actions, [], 'the branch fits, the root does not');
+  assert.match(branchOnly.reasons[0], /^aim: rejected — \{"x":1\};/);
+
+  const both = validate([call('aim', { ok: true, x: 1 })], body);
+  assert.equal(both.actions.length, 1, 'both the root and the branch hold');
+
+  const rootOnly = validate([call('aim', { ok: true })], body);
+  assert.deepEqual(rootOnly.actions, [], 'the root fits, the branch does not');
+});
+
+test('an array is judged by the root schema, no shape invented for it', () => {
+  // The early return for non-objects only looked at `properties`/`required`,
+  // so a root `anyOf` of object shapes never saw the list: `[]` ran as an
+  // action. The real value goes to the checker now.
+  const body = resolveBody('none');
+  body.actions = [{
+    name: 'aim',
+    label: { en: 'Aim', zh: '瞄准' },
+    say: 'Aim with x.',
+    args: {
+      anyOf: [{
+        type: 'object',
+        required: ['x'],
+        properties: { x: { type: 'integer' } },
+      }],
+    },
+    run: [{ verb: 'halt', args: {} }],
+  }];
+
+  const r = validate([call('aim', [])], body);
+  assert.deepEqual(r.actions, [], 'a list is not one of the object shapes');
+  assert.match(r.reasons[0], /^aim: rejected — \[\];/);
+});
+
+test('the walked-array exemption only touches the argument it walks', () => {
+  // `withoutWalked` matched by NAME at every depth, so `each: 'steps'` also
+  // rewrote `meta.steps` from a string schema to `{type:'array'}`: the legal
+  // string was refused and the illegal list was accepted. Only the exact
+  // argument path is the one `expand` walks.
+  const body = resolveBody('none');
+  body.actions = [{
+    name: 'glide',
+    label: { en: 'Glide', zh: '滑' },
+    say: 'Glide over steps, with a note.',
+    args: {
+      type: 'object',
+      required: ['steps', 'meta'],
+      properties: {
+        steps: { type: 'array', items: { type: 'integer' } },
+        meta: {
+          type: 'object',
+          required: ['steps'],
+          properties: { steps: { type: 'string' } },
+        },
+      },
+    },
+    run: [{ verb: 'halt', each: 'steps', args: {} }],
+  }];
+
+  const legal = validate([call('glide', { steps: [1], meta: { steps: 'now' } })], body);
+  assert.equal(legal.actions.length, 1, 'meta.steps is still a string schema');
+
+  const illegal = validate([call('glide', { steps: [1], meta: { steps: [] } })], body);
+  assert.deepEqual(illegal.actions, [], 'meta.steps is not an array');
+  assert.match(illegal.reasons[0], /^glide: rejected — \{"steps":\[1\],"meta":\{"steps":\[\]\}\};/);
 });
 
 test('a program that halts becomes the halt, whatever else it asked for', async () => {
