@@ -1249,10 +1249,14 @@ export class Brain {
     // `cruise` and `stop` bump the generation. A turn that speaks, barks or
     // poses leaves a live queue alone, because it commands nothing; `cancel()`
     // bumps on its own for the explicit stop.
-    const commands = ordered.some((step) => step.verb === 'drive' || step.verb === 'halt');
-    if (commands) this.#dispatchGen++;
-    const gen = this.#dispatchGen;
+    let gen = this.#dispatchGen;
+    let claimed = false;
     const live = () => gen === this.#dispatchGen && !signal?.aborted;
+    const claim = () => {
+      if (claimed) return;
+      gen = ++this.#dispatchGen;
+      claimed = true;
+    };
 
     // Sequential inside, unawaited outside: each step still waits for the
     // previous one's motion to end (which is what restores the ordering the
@@ -1279,6 +1283,7 @@ export class Brain {
         if (!live()) { frames = []; return; }
         const batch = frames;
         frames = [];
+        claim();
         await this.#executor.move(batch);
       };
 
@@ -1302,7 +1307,7 @@ export class Brain {
           // the emergency stop exists to prevent.
           if (!live()) return;
         }
-        await this.#run(step);
+        await this.#run(step, claim);
       }
       await flush();
     })().catch(() => this.#earcon('error'));
@@ -1315,16 +1320,19 @@ export class Brain {
    * other by its `ms`, and a numeric duration stays whole — the carrier slices
    * it, not this.
    * @param {ProgramStep} step
+   * @param {() => void} claim take the body immediately before sending a command
    * @returns {Promise<void>}
    */
-  #run(step) {
+  #run(step, claim) {
     const args = /** @type {any} */ (step.args);
     switch (step.verb) {
       case 'drive':
+        claim();
         return args.ms === 'hold'
           ? this.#executor.cruise(args.drive, args.steer)
           : this.#executor.move([{ drive: args.drive, steer: args.steer, duration_ms: args.ms }]);
       case 'halt':
+        claim();
         return this.#executor.stop();
       case 'voice':
         return this.#sound(args.clip);

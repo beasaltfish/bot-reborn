@@ -439,13 +439,15 @@ test('one walked array is judged once, even when two steps walk it', () => {
  * Y in this array" — event order alone cannot distinguish an awaited
  * #dispatch from a fire-and-forget one when the fake resolves instantly
  * either way (see the review note on the test this exists for).
- * @returns {{ promise: Promise<void>, resolve: (value?: any) => void }}
+ * @returns {{ promise: Promise<void>, resolve: (value?: any) => void, reject: (reason: Error) => void }}
  */
 function deferred() {
   /** @type {(value?: any) => void} */
   let resolve = () => {};
-  const promise = new Promise((res) => { resolve = res; });
-  return { promise, resolve };
+  /** @type {(reason: Error) => void} */
+  let reject = () => {};
+  const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
 }
 
 /** @param {{ id?: 'toy' | 'dry-run' | 'none' | 'pet', actions?: any[], reply?: any, gateMotion?: boolean, reflex?: any, holdSound?: boolean }} [opts] */
@@ -504,7 +506,7 @@ function brainHarness({ id = 'toy', actions, reply, gateMotion = false, reflex =
   const earcon = (/** @type {any} */ name) => events.push({ op: 'earcon', name });
   // holdSound: every sound stays "playing" until the test resolves its gate —
   // the window in which somebody can hit the stop button mid-bark.
-  /** @type {Array<{ promise: Promise<void>, resolve: (value?: any) => void }>} */
+  /** @type {ReturnType<typeof deferred>[]} */
   const soundGates = [];
   const sound = async (/** @type {any} */ name) => {
     events.push({ op: 'sound', name });
@@ -763,6 +765,52 @@ test('a speak-only turn does not take the body from a live queue', async () => {
     [{ op: 'cruise', drive: 'forward', steer: 'straight' }],
     'the queued cruise must survive a turn that only speaks');
 });
+
+for (const bark of ['invalid', 'pending', 'failing']) {
+  test(`dispatch with ${bark} bark: only sending the move takes over`, async () => {
+    const first = [{ drive: 'forward', steer: 'straight', duration_ms: 600 }];
+    const second = [{ drive: 'backward', steer: 'straight', duration_ms: 600 }];
+    const h = brainHarness({ gateMotion: true, holdSound: true, reply: (/** @type {number} */ n) => (n === 1
+      ? say('', [
+        { id: 'm1', name: 'move', args: { steps: first } },
+        { id: 'c1', name: 'cruise', args: { drive: 'forward', steer: 'straight' } },
+      ])
+      : say('', [
+        { id: 's1', name: 'play_sound', args: { name: bark === 'invalid' ? 'moo' : 'bark' } },
+        { id: 'm2', name: 'move', args: { steps: second } },
+      ])) });
+    const commands = () => h.events.filter((e) => e.op === 'move' || e.op === 'cruise');
+    const firstMove = { op: 'move', steps: first };
+    const secondMove = { op: 'move', steps: second };
+    const cruise = { op: 'cruise', drive: 'forward', steer: 'straight' };
+
+    await h.brain.handle('forward, then keep going');
+    await h.brain.handle('bark, then back up');
+    if (bark === 'invalid') {
+      assert.match(h.traced.join('\n'), /play_sound: rejected.*moo/);
+      assert.deepEqual(commands(), [firstMove, secondMove]);
+      h.motionGates[0].resolve();
+      await flushMicrotasks();
+      assert.deepEqual(commands(), [firstMove, secondMove]);
+    } else {
+      assert.deepEqual(commands(), [firstMove]);
+      if (bark === 'failing') {
+        h.soundGates[0].reject(new Error('playback failed'));
+        await flushMicrotasks();
+        assert.ok(h.events.some((e) => e.op === 'earcon' && e.name === 'error'));
+      }
+      h.motionGates[0].resolve();
+      await flushMicrotasks();
+      assert.deepEqual(commands(), [firstMove, cruise], 'the queued cruise survives until a new command is sent');
+      if (bark === 'pending') {
+        h.soundGates[0].resolve();
+        await flushMicrotasks();
+        assert.deepEqual(commands(), [firstMove, cruise, secondMove]);
+      }
+    }
+    h.motionGates.forEach((gate) => gate.resolve());
+  });
+}
 
 test('a later turn that sends stop kills the queued cruise', async () => {
   // The counterpart: `[move, cruise]` waiting behind a gate, then a stop from
