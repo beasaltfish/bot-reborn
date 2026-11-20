@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { REFLEX_PRESETS } from '../../core/reflex-presets.js';
+import { resolveBody } from '../../core/bodies.js';
 import { blankQuestion, freshChoice, fromUnsloth, presetIdOf, presetPatch, toUnsloth, unsupported } from './reflexEdit';
 import { blankConfig } from './test/fakeApi';
-import type { ReflexConfig, ReflexQuestion } from './types';
+import type { Motion, ReflexConfig, ReflexQuestion } from './types';
+
+/** The body the reflex tab hands `unsupported`: resolved, with its own names. */
+const body = (id: Motion, actions?: any[]) => resolveBody(id, actions ? { actions } : {});
 
 const LEFT = [{ name: 'move' as const, args: { steps: [{ drive: 'forward', steer: 'left', duration_ms: 600 }] } }];
 const Q: ReflexQuestion = {
@@ -82,13 +86,45 @@ describe('presets', () => {
 });
 
 describe('unsupported', () => {
-  it('lists the configured kinds this body does not do', () => {
+  it('lists the actions this body does not carry', () => {
     const r = withQ(REFLEX_PRESETS[1].question);
-    expect(unsupported(r, 'car')).toEqual([]);
-    expect(unsupported(r, 'dry-run')).toEqual([]);
-    expect(unsupported(r, 'none').sort()).toEqual(['cruise', 'move', 'stop']);
-    expect(unsupported(withQ(REFLEX_PRESETS[0].question), 'none')).toEqual([]);
-    expect(unsupported(withQ(null), 'none')).toEqual([]);
+    expect(unsupported(r, body('toy'))).toEqual([]);
+    expect(unsupported(r, body('dry-run'))).toEqual([]);
+    expect(unsupported(r, body('none')).sort()).toEqual(['cruise', 'move', 'stop']);
+    expect(unsupported(withQ(REFLEX_PRESETS[0].question), body('none'))).toEqual([]);
+    expect(unsupported(withQ(null), body('none'))).toEqual([]);
+  });
+});
+
+describe('unsupported and what a name answers to', () => {
+  const asking = (name: string): ReflexConfig => withQ({ ...blankQuestion(), options: [
+    { choice: 'yes', description: 'Yes.', actions: [{ name, args: {} }] },
+    { choice: 'pass', description: 'No.', actions: [] },
+  ] });
+
+  it('a saved action is supported when the body carries that action name', () => {
+    expect(unsupported(asking('play_sound'), body('toy'))).toEqual([]);
+    expect(unsupported(asking('draw_card'), body('tarot'))).toEqual([]);
+  });
+
+  it('a legacy kind is not a tool: saved sound/draw are refused at runtime, and reported so', () => {
+    // The body carries `play_sound`/`draw_card`, and `validate()` matches
+    // `call.name`, so `sound` and `draw` are "no such tool".
+    expect(unsupported(asking('sound'), body('toy'))).toEqual(['sound']);
+    expect(unsupported(asking('draw'), body('tarot'))).toEqual(['draw']);
+  });
+
+  it('a name no body answers to is unsupported everywhere', () => {
+    expect(unsupported(asking('nod'), body('toy'))).toEqual(['nod']);
+    expect(unsupported(asking('nod'), body('pet'))).toEqual(['nod']);
+  });
+
+  it('a body of one\'s own is judged by the names it declares', () => {
+    // A copied body may add an action no template has; the editor must not
+    // keep calling it unsupported just because the six reference names miss it.
+    const nod = { name: 'nod', label: { en: 'Nod', zh: '点头' }, say: 'Nod.', args: { type: 'object', properties: {} }, run: [{ verb: 'pose', args: { pose: 'sit' } }] };
+    expect(unsupported(asking('nod'), body('toy', [nod]))).toEqual([]);
+    expect(unsupported(asking('move'), body('toy', [nod]))).toEqual(['move']);
   });
 });
 
@@ -109,8 +145,8 @@ describe('the pet preset', () => {
 
   it('is named by itself, and a pet is the only body that does all of it', () => {
     expect(presetIdOf(withQ(pet.question))).toBe('pet');
-    expect(unsupported(withQ(pet.question), 'pet')).toEqual([]);
-    expect(unsupported(withQ(pet.question), 'car')).toEqual(['pose']);
+    expect(unsupported(withQ(pet.question), body('pet'))).toEqual([]);
+    expect(unsupported(withQ(pet.question), body('toy'))).toEqual(['pose']);
   });
 
   it('copies its threshold, state and question like any other', () => {
@@ -127,10 +163,10 @@ describe('the tarot preset', () => {
     expect(presetIdOf(tarot)).toBe('tarot');
   });
 
-  it('draws only on a tarot body: a car would ignore draw_card', () => {
-    expect(unsupported(tarot, 'tarot')).toEqual([]);
-    expect(unsupported(tarot, 'car')).toEqual(['draw_card']);
-    expect(unsupported(tarot, 'pet')).toEqual(['draw_card']);
+  it('draws only on a tarot body: a toy would ignore draw_card', () => {
+    expect(unsupported(tarot, body('tarot'))).toEqual([]);
+    expect(unsupported(tarot, body('toy'))).toEqual(['draw_card']);
+    expect(unsupported(tarot, body('pet'))).toEqual(['draw_card']);
   });
 });
 

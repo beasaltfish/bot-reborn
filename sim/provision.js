@@ -18,8 +18,8 @@ export function provisionPlan(plan, settings) {
 
 /**
  * The characters that could be paired right now: ready and not already online.
- * `CAN_DO` is deliberately not a filter here; capability only affects the last
- * step of a demo, never pairing.
+ * Capability is deliberately not a filter here; it only affects the last step
+ * of a demo, never pairing.
  * @param {{ id: string, name: string, ready?: boolean, online?: boolean, motion?: string }[]} list
  */
 export function tokenCandidates(list) {

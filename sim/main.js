@@ -996,7 +996,7 @@ async function plugIn(meta = {}) {
           const remote = isRemote(bench.board.settings.url, location.origin);
           const character = lookupCharacter(list, name, remote);
           const zh = document.documentElement.lang === 'zh';
-          for (const skip of demoSkips(needs, character?.motion ?? 'none', zh ? 'zh' : 'en')) serial.append(skip.text);
+          for (const skip of demoSkips(needs, character?.verbs ?? [], zh ? 'zh' : 'en')) serial.append(skip.text);
         }).catch(() => {});
       } else if (text.startsWith('rejected:')) {
         provisioning?.gaveUp();

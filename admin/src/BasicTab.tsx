@@ -1,11 +1,11 @@
 import { DEFAULT_PERSONA, MAX_PERSONA } from '../../core/brain.js';
 import { t } from './i18n';
-import { PhoneLink } from './PhoneLink';
 import { TokenBox } from './TokenBox';
-import type { Detail, Motion, Patch } from './types';
+import type { Detail, Patch } from './types';
 
-// The phone is this character's body, so it is paired here with the body
-// setting above, not on every tab.
+// The phone is this character's body, so it is paired on the Body tab, beside
+// the cards that say which bodies use one. What stays here is the token, for a
+// device that cannot scan a code.
 export function BasicTab({ detail, update, onToken }: { detail: Detail; update(p: Patch): void; onToken(token: string): void }) {
   const c = detail.config;
   return (
@@ -24,20 +24,6 @@ export function BasicTab({ detail, update, onToken }: { detail: Detail; update(p
             <option value="zh">中文</option>
             <option value="en">English</option>
           </select>
-        </label>
-        <label>{t('motion')}
-          <select
-            aria-label={t('motion')}
-            value={c.body.motion}
-            onChange={(e) => update({ config: { body: { motion: e.target.value as Motion } } })}
-          >
-            <option value="car">{t('motionCar')}</option>
-            <option value="dry-run">{t('motionDryRun')}</option>
-            <option value="none">{t('motionNone')}</option>
-            <option value="pet">{t('motionPet')}</option>
-            <option value="tarot">{t('motionTarot')}</option>
-          </select>
-          <small>{t('motionHint')}</small>
         </label>
         <label>{t('persona')}
           <textarea
@@ -62,7 +48,6 @@ export function BasicTab({ detail, update, onToken }: { detail: Detail; update(p
         </label>
       </div>
       <div className="pairing">
-        <PhoneLink token={detail.token} />
         <TokenBox id={detail.id} onToken={onToken} />
       </div>
     </>

@@ -2,32 +2,36 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  TOOLS, RETURNING_TOOLS, toolsFor, validate, buildSystemPrompt, SYSTEM_PROMPT_TAROT,
+  toolsOf, validate, buildSystemPrompt, SYSTEM_PROMPT_TAROT,
 } from '../core/brain.js';
+import { resolveBody } from '../core/bodies.js';
 
-const names = (/** @type {any} */ m) => toolsFor(m).map((t) => t.function.name).sort();
+const names = (/** @type {any} */ m) => toolsOf(resolveBody(m))
+  .map((t) => t.function.name).sort();
 
-test('toolsFor: a tarot body is offered draw_card and nothing else', () => {
+test('toolsOf: a tarot body is offered draw_card and no language tool', () => {
   assert.deepEqual(names('tarot'), ['draw_card']);
 });
 
-test('toolsFor: every other body gets exactly the tools it had before tarot', () => {
-  assert.deepEqual(names('car'), ['cruise', 'move', 'play_sound', 'set_reply_language', 'stop']);
+test('toolsOf: every other body gets exactly the tools it had before tarot', () => {
+  assert.deepEqual(names('toy'), ['cruise', 'move', 'play_sound', 'set_reply_language', 'stop']);
   assert.deepEqual(names('dry-run'), ['cruise', 'move', 'play_sound', 'set_reply_language', 'stop']);
   assert.deepEqual(names('none'), ['play_sound', 'set_reply_language']);
   assert.deepEqual(names('pet'), ['play_sound', 'pose']);
-  assert.deepEqual(names(undefined), ['cruise', 'move', 'play_sound', 'set_reply_language', 'stop']);
 });
 
-test('draw_card takes no arguments, and only it is a returning tool', () => {
-  const tool = TOOLS.find((t) => t.function.name === 'draw_card');
+test('draw_card takes no arguments, and it is the returning tool of its body', () => {
+  const body = resolveBody('tarot');
+  const tool = toolsOf(body).find((t) => t.function.name === 'draw_card');
   assert.deepEqual(tool?.function.parameters.properties, {});
-  assert.deepEqual([...RETURNING_TOOLS], ['draw_card']);
+  // `returns` is the action's own word for it: the brain reads the set from the
+  // body, so a second returning action would need no code.
+  assert.deepEqual(body.actions.filter((a) => a.returns).map((a) => a.name), ['draw_card']);
 });
 
-test('validate: a draw_card call becomes a draw action with no card chosen yet', () => {
-  const out = validate([{ name: 'draw_card', args: {}, rawArguments: '{}' }]);
-  assert.deepEqual(out.actions, [{ kind: 'draw' }]);
+test('validate: a draw_card call becomes a draw program with no card chosen yet', () => {
+  const out = validate([{ name: 'draw_card', args: {}, rawArguments: '{}' }], resolveBody('tarot'));
+  assert.deepEqual(out.actions, [{ name: 'draw_card', steps: [{ verb: 'draw', args: {} }] }]);
   assert.equal(out.hadMoveIntent, false);
   assert.deepEqual(out.reasons, []);
 });
@@ -41,14 +45,14 @@ test('the tarot prompt: its own body, the reading limits, and no dog', () => {
 });
 
 test('the tarot prompt follows the recorded reply language, and adds none when there is none', () => {
-  const tarot = { body: { motion: /** @type {const} */ ('tarot') } };
+  const tarot = { body: resolveBody('tarot') };
   assert.match(buildSystemPrompt({ replyLang: 'en', ...tarot }), /Always reply in English/);
   assert.match(buildSystemPrompt({ replyLang: 'zh', ...tarot }), /Always reply in Chinese/);
   assert.doesNotMatch(buildSystemPrompt({ replyLang: null, ...tarot }), /Always reply in/);
 });
 
 test('the tarot prompt keeps the persona, and tells the model not to describe the picture', () => {
-  const p = buildSystemPrompt({ replyLang: null, persona: 'You are Madame Rue.', body: { motion: 'tarot' } });
+  const p = buildSystemPrompt({ replyLang: null, persona: 'You are Madame Rue.', body: resolveBody('tarot') });
   assert.match(p, /^You are Madame Rue\./);
   assert.match(p, /do not describe what is drawn on the card/i);
   assert.match(p, /not a prediction/i);
@@ -63,9 +67,9 @@ import { t } from '../core/strings.js';
 /**
  * A tarot brain whose every side effect lands, in order, in `events`: the
  * model's calls, the executor's draw and reveal, and what is spoken.
- * @param {{ replies?: any[], llmFails?: Error, hang?: boolean, motion?: any, reflex?: any, onDraw?: () => void }} [opts]
+ * @param {{ replies?: any[], llmFails?: Error, hang?: boolean, id?: any, reflex?: any, onDraw?: () => void }} [opts]
  */
-function tarotHarness({ replies = [], llmFails, hang = false, motion = 'tarot', reflex = null, onDraw = () => {} } = {}) {
+function tarotHarness({ replies = [], llmFails, hang = false, id = 'tarot', reflex = null, onDraw = () => {} } = {}) {
   /** @type {any[]} */ const events = [];
   /** @type {any[]} */ const calls = [];
   /** @type {Array<{ ms: number, fn: () => void, live: boolean }>} */ const timers = [];
@@ -95,7 +99,7 @@ function tarotHarness({ replies = [], llmFails, hang = false, motion = 'tarot', 
   /** @type {string[]} */ const traced = [];
   const brain = new Brain({
     llm, executor, tts, earcon: () => {}, sound: async () => {}, reflex,
-    config: { lang: 'en', replyLang: null, bargeIn: true, body: { motion } },
+    config: { lang: 'en', replyLang: null, bargeIn: true, body: { id } },
     rng: () => 0,
     after: (ms, fn) => { const timer = { ms, fn, live: true }; timers.push(timer); return () => { timer.live = false; }; },
     onFault: (part, err) => faults.push([part, err.message]),
@@ -198,7 +202,7 @@ test('a reflex that fires draw_card draws, then the model reads it once', async 
 });
 
 test('a reflex that fires a pet pose still ends the turn with no model call', async () => {
-  const h = tarotHarness({ motion: 'pet', reflex: firing(['pose']) });
+  const h = tarotHarness({ id: 'pet', reflex: firing(['pose']) });
   await h.brain.handle('sit');
   await new Promise((r) => setTimeout(r, 0));
   assert.equal(h.calls.length, 0);
@@ -206,11 +210,11 @@ test('a reflex that fires a pet pose still ends the turn with no model call', as
 });
 
 test('a draw fired for a body that cannot draw is dropped with a trace line, and no model call', async () => {
-  const h = tarotHarness({ motion: 'car', reflex: firing(['draw_card']) });
+  const h = tarotHarness({ id: 'toy', reflex: firing(['draw_card']) });
   await h.brain.handle('draw a card');
   assert.equal(h.calls.length, 0);
   assert.deepEqual(ops(h.events), []);
-  assert.match(h.traced.join('\n'), /draw dropped: body "car" does not do draw/);
+  assert.match(h.traced.join('\n'), /draw dropped: body "toy" does not do draw/);
 });
 
 test('a turn cancelled while the card is being drawn still turns it over, and nothing fires later', async () => {

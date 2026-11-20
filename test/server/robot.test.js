@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { startRobot, tarotLang } from '../../server/robot.js';
 import { renderEarcons } from '../../server/audio/render.js';
+import { TEMPLATES } from '../../core/bodies.js';
 import { readyConfig, fakeFetch, until } from './helpers.js';
 
 function fakeConn() {
@@ -36,7 +37,8 @@ function fakeEars() {
   };
 }
 
-function rig(/** @type {Parameters<typeof fakeFetch>[0]} */ fetchOpts = {}, motion = 'car',
+function rig(/** @type {Parameters<typeof fakeFetch>[0]} */ fetchOpts = {},
+  /** @type {string | Record<string, any>} */ body = 'toy',
   /** @type {Record<string, any>} */ overrides = {}) {
   const c = fakeConn();
   const e = fakeEars();
@@ -45,7 +47,9 @@ function rig(/** @type {Parameters<typeof fakeFetch>[0]} */ fetchOpts = {}, moti
   /** @type {string[]} */ const logged = [];
   /** @type {number[]} */ const spoken = [];
   const config = readyConfig();
-  config.body.motion = /** @type {any} */ (motion);
+  // An id, or the whole patch: the tests that ask "does the id decide this?"
+  // need a body whose name and template disagree.
+  config.body = typeof body === 'string' ? { id: /** @type {any} */ (body) } : /** @type {any} */ ({ ...body });
   const sfx = new Map([[/** @type {const} */ ('bark'), new Int16Array(1600).fill(1200)]]);
   const robot = startRobot(c.conn, {
     config, fetch: customFetch ?? fetch, ears: e.ears, sfx, earcons: renderEarcons(),
@@ -109,7 +113,7 @@ test('an audible STT apology is not an audible reply', async () => {
   const base = fakeFetch();
   const fetch = /** @type {any} */ ((/** @type {string} */ url, /** @type {RequestInit} */ init) =>
     url.endsWith('/audio/transcriptions') ? Promise.reject(new Error('stt down')) : base(url, init));
-  const r = rig({}, 'car', { fetch });
+  const r = rig({}, 'toy', { fetch });
   const before = r.audio.length;
   await r.speak();
   await until(() => spokeAndFinished(r.sent), 3000, () => `states ${JSON.stringify(states(r.sent))}`);
@@ -128,7 +132,7 @@ test('an LLM apology does not count, and the next real answer does', async () =>
     }
     return base(url, init);
   });
-  const r = rig({}, 'car', { fetch });
+  const r = rig({}, 'toy', { fetch });
   const before = r.audio.length;
   await r.speak();
   await until(() => spokeAndFinished(r.sent), 3000, () => `states ${JSON.stringify(states(r.sent))}`);
@@ -208,6 +212,110 @@ test('none: nothing reaches the body, and the LLM was not offered moving', async
   r.robot.stop();
 });
 
+test('a body with a connection sends; one with none only logs', async () => {
+  // The toy's own actions, but the dry run's way of being reached: what decides
+  // is whether anything is listening, not what the body is called.
+  const idle = rig({}, { id: 'toy', template: 'dry-run' });
+  await idle.speak();
+  await until(() => idle.logged.some((l) => l.startsWith('dry-run: move')));
+  assert.ok(!idle.sent.some((m) => m.type === 'move'), 'a body nobody is listening to received a move');
+  idle.robot.stop();
+
+  // And the other way round: a body called dry-run that has a board sends.
+  const live = rig({}, { id: 'dry-run', template: 'toy' });
+  await live.speak();
+  await until(() => live.sent.some((m) => m.type === 'move'));
+  assert.ok(!live.logged.some((l) => l.startsWith('dry-run')));
+  live.robot.stop();
+});
+
+test('a body with no connection logs the screen verbs too, and draws nothing', async () => {
+  /** @type {string[]} */ const shown = [];
+  const r = rig({ tool: { name: 'pose', args: { name: 'sit' } } },
+    { id: 'toy', template: 'dry-run', actions: [templateAction('pet', 'pose')] },
+    { petFrames: fakePetFrames(), screen: (/** @type {any} */ pick) => shown.push(String(pick('320x240'))) });
+  await r.speak();
+  await until(() => r.logged.includes('dry-run: pose sit'));
+  assert.deepEqual(shown, [], 'a body nobody can reach has no screen either');
+  assert.ok(!r.sent.some((m) => m.type === 'move'));
+  r.robot.stop();
+});
+
+test('a body that can drive and pose does both: the order is sent and the face is drawn', async () => {
+  const both = {
+    id: 'both', template: 'toy',
+    actions: [templateAction('toy', 'move'), templateAction('pet', 'pose')],
+  };
+
+  // The motors' half is still reachable: a move goes over the link.
+  /** @type {string[]} */ const moved = [];
+  const drive = rig({}, both, {
+    petFrames: fakePetFrames(), screen: (/** @type {any} */ pick) => moved.push(String(pick('320x240'))),
+  });
+  await drive.speak();
+  await until(() => drive.sent.some((m) => m.type === 'move'));
+  assert.ok(!moved.includes('t0'), 'a move is not a pose');
+  drive.robot.stop();
+
+  // And the screen's half: the same body draws the sit transition.
+  /** @type {string[]} */ const shown = [];
+  const pose = rig({ tool: { name: 'pose', args: { name: 'sit' } } }, both, {
+    petFrames: fakePetFrames(), screen: (/** @type {any} */ pick) => shown.push(String(pick('320x240'))),
+  });
+  await pose.speak();
+  await until(() => shown.includes('t0'), 3000, () => `shown ${JSON.stringify(shown)}`);
+  assert.ok(!pose.sent.some((m) => m.type === 'move'), 'a pose does not drive');
+  pose.robot.stop();
+});
+
+test('a body that can only halt still hears stop', async () => {
+  const r = rig({ tool: { name: 'stop', args: {} } },
+    { id: 'stopper', template: 'toy', actions: [templateAction('toy', 'stop')] });
+  await r.speak();
+  await until(() => r.sent.some((m) => m.type === 'stop'), 3000,
+    () => `sent ${JSON.stringify(r.sent)}`);
+  r.robot.stop();
+});
+
+test('a pose body with no frames still sends the halt it was given', async () => {
+  // No petFrames, so there is no screen carrier — but the motors' carrier is
+  // not the screen's, and a halt must not be swallowed with it.
+  const r = rig({ tool: { name: 'stop', args: {} } },
+    {
+      id: 'still-face', template: 'toy',
+      actions: [templateAction('pet', 'pose'), templateAction('toy', 'stop')],
+    });
+  await r.speak();
+  await until(() => r.sent.some((m) => m.type === 'stop'), 3000,
+    () => `sent ${JSON.stringify(r.sent)}`);
+  r.robot.stop();
+});
+
+test('the reply is decided by whether the body answers in clips, not by its id', async () => {
+  const bark = { tool: { name: 'play_sound', args: { name: 'bark' } }, tts: new Int16Array(0) };
+  // Called `pet`, but following the voice-only template: the bark is a sound
+  // beside a spoken answer, so an empty TTS voice means nothing was said.
+  const words = rig(bark, { id: 'pet', template: 'none' }, { petFrames: fakePetFrames() });
+  await words.speak();
+  await until(() => spokeAndFinished(words.sent));
+  assert.deepEqual(words.spoken, []);
+  words.robot.stop();
+
+  // Called anything, but answering in clips: the bark IS the reply.
+  const clips = rig(bark, { id: 'screen-dog', template: 'pet' }, { petFrames: fakePetFrames() });
+  await clips.speak();
+  await until(() => clips.spoken.length > 0, 3000, () => `states ${JSON.stringify(states(clips.sent))}`);
+  assert.equal(clips.spoken.length, 1);
+  clips.robot.stop();
+});
+
+/** One template action by name, for a body that needs two carriers at once. */
+function templateAction(/** @type {import('../../core/bodies.js').BodyId} */ id, /** @type {string} */ name) {
+  const action = TEMPLATES[id].actions.find((candidate) => candidate.name === name);
+  assert.ok(action, `${id} has ${name}`);
+  return action;
+}
+
 /** Idle 2 frames at 10 fps; one trick with a single frame. One size is enough. */
 function fakePetFrames() {
   /** @param {string[]} frames */
@@ -224,7 +332,7 @@ test('a pet streams its lying rest at once, and stops when the robot stops', asy
   const e = fakeEars();
   /** @type {string[]} */ const shown = [];
   const config = readyConfig();
-  config.body.motion = 'pet';
+  config.body.id = 'pet';
   const robot = startRobot(c.conn, {
     config, fetch: fakeFetch(), ears: e.ears, sfx: new Map(), earcons: renderEarcons(),
     log: () => {}, slackMs: 0,
@@ -253,6 +361,37 @@ test('a car never asks for a screen', async () => {
   assert.deepEqual(shown, []);
 });
 
+test('animators are built from the actions, not the id', () => {
+  /** @param {Record<string, any>} body */
+  const shownFor = (body) => {
+    const c = fakeConn();
+    const e = fakeEars();
+    /** @type {string[]} */ const shown = [];
+    const config = readyConfig();
+    config.body = /** @type {any} */ ({ ...body });
+    const robot = startRobot(c.conn, {
+      config, fetch: fakeFetch(), ears: e.ears, sfx: new Map(), earcons: renderEarcons(),
+      log: () => {}, slackMs: 0,
+      petFrames: fakePetFrames(), tarotFrames: fakeTarotFrames(),
+      screen: (pick) => shown.push(String(pick('320x240'))),
+    });
+    robot.stop();
+    return shown;
+  };
+
+  const pose = TEMPLATES.pet.actions.find((a) => a.name === 'pose') ?? TEMPLATES.pet.actions[0];
+  const sound = TEMPLATES.none.actions[0];
+
+  // A body called `pet` whose actions were replaced with a sound alone has
+  // nothing to animate, so no face is ever drawn.
+  assert.deepEqual(shownFor({ id: 'pet', actions: [sound] }), [], 'pose was taken away');
+  // A body called anything that can pose gets the pet's screen.
+  assert.deepEqual(shownFor({ id: 'toy', actions: [pose] }), ['i0']);
+  // And a draw gets the deck, whatever the body is called.
+  const draw = TEMPLATES.tarot.actions.find((a) => a.name === 'draw_card') ?? TEMPLATES.tarot.actions[0];
+  assert.deepEqual(shownFor({ id: 'toy', actions: [draw] }), ['back']);
+});
+
 /** Tarot frames whose bytes say what they are; one size is enough. */
 function fakeTarotFrames() {
   /** @type {any} */
@@ -271,7 +410,7 @@ test('a tarot reader shows the card back at once, and stops when the robot stops
   const e = fakeEars();
   /** @type {string[]} */ const shown = [];
   const config = readyConfig();
-  config.body.motion = 'tarot';
+  config.body.id = 'tarot';
   const robot = startRobot(c.conn, {
     config, fetch: fakeFetch(), ears: e.ears, sfx: new Map(), earcons: renderEarcons(),
     log: () => {}, slackMs: 0,
@@ -291,7 +430,7 @@ test('a pet never builds the tarot screen, and a tarot reader never builds the p
     const e = fakeEars();
     /** @type {string[]} */ const shown = [];
     const config = readyConfig();
-    config.body.motion = motion;
+    config.body.id = motion;
     const robot = startRobot(c.conn, {
       config, fetch: fakeFetch(), ears: e.ears, sfx: new Map(), earcons: renderEarcons(),
       log: () => {}, slackMs: 0,
@@ -308,7 +447,7 @@ test('a tarot reader with no frames still connects: a blank screen, and it can b
   const e = fakeEars();
   /** @type {string[]} */ const shown = [];
   const config = readyConfig();
-  config.body.motion = 'tarot';
+  config.body.id = 'tarot';
   const robot = startRobot(c.conn, {
     config, fetch: fakeFetch(), ears: e.ears, sfx: new Map(), earcons: renderEarcons(),
     log: () => {}, slackMs: 0,
@@ -339,7 +478,7 @@ test('drawCard on a tarot reader starts a turn that asks the model once, with no
 });
 
 test('drawCard on any other body does nothing', async () => {
-  const r = rig({}, 'car');
+  const r = rig({}, 'toy');
   assert.equal(r.robot.drawCard(), false);
   await new Promise((resolve) => setTimeout(resolve, 50));
   assert.equal(r.fetch.calls.filter((c) => c.url.endsWith('/chat/completions')).length, 0);
@@ -355,8 +494,31 @@ test('a shake message from a tarot body draws a card; a second one while busy ad
   r.robot.stop();
 });
 
+test('a shake draws on any body whose actions draw, whatever it is called', async () => {
+  const r = rig({}, { id: 'cards', template: 'tarot' });
+  assert.equal(r.robot.drawCard(), true);
+  await until(() => r.fetch.calls.some((c) => c.url.endsWith('/audio/speech')));
+  assert.equal(r.fetch.calls.filter((c) => c.url.endsWith('/chat/completions')).length, 1);
+  r.robot.stop();
+});
+
+test('a shake takes no turn on a body whose draw trigger was emptied', async () => {
+  const r = rig({}, { id: 'cards', template: 'tarot', triggers: [] });
+  await until(() => states(r.sent).includes('LISTENING'));
+  const before = states(r.sent).length;
+
+  assert.equal(r.robot.drawCard(), false, 'the draw action is there, but no shake reaches it');
+  r.message({ type: 'shake' });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  assert.ok(!states(r.sent).includes('THINKING'), 'the session was not taken for a turn it would refuse');
+  assert.equal(states(r.sent).length, before, 'and it stayed in the state it was in');
+  assert.equal(r.fetch.calls.filter((c) => c.url.endsWith('/chat/completions')).length, 0);
+  r.robot.stop();
+});
+
 test('a shake message to a car does nothing', async () => {
-  const r = rig({}, 'car');
+  const r = rig({}, 'toy');
   r.message({ type: 'shake' });
   await new Promise((resolve) => setTimeout(resolve, 50));
   assert.equal(r.fetch.calls.filter((c) => c.url.endsWith('/chat/completions')).length, 0);

@@ -9,7 +9,7 @@ export function blankConfig(): Config {
     stt: { ...layer(), prompt: '' }, llm: layer(), tts: { ...layer(), voice: '' },
     reflex: { ...layer(), enabled: true, threshold: 0.8, state: 'Robot said: "{robot}"\nPerson said: "{person}"', question: null },
     lang: 'en', replyLang: null, bargeIn: true, wakeWord: false,
-    body: { motion: 'car' },
+    body: { id: 'toy' },
     persona: '',
   };
 }

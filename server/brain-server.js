@@ -14,6 +14,7 @@ import { startRobot } from './robot.js';
 import { listCharacters, findByToken, updateConfig, ready } from './characters.js';
 import { isLocalRequest } from './local-guard.js';
 import { lanAllowed, pathOf } from './pages.js';
+import { servePreview } from './preview.js';
 import { createDistPages, DIST_DIR, FIXTURES_DIR } from './dist-pages.js';
 import { createAdminApi, setupIdFor } from './admin-api.js';
 import { createPresence } from './presence.js';
@@ -70,6 +71,10 @@ export function createBrainServer(opts) {
       return;
     }
     if ((req.url ?? '').startsWith('/api/')) return void api?.(req, res);
+    // The body previews: frames the pet and tarot bodies already render. After
+    // the local check above, like the admin page — a body's picture is not
+    // something the network gets to enumerate.
+    if (path?.startsWith('/preview/')) return void (await servePreview(req, res));
     if (!(await pages.serve(req, res))) say(res, 404, 'Not found\n');
   }
   const pages = (opts.pages ?? (() => createDistPages({ dist: DIST_DIR, fixtures: FIXTURES_DIR })))(http);

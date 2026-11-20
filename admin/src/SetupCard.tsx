@@ -25,7 +25,7 @@ export function SetupCard({ steps, next }: { steps: Step[]; next: Step | null })
     <>
       <ol className="setup-steps">
         {steps.map((step) => {
-          const skipped = step.optionalFor === 'phone';
+          const skipped = step.optionalFor !== undefined;
           const [title, defaultNote] = copy[step.id];
           const note = skipped ? 'setupBoardSkipped' : step.id === 'body-screen' && phone ? 'setupPhoneNote' : defaultNote;
           return (

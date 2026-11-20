@@ -27,7 +27,7 @@ import { wireEnd } from './snap.js';
 
 /**
  * What a recipe is: `needs` says what the character has to be able to do
- * ('pet' = it has a screen to show, 'car' = it drives), `ending` is what to say
+ * ('pose' = it has a screen to show, 'move' = it drives), `ending` is what to say
  * to try the finished bench.
  * @typedef {{ id: 'audio' | 'screen' | 'toy', name: string, needs: string[], connection: 'body' | null, firmware: string | null, ending: string }} Recipe
  */

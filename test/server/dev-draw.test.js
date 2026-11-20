@@ -28,14 +28,14 @@ async function rig({ dev = false } = {}) {
 
 test('without the dev flag there is no draw route', async () => {
   const r = await rig();
-  const c = r.chars.add('tara', (cfg) => { cfg.body.motion = 'tarot'; });
+  const c = r.chars.add('tara', (cfg) => { cfg.body.id = 'tarot'; });
   assert.equal((await r.draw({ id: c.id })).status, 404);
   await r.server.close();
 });
 
 test('with the dev flag: an unknown or offline character starts nothing; a connected tarot reader reads a card', async () => {
   const r = await rig({ dev: true });
-  const c = r.chars.add('tara', (cfg) => { cfg.body.motion = 'tarot'; });
+  const c = r.chars.add('tara', (cfg) => { cfg.body.id = 'tarot'; });
   assert.deepEqual(await r.draw({ id: 'nobody' }), { status: 200, body: { started: false } });
   assert.deepEqual(await r.draw({ id: c.id }), { status: 200, body: { started: false } }, 'offline');
   const body = await connectFakeBody(`ws://127.0.0.1:${r.port}/body`, { token: c.token });

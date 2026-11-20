@@ -3,14 +3,12 @@
 // options array (spec §2.1); the JSON view speaks the decision API's own
 // `questions` shape, so a question from training can be pasted as is.
 import { REFLEX_PRESETS } from '../../core/reflex-presets.js';
-import { CAN_DO } from '../../core/config.js';
+import { DRIVE_VALUES, STEER_VALUES } from '../../core/verbs.js';
 import { isPlain } from './merge';
-import type { Motion, ReflexCall, ReflexConfig, ReflexQuestion, SavedReflex } from './types';
+import type { ReflexConfig, ReflexQuestion, SavedReflex } from './types';
 
-export const DRIVES = ['forward', 'backward'] as const;
-export const STEERS = ['left', 'right', 'straight'] as const;
-
-const KIND: Record<ReflexCall['name'], string> = { move: 'move', cruise: 'cruise', stop: 'stop', play_sound: 'sound', pose: 'pose', draw_card: 'draw' };
+export const DRIVES = DRIVE_VALUES;
+export const STEERS = STEER_VALUES;
 
 export function toUnsloth(q: ReflexQuestion): string {
   const criteria = Object.fromEntries(q.options.map((o) => [o.choice, o.description]));
@@ -64,11 +62,18 @@ export function presetPatch(id: string, saved: SavedReflex[] = []): Partial<Refl
   return structuredClone({ threshold: p.threshold, state: p.state, question: p.question as ReflexQuestion });
 }
 
-/** Spec §4: the kinds this question would fire that this body ignores. */
-export function unsupported(r: ReflexConfig, motion: Motion): string[] {
-  const can = CAN_DO[motion] ?? CAN_DO.car;
+/**
+ * Spec §4: the actions this question would fire that this body does not carry.
+ * The body is the resolved one, so a body of one's own is judged by the names
+ * it actually declares — a `nod` action counts, and `play_sound`/`draw_card`
+ * are names, not the legacy `sound`/`draw` kinds. The brain matches actions by
+ * name (`validate()` drops an unknown one as "no such tool"), so anything else
+ * is refused at runtime and must be reported here.
+ */
+export function unsupported(r: ReflexConfig, body: { actions: ReadonlyArray<{ name: string }> }): string[] {
+  const can = new Set(body.actions.map((a) => a.name));
   const names = new Set(r.question?.options.flatMap((o) => o.actions.map((a) => a.name)) ?? []);
-  return [...names].filter((n) => !can.includes(KIND[n]));
+  return [...names].filter((n) => !can.has(n));
 }
 
 export function freshChoice(q: ReflexQuestion): string {

@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CONFIG_KEY, STICKY, MOTIONS, REFLEX_TOOLS, defaultConfig, loadConfig, saveConfig, resetSticky, layerReady,
-  reflexReady, reflexMissing, normalizeReflex, CAN_DO, DEFAULT_STATE } from '../core/config.js';
+import { CONFIG_KEY, STICKY, REFLEX_TOOLS, defaultConfig, loadConfig, saveConfig, resetSticky, layerReady,
+  reflexReady, reflexMissing, normalizeReflex, DEFAULT_STATE } from '../core/config.js';
+import { buildSystemPrompt } from '../core/brain.js';
+import { resolveBody } from '../core/bodies.js';
 
 /** A localStorage stand-in. The real one is not available in node, and every
  * function under test takes it as a parameter for exactly this reason. */
@@ -279,6 +281,9 @@ test('normalizeReflex: bad options and bad actions are dropped one by one', () =
     { choice: 'right', description: 7, actions: [] },
     { choice: 'stop', description: 'Stop.', actions: [
       { name: 'stop', args: {} },
+      // Survives: the parse layer only checks shape. `set_reply_language`
+      // writes config and is not an action, but whether the body can do a
+      // thing is a trigger-time question, not one this layer can answer.
       { name: 'set_reply_language', args: { lang: 'en' } },
       { name: 'move', args: [] },
       'stop',
@@ -286,46 +291,183 @@ test('normalizeReflex: bad options and bad actions are dropped one by one', () =
     { choice: 'odd', description: 'no actions array', actions: 'stop' },
   ] } }).question;
   assert.deepEqual(q?.options.map((o) => o.choice), ['left', 'pass', 'stop', 'odd']);
-  assert.deepEqual(q?.options[2].actions, [{ name: 'stop', args: {} }]);
+  assert.deepEqual(q?.options[2].actions, [
+    { name: 'stop', args: {} },
+    { name: 'set_reply_language', args: { lang: 'en' } },
+  ]);
   assert.deepEqual(q?.options[3].actions, []);
 });
 
-test('CAN_DO: a car and a dry run do everything, a still body only makes sounds, a pet poses', () => {
-  assert.deepEqual(CAN_DO.car, ['move', 'cruise', 'stop', 'sound']);
-  assert.deepEqual(CAN_DO['dry-run'], CAN_DO.car);
-  assert.deepEqual(CAN_DO.none, ['sound']);
-  assert.deepEqual(CAN_DO.pet, ['pose', 'sound']);
+test('a saved reflex keeps an action this body cannot do', () => {
+  // The body is not known at parse time, and an action is not illegal just
+  // because the five templates do not carry it: a person's own body may.
+  // "Can this body do it" is decided when the reflex fires, against the
+  // resolved body's actions, and the editor says so. Dropping it here would
+  // lose the configuration for good when the user switches body and back.
+  const actions = [{ name: 'wag', args: { times: 2 } }];
+  const reflex = { ...LAYER, question: { ...QUESTION, options: [
+    { ...QUESTION.options[0], actions },
+    QUESTION.options[1],
+  ] } };
+  const r = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ reflex }) })).reflex;
+  assert.deepEqual(r.question?.options[0].actions, actions);
 });
 
-test('MOTIONS: a pet and a tarot reader are body kinds the admin can pick', () => {
-  assert.deepEqual([...MOTIONS], ['car', 'dry-run', 'none', 'pet', 'tarot']);
-});
-
-test('CAN_DO: a tarot body draws and does nothing else; its reflex may call draw_card', () => {
-  assert.deepEqual(CAN_DO.tarot, ['draw']);
+test('a reflex may call every action a body can carry out, and draw_card', () => {
   assert.ok(REFLEX_TOOLS.includes('draw_card'));
+  assert.ok(REFLEX_TOOLS.includes('pose'));
 });
 
-test('body.motion defaults to car, and an old config gets it too', () => {
-  assert.deepEqual(defaultConfig().body, { motion: 'car' });
+test('a new character has no body worth speaking of', () => {
+  // Nothing is picked yet. A brand-new character is not a car by accident:
+  // the admin asks, and until it answers there are no wheels to promise.
+  assert.deepEqual(defaultConfig().body, { id: 'none' });
+});
+
+test('a file with no body key at all is still a toy', () => {
+  // Every character written before this field existed was a car. The two
+  // cases differ on purpose: absent means "the old default", `none` is a
+  // choice somebody made (or a fresh character).
   const old = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ wakeWord: true }) }));
-  assert.deepEqual(old.body, { motion: 'car' });
+  assert.deepEqual(old.body, { id: 'toy' });
 });
 
-test('a stored motion survives the read', () => {
-  for (const motion of ['car', 'dry-run', 'none', 'pet', 'tarot']) {
-    const c = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ body: { motion } }) }));
-    assert.equal(c.body.motion, motion);
+test('a stored body.id survives the read', () => {
+  for (const id of ['toy', 'dry-run', 'none', 'pet', 'tarot']) {
+    const c = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ body: { id } }) }));
+    assert.equal(c.body.id, id);
   }
 });
 
-test('a motion that is not one of the three reads as car', () => {
-  // A hand-edited file with a typo must still drive a car the way it did
-  // before the field existed, not crash and not silently become "none".
-  for (const motion of ['Car', 'dryrun', 42, null, '']) {
-    const c = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ body: { motion } }) }));
-    assert.equal(c.body.motion, 'car', `motion ${JSON.stringify(motion)}`);
+test('the body that drives kept its old id readable', () => {
+  /** @param {any} body */
+  const load = (body) => loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ body }) }));
+  assert.equal(load({ id: 'car' }).body.id, 'toy', 'a file saved before the rename');
+  assert.equal(load({ motion: 'car' }).body.id, 'toy', 'a file saved before the field was renamed');
+  assert.equal(load({ id: 'toy' }).body.id, 'toy');
+});
+
+test('an old body.motion becomes body.id, and the old key is gone', () => {
+  const saved = { name: 'A', body: { motion: 'pet' } };
+  const c = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify(saved) }));
+  assert.equal(c.body.id, 'pet');
+  // The default file written before this field was renamed: same five names.
+  assert.equal('motion' in c.body, false);
+  // An id wins over a leftover motion, so a half-migrated file is not a trap.
+  const both = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ body: { id: 'tarot', motion: 'pet' } }) }));
+  assert.equal(both.body.id, 'tarot');
+});
+
+test('an unknown id falls to none, and does not throw', () => {
+  // A hand-edited file with a typo must not claim wheels. `none` is the body
+  // that promises nothing, and the id is still readable enough to be fixed.
+  for (const body of [{ id: 'Car' }, { id: 'dryrun' }, { id: 42 }, { id: null }, { id: '' }, { motion: 'bogus' }]) {
+    const c = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ body }) }));
+    assert.equal(c.body.id, 'none', `body ${JSON.stringify(body)}`);
   }
   const notObject = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ body: 'car' }) }));
-  assert.equal(notObject.body.motion, 'car');
+  assert.equal(notObject.body.id, 'none');
+});
+
+test('a known body keeps its id and the rest of the patch', () => {
+  // The stored value is the patch, not a resolved body: no template is
+  // flattened in, and no key the file did not have is invented.
+  const body = {
+    id: 'pet',
+    template: 'pet',
+    label: { en: 'Rex', zh: '雷克斯' },
+    prompts: { rules: ['Only a dog.'] },
+    triggers: [{ on: 'button', action: 'pose' }],
+  };
+  const c = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ body: { ...body, wheels: true } }) }));
+  assert.deepEqual(c.body, body);
+});
+
+test('a malformed prompts patch is dropped, and the template\'s own words apply', () => {
+  // `prompts.rules` is joined by buildSystemPrompt, so a string here would
+  // throw inside the prompt and read from outside as an LLM failure. Load
+  // catches it: one bad field costs that field, not the character.
+  const c = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({
+    body: { id: 'toy', prompts: { rules: 'text' } },
+  }) }));
+  assert.equal(c.body.id, 'toy');
+  assert.equal('prompts' in c.body, false, 'the malformed key is gone, not passed on');
+  const body = resolveBody(c.body.id, c.body);
+  assert.doesNotThrow(() => buildSystemPrompt({ replyLang: null, body }));
+  assert.match(buildSystemPrompt({ replyLang: null, body }), /Your reply is read aloud/);
+
+  // Both halves are checked the same way: an empty voice is no voice, and a
+  // rules list with a non-string in it is not a list of rules.
+  for (const prompts of [{ voice: '' }, { voice: 7 }, { rules: ['ok', 3] }, { rules: [] , voice: ' ' }, 'x']) {
+    const bad = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ body: { id: 'toy', prompts } }) }));
+    assert.equal('prompts' in bad.body, false, JSON.stringify(prompts));
+  }
+});
+
+test('the page\'s "use the template" sends actions: null, which reads as inherited', () => {
+  // A PATCH merges and cannot drop a key, so the admin removes the override by
+  // sending null. It is not an actions list, so the next read drops it and the
+  // template's own actions apply again; an emptied trigger list stays explicit.
+  const c = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({
+    body: { id: 'toy', actions: null, triggers: [] },
+  }) }));
+  assert.equal('actions' in c.body, false);
+  assert.deepEqual(c.body.triggers, []);
+  assert.deepEqual(resolveBody(c.body.id, c.body).actions.map((a) => a.name), ['move', 'cruise', 'stop', 'play_sound']);
+});
+
+test('a body that carries actions is kept as written, id included', () => {
+  // A body of one's own is told apart by carrying actions (or by naming the
+  // template it copied), not by its id, so an id the templates do not know is
+  // not a typo in this case. The admin reads the id back, so rewriting it to
+  // `none` made a user body show as "Voice only".
+  const actions = [{
+    name: 'pose',
+    label: { en: 'Pose', zh: '做个动作' },
+    say: 'Sit.',
+    args: { type: 'object', properties: { name: { enum: ['sit'] } } },
+    run: [{ verb: 'pose', args: { pose: '$name' } }],
+  }];
+  const body = { id: 'my-dog', template: 'pet', label: { en: 'My dog', zh: '我的狗' }, actions };
+  const c = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ body }) }));
+  assert.equal(c.body.id, 'my-dog');
+  assert.deepEqual(c.body.actions, actions);
+  assert.equal(c.body.template, 'pet');
+  assert.deepEqual(c.body.label, body.label);
+
+  // An id with no actions and no template is still a typo, not a body.
+  const typo = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ body: { id: 'my-dog' } }) }));
+  assert.equal(typo.body.id, 'none');
+
+  // Through the real pair, not just the read: what saveConfig writes is what
+  // loadConfig reads back, the whole body as the user wrote it.
+  const store = fakeStorage();
+  saveConfig(/** @type {any} */ ({ ...defaultConfig(), body }), store);
+  assert.deepEqual(loadConfig(store).body, c.body, 'the same body after a save and a load');
+});
+
+test('an actions-only body with no id has one face, and it is not the toy', () => {
+  // `actions` alone says the body is one's own, but there is no id to keep.
+  // `{ id: undefined }` would read as `toy` in the brain (`body?.id ?? 'toy'`)
+  // and as `none` in the admin (`resolveBody`): one file, two bodies. The
+  // fallback is `none`, so both sides agree.
+  const actions = [{
+    name: 'pose',
+    label: { en: 'Pose', zh: '做个动作' },
+    say: 'Sit.',
+    args: { type: 'object', properties: { name: { enum: ['sit'] } } },
+    run: [{ verb: 'pose', args: { pose: '$name' } }],
+  }];
+  const c = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ body: { actions } }) }));
+  assert.equal(c.body.id, 'none');
+  // What the brain resolves from the stored body, and what the admin resolves
+  // from the id it reads back: the same body either way.
+  const asBrain = resolveBody(c.body.id ?? 'toy', c.body);
+  const asAdmin = resolveBody(c.body.id, c.body);
+  assert.equal(asBrain.id, 'none');
+  assert.equal(asAdmin.id, 'none');
+  assert.equal(asBrain.template, 'none');
+  assert.equal(asAdmin.template, 'none');
+  assert.deepEqual(asAdmin.actions.map((a) => a.name), ['pose']);
+  assert.deepEqual(asAdmin.fixedTools, ['set_reply_language']);
 });

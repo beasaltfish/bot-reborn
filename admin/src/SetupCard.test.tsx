@@ -32,14 +32,23 @@ describe('SetupCard', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Next: Add three keys');
   });
 
+  it('points at the Body tab, not at a Basic setting that no longer exists', () => {
+    const steps = stepsFor({ motion: 'toy', bodyKind: 'phone', ready: true, lastSeenAt: 1 });
+    render(<SetupCard steps={steps} next={steps[3]} />);
+    const bodyRows = screen.getAllByRole('listitem').filter((row) => row.dataset.step === 'body-screen');
+    const notes = bodyRows.map((row) => row.textContent ?? '').join(' ');
+    expect(notes).toMatch(/Body tab/);
+    expect(notes).not.toMatch(/In Basic/);
+  });
+
   it('shows the skipped row but excludes it from phone progress', () => {
-    const steps = stepsFor({ motion: 'car', bodyKind: 'phone', ready: true, lastSeenAt: 1 });
+    const steps = stepsFor({ motion: 'toy', bodyKind: 'phone', ready: true, lastSeenAt: 1 });
     render(<SetupCard steps={steps} next={steps[4]} />);
 
     const rows = screen.getAllByRole('listitem');
     expect(within(rows[2]).getByText('Skipped')).toBeVisible();
     expect(within(rows[2]).getByText(/phone does not need/i)).toBeVisible();
-    expect(within(rows[3]).getByText(/scan the QR code/i)).toBeVisible();
+    expect(within(rows[3]).getByText(/phone page/i)).toBeVisible();
     expect(within(rows[4]).getByText('Not recorded')).toBeVisible();
     expect(screen.getByText('3 of 4 complete')).toBeVisible();
     expect(screen.getByRole('status')).toHaveTextContent('Next: Hear the first reply');
@@ -73,7 +82,7 @@ describe('SetupCard', () => {
       ['创建角色', /先给机器人创建一个角色/, '来自这个大脑'],
       ['填入三把密钥', /「听」「想」「说」/, '来自这个大脑'],
       ['刷写板子（只对板子身体）', /「第一次（刷固件 \+ 设置）」/, '记在此浏览器'],
-      ['让一个身体连上来', /先刷上面那块板子.*二维码/, '记在此浏览器'],
+      ['让一个身体连上来', /先刷上面那块板子.*同一个 Wi-Fi/, '记在此浏览器'],
       ['听到第一句回复', /唤醒词/, '暂无记录'],
     ] as const;
     rows.forEach((row, index) => {
@@ -85,9 +94,9 @@ describe('SetupCard', () => {
     expect(screen.getByText(/本次启动以来/)).toBeVisible();
     expect(screen.getByRole('status')).toHaveTextContent('下一步：填入三把密钥');
 
-    const phone = stepsFor({ motion: 'car', bodyKind: 'phone', ready: true, lastSeenAt: 1 });
+    const phone = stepsFor({ motion: 'toy', bodyKind: 'phone', ready: true, lastSeenAt: 1 });
     view.rerender(<ChineseSetupCard steps={phone} next={phone[4]} />);
-    expect(screen.getByText(/扫描「手机」区的二维码/)).toBeVisible();
+    expect(screen.getByText(/从手机页面连进来的/)).toBeVisible();
     expect(screen.getByText('已跳过')).toBeVisible();
     expect(screen.getByText(/不需要板子，也不用刷固件/)).toBeVisible();
     expect(screen.getByText('已完成 3 / 4 步')).toBeVisible();

@@ -155,15 +155,15 @@ runs timed moves on a car's motor driver inputs (GPIO 4–7).
   board finds the brain on its own.
 - Turn **Barge-in off** for this character. The body has no echo cancellation,
   so it would hear itself and interrupt itself.
-- Driving a toy, give the character **Body: Car**, wire the four motor inputs,
+- Driving a toy, give the character **Body: Toy on wheels**, wire the four motor inputs,
   and calibrate: `cal drive` if it goes backwards, `cal steer` if it turns the
   wrong way. The board stops the car within a second of losing the brain.
 
 The phone body — an Android phone plus an FT232H, which is what drove the car
 in the demos above — still works, but it is not the direction here and the
 README does not teach it: [`docs/hardware.md`](docs/hardware.md) does. Without
-wheels, set a character's body to **Dry run** and the moves only reach the
-brain's log, or to **Cannot move** for a robot that just talks.
+wheels, open the admin with `?bench` and set a character's body to **Dry run**:
+the moves only reach the brain's log. **Voice only** is a robot that just talks.
 
 ## What runs where
 
@@ -191,13 +191,40 @@ something the workbench can teach and the board cannot run yet.
 
 ### What a body can do
 
-| Body | Moves | Shows | Needs |
+A body is a template, not a firmware and not the character. There are five, in
+[`core/bodies.js`](core/bodies.js): voice only, a pet on a screen, a tarot
+reader, a toy on wheels, and a dry run kept out of the picker (open the admin
+with `?bench` to see it). The admin's Body tab draws one card per template: the
+capabilities it has — hear, speak, show, move — the parts each body costs, and
+the actions the model may call.
+
+| Template | Capabilities | Actions the model may call | Parts |
 |---|---|---|---|
-| Car | drives, cruises, stops | a face | ESP32 motor pins, or a phone + FT232H |
-| Pet on a screen | poses, barks | a dog | a screen |
-| Tarot | no | cards | an MPU-6050 wand |
-| Dry run | logged only | a face | nothing |
-| Cannot move | no | a face | nothing |
+| Voice only (`none`) | hear, speak | `play_sound` | ESP32 board, mic, amp |
+| Pet on a screen (`pet`) | hear, speak, show | `pose`, `play_sound` | ESP32 board, mic, amp, screen |
+| Tarot reader (`tarot`) | hear, speak, show | `draw_card` | ESP32 board, mic, amp, screen, wand (optional) |
+| Toy on wheels (`toy`) | hear, speak, move | `move`, `cruise`, `stop`, `play_sound` | toy, ESP32 board, mic, amp |
+| Dry run (`dry-run`) | hear, speak, move | the toy's four | nothing: every verb is logged, never sent |
+
+A body's actions are yours to edit. The Body tab holds them as JSON, and once
+you write your own the body keeps them instead of following the template; the
+model is then offered those actions, plus the fixed tools its template names
+(the language setting, for a body that speaks words), and the prompt is
+built from that body's own words. Nothing is compiled and nothing is
+flashed for this — an action is a program of the five verbs the hardware already
+answers (`drive`, `halt`, `voice`, `pose`, `draw`). The parts list is the other
+half: it is what to buy, and it is fixed by the template.
+
+A character with no body chosen is voice only; a character file written before
+this setting has no `body` key and is still the toy
+([`core/config.js`](core/config.js)). The rest of the account — the verbs, and
+what an action may say — is in [`docs/development.md`](docs/development.md#bodies-capabilities-verbs-actions).
+
+A character file has no version number. An older brain reading a file written by
+a newer one silently drops the keys it does not know: a body's `actions`, for
+instance, disappear with no error and the body falls back to its template. Keep
+the brain and the characters you wrote them with; there is no migration step to
+run on a downgrade.
 
 ## Status and limits
 

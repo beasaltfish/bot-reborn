@@ -98,7 +98,7 @@ test('two characters talk at once, each with its own voice and key', async () =>
 
 test('a dry-run character answers a body with no car, and only the brain sees the move', async () => {
   const chars = tempCharacters();
-  const a = chars.add('a', (cfg) => { cfg.body.motion = 'dry-run'; });
+  const a = chars.add('a', (cfg) => { cfg.body.id = 'dry-run'; });
   /** @type {string[]} */ const lines = [];
   const server = createBrainServer({
     dir: chars.dir, fetch: fakeFetch(), sfx: new Map(), earcons: renderEarcons(),
@@ -137,7 +137,7 @@ async function screen(port, token, size = undefined) {
 
 test('/screen is taken by the screen link, welcomes a token, and streams the pet', async () => {
   const chars = tempCharacters();
-  const a = chars.add('a', (cfg) => { cfg.body.motion = 'pet'; });
+  const a = chars.add('a', (cfg) => { cfg.body.id = 'pet'; });
   const server = createBrainServer({
     dir: chars.dir, fetch: fakeFetch(), sfx: new Map(), earcons: renderEarcons(),
     makeEars: () => onceEars(), log: () => {},
@@ -166,7 +166,7 @@ test('/screen is taken by the screen link, welcomes a token, and streams the pet
 
 test('two screens of one character each get their own size', async () => {
   const chars = tempCharacters();
-  const a = chars.add('a', (cfg) => { cfg.body.motion = 'pet'; });
+  const a = chars.add('a', (cfg) => { cfg.body.id = 'pet'; });
   const server = createBrainServer({
     dir: chars.dir, fetch: fakeFetch(), sfx: new Map(), earcons: renderEarcons(),
     makeEars: () => onceEars(), log: () => {},

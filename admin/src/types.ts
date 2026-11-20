@@ -1,5 +1,5 @@
 export type LayerName = 'stt' | 'llm' | 'tts' | 'reflex';
-export type TabName = 'basic' | LayerName;
+export type TabName = 'basic' | 'body' | LayerName;
 
 /** One provider a character talks to, and the key for it. See server/endpoints.js. */
 export interface Endpoint {
@@ -20,7 +20,11 @@ export interface LayerConfig {
   prompt?: string;
 }
 
-export interface ReflexCall { name: 'move' | 'cruise' | 'stop' | 'play_sound' | 'pose' | 'draw_card'; args: Record<string, any> }
+/** The action names the reflex editor offers. A candidate list, not a parse
+ * guarantee: core/config.js keeps any non-empty name, so `ReflexCall.name` is
+ * a plain string and a call outside this list is shown as unsupported. */
+export type ReflexKind = 'move' | 'cruise' | 'stop' | 'play_sound' | 'pose' | 'draw_card';
+export interface ReflexCall { name: string; args: Record<string, any> }
 export interface ReflexOption { choice: string; description: string; actions: ReflexCall[] }
 export interface ReflexQuestion { name: string; instructions: string; options: ReflexOption[] }
 export interface ReflexConfig extends LayerConfig {
@@ -34,7 +38,35 @@ export interface ReflexConfig extends LayerConfig {
 /** One the admin saved on this character; see server/saved-reflexes.js. */
 export interface SavedReflex { name: string; threshold: number; state: string; question: ReflexQuestion }
 
-export type Motion = 'car' | 'dry-run' | 'none' | 'pet' | 'tarot';
+export type Motion = 'toy' | 'dry-run' | 'none' | 'pet' | 'tarot';
+
+/** One tool a body lets the model call: a name plus a program of verbs. The
+ * required fields are the ones `core/bodies.js`'s `Action` requires; the
+ * editor's JSON is parsed, not typed, so `bodyProblem` is what refuses it. */
+export interface BodyAction {
+  name: string;
+  label: { en: string; zh: string };
+  /** The tool description, straight into the prompt. */
+  say: string;
+  args?: Record<string, any>;
+  run: Array<{ verb: string; args?: Record<string, unknown>; each?: string }>;
+  returns?: true;
+  rules?: string;
+}
+
+export interface BodyTrigger { on: 'shake' | 'button'; action: string }
+
+/** `config.body`: which template this character follows, and what it replaced.
+ * Absent keys inherit the template; `actions: null` is the wire form of
+ * "remove the override" that the page sends before a reload drops the key. */
+export interface BodyConfig {
+  id: Motion;
+  template?: Motion;
+  label?: { en: string; zh: string };
+  prompts?: { voice?: string; rules?: string[] };
+  actions?: BodyAction[] | null;
+  triggers?: BodyTrigger[] | null;
+}
 
 export interface Config {
   stt: LayerConfig;
@@ -45,7 +77,9 @@ export interface Config {
   replyLang: 'zh' | 'en' | null;
   bargeIn: boolean;
   wakeWord: boolean;
-  body: { motion: Motion };
+  /** Which template of core/bodies.js this character follows; old files said
+   * `motion`. */
+  body: BodyConfig;
   /** Empty means brain.js's DEFAULT_PERSONA. */
   persona: string;
 }

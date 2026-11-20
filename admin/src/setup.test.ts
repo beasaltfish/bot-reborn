@@ -39,16 +39,20 @@ describe('setupSteps', () => {
   });
 
   it('does not require a board once the body has said it is a phone', () => {
-    const phone = stepsFor({ ...summary, motion: 'car', bodyKind: 'phone' }, flash);
+    const phone = stepsFor({ ...summary, motion: 'toy', bodyKind: 'phone' }, flash);
     expect(phone.find((s) => s.id === 'board')).toEqual({ id: 'board', done: false, source: 'none', optionalFor: 'phone' });
   });
 
-  it('does not guess "phone" from motion before anything has connected', () => {
-    // A phone driving a car and a board driving the same car look alike until one connects.
-    for (const motion of ['none', 'dry-run', 'car'] as const) {
-      const steps = stepsFor({ ...summary, motion }, null);
-      expect(steps.find((s) => s.id === 'board')).toMatchObject({ done: false });
-      expect(steps.find((s) => s.id === 'board')?.optionalFor).toBeUndefined();
+  it('a body that needs no hardware at all skips the flash', () => {
+    const steps = stepsFor({ ...summary, motion: 'dry-run' }, null);
+    expect(steps.find((s) => s.id === 'board')).toEqual({ id: 'board', done: false, source: 'none', optionalFor: 'no-body' });
+  });
+
+  it('a body with a board way still asks for the flash until a phone says it is the body', () => {
+    // A car or a voice-only body can be either, so the card cannot skip the
+    // board on the user's behalf — only the hello marker knows.
+    for (const motion of ['toy', 'none'] as const) {
+      expect(stepsFor({ ...summary, motion }, null).find((s) => s.id === 'board')).toMatchObject({ done: false });
     }
   });
 

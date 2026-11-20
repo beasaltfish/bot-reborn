@@ -48,7 +48,8 @@ test('the list has names, readiness and presence — never keys or tokens', asyn
   const { status, body } = await r.call('/api/characters');
   assert.equal(status, 200);
   assert.deepEqual(body, [{
-    id: 'a', name: 'a', ready: true, online: false, motion: 'car', setupId: setupIdFor(a.token),
+    id: 'a', name: 'a', ready: true, online: false,
+    motion: 'toy', verbs: ['drive', 'halt', 'voice'], setupId: setupIdFor(a.token),
   }]);
   await r.server.close();
 });
@@ -211,12 +212,12 @@ async function sayHello(url, hello) {
 
 test('a connected phone says so without changing how the character moves, and the marker clears on reconnect', async () => {
   const r = await rig();
-  const car = r.chars.add('car', (cfg) => { cfg.body.motion = 'car'; });
+  const car = r.chars.add('car', (cfg) => { cfg.body.id = 'toy'; });
   const phone = await sayHello(`ws://127.0.0.1:${r.port}/body`, { token: car.token, body: 'phone' });
   try {
     assert.equal(phone.msgs[0].type, 'welcome');
     const withPhone = (await r.call('/api/characters')).body[0];
-    assert.equal(withPhone.motion, 'car');
+    assert.equal(withPhone.motion, 'toy');
     assert.equal(withPhone.bodyKind, 'phone');
 
     phone.ws.close();
@@ -251,9 +252,36 @@ test('the phone marker is ignored when admission fails', async () => {
 
 test('the list says how each character moves, so the bench can tell a pet', async () => {
   const r = await rig();
-  r.chars.add('petty', (cfg) => { cfg.body.motion = 'pet'; });
+  r.chars.add('petty', (cfg) => { cfg.body.id = 'pet'; });
   const { body } = await r.call('/api/characters');
   assert.equal(body[0].motion, 'pet');
+  await r.server.close();
+});
+
+test('the list carries verbs for the simulator, not action names', async () => {
+  const r = await rig();
+  r.chars.add('petty', (cfg) => { cfg.body.id = 'pet'; });
+  const { body } = await r.call('/api/characters');
+  const pet = body[0];
+
+  // What the bench asks is "can it pose?", so the list names the verb `pose`,
+  // never the action that runs it.
+  assert.ok(pet.verbs.includes('pose'));
+  assert.ok(pet.verbs.includes('voice'), 'a bark is the voice verb');
+  assert.equal(pet.verbs.includes('draw_card'), false);
+  assert.equal(pet.verbs.includes('move'), false, 'no action name reaches the list');
+  // The id stays beside it: an old tab still reads `motion`.
+  assert.equal(pet.motion, 'pet');
+
+  // A body's own actions answer for it, not its template: this one is called
+  // `toy` and has no toy actions at all.
+  r.chars.add('cards', (cfg) => {
+    cfg.body.id = 'toy';
+    cfg.body.actions = [{ name: 'sit', run: [{ verb: 'pose', args: { pose: 'sit' } }] }];
+  });
+  const toy = (await r.call('/api/characters')).body.find((/** @type {any} */ c) => c.id === 'cards');
+  assert.deepEqual(toy.verbs, ['pose']);
+  assert.equal(toy.motion, 'toy', 'the template name is beside it, not instead of it');
   await r.server.close();
 });
 

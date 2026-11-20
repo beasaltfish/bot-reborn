@@ -4,13 +4,14 @@ import { useEffect, useState } from 'react';
 import { SOUNDS } from '../../core/audio/sfx.js';
 import { MIN_DURATION_MS } from '../../core/motion.js';
 import { POSES } from '../../core/poses.js';
+import { resolveBody } from '../../core/bodies.js';
 import { normalizeReflex, reflexMissing } from '../../core/config.js';
 import {
   DRIVES, STEERS, blankQuestion, freshChoice, fromUnsloth, presetIdOf, presetPatch, toUnsloth, unsupported,
 } from './reflexEdit';
 import { t, type Key } from './i18n';
 import type { TryFn } from './checks';
-import type { Config, Patch, ReflexCall, ReflexConfig, ReflexOption, ReflexQuestion, SavedReflex } from './types';
+import type { Config, Patch, ReflexCall, ReflexConfig, ReflexKind, ReflexOption, ReflexQuestion, SavedReflex } from './types';
 
 export function ReflexTab({ config, saved, update, tryIt }:
   { config: Config; saved: SavedReflex[]; update(p: Patch): void; tryIt: TryFn }) {
@@ -23,7 +24,8 @@ export function ReflexTab({ config, saved, update, tryIt }:
   const [epoch, setEpoch] = useState(0);
   const replace = (p: Partial<ReflexConfig>) => { setEpoch((e) => e + 1); set(p); };
   const preset = presetIdOf(r, saved);
-  const ignored = unsupported(r, config.body.motion);
+  // The resolved body, so an action of one's own is counted by its own name.
+  const ignored = unsupported(r, resolveBody(config.body.id, config.body));
   // The brain reads this through the same normalisation; when it would read
   // something else, the page says so rather than show what will not run.
   const read = normalizeReflex(r);
@@ -177,7 +179,7 @@ function QuestionForm({ question: q, onChange }: { question: ReflexQuestion; onC
 }
 
 /** A starting call for each kind, so switching kind never leaves stale args. */
-function fresh(name: ReflexCall['name']): ReflexCall {
+function fresh(name: ReflexKind): ReflexCall {
   if (name === 'move') return { name, args: { steps: [{ drive: 'forward', steer: 'straight', duration_ms: 600 }] } };
   if (name === 'cruise') return { name, args: { drive: 'forward', steer: 'straight' } };
   if (name === 'stop' || name === 'draw_card') return { name, args: {} };
@@ -185,7 +187,8 @@ function fresh(name: ReflexCall['name']): ReflexCall {
   return { name, args: { name: SOUNDS[0] } };
 }
 
-const KINDS: ReflexCall['name'][] = ['move', 'cruise', 'stop', 'play_sound', 'pose', 'draw_card'];
+/** What this editor can offer. A saved question may name more than these. */
+const KINDS: ReflexKind[] = ['move', 'cruise', 'stop', 'play_sound', 'pose', 'draw_card'];
 
 function ActionList({ label, actions, onChange }: { label: string; actions: ReflexCall[]; onChange(a: ReflexCall[]): void }) {
   const setAt = (i: number, a: ReflexCall) => onChange(actions.map((x, j) => (j === i ? a : x)));
@@ -196,7 +199,7 @@ function ActionList({ label, actions, onChange }: { label: string; actions: Refl
         const at = `${label} action ${i + 1}`;
         return (
           <div key={i} className="action">
-            <select aria-label={at} value={a.name} onChange={(e) => setAt(i, fresh(e.target.value as ReflexCall['name']))}>
+            <select aria-label={at} value={a.name} onChange={(e) => setAt(i, fresh(e.target.value as ReflexKind))}>
               {KINDS.map((k) => <option key={k} value={k}>{k}</option>)}
             </select>
             <ActionArgs at={at} call={a} onChange={(c) => setAt(i, c)} />
