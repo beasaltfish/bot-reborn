@@ -203,8 +203,8 @@ the actions the model may call.
 | Voice only (`none`) | hear, speak | `play_sound` | ESP32 board, mic, amp |
 | Pet on a screen (`pet`) | hear, speak, show | `pose`, `play_sound` | ESP32 board, mic, amp, screen |
 | Tarot reader (`tarot`) | hear, speak, show | `draw_card` | ESP32 board, mic, amp, screen, wand (optional) |
-| Toy on wheels (`toy`) | hear, speak, show, move | `move`, `cruise`, `stop`, `play_sound` | toy, ESP32 board, mic, amp |
-| Dry run (`dry-run`) | hear, speak, show, move | the toy's four | nothing: every verb is logged, never sent |
+| Toy on wheels (`toy`) | hear, speak, move | `move`, `cruise`, `stop`, `play_sound` | toy, ESP32 board, mic, amp |
+| Dry run (`dry-run`) | hear, speak, move | the toy's four | nothing: every verb is logged, never sent |
 
 A body's actions are yours to edit. The Body tab holds them as JSON, and once
 you write your own the body keeps them instead of following the template; the

@@ -256,6 +256,20 @@ test('a voice-only body does not borrow the phone\'s face', () => {
   assert.equal(voice?.label.en, 'Voice only');
 });
 
+test('a body that shows has a screen in its parts', () => {
+  // `show` is what the `pose` verb needs, and the brain builds a screen
+  // animator only for a body whose actions ask for one. A template with no
+  // screen must not promise a face nothing can draw.
+  assert.deepEqual(
+    BODIES.filter((b) => b.capabilities.includes('show')).map((b) => b.id),
+    ['pet', 'tarot'],
+  );
+  for (const body of BODIES) {
+    const screens = body.ways.some((w) => parts(/** @type {any} */ (w)).includes('screen'));
+    assert.equal(body.capabilities.includes('show'), screens, body.id);
+  }
+});
+
 test('the label is the reader\'s language', () => {
   assert.equal(labelOf(bodyById('pet') ?? BODIES[0], 'en'), 'Pet on a screen');
   assert.equal(labelOf(bodyById('pet') ?? BODIES[0], 'zh'), '屏幕宠物');

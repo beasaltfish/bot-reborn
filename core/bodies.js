@@ -363,9 +363,11 @@ export const TEMPLATES = {
     hidden: true,
     reply: 'tts',
     ways: [{ source: 'none', needs: [] }],
-    capabilities: ['hear', 'speak', 'show', 'move'],
-    // A dry run is a car as far as the model can tell: what is being tested is
-    // the real prompt, so it carries the toy's own actions.
+    // No screen in its parts and no `pose` in its actions: what it cannot draw
+    // is not promised.
+    capabilities: ['hear', 'speak', 'move'],
+    // A dry run is the toy as far as the model can tell: what is being tested
+    // is the real prompt, so it carries the toy's own actions.
     actions: [ACTIONS.move, ACTIONS.cruise, ACTIONS.stop, ACTIONS.play_sound],
     prompts: {
       voice: BODY_WHEELS,
@@ -386,7 +388,7 @@ export const TEMPLATES = {
       source: 'board',
       needs: [{ part: 'toy' }, { part: 'board' }, { part: 'mic' }, { part: 'amp' }],
     }],
-    capabilities: ['hear', 'speak', 'show', 'move'],
+    capabilities: ['hear', 'speak', 'move'],
     actions: [ACTIONS.move, ACTIONS.cruise, ACTIONS.stop, ACTIONS.play_sound],
     prompts: {
       voice: BODY_WHEELS,

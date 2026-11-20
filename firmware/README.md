@@ -185,9 +185,10 @@ body URL. Then calibrate, drive first (a car wired backwards turns the wrong
 way while you watch it): `cal drive` if it went backwards, then `cal steer` if
 it turned the wrong way. `cal` shows both; `help` lists everything.
 
-In the admin page, give this character **Body: Car** and turn **Barge-in
-off**: there is no echo cancellation on this body, and with barge-in on the
-robot would hear itself and interrupt itself.
+In the admin page, give this character **Body: Toy on wheels** — the card
+badged **Flashed to a board**; the phone is not offered as a body — and turn
+**Barge-in off**: there is no echo cancellation on this body, and with barge-in
+on the robot would hear itself and interrupt itself.
 
 ## Status light
 
