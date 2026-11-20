@@ -53,6 +53,9 @@ import { VERBS, VERB_NAMES } from './verbs.js';
  * the item schema's words (`duration_ms`), not the verb's (`ms`), because the
  * element is the thing the author can see. `expect` is a phrase, not a
  * sentence: `move: step rejected — <json>; <expect>` is the caller's to build.
+ * The one exception to "phrase" is the unknown-verb refusal, where the
+ * offending line says `unknown verb "<v>"; one of the verbs: …` and the other
+ * lines say `not run — step N uses an unknown verb`, naming the guilty line.
  * @typedef {{
  *   where: 'args' | `steps[${number}]`,
  *   value: unknown,
@@ -122,8 +125,11 @@ export function actionProblem(action, opts) {
         // every element would be dropped at call time for a typo the author
         // could have been told about here.
         const field = ref.slice('$each.'.length);
-        const fields = properties[step.each]?.items?.properties;
-        if (!fields || !Object.hasOwn(fields, field)) {
+        // Only refuse a field when the item schema is a record of fields this
+        // checker can read and does not declare it — `anyOf` is a declared
+        // shape too, so a field from any branch fills fine.
+        const fields = itemFields(properties[step.each]?.items);
+        if (fields && !fields.has(field)) {
           return `${at} uses ${ref}, but the elements of ${step.each} have no "${field}"`;
         }
       } else if (!declared.has(ref.slice(1))) {
@@ -164,12 +170,17 @@ export function expand(action, args) {
 
   const badAt = run.findIndex((step) => !VERB_TABLE[step.verb]);
   if (badAt >= 0) {
-    const expect = `one of the verbs: ${VERB_NAMES.join(', ')}`;
+    const guilty = run[badAt];
+    const unknown = `unknown verb "${guilty.verb}"; one of the verbs: ${VERB_NAMES.join(', ')}`;
+    // The whole action is refused, but only one line is at fault. Every other
+    // line says what stopped it and which line did — `pose` is a legal verb, so
+    // a reason listing the verbs would be false for the innocent lines.
+    const stopped = `not run — step ${badAt + 1} uses an unknown verb`;
     return {
       steps: [],
       // One Drop per line of the program, so the count still tells the caller
       // how much was lost — the whole action, not just the one bad line.
-      dropped: run.map((step, i) => ({ where: at(i), value: step, expect })),
+      dropped: run.map((step, i) => ({ where: at(i), value: step, expect: i === badAt ? unknown : stopped })),
       hadDrive: false,
     };
   }
@@ -263,6 +274,31 @@ function schemaProblem(node, path) {
     if (bad) return bad;
   }
   return null;
+}
+
+/**
+ * The field names an element of a walked argument may have, or `null` when the
+ * item schema is not a record of fields this checker can read. `null` means
+ * "cannot tell", not "no fields": a `$each.field` is then not refused, because
+ * a field the checker cannot see is not proof of a typo. An `anyOf` item is one
+ * of the subset's shapes, so a field any branch declares is declared.
+ * @param {unknown} schema
+ * @returns {Set<string> | null}
+ */
+function itemFields(schema) {
+  if (!isRecord(schema)) return null;
+  /** @type {Set<string>} */
+  const fields = new Set();
+  if (isRecord(schema.properties)) {
+    for (const key of Object.keys(schema.properties)) fields.add(key);
+  }
+  if (Array.isArray(schema.anyOf)) {
+    for (const branch of schema.anyOf) {
+      if (!isRecord(branch) || !isRecord(branch.properties)) continue;
+      for (const key of Object.keys(branch.properties)) fields.add(key);
+    }
+  }
+  return fields.size > 0 ? fields : null;
 }
 
 /**

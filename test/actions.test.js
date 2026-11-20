@@ -176,8 +176,15 @@ test('a missing verb stops the whole action', () => {
   assert.deepEqual(r.dropped[1], {
     where: 'steps[1]',
     value: { verb: 'fly' },
-    expect: `one of the verbs: ${VERB_NAMES.join(', ')}`,
-  });
+    expect: `unknown verb "fly"; one of the verbs: ${VERB_NAMES.join(', ')}`,
+  }, 'the guilty line names the verb that is unknown');
+
+  // `pose` is a legal verb: the innocent lines must not be told it is unknown,
+  // and must say which line stopped them.
+  for (const i of [0, 2]) {
+    assert.equal(r.dropped[i].expect, 'not run — step 2 uses an unknown verb');
+    assert.deepEqual(r.dropped[i].value, mixed.run[i], 'the innocent line keeps its own value');
+  }
   assert.equal(r.hadDrive, false);
 });
 
@@ -222,6 +229,42 @@ test('a $each field the walked argument does not have is refused', () => {
     }],
   });
   assert.match(actionProblem(typo, OPTS) ?? '', /durration_ms/);
+});
+
+test('a $each field declared by an anyOf item branch is accepted', () => {
+  const creep = action({
+    name: 'creep',
+    args: {
+      type: 'object',
+      required: ['steps'],
+      properties: {
+        steps: {
+          type: 'array',
+          items: {
+            anyOf: [{
+              type: 'object',
+              required: ['delay_ms'],
+              properties: { delay_ms: { type: 'integer', minimum: 1 } },
+            }],
+          },
+        },
+      },
+    },
+    run: [{ verb: 'drive', each: 'steps', args: { drive: 'forward', steer: 'straight', ms: '$each.delay_ms' } }],
+  });
+  assert.equal(actionProblem(creep, OPTS), null, 'delay_ms is declared by the anyOf branch');
+  assert.deepEqual(expand(creep, { steps: [{ delay_ms: 500 }] }).steps, [
+    { verb: 'drive', args: { drive: 'forward', steer: 'straight', ms: 500 } },
+  ], 'and it fills the verb it was written for');
+
+  // An item schema with no readable record of fields cannot prove a typo, so
+  // the check is skipped rather than guessing.
+  const open = action({
+    name: 'open',
+    args: { type: 'object', properties: { steps: { type: 'array' } } },
+    run: [{ verb: 'drive', each: 'steps', args: { drive: 'forward', steer: 'straight', ms: '$each.anything' } }],
+  });
+  assert.equal(actionProblem(open, OPTS), null);
 });
 
 test('a literal step is held to the verb schema before any call', () => {
