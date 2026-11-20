@@ -116,6 +116,20 @@ describe('BodyTab', () => {
     expect(screen.getByRole('status')).toHaveTextContent(/needs show/);
   });
 
+  it('does not write a switch whose retained prompts are still broken', async () => {
+    const update = vi.fn();
+    const d = detail('pet');
+    d.config.body.actions = structuredClone(TEMPLATES.pet.actions) as BodyAction[];
+    // The prompt override is the person's words: a switch never drops it, so
+    // clearing the actions would leave the body just as broken — and take the
+    // unsaved-by-hand actions with it.
+    d.config.body.prompts = { rules: 'one paragraph' as unknown as string[] };
+    renderTab(d, update);
+    await userEvent.click(screen.getByRole('radio', { name: /voice only/i }));
+    expect(update).not.toHaveBeenCalled();
+    expect(screen.getByRole('status')).toHaveTextContent(/prompts\.rules is not a list of strings/i);
+  });
+
   it('draws the chosen body with the frames the brain has, and says it is not a simulation', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ pet: [], tarot: ['320x240/back.jpg'] }) })));
     renderTab(detail('tarot'));

@@ -30,6 +30,10 @@ export function ActionsEditor({ detail, update }: { detail: Detail; update(p: Pa
   // Whether the box holds an edit that has not reached the config. A rejected
   // edit counts: clearing the trigger should still save it once it is whole.
   const [dirty, setDirty] = useState(false);
+  // "Use the template" was refused by a trigger, not by the actions. The box
+  // already shows the template, so the next write that clears the trigger must
+  // remove the override (`actions: null`) rather than save that copy.
+  const [pendingInherit, setPendingInherit] = useState(false);
 
   /**
    * The triggers the body would read before `resolveBody` drops the ones whose
@@ -58,6 +62,9 @@ export function ActionsEditor({ detail, update }: { detail: Detail; update(p: Pa
 
   const edit = (next: string) => {
     setText(next);
+    // The person is editing the actions again; the template is no longer the
+    // pending intent, even if it was what the box held a moment ago.
+    setPendingInherit(false);
     let actions: BodyAction[];
     try {
       actions = JSON.parse(next);
@@ -73,13 +80,17 @@ export function ActionsEditor({ detail, update }: { detail: Detail; update(p: Pa
     if (!problem) update({ config: { body: { actions } } });
   };
 
-  const copy = () => attempt(structuredClone(template.actions));
+  const copy = () => {
+    setPendingInherit(false);
+    attempt(structuredClone(template.actions));
+  };
 
   const useTemplate = () => {
     const problem = bodyProblem(candidate(template.actions));
     setText(JSON.stringify(template.actions, null, 2));
     setError(problem);
     setDirty(Boolean(problem));
+    setPendingInherit(Boolean(problem));
     // A hand-written trigger can name one of the copy's own actions; removing
     // the override would then strand it and save a body `bodyProblem` refuses.
     if (!problem) update({ config: { body: { actions: null } } });
@@ -92,14 +103,27 @@ export function ActionsEditor({ detail, update }: { detail: Detail; update(p: Pa
    * template must not silently become a copy of itself.
    */
   const clearTriggers = () => {
+    const restore = pendingInherit;
     let actions: BodyAction[] | undefined;
-    try { actions = JSON.parse(text); } catch { /* the box is mid-edit */ }
-    const problem = actions === undefined
+    if (!restore) {
+      try { actions = JSON.parse(text); } catch { /* the box is mid-edit */ }
+    }
+    // A restore writes `actions: null`, so the body it leaves behind carries
+    // the template's actions, not the copy the box is showing.
+    const written = restore ? template.actions : actions;
+    const problem = written === undefined
       ? t('jsonInvalid')
-      : bodyProblem(candidate(actions, []));
+      : bodyProblem(candidate(written, []));
     setError(problem);
-    const keep = dirty && actions !== undefined && !problem ? { actions } : {};
+    if (problem && restore) return;
+    const keep = problem
+      ? {}
+      : restore
+        ? { actions: null as null }
+        : dirty && actions !== undefined ? { actions } : {};
     update({ config: { body: { triggers: [], ...keep } } });
+    setDirty(false);
+    setPendingInherit(false);
   };
 
   return (
@@ -122,7 +146,7 @@ export function ActionsEditor({ detail, update }: { detail: Detail; update(p: Pa
           <button type="button" className="secondary" disabled={inherited} onClick={useTemplate}>
             {t('actionsUse')}
           </button>
-          {(body.triggers?.length ?? 0) > 0 && (
+          {triggers().length > 0 && (
             <button type="button" className="secondary" onClick={clearTriggers}>{t('actionsClearTriggers')}</button>
           )}
         </div>

@@ -19,6 +19,14 @@ const detail = (id: 'toy' | 'pet' | 'tarot' | 'none' = 'tarot'): Detail => ({
 
 const box = () => screen.getByLabelText(t('actionsTitle')) as HTMLTextAreaElement;
 
+/** A pet action of the person's own, named by a hand-written trigger. */
+const waveAction = () => ({
+  ...TEMPLATES.pet.actions[0],
+  name: 'wave',
+  label: { en: 'Wave', zh: '挥爪' },
+  say: 'Wave a paw.',
+}) as BodyAction;
+
 /** Open the collapsed section so its controls are real click targets. */
 const open = async () => {
   await userEvent.click(screen.getByText(new RegExp(`^${t('actionsTitle')}`), { selector: 'summary' }));
@@ -112,15 +120,9 @@ describe('ActionsEditor', () => {
   it('refuses "use the template" when it would strand a trigger', async () => {
     const update = vi.fn();
     const d = detail('pet');
-    const wave = {
-      ...TEMPLATES.pet.actions[0],
-      name: 'wave',
-      label: { en: 'Wave', zh: '挥爪' },
-      say: 'Wave a paw.',
-    } as BodyAction;
     d.config.body = {
       id: 'pet',
-      actions: [...TEMPLATES.pet.actions, wave],
+      actions: [...TEMPLATES.pet.actions, waveAction()],
       triggers: [{ on: 'button', action: 'wave' }],
     };
     render(<ActionsEditor detail={d} update={update} />);
@@ -128,6 +130,36 @@ describe('ActionsEditor', () => {
     await userEvent.click(screen.getByRole('button', { name: t('actionsUse') }));
     expect(screen.getByRole('alert')).toHaveTextContent(/button trigger names wave/);
     expect(update).not.toHaveBeenCalled();
+  });
+
+  it('keeps "use the template" intent when the trigger is cleared next', async () => {
+    const update = vi.fn();
+    const d = detail('pet');
+    d.config.body = {
+      id: 'pet',
+      actions: [...TEMPLATES.pet.actions, waveAction()],
+      triggers: [{ on: 'button', action: 'wave' }],
+    };
+    render(<ActionsEditor detail={d} update={update} />);
+    await open();
+    await userEvent.click(screen.getByRole('button', { name: t('actionsUse') }));
+    expect(update).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: t('actionsClearTriggers') }));
+    // `null`, not the template's actions: the box looked restored, so the
+    // body must inherit again rather than become a copy of what it followed.
+    expect(update).toHaveBeenCalledWith({ config: { body: { triggers: [], actions: null } } });
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('offers "clear triggers" for a trigger the resolved body dropped', async () => {
+    const d = detail('pet');
+    // `resolveBody` filters this out, so the resolved body has none — but the
+    // trigger is what refuses every edit, and clearing it is the way out.
+    d.config.body.triggers = [{ on: 'button', action: 'wave' }];
+    render(<ActionsEditor detail={d} update={vi.fn()} />);
+    await open();
+    expect(screen.getByRole('button', { name: t('actionsClearTriggers') })).toBeInTheDocument();
   });
 
   it('clearing triggers on an unedited template writes only the trigger list', async () => {

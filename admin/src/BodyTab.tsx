@@ -32,8 +32,9 @@ const NEED: Record<string, Key> = {
 export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): void }) {
   const chosen = detail.config.body.id;
   const patch = detail.config.body;
-  /** The sentence `bodyProblem` wrote when a switch had to drop the user's edits. */
-  const [notice, setNotice] = useState<string | null>(null);
+  /** The sentence `bodyProblem` wrote when a switch was refused, and whether
+   * the switch then dropped the user's edits or wrote nothing at all. */
+  const [notice, setNotice] = useState<{ text: string; cleared: boolean } | null>(null);
   // A dry run is a bench tool: it moves nothing and shows nothing, and next to
   // four real bodies it reads as a fifth one. `?bench` brings it back for the
   // person editing prompts without hardware — and it is always shown when it is
@@ -62,23 +63,37 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
   // cleared back to inherited, and the sentence says which.
   const pick = (id: string) => {
     const next = id as Motion;
-    const candidate = resolveBody(next, patch);
-    const base = TEMPLATES[(candidate.template ?? next) as Motion] ?? TEMPLATES.none;
-    const rawTriggers = /** @type {any} */ (patch.triggers ?? base.triggers ?? []);
-    const problem = bodyProblem({ ...candidate, triggers: Array.isArray(rawTriggers) ? rawTriggers : [] });
+    /** The body as the brain will read it after a PATCH carrying this patch. */
+    const read = (p: typeof patch) => {
+      const candidate = resolveBody(next, p);
+      const base = TEMPLATES[(candidate.template ?? next) as Motion] ?? TEMPLATES.none;
+      const rawTriggers = /** @type {any} */ (p.triggers ?? base.triggers ?? []);
+      return { ...candidate, triggers: Array.isArray(rawTriggers) ? rawTriggers : [] };
+    };
+    const problem = bodyProblem(read(patch));
     if (!problem) {
       setNotice(null);
       update({ config: { body: { id: next } } });
       return;
     }
-    setNotice(problem);
-    if (Array.isArray(patch.actions)) {
-      update({ config: { body: { id: next, actions: null, triggers: null } } });
-    } else if (patch.triggers !== undefined) {
-      update({ config: { body: { id: next, triggers: null } } });
-    } else {
-      update({ config: { body: { id: next } } });
+    // A switch drops what the new body cannot carry: the actions it wrote and
+    // the triggers that may name them. It never drops a prompts override —
+    // those are the person's words, not the body's — so if the prompt is the
+    // reason the merge is refused, the switch is refused too rather than
+    // taking the actions with it and leaving the body just as broken.
+    const dropped = Array.isArray(patch.actions)
+      ? { id: next, actions: null, triggers: null }
+      : patch.triggers !== undefined
+        ? { id: next, triggers: null }
+        : { id: next };
+    // Validate the patch that would actually be written, not just the merge.
+    const settled = bodyProblem(read({ ...patch, ...dropped }));
+    if (settled) {
+      setNotice({ text: settled, cleared: false });
+      return;
     }
+    setNotice({ text: problem, cleared: true });
+    update({ config: { body: dropped } });
   };
   const name = labelOf(body, lang);
 
@@ -113,7 +128,8 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
         <ActionsEditor key={chosen} detail={detail} update={update} />
         {notice && (
           <p className="hint" role="status">
-            {t('bodySwitchCleared')} <span>{notice}</span>
+            {notice.cleared && <>{t('bodySwitchCleared')} </>}
+            <span>{notice.text}</span>
           </p>
         )}
       </div>
