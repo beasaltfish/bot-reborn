@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CONFIG_KEY, STICKY, REFLEX_TOOLS, defaultConfig, loadConfig, saveConfig, resetSticky, layerReady,
   reflexReady, reflexMissing, normalizeReflex, DEFAULT_STATE } from '../core/config.js';
+import { buildSystemPrompt } from '../core/brain.js';
+import { resolveBody } from '../core/bodies.js';
 
 /** A localStorage stand-in. The real one is not available in node, and every
  * function under test takes it as a parameter for exactly this reason. */
@@ -379,6 +381,27 @@ test('a known body keeps its id and the rest of the patch', () => {
   };
   const c = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ body: { ...body, wheels: true } }) }));
   assert.deepEqual(c.body, body);
+});
+
+test('a malformed prompts patch is dropped, and the template\'s own words apply', () => {
+  // `prompts.rules` is joined by buildSystemPrompt, so a string here would
+  // throw inside the prompt and read from outside as an LLM failure. Load
+  // catches it: one bad field costs that field, not the character.
+  const c = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({
+    body: { id: 'toy', prompts: { rules: 'text' } },
+  }) }));
+  assert.equal(c.body.id, 'toy');
+  assert.equal('prompts' in c.body, false, 'the malformed key is gone, not passed on');
+  const body = resolveBody(c.body.id, c.body);
+  assert.doesNotThrow(() => buildSystemPrompt({ replyLang: null, body }));
+  assert.match(buildSystemPrompt({ replyLang: null, body }), /Your reply is read aloud/);
+
+  // Both halves are checked the same way: an empty voice is no voice, and a
+  // rules list with a non-string in it is not a list of rules.
+  for (const prompts of [{ voice: '' }, { voice: 7 }, { rules: ['ok', 3] }, { rules: [] , voice: ' ' }, 'x']) {
+    const bad = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ body: { id: 'toy', prompts } }) }));
+    assert.equal('prompts' in bad.body, false, JSON.stringify(prompts));
+  }
 });
 
 test('a body that carries actions is kept as written', () => {

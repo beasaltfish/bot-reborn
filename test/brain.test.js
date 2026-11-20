@@ -1018,6 +1018,31 @@ test('the rules are the body\'s list, in the order it keeps them', () => {
   assert.ok(!p.includes(original), 'the template order is not baked in');
 });
 
+test('the read-aloud paragraph is the body\'s data, not derived from reply', () => {
+  // Both bodies speak (`reply: 'tts'`), so a paragraph derived from `reply`
+  // would appear in both. It does not: only the body whose `prompts.rules`
+  // carry it gets it. That is why a body written from scratch can lack it.
+  const silent = resolveBody('none');
+  silent.prompts.rules = ['- Answer in one breath.'];
+  const p = buildSystemPrompt({ replyLang: null, body: silent });
+  assert.equal(silent.reply, 'tts');
+  assert.ok(!p.includes('read aloud'), 'no derived read-aloud paragraph');
+  assert.match(buildSystemPrompt({ replyLang: null, body: resolveBody('none') }), /Your reply is read aloud/);
+});
+
+test('an action\'s rules follow the body\'s, in actions order', () => {
+  // No template carries action rules yet, so the step is pinned with actions
+  // of our own: where they came from must not matter to the assembly.
+  const body = resolveBody('none');
+  const base = body.actions[0];
+  body.actions = [
+    { ...base, name: 'whistle', rules: '- ACTION ONE' },
+    { ...base, name: 'hum', rules: '- ACTION TWO' },
+  ];
+  const p = buildSystemPrompt({ replyLang: null, body });
+  assert.ok(p.includes(`${body.prompts.rules.join('\n')}\n- ACTION ONE\n- ACTION TWO`));
+});
+
 test('the driving prompt is the one it always was, word for word', () => {
   const base = { replyLang: null };
   assert.equal(buildSystemPrompt(base), SYSTEM_PROMPT);

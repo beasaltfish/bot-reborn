@@ -205,6 +205,16 @@ export const MAX_PERSONA = 4000;
 export function buildSystemPrompt(cfg) {
   const body = cfg.body ?? resolveBody('toy');
   const persona = cfg.persona?.trim().slice(0, MAX_PERSONA) || DEFAULT_PERSONA;
+  // The rules are data, taken whole and in the order the body keeps them; each
+  // action's rules follow, in `actions` order.
+  //
+  // Note what is NOT assembled here: the "your reply is read aloud" paragraph
+  // is one of the template's `prompts.rules` (RULES_SPOKEN), not a sentence
+  // derived from `body.reply`. It has to stay there because the frozen golden
+  // puts it between the driving rules and the `duration_ms` line. So a body
+  // written from scratch without it gets no such paragraph, and `reply` below
+  // decides only the language line — the one thing that cannot be data,
+  // because it depends on the user's recorded preference.
   const rules = body.prompts.rules.slice();
   for (const action of body.actions) if (action.rules) rules.push(action.rules);
 

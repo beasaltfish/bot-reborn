@@ -89,10 +89,42 @@ function patchOf(p) {
   const patch = {};
   if (typeof p.template === 'string') patch.template = p.template;
   if (isPlain(p.label)) patch.label = p.label;
-  if (isPlain(p.prompts)) patch.prompts = p.prompts;
+  const prompts = promptsOf(p.prompts);
+  if (prompts) patch.prompts = prompts;
   if (Array.isArray(p.actions)) patch.actions = p.actions;
   if (Array.isArray(p.triggers)) patch.triggers = p.triggers;
   return patch;
+}
+
+/**
+ * A stored `prompts` patch, or undefined when its shape is wrong.
+ *
+ * The prompt is assembled straight from these strings (`buildSystemPrompt`
+ * joins `rules`), so `rules: 'one paragraph'` would throw there and surface as
+ * an LLM failure with nothing on screen to explain it. This is the load path,
+ * where nobody is at hand to be asked, so the whole `prompts` key is dropped
+ * and the template's own words apply — the same deal as `normalizeReflex`:
+ * one bad value costs that value, not the character.
+ *
+ * `resolveBody` deliberately keeps a bad shape, because `bodyProblem` must be
+ * able to refuse a body a person typed in the editor. This check belongs to
+ * the save file, not to resolution.
+ * @param {any} p
+ * @returns {Partial<import('./bodies.js').Prompts> | undefined}
+ */
+function promptsOf(p) {
+  if (!isPlain(p)) return undefined;
+  /** @type {Partial<import('./bodies.js').Prompts>} */
+  const prompts = {};
+  if ('voice' in p) {
+    if (typeof p.voice !== 'string' || p.voice.trim() === '') return undefined;
+    prompts.voice = p.voice;
+  }
+  if ('rules' in p) {
+    if (!Array.isArray(p.rules) || p.rules.some((/** @type {unknown} */ r) => typeof r !== 'string')) return undefined;
+    prompts.rules = p.rules;
+  }
+  return prompts;
 }
 
 /**
