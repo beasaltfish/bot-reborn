@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   TOOLS, RETURNING_TOOLS, toolsFor, validate, buildSystemPrompt, SYSTEM_PROMPT_TAROT,
 } from '../core/brain.js';
+import { resolveBody } from '../core/bodies.js';
 
 const names = (/** @type {any} */ m) => toolsFor(m).map((t) => t.function.name).sort();
 
@@ -41,14 +42,14 @@ test('the tarot prompt: its own body, the reading limits, and no dog', () => {
 });
 
 test('the tarot prompt follows the recorded reply language, and adds none when there is none', () => {
-  const tarot = { body: { id: /** @type {const} */ ('tarot') } };
+  const tarot = { body: resolveBody('tarot') };
   assert.match(buildSystemPrompt({ replyLang: 'en', ...tarot }), /Always reply in English/);
   assert.match(buildSystemPrompt({ replyLang: 'zh', ...tarot }), /Always reply in Chinese/);
   assert.doesNotMatch(buildSystemPrompt({ replyLang: null, ...tarot }), /Always reply in/);
 });
 
 test('the tarot prompt keeps the persona, and tells the model not to describe the picture', () => {
-  const p = buildSystemPrompt({ replyLang: null, persona: 'You are Madame Rue.', body: { id: 'tarot' } });
+  const p = buildSystemPrompt({ replyLang: null, persona: 'You are Madame Rue.', body: resolveBody('tarot') });
   assert.match(p, /^You are Madame Rue\./);
   assert.match(p, /do not describe what is drawn on the card/i);
   assert.match(p, /not a prediction/i);

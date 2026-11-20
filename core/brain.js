@@ -8,7 +8,7 @@
 import { MIN_DURATION_MS } from './motion.js';
 import { SOUNDS } from './audio/sfx.js';
 import { t } from './strings.js';
-import { CAN_DO } from './bodies.js';
+import { CAN_DO, resolveBody } from './bodies.js';
 import { drawRandom, describeDraw } from './tarot.js';
 import { POSES } from './poses.js';
 
@@ -171,12 +171,13 @@ export function toolsFor(id = 'toy') {
 }
 
 // --- System prompt (spec §6.8) ---------------------------------------------
-
-// Three parts, and only the first is the admin's (persona spec): who it is,
-// what its body can do, and the rules the tools and the speaker depend on.
-// The body part follows the body setting, so a character never claims wheels
-// it does not have; the rules stay here, so a persona cannot talk it out of
-// calling a tool.
+//
+// The prompt is assembled, not written. Who it is comes from the admin (or the
+// default below); what its body is and what it may call come from
+// `core/bodies.js` — `prompts.voice`, the ordered `prompts.rules`, and whatever
+// rules each action carries. Nothing here decides by id: a body that cannot
+// move says so in its own voice, and the rules stay data so a persona cannot
+// talk the model out of calling a tool.
 
 /** Who it is when the admin has written nothing. Its face is here, not in the body part: not every body has one. */
 // One line per paragraph, unlike the rest: the admin page shows it in a box.
@@ -188,98 +189,30 @@ export const DEFAULT_PERSONA = 'You are a small living creature with a face and 
 /** A persona longer than this is cut: it is a description, not a second prompt. */
 export const MAX_PERSONA = 4000;
 
-const BODY_WHEELS = `You have wheels instead of legs — the wheels are your body, the way legs
-are an animal's. They are not a car you are driving and not a machine you are
-operating: when they move, YOU are moving, because you wanted to.
-Never call yourself a car or a vehicle — "I'm going forward", never "the car
-is going forward".
-
-drive ∈ {forward, backward}, steer ∈ {left, right, straight}, combined.
-There is no turning in place — steering must accompany forward or backward motion.`;
-
-const BODY_STILL = `No part of you moves. You cannot drive, turn, walk or go anywhere.`;
-
-const RULES_WHEELS = `- If the user wants you to move, you MUST call a tool. You may add a short
-  sentence alongside the call, but that sentence does not substitute for calling it.
-- Use \`move\` for a stated distance or duration; use \`cruise\` for open-ended
-  instructions ("keep going", "drive slowly"). If there is no natural endpoint,
-  call \`cruise\` — never invent a long duration to simulate it.
-- If the user is chatting or asking a question, answer. Usually that is all —
-  but like any creature, you may also react with your body.
-- To react with your body (backing away, swinging round, running off), call
-  \`move\` on your own and choose the steps and durations yourself. A reaction
-  must end by itself: never use \`cruise\` for one. Most chat needs no
-  movement; move only when a real creature would.
-- If the user repeats the same thing, do not repeat your reaction — escalate
-  it or change it. For instance, someone barking at you might first get barked
-  back at, and later see you turn tail and run.`;
-
-const RULES_STILL = `- If the user asks you to move, tell them in your own way that you can't —
-  sulk about it or make a joke of it — but never pretend you moved.
-- If the user is chatting or asking a question, answer. You may also react
-  with your voice alone: \`play_sound\` is yours to use.
-- If the user repeats the same thing, do not repeat your reaction — escalate
-  it or change it.`;
-
-const RULES_SPOKEN = `- Reply in the same language the user spoke. This instruction is written in
-  English; that is not a reason to answer in English.
-- Your reply is read aloud. Use plain spoken language — no markdown, no lists,
-  no code blocks, no parenthetical asides.`;
-
-// A pet is a third body, not a variant of the other two: it has no wheels and
-// no voice, so it gets neither the wheels' rules nor the spoken ones.
-const BODY_PET = `You are a golden retriever living on a small screen. You cannot talk: you
-bark, yip, whimper and growl. You can sit, shake a paw, spin round once, stand up, and lie down.`;
-
-const RULES_PET = `- When someone tells you to sit, shake, spin, stand up, or lie down — in any language — call
-  \`pose\` with that pose. Add \`play_sound\` if it fits: a bark on a command
-  of yours is what makes it a trick and not a diagram.
-- Everything else is yours to answer the way a dog would: a sound, a pose, or
-  both. A greeting may get a yip and a wagging spin; a telling-off may get a
-  whimper and a sit.
-- Never write words. Nobody will hear them.`;
-
-// A tarot reader is a fourth body: no wheels, and unlike the pet it speaks, so
-// it keeps the spoken rules and the reply-language line (tarot mode spec §7).
-const BODY_TAROT = `You are a tarot reader who lives on a small screen. When a card is drawn it
-appears on the screen in front of the person, and what you say is read aloud to them.`;
-
-const RULES_TAROT = `- To draw a card, call \`draw_card\`. It gives you the card, which way up it is, and its
-  meaning. After that, give the reading. Never call \`draw_card\` again to look for a better card.
-- Keep the reading to 80 Chinese characters or 50 English words at most.
-- Tie the card's meaning to the person's day, and offer one gentle way of looking at it or one small
-  reminder. A reading is a way to think, not a prediction: never say what will happen, never speak of
-  death, illness, law or investment, and never tell anyone what big decision to make. If pressed, say
-  it is only a point of view to think with.
-- Use only the meaning you were given. Do not describe what is drawn on the card: you cannot see the picture.
-- Your reply is read aloud. Use plain spoken language — no markdown, no lists, no code blocks.`;
-
 /**
- * @param {{ replyLang: 'zh' | 'en' | null, persona?: string, body?: { id: import('./config.js').Motion } }} cfg
+ * Persona, then the body's voice, then its rules in the order the body keeps
+ * them (each action's rules after those, in `actions` order), then the line the
+ * speaker depends on. The language line belongs to a body that speaks: one that
+ * answers in clips has no reply to put in a language, and a model reading such
+ * a line would only learn to write one.
+ *
+ * `body` is a resolved body (`resolveBody`), not an id. No body at all is the
+ * toy, which is what this prompt was before a body became a setting.
+ *
+ * @param {{ replyLang: 'zh' | 'en' | null, persona?: string, body?: import('./bodies.js').Body }} cfg
  * @returns {string}
  */
 export function buildSystemPrompt(cfg) {
-  const id = cfg.body?.id;
+  const body = cfg.body ?? resolveBody('toy');
   const persona = cfg.persona?.trim().slice(0, MAX_PERSONA) || DEFAULT_PERSONA;
-  // A pet gets no reply-language line either: there is no reply to put in a
-  // language, and the model reading one would only learn to write one.
-  if (id === 'pet') return [persona, BODY_PET, RULES_PET].join('\n\n');
-  if (id === 'tarot') {
-    const reader = [persona, BODY_TAROT, RULES_TAROT].join('\n\n');
-    return cfg.replyLang
-      ? `${reader}\nAlways reply in ${LANG_NAME[cfg.replyLang]}, regardless of which language the user speaks.`
-      : reader;
-  }
+  const rules = body.prompts.rules.slice();
+  for (const action of body.actions) if (action.rules) rules.push(action.rules);
 
-  const still = id === 'none';
-  const rules = still
-    ? `${RULES_STILL}\n${RULES_SPOKEN}`
-    : `${RULES_WHEELS}\n${RULES_SPOKEN}\n- duration_ms: default 600; use ${MIN_DURATION_MS} for "just a little".`;
-  let prompt = [persona, still ? BODY_STILL : BODY_WHEELS, rules].join('\n\n');
+  let prompt = [persona, body.prompts.voice, rules.join('\n')].join('\n\n');
 
   // 1. A recorded language preference (spec §11.1). null = follow the user,
   //    which is the model's default behaviour, so inject nothing.
-  if (cfg.replyLang) {
+  if (body.reply === 'tts' && cfg.replyLang) {
     prompt += `\nAlways reply in ${LANG_NAME[cfg.replyLang]}, `
             + 'regardless of which language the user speaks.';
   }
@@ -288,13 +221,13 @@ export function buildSystemPrompt(cfg) {
 }
 
 /** The default creature on wheels, as the tests read it. */
-export const SYSTEM_PROMPT = buildSystemPrompt({ replyLang: null });
+export const SYSTEM_PROMPT = buildSystemPrompt({ replyLang: null, body: resolveBody('toy') });
 /** The default creature with no body that moves (body motion spec §3, §4.1 ②). */
-export const SYSTEM_PROMPT_STILL = buildSystemPrompt({ replyLang: null, body: { id: 'none' } });
+export const SYSTEM_PROMPT_STILL = buildSystemPrompt({ replyLang: null, body: resolveBody('none') });
 /** The tarot reader on a screen (tarot mode spec §7). */
-export const SYSTEM_PROMPT_TAROT = buildSystemPrompt({ replyLang: null, body: { id: 'tarot' } });
+export const SYSTEM_PROMPT_TAROT = buildSystemPrompt({ replyLang: null, body: resolveBody('tarot') });
 /** The cartoon dog on a screen (pet screen spec §4.3). */
-export const SYSTEM_PROMPT_PET = buildSystemPrompt({ replyLang: null, body: { id: 'pet' } });
+export const SYSTEM_PROMPT_PET = buildSystemPrompt({ replyLang: null, body: resolveBody('pet') });
 
 // --- The validator (spec §6.6) ---------------------------------------------
 //
@@ -455,7 +388,8 @@ export class Brain {
    *   returningTools?: ReadonlySet<string>,
    *   rng?: () => number,
    *   after?: (ms: number, fn: () => void) => () => void,
-   *   config: { lang: 'en' | 'zh', replyLang: 'zh' | 'en' | null, bargeIn: boolean, body?: { id: import('./config.js').Motion } },
+   *   config: { lang: 'en' | 'zh', replyLang: 'zh' | 'en' | null, bargeIn: boolean,
+   *             body?: import('./config.js').BodyConfig, persona?: string },
    *   onReplyLangChange?: (lang: 'en' | 'zh' | null) => void,
    *   onFault?: (part: import('./strings.js').FaultPart, err: Error) => void,
    *   trace?: (line: string) => void,
@@ -547,7 +481,14 @@ export class Brain {
       let reply;
       try {
         reply = await this.#llm.chat(
-          [{ role: 'system', content: buildSystemPrompt(this.#config) }, ...this.#history],
+          [{
+            role: 'system',
+            content: buildSystemPrompt({
+              replyLang: this.#config.replyLang,
+              persona: this.#config.persona,
+              body: resolveBody(this.#bodyId(), this.#config.body),
+            }),
+          }, ...this.#history],
           tools ?? toolsFor(this.#config.body?.id),
           { signal: turn.signal },
         );

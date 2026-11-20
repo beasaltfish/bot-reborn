@@ -5,6 +5,8 @@ import {
 } from '../core/brain.js';
 import { MIN_DURATION_MS } from '../phone/executor.js';
 import { KEYWORDS } from '../core/strings.js';
+import { resolveBody } from '../core/bodies.js';
+import { GOLDEN } from './prompts-golden.js';
 
 /** @param {string} name @returns {any} */
 const byName = (name) => TOOLS.find((t) => t.function.name === name);
@@ -988,16 +990,44 @@ test('car and dry-run are offered every tool but pose, none is offered no moving
   assert.deepEqual(names('none'), ['play_sound', 'set_reply_language']);
 });
 
+test('the four prompts are what they were, word for word', () => {
+  // Frozen before the words moved into the bodies (test/prompts-golden.js).
+  // The assembly changed who puts them together; it changed nothing they say.
+  assert.equal(buildSystemPrompt({ replyLang: null, body: resolveBody('toy') }), GOLDEN.car);
+  assert.equal(buildSystemPrompt({ replyLang: null, body: resolveBody('none') }), GOLDEN.still);
+  assert.equal(buildSystemPrompt({ replyLang: null, body: resolveBody('tarot') }), GOLDEN.tarot);
+  assert.equal(buildSystemPrompt({ replyLang: null, body: resolveBody('pet') }), GOLDEN.pet);
+});
+
+test('the prompt is the body\'s words, not a branch on its id', () => {
+  // A body with no wheels says so in its own voice; edit that voice and the
+  // prompt follows, because there is no longer a rule that knows the id.
+  const body = resolveBody('none');
+  body.prompts.voice = 'No part of you moves, and today that is fine.';
+  const p = buildSystemPrompt({ replyLang: null, body });
+  assert.match(p, /No part of you moves, and today that is fine\./);
+  assert.ok(!p.includes('You cannot drive, turn, walk or go anywhere.'));
+});
+
+test('the rules are the body\'s list, in the order it keeps them', () => {
+  const body = resolveBody('none');
+  const original = body.prompts.rules.join('\n');
+  body.prompts.rules = [...body.prompts.rules].reverse();
+  const p = buildSystemPrompt({ replyLang: null, body });
+  assert.ok(p.includes(body.prompts.rules.join('\n')));
+  assert.ok(!p.includes(original), 'the template order is not baked in');
+});
+
 test('the driving prompt is the one it always was, word for word', () => {
   const base = { replyLang: null };
   assert.equal(buildSystemPrompt(base), SYSTEM_PROMPT);
-  assert.equal(buildSystemPrompt({ ...base, body: { id: 'toy' } }), SYSTEM_PROMPT);
+  assert.equal(buildSystemPrompt({ ...base, body: resolveBody('toy') }), SYSTEM_PROMPT);
   // dry-run is a toy as far as the model knows: testing it must test the real prompt.
-  assert.equal(buildSystemPrompt({ ...base, body: { id: 'dry-run' } }), SYSTEM_PROMPT);
+  assert.equal(buildSystemPrompt({ ...base, body: resolveBody('dry-run') }), SYSTEM_PROMPT);
 });
 
 test('the still prompt has no wheels in it, and the language add-on still applies', () => {
-  const p = buildSystemPrompt({ replyLang: 'en', body: { id: 'none' } });
+  const p = buildSystemPrompt({ replyLang: 'en', body: resolveBody('none') });
   assert.ok(p.startsWith(SYSTEM_PROMPT_STILL));
   assert.doesNotMatch(SYSTEM_PROMPT_STILL, /drive ∈|steer|cruise|duration_ms|wheels instead of legs/);
   assert.match(SYSTEM_PROMPT_STILL, /never pretend you moved/);
@@ -1007,15 +1037,15 @@ test('the still prompt has no wheels in it, and the language add-on still applie
 test('a persona replaces who it is, and nothing the tools or the speaker need', () => {
   const persona = '你是一块刚接好线的面包板，还没有身体，有点自嘲。';
   for (const id of /** @type {const} */ (['toy', 'none'])) {
-    const p = buildSystemPrompt({ replyLang: null, persona, body: { id } });
+    const p = buildSystemPrompt({ replyLang: null, persona, body: resolveBody(id) });
     assert.ok(p.startsWith(persona), id);
     assert.doesNotMatch(p, /curious, playful/, id);
     assert.match(p, /Your reply is read aloud/, id);
   }
-  const driving = buildSystemPrompt({ replyLang: null, persona, body: { id: 'toy' } });
+  const driving = buildSystemPrompt({ replyLang: null, persona, body: resolveBody('toy') });
   assert.match(driving, /MUST call a tool/);
   assert.match(driving, /wheels instead of legs/);
-  assert.match(buildSystemPrompt({ replyLang: null, persona, body: { id: 'none' } }), /never pretend you moved/);
+  assert.match(buildSystemPrompt({ replyLang: null, persona, body: resolveBody('none') }), /never pretend you moved/);
 });
 
 test('an empty persona is the default one, and a long one is cut', () => {
@@ -1028,7 +1058,7 @@ test('an empty persona is the default one, and a long one is cut', () => {
 test('the face is the persona\'s to claim: no body part mentions one', () => {
   const persona = 'A bare circuit board.';
   for (const id of /** @type {const} */ (['toy', 'none'])) {
-    assert.doesNotMatch(buildSystemPrompt({ replyLang: null, persona, body: { id } }), /face/, id);
+    assert.doesNotMatch(buildSystemPrompt({ replyLang: null, persona, body: resolveBody(id) }), /face/, id);
   }
 });
 
@@ -1087,7 +1117,7 @@ test('pose: rejected unless one of the three', () => {
 });
 
 test('pet prompt: a dog that poses and barks, no driving, no spoken rules', () => {
-  const p = buildSystemPrompt({ replyLang: 'zh', body: { id: 'pet' } });
+  const p = buildSystemPrompt({ replyLang: 'zh', body: resolveBody('pet') });
   assert.match(p, /golden retriever/i);
   assert.match(p, /`pose`/);
   assert.doesNotMatch(p, /wheels|cruise|read aloud|Always reply in/);
@@ -1097,7 +1127,7 @@ test('the car and still prompts are unchanged by pet', () => {
   // The pet branch is a third body, not an edit to the first two: the words
   // that make the car a car and the still thing still are exactly as they were.
   assert.equal(buildSystemPrompt({ replyLang: null }), SYSTEM_PROMPT);
-  assert.equal(buildSystemPrompt({ replyLang: null, body: { id: 'none' } }), SYSTEM_PROMPT_STILL);
+  assert.equal(buildSystemPrompt({ replyLang: null, body: resolveBody('none') }), SYSTEM_PROMPT_STILL);
   for (const p of [SYSTEM_PROMPT, SYSTEM_PROMPT_STILL]) {
     assert.doesNotMatch(p, /golden retriever|`pose`|never write words/i);
   }
