@@ -191,13 +191,20 @@ something the workbench can teach and the board cannot run yet.
 
 ### What a body can do
 
-| Body | Moves | Shows | Needs |
-|---|---|---|---|
-| Car | drives, cruises, stops | a face | ESP32 motor pins, or a phone + FT232H |
-| Pet on a screen | poses, barks | a dog | a screen |
-| Tarot | no | cards | an MPU-6050 wand |
-| Dry run | logged only | a face | nothing |
-| Cannot move | no | a face | nothing |
+A body is a set of capabilities, not a firmware. The admin's Body tab draws one
+card per row of [`core/bodies.js`](core/bodies.js), which is also what the brain
+offers the model and what the simulator checks a demo against.
+
+| Body | Hears | Speaks | Shows | Moves | Senses | Runs on |
+|---|---|---|---|---|---|---|
+| Car | yes | yes | a face | drives, cruises, stops | — | the ESP32 board, flashed once |
+| Pet on a screen | yes | yes | a dog | — | — | the ESP32 board + a screen |
+| Tarot reader | yes | yes | cards | — | draws a card | the ESP32 board + a wand |
+| Dry run | yes | yes | nowhere to show it | logged, never sent | — | no hardware at all |
+| No moving parts | yes | yes | — | — | — | your phone |
+
+All five play the robot's audio; a card's badges are what the brain may call,
+and the line under them is what it never will.
 
 ## Status and limits
 
