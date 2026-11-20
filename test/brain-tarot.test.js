@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  RETURNING_TOOLS, toolsOf, validate, buildSystemPrompt, SYSTEM_PROMPT_TAROT,
+  toolsOf, validate, buildSystemPrompt, SYSTEM_PROMPT_TAROT,
 } from '../core/brain.js';
 import { resolveBody } from '../core/bodies.js';
 
@@ -19,15 +19,18 @@ test('toolsOf: every other body gets exactly the tools it had before tarot', () 
   assert.deepEqual(names('pet'), ['play_sound', 'pose', 'set_reply_language']);
 });
 
-test('draw_card takes no arguments, and only it is a returning tool', () => {
-  const tool = toolsOf(resolveBody('tarot')).find((t) => t.function.name === 'draw_card');
+test('draw_card takes no arguments, and it is the returning tool of its body', () => {
+  const body = resolveBody('tarot');
+  const tool = toolsOf(body).find((t) => t.function.name === 'draw_card');
   assert.deepEqual(tool?.function.parameters.properties, {});
-  assert.deepEqual([...RETURNING_TOOLS], ['draw_card']);
+  // `returns` is the action's own word for it: the brain reads the set from the
+  // body, so a second returning action would need no code.
+  assert.deepEqual(body.actions.filter((a) => a.returns).map((a) => a.name), ['draw_card']);
 });
 
-test('validate: a draw_card call becomes a draw action with no card chosen yet', () => {
+test('validate: a draw_card call becomes a draw program with no card chosen yet', () => {
   const out = validate([{ name: 'draw_card', args: {}, rawArguments: '{}' }], resolveBody('tarot'));
-  assert.deepEqual(out.actions, [{ kind: 'draw' }]);
+  assert.deepEqual(out.actions, [{ name: 'draw_card', steps: [{ verb: 'draw', args: {} }] }]);
   assert.equal(out.hadMoveIntent, false);
   assert.deepEqual(out.reasons, []);
 });
@@ -210,7 +213,7 @@ test('a draw fired for a body that cannot draw is dropped with a trace line, and
   await h.brain.handle('draw a card');
   assert.equal(h.calls.length, 0);
   assert.deepEqual(ops(h.events), []);
-  assert.match(h.traced.join('\n'), /draw dropped: body "toy" does not do draw/);
+  assert.match(h.traced.join('\n'), /draw_card dropped: body "toy" does not do draw_card/);
 });
 
 test('a turn cancelled while the card is being drawn still turns it over, and nothing fires later', async () => {

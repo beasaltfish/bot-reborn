@@ -5,16 +5,12 @@
 // the config — arrives through the constructor, so it can be tested without a
 // browser and a provider can be swapped without touching it.
 
-import { MIN_DURATION_MS } from './motion.js';
-import { SOUNDS } from './audio/sfx.js';
 import { t } from './strings.js';
-import { CAN_DO, resolveBody } from './bodies.js';
+import { TEMPLATES, resolveBody } from './bodies.js';
 import { drawRandom, describeDraw } from './tarot.js';
-import { POSES } from './poses.js';
+import { VERBS } from './verbs.js';
+import { expand, expectationOf } from './actions.js';
 
-const DRIVE_VALUES = ['forward', 'backward'];
-const STEER_VALUES = ['left', 'right', 'straight'];
-const MAX_STEPS = 5;
 const HISTORY_ROUNDS = 6;
 
 /**
@@ -38,103 +34,12 @@ const LANG_NAME = { zh: 'Chinese', en: 'English' };
 // English, always: the tool descriptions and the system prompt are two halves
 // of the same prompt and should not be half Chinese.
 //
-// The queue is expressed as `move.steps` rather than parallel tool calls,
+// The list itself is the body's: one tool per action it carries, described by
+// the words the body wrote. Nothing here decides by id, and there is nothing to
+// add when a new action is invented — the body says it, and the model sees it.
+//
+// A queue is still expressed as `move.steps` rather than parallel tool calls,
 // because parallel calling is where provider implementations differ most.
-
-export const TOOLS = [
-  {
-    type: 'function',
-    function: {
-      name: 'move',
-      description: 'Drive yourself for a fixed duration. If the user wants you to move you MUST call a tool — saying something does not substitute for calling it.',
-      parameters: {
-        type: 'object',
-        required: ['steps'],
-        properties: {
-          steps: {
-            type: 'array',
-            maxItems: MAX_STEPS,
-            items: {
-              type: 'object',
-              required: ['drive', 'steer', 'duration_ms'],
-              properties: {
-                drive: { enum: DRIVE_VALUES },
-                steer: { enum: STEER_VALUES },
-                // No maximum, deliberately — spec §6.6. Safety comes from the
-                // slicing loop and the generation counter, not from a cap here.
-                duration_ms: { type: 'integer', minimum: MIN_DURATION_MS },
-              },
-            },
-          },
-        },
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'cruise',
-      description: 'Keep moving until the user says stop. For open-ended instructions like "keep going forward" or "drive slowly", with no stated endpoint.',
-      parameters: {
-        type: 'object',
-        required: ['drive', 'steer'],
-        properties: { drive: { enum: DRIVE_VALUES }, steer: { enum: STEER_VALUES } },
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'stop',
-      description: 'Stop moving immediately.',
-      parameters: { type: 'object', properties: {} },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'set_reply_language',
-      description: 'Record a LASTING preference for which language to reply in. Call this ONLY when the user explicitly asks you to always use a language ("from now on speak Chinese", "stop speaking English"). Do NOT call it for a one-off request like "say that again in English" — just do that directly without calling anything. Use "auto" to go back to following whatever language the user speaks.',
-      parameters: {
-        type: 'object',
-        required: ['lang'],
-        properties: { lang: { enum: ['zh', 'en', 'auto'] } },
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'play_sound',
-      description: 'Make a sound with your own voice: bark (answering a bark, excited), yip (happy), whimper (hurt, sulking), growl (annoyed). A sound can go with a move or stand alone.',
-      parameters: {
-        type: 'object',
-        required: ['name'],
-        properties: { name: { enum: [...SOUNDS] } },
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'pose',
-      description: 'Do a trick with your whole body: sit, shake (offer a paw), spin (turn round once), stand (get up on all fours), lie (lie down flat). Use it when someone gives you that command, or on your own when a dog would.',
-      parameters: {
-        type: 'object',
-        required: ['name'],
-        properties: { name: { enum: [...POSES] } },
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'draw_card',
-      description: 'Draw one tarot card for the person. Use it when they ask for a card, or for a reading of their day. The card, which way up it is and its meaning come back to you, and then you give the reading.',
-      parameters: { type: 'object', properties: {} },
-    },
-  },
-];
 
 /**
  * One tool as the provider sees it (spec §6.2): a name, the words the body
@@ -187,37 +92,21 @@ export function toolsOf(body) {
 }
 
 /**
- * Tools whose result goes back to the model, which is asked again with it
- * (tarot mode spec §4). Every other tool is an action: done, and forgotten.
- * A set beside TOOLS, not a field on each tool, because providers reject
- * tool schemas with fields they do not know.
+ * The toy's tools. Kept as a name because the admin's Test button
+ * (`server/check-api.js`) asks a provider to accept the tools a toy is offered
+ * and has no body of its own to hand. `toolsOf` is what the brain asks.
  */
-export const RETURNING_TOOLS = /** @type {ReadonlySet<string>} */ (new Set(['draw_card']));
-
-const MOTION_TOOLS = new Set(['move', 'cruise', 'stop']);
+export const TOOLS = toolsOf(resolveBody('toy'));
 
 /**
- * The tools a body gets (body motion spec §3). A dry-run is a car as far as
- * the model can tell: what is being tested is the real prompt.
- *
- * `pose` is a pet's alone: it is the one action that needs a body that is a
- * whole cartoon animal, and offering it to a car would be offering it a tool
- * the validator then drops on every use.
- * @param {import('./config.js').Motion} [id]
+ * Tools whose result goes back to the model, which is asked again with it
+ * (tarot mode spec §4). Every other tool is an action: done, and forgotten.
+ * Derived from the body: an action says `returns`, and that is the whole list.
+ * @param {import('./bodies.js').Body} body
+ * @returns {ReadonlySet<string>}
  */
-export function toolsFor(id = 'toy') {
-  if (id === 'pet') {
-    return TOOLS.filter((t) => t.function.name === 'pose' || t.function.name === 'play_sound');
-  }
-  // A tarot reader is offered the one tool and no other: it has no wheels, no
-  // pose, no bark, and what language it answers in is the persona's business.
-  if (id === 'tarot') return TOOLS.filter((t) => t.function.name === 'draw_card');
-  // Neither pose nor draw_card is any other body's: offering a car a tool the
-  // validator then drops on every use would only teach the model to try it.
-  const others = TOOLS.filter((t) => t.function.name !== 'pose' && t.function.name !== 'draw_card');
-  return id === 'none'
-    ? others.filter((t) => !MOTION_TOOLS.has(t.function.name))
-    : others;
+function returningToolsOf(body) {
+  return new Set(body.actions.filter((action) => action.returns).map((action) => action.name));
 }
 
 // --- System prompt (spec §6.8) ---------------------------------------------
@@ -296,12 +185,40 @@ export const SYSTEM_PROMPT_PET = buildSystemPrompt({ replyLang: null, body: reso
 // ask for, and you cannot tell.
 
 /**
- * @typedef {{ drive: string, steer: string, duration_ms: number }} Step
- * @typedef {{ kind: 'move', steps: Step[] } | { kind: 'cruise', drive: string, steer: string }
- *   | { kind: 'stop' } | { kind: 'sound', name: import('./audio/sfx.js').SoundName }
- *   | { kind: 'pose', name: import('./poses.js').Pose }
- *   | { kind: 'draw', card?: import('./tarot.js').Draw }} Action
+ * One step of an action's program, as `core/actions.js` expands it: a verb and
+ * the arguments the verb was given. `drive` carries `ms` — a number of
+ * milliseconds, or the word `hold` (core/verbs.js).
+ * @typedef {import('./actions.js').Step} ProgramStep
  */
+
+/**
+ * One thing the model asked for, as this body would run it: the action's name
+ * and the program its arguments expanded to. Steps that could not run are not
+ * here; they are in `reasons`.
+ * @typedef {{ name: string, steps: ProgramStep[] }} Program
+ */
+
+/** The executor's own step: the same three fields the wire frame has. */
+/** @typedef {{ drive: string, steer: string, duration_ms: number }} MoveStep */
+
+/**
+ * Every action the five templates define, by name. A call is judged against the
+ * body's own definition of it when the body carries one; this is the fallback
+ * for a call to an action the body does not have, which is still refused where
+ * the body's answer is known — "this body cannot move" is a better sentence
+ * than "no such tool" when the tool exists and this body simply dropped it.
+ * @type {Map<string, import('./bodies.js').Action>}
+ */
+const REFERENCE_ACTIONS = new Map();
+for (const body of Object.values(TEMPLATES)) {
+  for (const action of body.actions) {
+    if (!REFERENCE_ACTIONS.has(action.name)) REFERENCE_ACTIONS.set(action.name, action);
+  }
+}
+
+/** An action that takes no arguments, for the tools that say nothing. */
+/** @type {import('./verbs.js').JsonSchemaSubset} */
+const NO_ARGS = { type: 'object', properties: {} };
 
 /**
  * Every drop says why.
@@ -313,15 +230,22 @@ export const SYSTEM_PROMPT_PET = buildSystemPrompt({ replyLang: null, body: reso
  * them on the screen, and the one thing worth knowing about a refused command
  * is WHICH field this robot refused.
  *
+ * Accept or drop. NOTHING here modifies a value the model gave us: clamping
+ * would fail in the worst direction — the car moves, by an amount you did not
+ * ask for, and you cannot tell.
+ *
  * @param {Array<{ id?: string, name: string, args: object | null, rawArguments: string }>} toolCalls
- * @param {import('./bodies.js').Body} [body] the body the turn runs on. Read
- *   once the switch below is gone; until then this argument only fixes the
- *   shape the tests are written against.
- * @returns {{ actions: Action[], replyLang: 'zh'|'en'|'auto'|null, dropped: number,
+ * @param {import('./bodies.js').Body} [body] the body the turn runs on. Its own
+ *   definition of an action decides the action's arguments and program; a call
+ *   to one it does not carry falls back to the reference definition, so the
+ *   refusal below can say what was wrong with it and the caller can say that
+ *   this body does not do it. No body at all judges every known action, which is
+ *   what a caller with no turn (a saved reflex, a test) needs.
+ * @returns {{ actions: Program[], replyLang: 'zh'|'en'|'auto'|null, dropped: number,
  *             reasons: string[], hadMoveIntent: boolean }}
  */
 export function validate(toolCalls, body) {
-  /** @type {Action[]} */
+  /** @type {Program[]} */
   const actions = [];
   /** @type {'zh'|'en'|'auto'|null} */
   let replyLang = null;
@@ -330,88 +254,296 @@ export function validate(toolCalls, body) {
   const drop = (/** @type {string} */ why) => { reasons.push(why); };
   let hadMoveIntent = false;
 
+  /** @type {Map<string, import('./bodies.js').Action>} */
+  const own = new Map((body?.actions ?? []).map((action) => [action.name, action]));
+
   for (const call of toolCalls) {
-    if (call.name === 'move' || call.name === 'cruise' || call.name === 'stop') {
+    const action = call.name === 'set_reply_language'
+      ? undefined
+      : own.get(call.name) ?? REFERENCE_ACTIONS.get(call.name);
+
+    // An action that asks the body to go somewhere is a movement attempt even
+    // when its arguments are unreadable or every one of its steps is refused,
+    // and that is what earns the "I could not do that" beep. A pose is not: its
+    // steps need no `move`.
+    if (action && (action.run ?? []).some((step) => VERB_TABLE[step.verb]?.needs === 'move')) {
       hadMoveIntent = true;
     }
-    const args = /** @type {any} */ (call.args);
-    if (args === null) {
+
+    if (call.args === null) {
       drop(`${call.name}: arguments were not valid JSON — ${call.rawArguments}`);
       continue;
     }
+    const args = /** @type {any} */ (call.args);
 
-    switch (call.name) {
-      case 'move': {
-        // Not an array is its own failure, and it was the one going unreported:
-        // the loop below simply never ran, so a model that flattened the schema
-        // — drive/steer/duration_ms at the top level, no wrapper — produced a
-        // turn with zero actions AND zero drops.
-        if (!Array.isArray(args.steps)) {
-          drop(`move: no steps array — got ${JSON.stringify(args)}`);
-          break;
-        }
-        const steps = [];
-        // Rule 3: truncate rather than reject.
-        for (const step of args.steps.slice(0, MAX_STEPS)) {
-          if (isValidStep(step)) steps.push({
-            drive: step.drive, steer: step.steer, duration_ms: step.duration_ms,
-          });
-          else drop(`move: step rejected — ${JSON.stringify(step)}; drive must be one of `
-            + `${DRIVE_VALUES.join('/')}, steer one of ${STEER_VALUES.join('/')}, `
-            + `duration_ms an integer >= ${MIN_DURATION_MS}`);
-        }
-        // Rule 4: if every step died, dispatch nothing.
-        if (steps.length > 0) actions.push({ kind: 'move', steps });
-        break;
-      }
-      case 'cruise': {
-        if (DRIVE_VALUES.includes(args.drive) && STEER_VALUES.includes(args.steer)) {
-          actions.push({ kind: 'cruise', drive: args.drive, steer: args.steer });
-        } else {
-          drop(`cruise: rejected — ${JSON.stringify(args)}; drive must be one of `
-            + `${DRIVE_VALUES.join('/')}, steer one of ${STEER_VALUES.join('/')}`);
-        }
-        break;
-      }
-      case 'stop':
-        actions.push({ kind: 'stop' });
-        break;
-      case 'set_reply_language': {
-        // Rule 5: it writes config, so it never becomes an action (spec §6.2).
-        if (['zh', 'en', 'auto'].includes(args.lang)) replyLang = args.lang;
-        else drop(`set_reply_language: rejected — ${JSON.stringify(args)}`);
-        break;
-      }
-      case 'draw_card':
-        actions.push({ kind: 'draw' });
-        break;
-      case 'play_sound': {
-        if (SOUNDS.includes(args.name)) actions.push({ kind: 'sound', name: args.name });
-        else drop(`play_sound: rejected — ${JSON.stringify(args)}; name must be one of ${SOUNDS.join('/')}`);
-        break;
-      }
-      case 'pose': {
-        // A trick is not a request to move: it does not set hadMoveIntent, so
-        // a refused pose never earns the "I could not do that" beep.
-        if (POSES.includes(args.name)) actions.push({ kind: 'pose', name: args.name });
-        else drop(`pose: rejected — ${JSON.stringify(args)}; name must be one of ${POSES.join('/')}`);
-        break;
-      }
-      default:
-        drop(`${call.name}: no such tool`);
+    if (call.name === 'set_reply_language') {
+      // Rule 5: it writes config, so it never becomes an action (spec §6.2).
+      if (['zh', 'en', 'auto'].includes(args.lang)) replyLang = args.lang;
+      else drop(`set_reply_language: rejected — ${JSON.stringify(args)}`);
+      continue;
     }
+
+    if (!action) {
+      drop(`${call.name}: no such tool`);
+      continue;
+    }
+
+    const wrong = argsProblem(action, args);
+    if (wrong) { drop(wrong); continue; }
+
+    const usable = usableArgs(action, args);
+    for (const why of usable.reasons) drop(why);
+    const { steps, dropped } = expand(action, usable.args);
+    for (const refused of dropped) drop(refusalFor(action, refused));
+    // Rule 4: if every step died, dispatch nothing.
+    if (steps.length > 0) actions.push({ name: action.name, steps });
   }
 
   return { actions, replyLang, dropped: reasons.length, reasons, hadMoveIntent };
 }
 
-/** @param {any} step */
-function isValidStep(step) {
-  return step
-    && DRIVE_VALUES.includes(step.drive)            // rule 2
-    && STEER_VALUES.includes(step.steer)            // rule 2
-    && Number.isInteger(step.duration_ms)           // rule 1
-    && step.duration_ms >= MIN_DURATION_MS;         // rule 1 — no upper bound
+/**
+ * Why these arguments cannot be this action's, in today's words, or null.
+ *
+ * A call is judged twice, and each judge knows something the other does not:
+ * the action's schema knows an argument is one of five poses, and the verb's
+ * schema knows a duration is an integer. This answers the first — a required
+ * field missing, a walked argument that is not a list, or a value outside an
+ * enum the action narrowed — because `expand` answers the second for every value
+ * it fills, and it says so in the verb's own words.
+ * @param {import('./bodies.js').Action} action
+ * @param {any} args
+ * @returns {string | null}
+ */
+function argsProblem(action, args) {
+  const schema = action.args ?? NO_ARGS;
+  const rejected = `${action.name}: rejected — ${JSON.stringify(args)}; ${expectationOf(schema)}`;
+
+  // A walked argument is judged element by element by `expand`. What belongs
+  // here is only whether it is a list at all — and the sentence says what came
+  // instead, which is the one failure that used to go unreported: a model that
+  // flattens the schema (drive/steer/duration_ms at the top level, no wrapper)
+  // produced a turn with zero actions AND zero drops.
+  for (const step of Array.isArray(action.run) ? action.run : []) {
+    if (step.each === undefined) continue;
+    if (!Array.isArray(/** @type {any} */ (args)?.[step.each])) {
+      return `${action.name}: no ${step.each} array — got ${JSON.stringify(args)}`;
+    }
+  }
+
+  // An action that takes nothing (`stop`, `draw_card`) ignores what came: it
+  // never read its arguments, and a validator that refuses an empty list now
+  // where it accepted one before is a refusal nobody asked for.
+  const properties = schema.properties ?? {};
+  if (!args || typeof args !== 'object' || Array.isArray(args)) {
+    return Object.keys(properties).length > 0 || (schema.required ?? []).length > 0 ? rejected : null;
+  }
+
+  for (const key of schema.required ?? []) {
+    if (!(key in args)) return rejected;
+  }
+  for (const [key, sub] of Object.entries(properties)) {
+    if (!(key in args)) continue;
+    if (isWalked(action, key)) continue;
+    if (!fitsSchema(args[key], sub)) return rejected;
+  }
+  return null;
+}
+
+/**
+ * Whether an argument is the one a program walks, element by element. Its
+ * elements are `expand`'s to refuse; the top level has nothing to add.
+ * @param {import('./bodies.js').Action} action
+ * @param {string} key
+ * @returns {boolean}
+ */
+function isWalked(action, key) {
+  return (Array.isArray(action.run) ? action.run : []).some((step) => step.each === key);
+}
+
+/**
+ * The call's arguments with every element that does not fit the action's own
+ * schema taken out, and one reason for each. `expand` walks what is left: it
+ * knows how to fill a program, but it judges a step by the verb, and an action
+ * may promise more than its verb does (`duration_ms` has a floor that `ms` does
+ * not). Over-length is truncated, not refused, exactly as `expand` does it.
+ * @param {import('./bodies.js').Action} action
+ * @param {any} args
+ * @returns {{ args: any, reasons: string[] }}
+ */
+function usableArgs(action, args) {
+  /** @type {string[]} */
+  const reasons = [];
+  const out = { ...args };
+  for (const step of Array.isArray(action.run) ? action.run : []) {
+    if (step.each === undefined) continue;
+    const list = /** @type {any[]} */ (args[step.each]);
+    const walked = action.args?.properties?.[step.each];
+    const max = walked?.maxItems;
+    const elements = typeof max === 'number' ? list.slice(0, max) : list;
+    out[step.each] = elements.filter((element) => {
+      if (fitsSchema(element, walked?.items)) return true;
+      reasons.push(`${action.name}: step rejected — ${JSON.stringify(element)}; ${expectationOf(walked?.items)}`);
+      return false;
+    });
+  }
+  return { args: out, reasons };
+}
+
+/**
+ * Whether a value fits a schema of the subset the actions are written in. The
+ * same vocabulary `core/actions.js` reads, kept here because a call is judged
+ * against the action's own schema — which can be stricter than the verb it runs
+ * (`duration_ms` starts at 300; `drive.ms` at 1). A schema that says nothing is
+ * "cannot tell", not "no": `expand` still applies the verb.
+ * @param {unknown} value
+ * @param {import('./verbs.js').JsonSchemaSubset | undefined} schema
+ * @returns {boolean}
+ */
+function fitsSchema(value, schema) {
+  if (!schema || typeof schema !== 'object') return true;
+  if (Array.isArray(schema.anyOf)) return schema.anyOf.some((branch) => fitsSchema(value, branch));
+  if (schema.const !== undefined) return value === schema.const;
+  if (Array.isArray(schema.enum)) return schema.enum.includes(/** @type {string | number} */ (value));
+
+  switch (schema.type) {
+    case 'object': {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+      const obj = /** @type {Record<string, unknown>} */ (value);
+      for (const key of schema.required ?? []) if (!(key in obj)) return false;
+      for (const [key, sub] of Object.entries(schema.properties ?? {})) {
+        if (key in obj && !fitsSchema(obj[key], sub)) return false;
+      }
+      return true;
+    }
+    case 'array': {
+      if (!Array.isArray(value)) return false;
+      return schema.items ? value.every((item) => fitsSchema(item, schema.items)) : true;
+    }
+    case 'integer': {
+      if (!Number.isInteger(value)) return false;
+      const n = /** @type {number} */ (value);
+      return (schema.minimum === undefined || n >= schema.minimum)
+        && (schema.maximum === undefined || n <= schema.maximum);
+    }
+    case 'number': return typeof value === 'number' && Number.isFinite(value);
+    case 'string': return typeof value === 'string';
+    case 'boolean': return typeof value === 'boolean';
+    default: return true;
+  }
+}
+
+/**
+ * One of `expand`'s refusals, in the model's own words: the value it sent, then
+ * what was expected of it. `args` is the whole call and `steps[N]` is one
+ * element of an array argument — and, for a program that cannot run at all, one
+ * of its own lines, which only reach here from an action `bodyProblem` already
+ * refuses.
+ * @param {import('./bodies.js').Action} action
+ * @param {import('./actions.js').Drop} refused
+ * @returns {string}
+ */
+function refusalFor(action, refused) {
+  const shape = refused.where === 'args' ? 'rejected' : 'step rejected';
+  return `${action.name}: ${shape} — ${JSON.stringify(refused.value)}; ${refused.expect}`;
+}
+
+// --- What the steps say about the order they take ---------------------------
+//
+// Every question below is answered by the verb table, not by a name written out
+// here: a step is a movement because the capability it needs carries movement,
+// it takes the turn because its verb cancels the rest, and it goes first
+// because its verb says so. `hold` is a word in `drive`'s schema, so a program
+// that ends on it is the one with no end of its own.
+
+/**
+ * The verb table, seen as a lookup that may miss: `VERBS` is typed as a total
+ * record of the five names, and a hand-edited body may name a sixth (which
+ * `bodyProblem` refuses before a turn exists).
+ * @type {Record<string, import('./verbs.js').Verb | undefined>}
+ */
+const VERB_TABLE = VERBS;
+
+/**
+ * Whether these steps ask the body to go somewhere. An action that does is a
+ * movement attempt — it earns the "done" beep when it runs and the "I could
+ * not" beep when it is refused — and one that does not (a bark, a pose) has
+ * already answered in its own way.
+ * @param {Array<{ verb: string }>} steps a program's steps, or an action's run
+ * @returns {boolean}
+ */
+function moves(steps) {
+  return steps.some((step) => VERB_TABLE[step.verb]?.needs === 'move');
+}
+
+/**
+ * The step that voids the rest of the turn, as a program of one step, or null.
+ * The first one wins: a turn that says "stop" anywhere means "stop".
+ * @param {Program[]} programs
+ * @returns {Program | null}
+ */
+function halting(programs) {
+  for (const program of programs) {
+    const step = program.steps.find((s) => VERB_TABLE[s.verb]?.cancelsRest);
+    if (step) return { name: program.name, steps: [step] };
+  }
+  return null;
+}
+
+/**
+ * Whether a program opens the turn: one of its steps runs before the reply is
+ * spoken, so the face agrees with the words.
+ * @param {Program} program
+ * @returns {boolean}
+ */
+function aims(program) {
+  return program.steps.some((step) => VERB_TABLE[step.verb]?.first);
+}
+
+/**
+ * Whether a step has no end of its own: `ms: "hold"`, the word `drive`'s schema
+ * allows instead of a number (core/verbs.js). Awaiting one strands everything
+ * behind it, so a program that ends on one is dispatched last.
+ * @param {ProgramStep | undefined} step
+ * @returns {boolean}
+ */
+function holds(step) {
+  return Boolean(step) && /** @type {any} */ (step).args?.ms === 'hold';
+}
+
+/**
+ * What the trace says about an action this body does not carry: today's
+ * sentence, with the action's own name. A pose is not moving, so it says it
+ * cannot pose; everything else says it cannot move.
+ * @param {Program} program
+ * @returns {string}
+ */
+function refusalOf(program) {
+  const trick = program.steps.some((step) => step.verb === 'pose');
+  return `${program.name}: this body cannot ${trick ? 'pose' : 'move'}`;
+}
+
+/**
+ * One program as the trace says it: its name, then what each step was given —
+ * `move forward/left 600ms`, `play_sound bark`, `cruise forward/straight`.
+ * @param {Program} program
+ * @returns {string}
+ */
+function describeProgram(program) {
+  const detail = program.steps.map(stepDetail).filter(Boolean).join(', ');
+  return detail ? `${program.name} ${detail}` : program.name;
+}
+
+/** @param {ProgramStep} step @returns {string} */
+function stepDetail(step) {
+  const args = /** @type {any} */ (step.args);
+  switch (step.verb) {
+    case 'drive':
+      return `${args.drive}/${args.steer}${typeof args.ms === 'number' ? ` ${args.ms}ms` : ''}`;
+    case 'voice': return String(args.clip);
+    case 'pose': return String(args.pose);
+    default: return '';
+  }
 }
 
 // --- One turn --------------------------------------------------------------
@@ -421,7 +553,8 @@ export class Brain {
   #reflex;
   /** Returning tools this brain can run: name → handler (tarot mode spec §4). @type {Record<string, (args: any, signal?: AbortSignal) => Promise<string> | string>} */
   #returning;
-  /** @type {ReadonlySet<string>} */ #returningTools;
+  /** The body's returning tools, when the caller named them; else read from the body. @type {ReadonlySet<string> | null} */
+  #returningTools;
   /** @type {() => number} */ #rng;
   /** @type {(ms: number, fn: () => void) => () => void} */ #after;
   /** The card this turn already drew: a second draw_card in a turn gets this one back. @type {import('./tarot.js').Draw | null} */
@@ -438,7 +571,7 @@ export class Brain {
   /**
    * @param {{
    *   llm: { chat(messages: object[], tools: object[], opts?: { signal?: AbortSignal }): Promise<{ text: string, toolCalls: any[], rawMessage: object }> },
-   *   executor: { move(steps: Step[]): Promise<void>, cruise(d: string, s: string): Promise<void>, stop(): Promise<void>,
+   *   executor: { move(steps: MoveStep[]): Promise<void>, cruise(d: string, s: string): Promise<void>, stop(): Promise<void>,
    *               pose?(name: import('./poses.js').Pose): Promise<void>,
    *               draw?(card: import('./tarot.js').Draw): Promise<void>,
    *               reveal?(): Promise<void> },
@@ -477,7 +610,7 @@ export class Brain {
       const id = setTimeout(fn, ms);
       return () => clearTimeout(id);
     });
-    this.#returningTools = deps.returningTools ?? RETURNING_TOOLS;
+    this.#returningTools = deps.returningTools ?? null;
     this.#config = deps.config;
     this.#onReplyLangChange = deps.onReplyLangChange ?? (() => {});
     this.#onFault = deps.onFault ?? (() => {});
@@ -541,6 +674,7 @@ export class Brain {
    */
   async #converse(turn, { tools } = {}) {
     for (let round = 0; ; round++) {
+      const body = this.#body();
       let reply;
       try {
         reply = await this.#llm.chat(
@@ -549,10 +683,10 @@ export class Brain {
             content: buildSystemPrompt({
               replyLang: this.#config.replyLang,
               persona: this.#config.persona,
-              body: resolveBody(this.#bodyId(), this.#config.body),
+              body,
             }),
           }, ...this.#history],
-          tools ?? toolsFor(this.#config.body?.id),
+          tools ?? toolsOf(body),
           { signal: turn.signal },
         );
       } catch (err) {
@@ -572,7 +706,8 @@ export class Brain {
       this.#history.push(reply.rawMessage);
       // Every call needs a paired `tool` message or the NEXT request is rejected —
       // including calls we are about to drop. A returning tool's is its result.
-      const handled = reply.toolCalls.filter((/** @type {{ name: string }} */ c) => this.#returningTools.has(c.name) && this.#returning[c.name]);
+      const returning = this.#returningTools ?? returningToolsOf(body);
+      const handled = reply.toolCalls.filter((/** @type {{ name: string }} */ c) => returning.has(c.name) && this.#returning[c.name]);
       const goOn = handled.length > 0 && round < MAX_TOOL_ROUNDS;
       // An abort in the middle of the calls must not leave the rest without a
       // result: the next request would be rejected until the history is
@@ -625,27 +760,25 @@ export class Brain {
    * @param {boolean} speak
    */
   async #carryOut(reply, handled, turn, speak) {
-    const checked = validate(reply.toolCalls.filter((/** @type {any} */ c) => !handled.includes(c)));
+    const body = this.#body();
+    const checked = validate(reply.toolCalls.filter((/** @type {any} */ c) => !handled.includes(c)), body);
     const { replyLang, reasons } = checked;
     let { actions, hadMoveIntent } = checked;
-    // Every body carries out what CAN_DO says it can and nothing else (body
-    // motion spec §4.1 ④). A body was offered no moving and a model that
+    // Every body carries out what its actions say it does and nothing else
+    // (body motion spec §4.1 ④). A body was offered no moving and a model that
     // moves anyway is dropped like any other refused call. Not a refusal the
     // person should hear: the sentence beside it is the answer.
-    const id = this.#bodyId();
-    const can = CAN_DO[id] ?? CAN_DO.toy;
-    const refused = actions.filter((a) => !can.includes(a.kind));
+    const can = new Set(body.actions.map((action) => action.name));
+    const refused = actions.filter((action) => !can.has(action.name));
     if (refused.length > 0) {
       // The wording is the car's, kept: "this body cannot move" is what the
       // admin has been reading since a body became a config field. A pose is
       // not moving, so it says its own name.
-      for (const a of refused) {
-        reasons.push(a.kind === 'pose' ? 'pose: this body cannot pose' : `${a.kind}: this body cannot move`);
-      }
-      actions = actions.filter((a) => can.includes(a.kind));
-      // A pet and a still body were never offered moving, so a dropped move is
-      // not something to beep about: it is the model going off-script.
-      if (id === 'none' || id === 'pet') hadMoveIntent = false;
+      for (const action of refused) reasons.push(refusalOf(action));
+      actions = actions.filter((action) => can.has(action.name));
+      // A body that was never offered moving does not beep about a dropped
+      // move: it is the model going off-script.
+      if (!body.actions.some((action) => moves(action.run ?? []))) hadMoveIntent = false;
     }
 
     // One line per turn, whatever happened. `calls: []` next to a sentence
@@ -671,7 +804,7 @@ export class Brain {
     // WHICH one, and that difference is how a misheard command gets caught.
     // A pose is not a move either: it is the pet's answer, the way a bark is,
     // and a beep on top of it would be a third thing in the room.
-    const moved = actions.some((a) => a.kind !== 'sound' && a.kind !== 'pose');
+    const moved = actions.some((action) => moves(action.steps));
     if (actions.length > 0) this.#dispatch(actions, turn.signal);
     // done says "an instruction for the car ran". A turn that only made a
     // sound has already answered out loud, and a beep would land on it.
@@ -696,6 +829,14 @@ export class Brain {
 
   /** @returns {import('./config.js').Motion} */
   #bodyId() { return this.#config.body?.id ?? 'toy'; }
+
+  /**
+   * The body this turn runs on, resolved once per use: what the model is
+   * offered, what a call is judged against, and what a program may run are all
+   * read from it, so editing the body edits all three.
+   * @returns {import('./bodies.js').Body}
+   */
+  #body() { return resolveBody(this.#bodyId(), this.#config.body); }
 
   /**
    * Every spoken line goes through here.
@@ -738,10 +879,10 @@ export class Brain {
 
   /**
    * Spec §3.2. The fired option's calls become Actions by the LLM's own rules
-   * (validate), then only what this body does survives (CAN_DO). What cannot
-   * be done is not done: the admin chose both the body and the actions, and
-   * the trace is where they find out the two disagree. The LLM is not asked
-   * instead.
+   * (validate), then only what this body's actions say it does survives. What
+   * cannot be done is not done: the admin chose both the body and the actions,
+   * and the trace is where they find out the two disagree. The LLM is not
+   * asked instead.
    *
    * Written down as plain text on the user's side — what was heard, then a
    * bracketed note of what the body did. Not as the model's own tool calls:
@@ -752,27 +893,24 @@ export class Brain {
    * @param {import('./reflex.js').ToolCall[]} calls
    */
   async #reflexTurn(text, calls) {
-    const { actions: valid, reasons } = validate(calls);
+    const body = this.#body();
+    const id = this.#bodyId();
+    // The admin chose both the body and the actions; the trace is where they
+    // find out the two disagree. A name this body does not carry is dropped
+    // before it is judged: an action of another body is not a malformed call.
+    const can = new Set(body.actions.map((action) => action.name));
+    for (const call of calls) {
+      if (!can.has(call.name)) this.#trace(`[reflex] ${call.name} dropped: body "${id}" does not do ${call.name}`);
+    }
+    const { actions, reasons } = validate(calls.filter((call) => can.has(call.name)), body);
     for (const why of reasons) this.#trace(`[reflex] dropped — ${why}`);
-    const id = this.#config.body?.id ?? 'toy';
-    const can = CAN_DO[id] ?? CAN_DO.toy;
-    const actions = valid.filter((a) => {
-      if (can.includes(a.kind)) return true;
-      this.#trace(`[reflex] ${a.kind} dropped: body "${id}" does not do ${a.kind}`);
-      return false;
-    });
     // A draw is the one reflex that does not end the turn: the card is the
     // reflex's answer, and the reading of it is still the model's (tarot mode
     // spec §3). Everything else a reflex fires is as it always was.
-    const drawing = actions.some((a) => a.kind === 'draw');
-    const others = actions.filter((a) => a.kind !== 'draw');
-    const did = others.map((a) => a.kind === 'sound'
-      ? `play_sound ${a.name}`
-      : a.kind === 'pose'
-        ? `pose ${a.name}`
-        : a.kind === 'move'
-          ? `move ${a.steps.map((s) => `${s.drive}/${s.steer} ${s.duration_ms}ms`).join(', ')}`
-          : a.kind === 'cruise' ? `cruise ${a.drive}/${a.steer}` : a.kind);
+    const returning = returningToolsOf(body);
+    const drawing = actions.some((action) => returning.has(action.name));
+    const others = actions.filter((action) => !returning.has(action.name));
+    const did = others.map(describeProgram);
     if (drawing) {
       if (others.length > 0) this.#dispatch(others, this.#turn?.signal);
       const card = await this.#startDraw();
@@ -788,7 +926,7 @@ export class Brain {
     this.#dispatch(actions, this.#turn?.signal);
     // The same rule as an LLM turn: done says an instruction for the car ran.
     // A bark has already answered out loud, and a pose is the pet's answer.
-    if (actions.some((a) => a.kind !== 'sound' && a.kind !== 'pose')) this.#earcon('done');
+    if (actions.some((action) => moves(action.steps))) this.#earcon('done');
   }
 
   // --- Tarot (tarot mode spec §4, §8) ---------------------------------------
@@ -817,7 +955,7 @@ export class Brain {
    * @returns {Promise<string>}
    */
   async #drawForTurn() {
-    if (this.#bodyId() !== 'tarot') return 'error: this body does not draw cards';
+    if (!this.#body().actions.some((action) => action.returns)) return 'error: this body does not draw cards';
     return describeDraw(this.#turnCard ?? await this.#startDraw());
   }
 
@@ -912,15 +1050,18 @@ export class Brain {
    * out loud while there is still time to react. Awaiting turns the warning into
    * a post-mortem.
    *
-   * @param {Action[]} actions
-   * @param {AbortSignal} [signal] the turn's. Checked before each action, so a
+   * The order is not written here: it is what the steps say about themselves —
+   * `cancelsRest`, `first`, and an `ms` of `hold` (core/verbs.js).
+   *
+   * @param {Program[]} programs
+   * @param {AbortSignal} [signal] the turn's. Checked before each step, so a
    *   cancel — the stop button, the wake word, the user talking over it —
    *   drops what is still queued. Found in review: with a bark first, the loop
    *   sat on the sound, nothing cancelled that, and the move behind it drove
    *   the car after the emergency stop.
    */
-  #dispatch(actions, signal) {
-    // A `stop` anywhere in the turn is the whole turn. Spec §6.2 argues for
+  #dispatch(programs, signal) {
+    // A step that cancels the rest is the whole turn. Spec §6.2 argues for
     // `move.steps` over parallel tool calls but never says what happens when a
     // provider emits parallel calls anyway — and they do. The loop used to
     // start every action without awaiting the previous one, and
@@ -934,33 +1075,37 @@ export class Brain {
     // not look at WHERE the stop sits: `[stop, move]` run in order is safe by
     // itself, but "the user said stop and the model helpfully appended a move"
     // has exactly that shape, and dropping one extra action costs less than
-    // moving after a stop.
+    // moving after a stop. A program that both drives and halts becomes the
+    // halt alone for the same reason.
     //
-    // `cruise` then has to be the last action of the turn. Its renewal loop
-    // has no end condition — executor.cruise() only resolves once something
-    // else bumps the generation — so awaiting it strands everything behind it.
-    // The damage is not that those actions never run: it is that they run
-    // LATE. The next turn's action bumps the generation, the stranded cruise
-    // finally returns, and this loop resumes INSIDE that later turn, running a
-    // stale action that preempts the live one — say "right", drive left,
-    // because "left" was queued behind a cruise ten seconds ago. The
-    // generation counter cannot catch that; it guards the executor's own
-    // loops, not a for-loop here holding a previous turn's array.
-    /** @type {Action[]} */
+    // A program that ends on a holding step then has to be the last thing of
+    // the turn. Its renewal loop has no end condition — executor.cruise() only
+    // resolves once something else bumps the generation — so awaiting it
+    // strands everything behind it. The damage is not that those steps never
+    // run: it is that they run LATE. The next turn's action bumps the
+    // generation, the stranded hold finally returns, and this loop resumes
+    // INSIDE that later turn, running a stale step that preempts the live one —
+    // say "right", drive left, because "left" was queued behind a hold ten
+    // seconds ago. The generation counter cannot catch that; it guards the
+    // executor's own loops, not a for-loop here holding a previous turn's
+    // array.
+    /** @type {Program[]} */
     let ordered;
-    if (actions.some((a) => a.kind === 'stop')) {
-      ordered = [{ kind: 'stop' }];
+    const halted = halting(programs);
+    if (halted) {
+      ordered = [halted];
     } else {
-      const cruiseAt = actions.findIndex((a) => a.kind === 'cruise');
-      ordered = cruiseAt === -1 ? actions : actions.slice(0, cruiseAt + 1);
+      const last = programs.findIndex((program) => holds(program.steps.at(-1)));
+      ordered = last === -1 ? programs : programs.slice(0, last + 1);
     }
 
-    // A pose goes first (pet screen spec §4.6): a trick and its bark are one
-    // gesture, and a bark that lands a second before the dog sits reads as two
-    // unrelated things. Stable, so two poses keep the model's order.
-    ordered = [...ordered.filter((a) => a.kind === 'pose'), ...ordered.filter((a) => a.kind !== 'pose')];
+    // A step that runs before speech goes first (pet screen spec §4.6): a trick
+    // and its bark are one gesture, and a bark that lands a second before the
+    // dog sits reads as two unrelated things. Stable, so two of them keep the
+    // model's order.
+    ordered = [...ordered.filter(aims), ...ordered.filter((program) => !aims(program))];
 
-    // Sequential inside, unawaited outside: each action still waits for the
+    // Sequential inside, unawaited outside: each step still waits for the
     // previous one's motion to end (which is what restores the ordering the
     // awaited version had), while handle() returns immediately — the
     // non-blocking property test/brain.test.js pins.
@@ -971,23 +1116,42 @@ export class Brain {
     // earcon and after the spoken reply, whenever the rejection surfaces. That
     // is fine: a last-resort guard, not the normal error path.
     (async () => {
-      for (const action of ordered) {
-        if (signal?.aborted) return;
-        await this.#run(action);
+      for (const program of ordered) {
+        for (const step of program.steps) {
+          if (signal?.aborted) return;
+          await this.#run(step);
+        }
       }
     })().catch(() => this.#earcon('error'));
   }
 
-  /** @param {Action} action @returns {Promise<void>} */
-  #run(action) {
-    if (action.kind === 'sound') return this.#sound(action.name);
-    if (action.kind === 'pose') return this.#executor.pose?.(action.name) ?? Promise.resolve();
-    // A draw is carried out by #startDraw before anything is dispatched; one
-    // that reaches here must not fall through to `stop`.
-    if (action.kind === 'draw') return Promise.resolve();
-    if (action.kind === 'move') return this.#executor.move(action.steps);
-    if (action.kind === 'cruise') return this.#executor.cruise(action.drive, action.steer);
-    return this.#executor.stop();
+  /**
+   * One step of a program, as the executor of today understands it. This is the
+   * one place a verb's name meets a method: the executor still takes
+   * `move(steps)` and `cruise(drive, steer)`, so a `drive` becomes one or the
+   * other by its `ms`, and a numeric duration stays whole — the carrier slices
+   * it, not this.
+   * @param {ProgramStep} step
+   * @returns {Promise<void>}
+   */
+  #run(step) {
+    const args = /** @type {any} */ (step.args);
+    switch (step.verb) {
+      case 'drive':
+        return args.ms === 'hold'
+          ? this.#executor.cruise(args.drive, args.steer)
+          : this.#executor.move([{ drive: args.drive, steer: args.steer, duration_ms: args.ms }]);
+      case 'halt':
+        return this.#executor.stop();
+      case 'voice':
+        return this.#sound(args.clip);
+      case 'pose':
+        return this.#executor.pose?.(args.pose) ?? Promise.resolve();
+      // A draw is carried out by #startDraw before anything is dispatched; one
+      // that reaches here must not fall through to `stop`.
+      default:
+        return Promise.resolve();
+    }
   }
 
   /**
