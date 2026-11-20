@@ -37,7 +37,8 @@ export function BodyTab({ detail, update, onToken }: { detail: Detail; update(p:
   // already the choice, or the card would vanish from under them.
   const bench = new URLSearchParams(window.location.search).has('bench');
   const shown = BODIES.filter((b) => bench || b.id !== 'dry-run' || b.id === chosen);
-  const body = BODIES.find((b) => b.id === chosen) ?? BODIES[0];
+  // The fallback is the id config.js falls back to, not whatever sorts first.
+  const body = BODIES.find((b) => b.id === chosen) ?? BODIES.find((b) => b.id === 'toy') ?? BODIES[0];
   // Frame paths come from the brain: the admin bundle has no idea what the
   // render tools left on disk, and a guessed path is a broken picture.
   const [art, setArt] = useState<Record<string, string[]>>({});

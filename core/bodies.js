@@ -73,29 +73,28 @@ export const BODY_FIRMWARE = 'body.bin';
  * }} Body
  */
 
-// Order is the admin's: the bodies most people have, then the bench-only two.
+// Order is the admin's, simplest first: the phone you already own, the two
+// that need a board and a screen, and last the one that also needs a toy car to
+// take apart. The bench-only dry run sits beside them but is hidden unless asked.
 // `actions` is exactly what the brain may call, and nothing here adds a
 // capability the body did not have before this table existed.
 /** @type {readonly Body[]} */
 export const BODIES = [
   {
-    id: 'toy',
-    // Not "Car": what you own is a cheap toy whose motors you tapped. The id
-    // stays `car` because that is what the firmware, the tools and every saved
-    // character already say.
-    label: 'Toy on wheels',
-    labelZh: '会动的玩具',
-    // A board brings the ears and the voice; the toy brings the motors and the
-    // chassis. A phone brings its own mic and speaker, and needs the USB board
-    // to tap the toy's four motor inputs.
+    id: 'none',
+    label: 'Voice only',
+    labelZh: '只有声音',
+    // Not "the phone body": a board with a microphone and an amp is the same
+    // thing, and it drives nothing. What it shows is not promised either — a
+    // phone has a face, a bare board has no screen.
     ways: [
-      { source: 'board', needs: ['toy', 'board', 'mic', 'amp'] },
-      { source: 'phone', needs: ['toy', 'phone', 'ftdi'] },
+      { source: 'board', needs: ['board', 'mic', 'amp'] },
+      { source: 'phone', needs: ['phone'] },
     ],
     firmware: BODY_FIRMWARE,
-    capabilities: ['hear', 'speak', 'show', 'move'],
-    actions: ['move', 'cruise', 'stop', 'sound'],
-    preview: 'toy',
+    capabilities: ['hear', 'speak'],
+    actions: ['sound'],
+    preview: 'voice',
   },
   {
     id: 'pet',
@@ -128,24 +127,27 @@ export const BODIES = [
     preview: 'toy',
   },
   {
-    id: 'none',
-    label: 'Voice only',
-    labelZh: '只有声音',
-    // Not "the phone body": a board with a microphone and an amp is the same
-    // thing, and it drives nothing. What it shows is not promised either — a
-    // phone has a face, a bare board has no screen.
+    id: 'toy',
+    // Not "Car": what you own is a cheap toy whose motors you tapped.
+    label: 'Toy on wheels',
+    labelZh: '会动的玩具',
+    // A board brings the ears and the voice; the toy brings the motors and the
+    // chassis. A phone brings its own mic and speaker, and needs the USB board
+    // to tap the toy's four motor inputs.
     ways: [
-      { source: 'board', needs: ['board', 'mic', 'amp'] },
-      { source: 'phone', needs: ['phone'] },
+      { source: 'board', needs: ['toy', 'board', 'mic', 'amp'] },
+      { source: 'phone', needs: ['toy', 'phone', 'ftdi'] },
     ],
     firmware: BODY_FIRMWARE,
-    capabilities: ['hear', 'speak'],
-    actions: ['sound'],
-    preview: 'voice',
+    capabilities: ['hear', 'speak', 'show', 'move'],
+    actions: ['move', 'cruise', 'stop', 'sound'],
+    preview: 'toy',
   },
+
 ];
 
-/** In the admin's order, so the first one is also the fallback. */
+/** In the admin's order. The fallback for an unknown id is `toy` and is stated
+ * where it is used (core/config.js), not inferred from this order. */
 export const BODY_IDS = /** @type {BodyId[]} */ (BODIES.map((b) => b.id));
 
 /**

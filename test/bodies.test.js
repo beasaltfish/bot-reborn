@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { BODIES, BODY_IDS, CAN_DO, bodyById, bodyProblem, labelOf } from '../core/bodies.js';
 
 test('the five bodies exist, with unique ids and a preview each', () => {
-  assert.deepEqual(BODY_IDS, ['toy', 'pet', 'tarot', 'dry-run', 'none']);
+  assert.deepEqual(BODY_IDS, ['none', 'pet', 'tarot', 'dry-run', 'toy']);
   for (const body of BODIES) {
     assert.equal(bodyProblem(body), null, body.id);
     assert.ok(body.label && body.labelZh, body.id);
