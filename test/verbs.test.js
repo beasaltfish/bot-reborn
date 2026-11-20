@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 import { VERBS, VERB_NAMES, verbNeeds } from '../core/verbs.js';
 
 /**
- * Reads the two-branch `ms` schema the way Task 2's checker will: integer at or
- * above the minimum, or the one literal word. Local and tiny on purpose — this
- * pins what the schema *means*, not just how it is spelled.
+ * Reads the two-branch `ms` schema the way Task 2's checker will: integer within
+ * the branch's bounds, or the one literal word. Local and tiny on purpose — this
+ * pins what the schema *means*, not just how it is spelled. Both `minimum` and
+ * `maximum` are honoured, so re-adding an upper bound fails the `60000` case
+ * instead of quietly passing.
  * @param {unknown} value
  */
 function msAccepted(value) {
@@ -14,7 +16,11 @@ function msAccepted(value) {
   return schema.anyOf.some((branch) => {
     if (branch.const !== undefined) return value === branch.const;
     if (branch.type === 'integer') {
-      return Number.isInteger(value) && /** @type {number} */ (value) >= (branch.minimum ?? 0);
+      if (!Number.isInteger(value)) return false;
+      const n = /** @type {number} */ (value);
+      if (branch.minimum !== undefined && n < branch.minimum) return false;
+      if (branch.maximum !== undefined && n > branch.maximum) return false;
+      return true;
     }
     return false;
   });
