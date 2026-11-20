@@ -69,6 +69,65 @@ test('a trigger has to name an action the body actually has', () => {
   );
 });
 
+test('a copied tarot body can shed the shake that no longer has an action', () => {
+  // The trigger follows the template's action. Replacing that action must not
+  // leave a body permanently invalid with no way to remove the trigger.
+  const pose = structuredClone(TEMPLATES.pet.actions[0]);
+  assert.deepEqual(resolveBody('copy').triggers, undefined);
+  assert.deepEqual(resolveBody('mine', { template: 'tarot' }).triggers, [{ on: 'shake', action: 'draw_card' }]);
+  const mine = resolveBody('mine', { template: 'tarot', actions: [pose] });
+  assert.equal(mine.triggers, undefined);
+  assert.equal(bodyProblem(mine), null);
+
+  // A trigger the person declares survives when its action does.
+  const own = resolveBody('mine', {
+    template: 'pet',
+    actions: [structuredClone(TEMPLATES.tarot.actions[0])],
+    triggers: [{ on: 'shake', action: 'draw_card' }],
+  });
+  assert.deepEqual(own.triggers, [{ on: 'shake', action: 'draw_card' }]);
+  assert.equal(bodyProblem(own), null);
+
+  // And one that names nothing the body has is dropped, not carried along.
+  const dropped = resolveBody('mine', {
+    template: 'pet',
+    triggers: [{ on: 'shake', action: 'draw_card' }],
+  });
+  assert.equal(dropped.triggers, undefined);
+});
+
+test('the prompt and reply are data the body has to carry', () => {
+  const pet = row();
+  assert.match(bodyProblem({ ...pet, prompts: {} }) ?? '', /voice prompt/);
+  assert.match(bodyProblem({ ...pet, prompts: { voice: '', rules: [] } }) ?? '', /voice prompt/);
+  assert.match(bodyProblem({ ...pet, prompts: { voice: 'hi', rules: 'text' } }) ?? '', /list of strings/);
+  assert.match(bodyProblem({ ...pet, prompts: { voice: 'hi', rules: ['ok', 3] } }) ?? '', /list of strings/);
+  assert.match(bodyProblem({ ...pet, reply: 'voice' }) ?? '', /tts/);
+  assert.equal(bodyProblem({ ...pet, reply: 'clips', prompts: { voice: 'hi', rules: [] } }), null);
+});
+
+test('a capability nobody implements is refused, not ignored', () => {
+  assert.match(bodyProblem({ ...row(), capabilities: /** @type {any} */ (['telepathy']) }) ?? '', /telepathy/);
+  assert.match(
+    bodyProblem({ ...row(), capabilities: /** @type {any} */ (['hear', 'speak', 'show', 'telepathy']) }) ?? '',
+    /telepathy/,
+  );
+});
+
+test('the five templates say how a reply is carried and which one is hidden', () => {
+  const reply = Object.fromEntries(BODIES.map((b) => [b.id, b.reply]));
+  assert.deepEqual(reply, {
+    none: 'tts',
+    pet: 'clips',
+    tarot: 'tts',
+    'dry-run': 'tts',
+    toy: 'tts',
+  });
+  // Task 8 depends on exactly one hidden template being the dry run.
+  assert.deepEqual(BODIES.filter((b) => b.hidden).map((b) => b.id), ['dry-run']);
+  for (const b of BODIES) assert.equal('still' in b.prompts, false, b.id);
+});
+
 test('a board way needs firmware and a phone way must not have one', () => {
   const base = { ...row(), ways: [], firmware: null, actions: [] };
   assert.match(bodyProblem({ ...base, ways: [{ source: 'board', needs: [] }], firmware: null }) ?? '', /firmware/);

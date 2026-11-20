@@ -59,10 +59,10 @@ import { SOUNDS } from './audio/sfx.js';
  * }} Action
  */
 /**
- * The words only this body says. `voice` is who it is; `rules` are the rules
- * the body and its actions depend on, joined in this order; `still` is the
- * paragraph for a body without wheels, kept beside the one that has them.
- * @typedef {{ voice: string, rules: string[], still?: string }} Prompts
+ * The words only this body says. `voice` is who it is — for a body that cannot
+ * move, that is also where "you cannot move" is said; `rules` are the rules the
+ * body and its actions depend on, joined in this order.
+ * @typedef {{ voice: string, rules: string[] }} Prompts
  */
 /**
  * @typedef {{
@@ -88,6 +88,7 @@ import { SOUNDS } from './audio/sfx.js';
  *   label?: Text,
  *   prompts?: Partial<Prompts>,
  *   actions?: Action[],
+ *   triggers?: Trigger[],
  * }} BodyPatch
  */
 
@@ -303,7 +304,6 @@ export const TEMPLATES = {
     prompts: {
       voice: BODY_STILL,
       rules: [RULES_STILL, RULES_SPOKEN],
-      still: BODY_STILL,
     },
     firmware: BODY_FIRMWARE,
     preview: 'voice',
@@ -364,7 +364,6 @@ export const TEMPLATES = {
     prompts: {
       voice: BODY_WHEELS,
       rules: [RULES_WHEELS, RULES_SPOKEN, RULE_DURATION],
-      still: BODY_STILL,
     },
     firmware: null,
     preview: 'toy',
@@ -386,7 +385,6 @@ export const TEMPLATES = {
     prompts: {
       voice: BODY_WHEELS,
       rules: [RULES_WHEELS, RULES_SPOKEN, RULE_DURATION],
-      still: BODY_STILL,
     },
     firmware: BODY_FIRMWARE,
     preview: 'toy',
@@ -453,9 +451,19 @@ export function resolveBody(id, patch = {}) {
 
   const actions = patch.actions ?? base.actions;
   const promptSource = patch.prompts ? { ...base.prompts, ...patch.prompts } : base.prompts;
+  const triggerSource = patch.triggers ?? base.triggers ?? [];
+  const actionNames = new Set(actions.map((a) => a.name));
+  // A shake may only reach an action the resolved body still has. Without
+  // this, a copied tarot reader whose actions were replaced with pose ones
+  // would keep a trigger nothing can satisfy and no way to remove it;
+  // `bodyProblem` stays strict for bodies written by hand.
+  const triggers = triggerSource.filter((t) => actionNames.has(t.action));
+
+  const copy = structuredClone(base);
+  delete copy.triggers;
 
   return {
-    ...structuredClone(base),
+    ...copy,
     id,
     template: base.id,
     label: structuredClone(patch.label ?? base.label),
@@ -465,9 +473,8 @@ export function resolveBody(id, patch = {}) {
     prompts: {
       voice: promptSource.voice,
       rules: [...(promptSource.rules ?? [])],
-      ...(promptSource.still === undefined ? {} : { still: promptSource.still }),
     },
-    ...(base.triggers ? { triggers: structuredClone(base.triggers) } : {}),
+    ...(triggers.length ? { triggers: structuredClone(triggers) } : {}),
   };
 }
 
@@ -499,6 +506,9 @@ export function bodyProblem(body) {
   const row = /** @type {Body} */ (body);
   const id = row?.id ?? 'this body';
   if (!Array.isArray(row?.capabilities)) return `${id}: no capabilities list`;
+  for (const capability of row.capabilities) {
+    if (!CAPABILITIES.includes(capability)) return `${id}: unknown capability ${capability}`;
+  }
   if (!Array.isArray(row?.actions)) return `${id}: no actions list`;
 
   /** @type {Set<string>} */
@@ -535,6 +545,17 @@ export function bodyProblem(body) {
   // One screen, one surface: a pet's animator and a tarot reader's would fight
   // over the same display.
   if (verbs.has('pose') && verbs.has('draw')) return `${id}: a body cannot both pose and draw — one screen, one surface`;
+
+  // The words are data too, and Task 5 assembles the prompt straight from
+  // them: a missing voice or a bare string where the rules belong would reach
+  // the model as an empty prompt instead of a refusal here.
+  if (row.reply !== 'tts' && row.reply !== 'clips') return `${id}: reply is neither "tts" nor "clips"`;
+  const voice = row.prompts?.voice;
+  if (typeof voice !== 'string' || voice.trim() === '') return `${id}: no voice prompt`;
+  const rules = row.prompts?.rules;
+  if (!Array.isArray(rules) || rules.some((rule) => typeof rule !== 'string')) {
+    return `${id}: prompts.rules is not a list of strings`;
+  }
 
   for (const trig of Array.isArray(row.triggers) ? row.triggers : []) {
     if (!names.has(trig.action)) return `${id}: a ${trig.on} trigger names ${trig.action}, which the body does not have`;
