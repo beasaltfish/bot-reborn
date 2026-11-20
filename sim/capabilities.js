@@ -1,18 +1,42 @@
-// What a character can do in a demo, from its declared body. `needs` are
-// actions (CAN_DO, from core/bodies.js), never body names: a car character can
-// still be plugged in for a screen demo; only the final pose is skipped.
+// What a character can do in a demo, from the verbs its body can run. `needs`
+// are verbs — pose, draw, move — never body names and never action names: a car
+// character can still be plugged in for a screen demo; only the final pose is
+// skipped.
 import { CAN_DO } from '../core/bodies.js';
 import { simText } from './ui/strings.js';
 
-/** @param {string[]} needs @param {string} motion */
-export function canDo(needs, motion) {
-  const can = CAN_DO[/** @type {import('../core/bodies.js').BodyId} */ (motion)] ?? [];
-  return needs.every((need) => can.includes(need));
+/**
+ * A demo's word for a verb. `move` is what a recipe asks for when it wants the
+ * thing to go somewhere, and `drive` is the verb that does it — `halt` alone
+ * only stops a body that was already moving.
+ * @type {Record<string, string>}
+ */
+const NEED_VERB = { move: 'drive' };
+
+/**
+ * Whether a body can run every verb a demo needs. `verbs` is the summary's
+ * `verbs` list (core/actions.js `verbsOf`), so the question is what the body can
+ * do, not what its actions are called.
+ *
+ * A body id is still accepted for a page that predates the field: it is read
+ * through the temporary CAN_DO shim, which Task 8 deletes along with this
+ * branch.
+ * @param {string[]} needs
+ * @param {string[] | string} verbs
+ */
+export function canDo(needs, verbs) {
+  if (!Array.isArray(verbs)) {
+    // A page that predates `verbs`: CAN_DO lists action names, so the demo's
+    // need is matched exactly as written. Temporary until Task 8.
+    const actions = CAN_DO[/** @type {import('../core/bodies.js').BodyId} */ (verbs)] ?? [];
+    return needs.every((need) => actions.includes(need));
+  }
+  return needs.every((need) => verbs.includes(NEED_VERB[need] ?? need));
 }
 
-/** @param {string[]} needs @param {string} motion @param {'en'|'zh'} [lang] */
-export function demoSkips(needs, motion, lang = 'en') {
-  return needs.filter((need) => !canDo([need], motion)).map((need) => {
+/** @param {string[]} needs @param {string[] | string} verbs @param {'en'|'zh'} [lang] */
+export function demoSkips(needs, verbs, lang = 'en') {
+  return needs.filter((need) => !canDo([need], verbs)).map((need) => {
     const key = `demo.skip.${need}`;
     const text = simText(lang, key);
     return { need, text: text === key ? simText(lang, 'demo.skip.other') : text };

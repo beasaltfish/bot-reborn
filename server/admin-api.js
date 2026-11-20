@@ -11,6 +11,8 @@ import {
 } from './characters.js';
 import { createCheckApi, LAYERS } from './check-api.js';
 import { listFirmwareSources, readFirmwareSource } from './firmware-sources.js';
+import { resolveBody } from '../core/bodies.js';
+import { verbsOf } from '../core/actions.js';
 
 const MAX_BODY = 64 * 1024;
 
@@ -23,6 +25,17 @@ const MAX_BODY = 64 * 1024;
  */
 export function setupIdFor(token) {
   return createHash('sha256').update('bot-reborn.setup.v1\0').update(token).digest('hex');
+}
+
+/**
+ * The verbs a character's body can run, for the bench: what it can do, as
+ * opposed to what its actions are called. Resolved from the patch, so a body
+ * someone edited answers with the actions it actually has.
+ * @param {import('../core/config.js').Config} config
+ * @returns {string[]}
+ */
+function verbsOfBody(config) {
+  return verbsOf(resolveBody(config.body?.id ?? 'toy', config.body).actions);
 }
 
 /**
@@ -123,7 +136,9 @@ export function createAdminApi(opts) {
             const bodyKind = opts.bodyKind?.(setupId);
             return {
               id: c.id, name: c.name, ready: ready(c.config), online: online.has(c.id),
-              motion: c.config.body?.id ?? null, setupId,
+              // `motion` stays for tabs that predate `verbs`: the bench asks
+              // what the body can do, not which template it was copied from.
+              motion: c.config.body?.id ?? null, verbs: verbsOfBody(c.config), setupId,
               ...(bodyKind ? { bodyKind } : {}),
               ...(opts.presence?.of(c.id, setupId) ?? {}),
             };

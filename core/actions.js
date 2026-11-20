@@ -234,6 +234,28 @@ export function expand(action, args) {
 }
 
 /**
+ * Every verb a body's actions can run, in the order they first appear. This is
+ * what the body can *do*, as opposed to what the model may *call*: the action
+ * names are the model's vocabulary, the verbs are what the hardware behind them
+ * is asked for. The executor picks a carrier by these, and the simulator asks
+ * "can it pose?" instead of "does it have an action called draw_card?".
+ *
+ * A name no verb answers to is kept as written: this lists what the actions
+ * say, and refusing a typo is `actionProblem`'s job, one level up.
+ * @param {readonly Action[]} actions
+ * @returns {string[]}
+ */
+export function verbsOf(actions) {
+  /** @type {Set<string>} */
+  const verbs = new Set();
+  for (const action of actions ?? []) {
+    const run = Array.isArray(action?.run) ? action.run : [];
+    for (const step of run) if (typeof step?.verb === 'string') verbs.add(step.verb);
+  }
+  return [...verbs];
+}
+
+/**
  * The first thing this checker cannot read in a schema, as the rest of a
  * sentence: a word outside the subset, or a node that is not a schema at all.
  * Both are refused by name — a checker that crashed, or quietly skipped, on a

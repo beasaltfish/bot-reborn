@@ -48,7 +48,8 @@ test('the list has names, readiness and presence — never keys or tokens', asyn
   const { status, body } = await r.call('/api/characters');
   assert.equal(status, 200);
   assert.deepEqual(body, [{
-    id: 'a', name: 'a', ready: true, online: false, motion: 'toy', setupId: setupIdFor(a.token),
+    id: 'a', name: 'a', ready: true, online: false,
+    motion: 'toy', verbs: ['drive', 'halt', 'voice'], setupId: setupIdFor(a.token),
   }]);
   await r.server.close();
 });
@@ -254,6 +255,28 @@ test('the list says how each character moves, so the bench can tell a pet', asyn
   r.chars.add('petty', (cfg) => { cfg.body.id = 'pet'; });
   const { body } = await r.call('/api/characters');
   assert.equal(body[0].motion, 'pet');
+  await r.server.close();
+});
+
+test('the list carries verbs for the simulator, not action names', async () => {
+  const r = await rig();
+  r.chars.add('petty', (cfg) => { cfg.body.id = 'pet'; });
+  const { body } = await r.call('/api/characters');
+  const pet = body[0];
+
+  // What the bench asks is "can it pose?", so the list names the verb `pose`,
+  // never the action that runs it.
+  assert.ok(pet.verbs.includes('pose'));
+  assert.ok(pet.verbs.includes('voice'), 'a bark is the voice verb');
+  assert.equal(pet.verbs.includes('draw_card'), false);
+  assert.equal(pet.verbs.includes('move'), false, 'no action name reaches the list');
+  // The id stays beside it: an old tab still reads `motion`.
+  assert.equal(pet.motion, 'pet');
+
+  // A body's own actions answer for it, not its template.
+  r.chars.add('cards', (cfg) => { cfg.body.id = 'toy'; });
+  const toy = (await r.call('/api/characters')).body.find((/** @type {any} */ c) => c.id === 'cards');
+  assert.deepEqual(toy.verbs, ['drive', 'halt', 'voice']);
   await r.server.close();
 });
 

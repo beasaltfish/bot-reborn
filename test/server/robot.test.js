@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { startRobot, tarotLang } from '../../server/robot.js';
 import { renderEarcons } from '../../server/audio/render.js';
+import { TEMPLATES } from '../../core/bodies.js';
 import { readyConfig, fakeFetch, until } from './helpers.js';
 
 function fakeConn() {
@@ -36,7 +37,8 @@ function fakeEars() {
   };
 }
 
-function rig(/** @type {Parameters<typeof fakeFetch>[0]} */ fetchOpts = {}, motion = 'toy',
+function rig(/** @type {Parameters<typeof fakeFetch>[0]} */ fetchOpts = {},
+  /** @type {string | Record<string, any>} */ body = 'toy',
   /** @type {Record<string, any>} */ overrides = {}) {
   const c = fakeConn();
   const e = fakeEars();
@@ -45,7 +47,9 @@ function rig(/** @type {Parameters<typeof fakeFetch>[0]} */ fetchOpts = {}, moti
   /** @type {string[]} */ const logged = [];
   /** @type {number[]} */ const spoken = [];
   const config = readyConfig();
-  config.body.id = /** @type {any} */ (motion);
+  // An id, or the whole patch: the tests that ask "does the id decide this?"
+  // need a body whose name and template disagree.
+  config.body = typeof body === 'string' ? { id: /** @type {any} */ (body) } : /** @type {any} */ ({ ...body });
   const sfx = new Map([[/** @type {const} */ ('bark'), new Int16Array(1600).fill(1200)]]);
   const robot = startRobot(c.conn, {
     config, fetch: customFetch ?? fetch, ears: e.ears, sfx, earcons: renderEarcons(),
@@ -208,6 +212,41 @@ test('none: nothing reaches the body, and the LLM was not offered moving', async
   r.robot.stop();
 });
 
+test('a body with a connection sends; one with none only logs', async () => {
+  // The toy's own actions, but the dry run's way of being reached: what decides
+  // is whether anything is listening, not what the body is called.
+  const idle = rig({}, { id: 'toy', template: 'dry-run' });
+  await idle.speak();
+  await until(() => idle.logged.some((l) => l.startsWith('dry-run: move')));
+  assert.ok(!idle.sent.some((m) => m.type === 'move'), 'a body nobody is listening to received a move');
+  idle.robot.stop();
+
+  // And the other way round: a body called dry-run that has a board sends.
+  const live = rig({}, { id: 'dry-run', template: 'toy' });
+  await live.speak();
+  await until(() => live.sent.some((m) => m.type === 'move'));
+  assert.ok(!live.logged.some((l) => l.startsWith('dry-run')));
+  live.robot.stop();
+});
+
+test('the reply is decided by whether the body answers in clips, not by its id', async () => {
+  const bark = { tool: { name: 'play_sound', args: { name: 'bark' } }, tts: new Int16Array(0) };
+  // Called `pet`, but following the voice-only template: the bark is a sound
+  // beside a spoken answer, so an empty TTS voice means nothing was said.
+  const words = rig(bark, { id: 'pet', template: 'none' }, { petFrames: fakePetFrames() });
+  await words.speak();
+  await until(() => spokeAndFinished(words.sent));
+  assert.deepEqual(words.spoken, []);
+  words.robot.stop();
+
+  // Called anything, but answering in clips: the bark IS the reply.
+  const clips = rig(bark, { id: 'screen-dog', template: 'pet' }, { petFrames: fakePetFrames() });
+  await clips.speak();
+  await until(() => clips.spoken.length > 0, 3000, () => `states ${JSON.stringify(states(clips.sent))}`);
+  assert.equal(clips.spoken.length, 1);
+  clips.robot.stop();
+});
+
 /** Idle 2 frames at 10 fps; one trick with a single frame. One size is enough. */
 function fakePetFrames() {
   /** @param {string[]} frames */
@@ -251,6 +290,37 @@ test('a car never asks for a screen', async () => {
   await new Promise((r) => setTimeout(r, 150));
   robot.stop();
   assert.deepEqual(shown, []);
+});
+
+test('animators are built from the actions, not the id', () => {
+  /** @param {Record<string, any>} body */
+  const shownFor = (body) => {
+    const c = fakeConn();
+    const e = fakeEars();
+    /** @type {string[]} */ const shown = [];
+    const config = readyConfig();
+    config.body = /** @type {any} */ ({ ...body });
+    const robot = startRobot(c.conn, {
+      config, fetch: fakeFetch(), ears: e.ears, sfx: new Map(), earcons: renderEarcons(),
+      log: () => {}, slackMs: 0,
+      petFrames: fakePetFrames(), tarotFrames: fakeTarotFrames(),
+      screen: (pick) => shown.push(String(pick('320x240'))),
+    });
+    robot.stop();
+    return shown;
+  };
+
+  const pose = TEMPLATES.pet.actions.find((a) => a.name === 'pose') ?? TEMPLATES.pet.actions[0];
+  const sound = TEMPLATES.none.actions[0];
+
+  // A body called `pet` whose actions were replaced with a sound alone has
+  // nothing to animate, so no face is ever drawn.
+  assert.deepEqual(shownFor({ id: 'pet', actions: [sound] }), [], 'pose was taken away');
+  // A body called anything that can pose gets the pet's screen.
+  assert.deepEqual(shownFor({ id: 'toy', actions: [pose] }), ['i0']);
+  // And a draw gets the deck, whatever the body is called.
+  const draw = TEMPLATES.tarot.actions.find((a) => a.name === 'draw_card') ?? TEMPLATES.tarot.actions[0];
+  assert.deepEqual(shownFor({ id: 'toy', actions: [draw] }), ['back']);
 });
 
 /** Tarot frames whose bytes say what they are; one size is enough. */
@@ -350,6 +420,14 @@ test('a shake message from a tarot body draws a card; a second one while busy ad
   const r = rig({}, 'tarot');
   r.message({ type: 'shake' });
   r.message({ type: 'shake' });
+  await until(() => r.fetch.calls.some((c) => c.url.endsWith('/audio/speech')));
+  assert.equal(r.fetch.calls.filter((c) => c.url.endsWith('/chat/completions')).length, 1);
+  r.robot.stop();
+});
+
+test('a shake draws on any body whose actions draw, whatever it is called', async () => {
+  const r = rig({}, { id: 'cards', template: 'tarot' });
+  assert.equal(r.robot.drawCard(), true);
   await until(() => r.fetch.calls.some((c) => c.url.endsWith('/audio/speech')));
   assert.equal(r.fetch.calls.filter((c) => c.url.endsWith('/chat/completions')).length, 1);
   r.robot.stop();
