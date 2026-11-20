@@ -32,6 +32,15 @@ describe('SetupCard', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Next: Add three keys');
   });
 
+  it('points at the Body tab, not at a Basic setting that no longer exists', () => {
+    const steps = stepsFor({ motion: 'car', bodyKind: 'phone', ready: true, lastSeenAt: 1 });
+    render(<SetupCard steps={steps} next={steps[3]} />);
+    const bodyRows = screen.getAllByRole('listitem').filter((row) => row.dataset.step === 'body-screen');
+    const notes = bodyRows.map((row) => row.textContent ?? '').join(' ');
+    expect(notes).toMatch(/Body tab/);
+    expect(notes).not.toMatch(/In Basic/);
+  });
+
   it('shows the skipped row but excludes it from phone progress', () => {
     const steps = stepsFor({ motion: 'car', bodyKind: 'phone', ready: true, lastSeenAt: 1 });
     render(<SetupCard steps={steps} next={steps[4]} />);

@@ -192,19 +192,25 @@ something the workbench can teach and the board cannot run yet.
 ### What a body can do
 
 A body is a set of capabilities, not a firmware. The admin's Body tab draws one
-card per row of [`core/bodies.js`](core/bodies.js), which is also what the brain
-offers the model and what the simulator checks a demo against.
+card per row of [`core/bodies.js`](core/bodies.js), and the brain's action limits
+and the simulator's demo checks are that table too. Which tools and prompt a body
+gets is still chosen by its id in `core/brain.js`; deriving those from
+capabilities is the next step.
 
 | Body | Hears | Speaks | Shows | Moves | Senses | Runs on |
 |---|---|---|---|---|---|---|
-| Car | yes | yes | a face | drives, cruises, stops | — | the ESP32 board, flashed once |
+| Car | yes | yes | a face | drives, cruises, stops | — | the ESP32 board flashed once, or a phone + FT232H |
 | Pet on a screen | yes | yes | a dog | — | — | the ESP32 board + a screen |
-| Tarot reader | yes | yes | cards | — | draws a card | the ESP32 board + a wand |
+| Tarot reader | yes | yes | cards | — | draws a card | the ESP32 board + a screen + a wand |
 | Dry run | yes | yes | nowhere to show it | logged, never sent | — | no hardware at all |
 | No moving parts | yes | yes | — | — | — | your phone |
 
 All five play the robot's audio; a card's badges are what the brain may call,
 and the line under them is what it never will.
+
+Adding a body is a row in `core/bodies.js` plus, if it shows something, its
+pictures; where its tools come from still has to be said in `core/brain.js`
+until that second step.
 
 ## Status and limits
 

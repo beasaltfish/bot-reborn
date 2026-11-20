@@ -11,7 +11,9 @@ import { runCheck, runTry, type CheckFn, type TryFn } from './checks';
 import { t, type Key } from './i18n';
 import type { Detail, EditorSlot, LayerName, Patch, TabName } from './types';
 
-const LAYERS: LayerName[] = ['stt', 'llm', 'tts'];
+// Reflex carries its own provider and key, so its tab renders the layer fields
+// too — the question editor sits under them (configurable reflex spec §4).
+const LAYERS: LayerName[] = ['stt', 'llm', 'tts', 'reflex'];
 const isLayer = (name: TabName): name is LayerName => LAYERS.includes(name as LayerName);
 
 const TABS: Array<[TabName, Key]> = [

@@ -31,7 +31,8 @@ test('the listing names only files that previewFile would serve', () => {
   assert.ok(list.tarot.length > 0, 'tarot cards');
   for (const root of /** @type {const} */ (['pet', 'tarot'])) {
     for (const rel of list[root]) {
-      assert.match(rel, /^[a-z0-9][a-z0-9/_-]*\.jpg$/, rel);
+      assert.match(rel, /^[a-z0-9][a-z0-9._/-]*\.jpg$/, rel);
+      assert.ok(!rel.split('/').includes('..'), rel);
       assert.ok(previewFile(`/preview/${root}/${rel}`), rel);
     }
   }
@@ -49,6 +50,17 @@ function recorder() {
     },
   };
 }
+
+test('the preview shows the largest art there is, and a card face, not just the back', () => {
+  const list = previewList();
+  // The render tools write every size; the smallest is a 160 px panel, not a preview.
+  for (const root of /** @type {const} */ (['pet', 'tarot'])) {
+    for (const rel of list[root]) assert.match(rel, /^320x240\//, `${root}: ${rel}`);
+  }
+  // A face carries its language in the name — `cups-01.en.jpg` — so a grammar
+  // that stops at the first dot would only ever show backs and shuffles.
+  assert.ok(list.tarot.some((rel) => /\.(en|zh)\.jpg$/.test(rel)), list.tarot.join(' '));
+});
 
 test('a real frame is served by extension, a made-up one is a 404', async () => {
   const first = recorder();

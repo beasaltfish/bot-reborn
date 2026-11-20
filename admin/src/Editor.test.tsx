@@ -224,6 +224,13 @@ describe('Editor', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(/Not valid JSON/);
   });
 
+  it('reflex: keeps its own provider and key on the same tab', async () => {
+    installFakeApi([{ name: 'A' }]);
+    render(<Editor {...props({ initialTab: 'reflex' })} />);
+    expect(await screen.findByLabelText('Provider')).toBeInTheDocument();
+    expect(screen.getByLabelText('API key')).toBeInTheDocument();
+  });
+
   it('reflex: says which configured actions this body will ignore', async () => {
     installFakeApi([{ name: 'A' }]);
     render(<Editor {...props({ initialTab: 'body' })} />);

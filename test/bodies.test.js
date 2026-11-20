@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BODIES, BODY_IDS, CAN_DO, bodyById, bodyProblem } from '../core/bodies.js';
+import { BODIES, BODY_IDS, CAN_DO, bodyById, bodyProblem, labelOf } from '../core/bodies.js';
 
 test('the five bodies exist, with unique ids and a preview each', () => {
   assert.deepEqual(BODY_IDS, ['car', 'pet', 'tarot', 'dry-run', 'none']);
@@ -19,9 +19,31 @@ test('an action without its capability is refused', () => {
 
 test('a board body needs firmware and a phone body must not have one', () => {
   const base = { id: 'x', label: 'X', labelZh: 'X', needs: [], capabilities: ['speak'], actions: [], preview: 'face' };
-  assert.match(bodyProblem({ ...base, source: 'board', firmware: null }) ?? '', /firmware/);
-  assert.match(bodyProblem({ ...base, source: 'phone', firmware: 'body' }) ?? '', /firmware/);
-  assert.equal(bodyProblem({ ...base, source: 'phone', firmware: null }), null);
+  assert.match(bodyProblem({ ...base, sources: ['board'], firmware: null }) ?? '', /firmware/);
+  assert.match(bodyProblem({ ...base, sources: ['phone'], firmware: 'body' }) ?? '', /firmware/);
+  assert.equal(bodyProblem({ ...base, sources: ['phone'], firmware: null }), null);
+  // A body reachable both ways is flashed for one of them and not the other.
+  assert.equal(bodyProblem({ ...base, sources: ['board', 'phone'], firmware: 'body.bin' }), null);
+});
+
+test('a body may be reached more than one way, and the card says so', () => {
+  assert.deepEqual(bodyById('car')?.sources, ['board', 'phone']);
+  assert.deepEqual(bodyById('pet')?.sources, ['board']);
+  assert.deepEqual(bodyById('none')?.sources, ['phone']);
+  // No source at all is a row nobody can follow.
+  assert.match(bodyProblem({ id: 'x', label: 'X', labelZh: 'X', needs: [], sources: [], firmware: null, capabilities: ['speak'], actions: [], preview: 'pet' }) ?? '', /source/);
+  assert.match(bodyProblem({ id: 'x', label: 'X', labelZh: 'X', needs: [], sources: ['telepathy'], firmware: null, capabilities: ['speak'], actions: [], preview: 'pet' }) ?? '', /telepathy/);
+});
+
+test('what a body senses with is in the list of things it needs', () => {
+  const tarot = bodyById('tarot');
+  assert.ok(tarot?.capabilities.includes('sense'));
+  assert.ok(tarot?.needs.includes('wand'), 'a tarot reader senses with the MPU-6050 wand');
+});
+
+test('the label is the reader\'s language', () => {
+  assert.equal(labelOf(bodyById('car') ?? BODIES[0], 'en'), 'Car');
+  assert.equal(labelOf(bodyById('car') ?? BODIES[0], 'zh'), '小车');
 });
 
 // The table replaces CAN_DO, so it has to say exactly what CAN_DO said. A

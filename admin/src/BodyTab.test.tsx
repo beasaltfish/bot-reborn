@@ -37,6 +37,12 @@ describe('BodyTab', () => {
     expect(screen.getByRole('radio', { name: /no moving parts/i })).toBeChecked();
   });
 
+  it('a body that runs on a board or a phone gives both ways, not just one', () => {
+    render(<BodyTab detail={detail('car')} update={vi.fn()} />);
+    expect(screen.getByText(/flash it once/i)).toBeInTheDocument();
+    expect(screen.getByText(/scan the QR code/i)).toBeInTheDocument();
+  });
+
   it('picking a board body asks for the firmware, and writes the id', async () => {
     const update = vi.fn();
     render(<BodyTab detail={detail('none')} update={update} />);

@@ -11,9 +11,22 @@
 /** @typedef {'hear' | 'speak' | 'show' | 'move' | 'sense'} Capability */
 /** @typedef {'move' | 'cruise' | 'stop' | 'sound' | 'pose' | 'draw'} ActionKind */
 /** @typedef {'car' | 'pet' | 'tarot' | 'dry-run' | 'none'} BodyId */
+/**
+ * What a body is made of, as keys rather than sentences: the admin says them
+ * in the reader's language, and a part number is the one thing that does not
+ * translate.
+ * @typedef {'board' | 'motor' | 'battery' | 'screen' | 'wand' | 'phone'} Need
+ */
+/** @typedef {'board' | 'phone' | 'none'} Source */
 
 /** The five fine-grained abilities a body can have, in the order the admin shows them. */
 export const CAPABILITIES = /** @type {const} */ (['hear', 'speak', 'show', 'move', 'sense']);
+
+/**
+ * The three ways a person gets a body.
+ * @type {readonly Source[]}
+ */
+export const SOURCES = ['board', 'phone', 'none'];
 
 /**
  * What an action needs before it means anything. An action is offered to the
@@ -42,8 +55,8 @@ export const BODY_FIRMWARE = 'body.bin';
  *   id: BodyId,
  *   label: string,
  *   labelZh: string,
- *   needs: string[],
- *   source: 'board' | 'phone' | 'none',
+ *   needs: Need[],
+ *   sources: Source[],
  *   firmware: string | null,
  *   capabilities: Capability[],
  *   actions: ActionKind[],
@@ -60,8 +73,8 @@ export const BODIES = [
     id: 'car',
     label: 'Car',
     labelZh: '小车',
-    needs: ['ESP32-S3 board', 'TB6612 motor driver', 'battery pack'],
-    source: 'board',
+    needs: ['board', 'motor', 'battery'],
+    sources: ['board', 'phone'],
     firmware: BODY_FIRMWARE,
     capabilities: ['hear', 'speak', 'show', 'move'],
     actions: ['move', 'cruise', 'stop', 'sound'],
@@ -71,8 +84,8 @@ export const BODIES = [
     id: 'pet',
     label: 'Pet on a screen',
     labelZh: '屏幕宠物',
-    needs: ['ESP32-S3 board', 'SSD1306 screen'],
-    source: 'board',
+    needs: ['board', 'screen'],
+    sources: ['board'],
     firmware: BODY_FIRMWARE,
     capabilities: ['hear', 'speak', 'show'],
     actions: ['pose', 'sound'],
@@ -82,8 +95,8 @@ export const BODIES = [
     id: 'tarot',
     label: 'Tarot reader',
     labelZh: '塔罗牌',
-    needs: ['ESP32-S3 board', 'SSD1306 screen'],
-    source: 'board',
+    needs: ['board', 'screen', 'wand'],
+    sources: ['board'],
     firmware: BODY_FIRMWARE,
     capabilities: ['hear', 'speak', 'show', 'sense'],
     actions: ['draw'],
@@ -94,7 +107,7 @@ export const BODIES = [
     label: 'Dry run',
     labelZh: '演练',
     needs: [],
-    source: 'none',
+    sources: ['none'],
     firmware: null,
     capabilities: ['hear', 'speak', 'show', 'move'],
     actions: ['move', 'cruise', 'stop', 'sound'],
@@ -105,7 +118,7 @@ export const BODIES = [
     label: 'No moving parts',
     labelZh: '无身体',
     needs: ['phone'],
-    source: 'phone',
+    sources: ['phone'],
     firmware: null,
     capabilities: ['hear', 'speak'],
     actions: ['sound'],
@@ -130,6 +143,16 @@ export function bodyById(id) {
 }
 
 /**
+ * The name in the reader's language. The table carries both because a body is
+ * the one row in it a person reads before anything else on the page.
+ * @param {Body} body @param {'en' | 'zh'} lang
+ * @returns {string}
+ */
+export function labelOf(body, lang) {
+  return lang === 'zh' ? body.labelZh : body.label;
+}
+
+/**
  * What is wrong with a row, or null. Run by the tests and by anyone adding a
  * body: the failure to avoid is a card that promises a face the firmware
  * never shows, and a string in a table is exactly where that slips through.
@@ -145,8 +168,13 @@ export function bodyProblem(body) {
     if (!(a in ACTION_NEEDS)) return `${row.id}: unknown action ${a}`;
     if (!row.capabilities.includes(ACTION_NEEDS[a])) return `${row.id}: ${a} needs ${ACTION_NEEDS[a]}`;
   }
-  if (row.source === 'board' && !row.firmware) return `${row.id}: a board body needs firmware`;
-  if (row.source !== 'board' && row.firmware !== null) return `${row.id}: only a board body has firmware`;
+  if (!Array.isArray(row.sources) || row.sources.length === 0) return `${row.id}: no source`;
+  for (const s of row.sources) {
+    if (!SOURCES.includes(s)) return `${row.id}: unknown source ${s}`;
+  }
+  const board = row.sources.includes('board');
+  if (board && !row.firmware) return `${row.id}: a board body needs firmware`;
+  if (!board && row.firmware !== null) return `${row.id}: only a board body has firmware`;
   if (!row.preview) return `${row.id}: no preview`;
   return null;
 }

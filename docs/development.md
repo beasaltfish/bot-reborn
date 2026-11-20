@@ -55,13 +55,19 @@ never import each other.
 
 `core/bodies.js` is one table of bodies: what each needs, how you get it (a
 board to flash, a phone, nothing), which of hear/speak/show/move/sense it has,
-and which actions the brain may offer it. The admin's cards, the brain's tools
-and the simulator's demo checks all read it. A body is added in one place: a row
-in `BODIES`, the artifact it is flashed with, and — if it should show something
-— its pictures. `bodyProblem()` in the same file refuses a row that claims an
-action its capabilities cannot support, and `test/bodies.test.js` runs it on
-every row. Never keep a second list of actions: `CAN_DO` is derived from the
-table on purpose.
+and which actions the brain may offer it. The admin's cards, the brain's action
+limits (`CAN_DO`) and the simulator's demo checks all read it. A body is added
+as a row in `BODIES`, the artifact it is flashed with, and — if it should show
+something — its pictures. `bodyProblem()` in the same file refuses a row that
+claims an action its capabilities cannot support, and `test/bodies.test.js`
+runs it on every row. Never keep a second list of actions: `CAN_DO` is derived
+from the table on purpose.
+
+Which tools and which prompt a body gets is not from this table yet:
+`toolsFor()` and `buildSystemPrompt()` in `core/brain.js` still pick by id, so a
+new body with new capabilities has to be added there too. Deriving them from
+the table is the second segment of the body redesign (spec §6), and until then
+"one row" is one row plus those two functions.
 
 Two habits that pay off here. **The comments carry the argument, not a
 description of the code** — where one says why some other approach was rejected,

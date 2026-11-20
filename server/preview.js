@@ -19,7 +19,17 @@ const TYPES = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png'
 
 // Lowercase only: on a case-insensitive filesystem `001.JPG` would find the
 // frame, and a grammar that admits it is a grammar nobody can reason about.
-const NAME = /^[a-z0-9][a-z0-9/_-]*\.(?:jpg|jpeg|png)$/;
+// A dot is allowed inside a name (`cups-01.en.jpg`), which is why `..` is
+// refused as a segment rather than as a substring.
+const SEGMENT = /^[a-z0-9][a-z0-9._-]*$/;
+const IMAGE = /\.(?:jpg|jpeg|png)$/;
+
+/** @param {string} rel */
+function safeName(rel) {
+  if (!IMAGE.test(rel)) return false;
+  const parts = rel.split('/');
+  return parts.every((p) => SEGMENT.test(p) && p !== '.' && p !== '..');
+}
 
 /** A frame this big is not a frame. */
 const MAX_BYTES = 2 * 1024 * 1024;
@@ -37,7 +47,7 @@ export function previewFile(path) {
   const [, root, rel] = m;
   const base = ROOTS[root];
   if (!base) return null;
-  if (!NAME.test(rel)) return null;
+  if (!safeName(rel)) return null;
   const dir = join(SERVER_DIR, base);
   const file = join(dir, rel);
   // The grammar already refuses `..`, a backslash and a leading slash; this is
@@ -55,25 +65,38 @@ export function previewList() {
   return Object.fromEntries(Object.entries(ROOTS).map(([root, base]) => [root, listRoot(root, join(SERVER_DIR, base))]));
 }
 
+/**
+ * The biggest size in a list like `['160x128', '240x240', '320x240']`.
+ * Lexical order would pick 160x128, and a 160 px panel is a thumbnail.
+ * @param {string[]} sizes
+ * @returns {string | undefined}
+ */
+function largest(sizes) {
+  const area = (/** @type {string} */ s) => {
+    const m = /^(\d+)x(\d+)$/.exec(s);
+    return m ? Number(m[1]) * Number(m[2]) : 0;
+  };
+  return [...sizes].filter((s) => area(s) > 0).sort((a, b) => area(b) - area(a))[0];
+}
+
 /** @param {string} root @param {string} dir */
 function listRoot(root, dir) {
   try {
     if (root === 'pet') {
       const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8'));
-      const size = manifest?.sizes?.[0];
+      const size = largest(Array.isArray(manifest?.sizes) ? manifest.sizes : []);
       const anim = Object.entries(manifest?.anims ?? {}).find(([, a]) => /** @type {any} */ (a)?.loop)?.[0];
-      if (!size || !anim || !NAME.test(`${size}/${anim}/a.jpg`)) return [];
-      const files = readdirSync(join(dir, size, anim)).filter((f) => NAME.test(f) && f.endsWith('.jpg')).sort();
+      if (!size || !anim || !safeName(`${size}/${anim}/a.jpg`)) return [];
+      const files = readdirSync(join(dir, size, anim)).filter((f) => safeName(f) && f.endsWith('.jpg')).sort();
       // Every N-th frame, so six of sixteen are a walk, not a jitter.
       const step = Math.max(1, Math.floor(files.length / MAX_PREVIEW_FRAMES));
       return files.filter((_, i) => i % step === 0).slice(0, MAX_PREVIEW_FRAMES).map((f) => `${size}/${anim}/${f}`);
     }
     // Cards: the back plus a few faces, so the carousel shows a reading.
-    return readdirSync(dir, { withFileTypes: true })
-      .filter((e) => e.isDirectory() && NAME.test(`${e.name}/a.jpg`))
-      .map((e) => e.name).sort().slice(0, 1)
-      .flatMap((size) => readdirSync(join(dir, size)).filter((f) => NAME.test(f) && f.endsWith('.jpg')).sort().slice(0, MAX_PREVIEW_FRAMES)
-        .map((f) => `${size}/${f}`));
+    const size = largest(readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name));
+    if (!size) return [];
+    return readdirSync(join(dir, size)).filter((f) => safeName(f) && f.endsWith('.jpg')).sort()
+      .slice(0, MAX_PREVIEW_FRAMES).map((f) => `${size}/${f}`);
   } catch {
     // No art rendered yet: the admin falls back to the body's name.
     return [];

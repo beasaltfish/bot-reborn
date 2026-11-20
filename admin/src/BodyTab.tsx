@@ -6,9 +6,9 @@
 // So each row of core/bodies.js is a card, and the attributes are the ones a
 // person can check against the box on their desk.
 import { useEffect, useState } from 'react';
-import { BODIES, CAPABILITIES } from '../../core/bodies.js';
+import { BODIES, CAPABILITIES, labelOf } from '../../core/bodies.js';
 import { PreviewFrames } from './PreviewFrames';
-import { t, type Key } from './i18n';
+import { lang, t, type Key } from './i18n';
 import type { Detail, Motion, Patch } from './types';
 
 const CAP: Record<string, Key> = {
@@ -19,6 +19,14 @@ const LACK: Record<string, Key> = {
 };
 const SOURCE: Record<string, Key> = {
   board: 'sourceBoard', phone: 'sourcePhone', none: 'sourceNone',
+};
+/** What to do next, one line per way this body can be reached. */
+const NEXT: Record<string, Key> = {
+  board: 'bodyNextBoard', phone: 'bodyNextPhone', none: 'bodyNextNone',
+};
+const NEED: Record<string, Key> = {
+  board: 'needBoard', motor: 'needMotor', battery: 'needBattery',
+  screen: 'needScreen', wand: 'needWand', phone: 'needPhone',
 };
 
 export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): void }) {
@@ -37,7 +45,7 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
   }, []);
   const frames = (art[body.preview] ?? []).map((rel) => `/preview/${body.preview}/${rel}`);
   const pick = (id: string) => update({ config: { body: { id: id as Motion } } });
-  const next = body.source === 'board' ? t('bodyNextBoard') : body.source === 'phone' ? t('bodyNextPhone') : t('bodyNextNone');
+  const name = labelOf(body, lang);
 
   return (
     <div className="body-tab">
@@ -51,9 +59,9 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
                 type="radio" name="body" value={b.id}
                 checked={b.id === chosen} onChange={() => pick(b.id)}
               />
-              <strong>{b.label}</strong>
-              <span className="badge">{t(SOURCE[b.source])}</span>
-              {b.needs.length > 0 && <small>{t('bodyNeeds')}: {b.needs.join(' · ')}</small>}
+              <strong>{labelOf(b, lang)}</strong>
+              <span className="badges">{b.sources.map((src) => <span key={src} className="badge">{t(SOURCE[src])}</span>)}</span>
+              {b.needs.length > 0 && <small>{t('bodyNeeds')}: {b.needs.map((n) => t(NEED[n])).join(' · ')}</small>}
               <span className="caps">{b.capabilities.map((c) => t(CAP[c])).join(' · ')}</span>
               {lacks.length > 0 && <small className="lacks">{lacks.map((c) => t(LACK[c])).join(' · ')}</small>}
             </label>
@@ -63,11 +71,11 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
       <div className="body-side">
         <div className="body-preview" data-testid="body-preview">
           {frames.length > 0
-            ? <PreviewFrames key={body.id} frames={frames} alt={body.label} />
-            : <span>{body.label}</span>}
+            ? <PreviewFrames key={body.id} frames={frames} alt={name} />
+            : <span>{name}</span>}
         </div>
         <small>{t('previewNote')}</small>
-        <p>{next}</p>
+        {body.sources.map((src) => <p key={src}>{t(NEXT[src])}</p>)}
       </div>
     </div>
   );
