@@ -92,6 +92,30 @@ describe('unsupported', () => {
   });
 });
 
+describe('unsupported and what a name answers to', () => {
+  const asking = (name: string): ReflexConfig => withQ({ ...blankQuestion(), options: [
+    { choice: 'yes', description: 'Yes.', actions: [{ name, args: {} }] },
+    { choice: 'pass', description: 'No.', actions: [] },
+  ] });
+
+  it('a saved action is supported when the body can do what its name means', () => {
+    expect(unsupported(asking('play_sound'), 'toy')).toEqual([]);
+    expect(unsupported(asking('draw_card'), 'tarot')).toEqual([]);
+  });
+
+  it('a legacy kind is not a tool: saved sound/draw are refused at runtime, and reported so', () => {
+    // `CAN_DO` carries `sound` beside `play_sound` for the old readers, but
+    // `validate()` matches `call.name`, so `sound` is "no such tool".
+    expect(unsupported(asking('sound'), 'toy')).toEqual(['sound']);
+    expect(unsupported(asking('draw'), 'tarot')).toEqual(['draw']);
+  });
+
+  it('a name no body answers to is unsupported everywhere', () => {
+    expect(unsupported(asking('nod'), 'toy')).toEqual(['nod']);
+    expect(unsupported(asking('nod'), 'pet')).toEqual(['nod']);
+  });
+});
+
 describe('new questions and options', () => {
   it('a blank question is already a valid one, and new choices never collide', () => {
     const q = blankQuestion();

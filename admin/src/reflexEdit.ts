@@ -11,12 +11,23 @@ export const DRIVES = ['forward', 'backward'] as const;
 export const STEERS = ['left', 'right', 'straight'] as const;
 
 /**
- * The capability a reflex action answers to where the two names differ —
- * `CAN_DO` carries both, see `LEGACY_KIND` in core/bodies.js. Any other name
- * is its own, so a custom action is asked about by the name it was written
- * with rather than mapped over a fixed list.
+ * The six actions a body can be asked for, by name, and the `CAN_DO` entry that
+ * says whether it can: `play_sound` and `draw_card` predate actions as data and
+ * answer to their legacy kinds (see `LEGACY_KIND` in core/bodies.js), the other
+ * four answer to their own name.
+ *
+ * Total on purpose, and closed on purpose: the brain matches actions by name
+ * (`validate()` drops an unknown one as "no such tool"), so a name outside this
+ * table is refused at runtime however it is spelled, and the editor must say so.
  */
-const LEGACY_KIND: Record<string, string> = { play_sound: 'sound', draw_card: 'draw' };
+const CAPABILITY: Record<string, string> = {
+  move: 'move',
+  cruise: 'cruise',
+  stop: 'stop',
+  pose: 'pose',
+  play_sound: 'sound',
+  draw_card: 'draw',
+};
 
 export function toUnsloth(q: ReflexQuestion): string {
   const criteria = Object.fromEntries(q.options.map((o) => [o.choice, o.description]));
@@ -74,7 +85,10 @@ export function presetPatch(id: string, saved: SavedReflex[] = []): Partial<Refl
 export function unsupported(r: ReflexConfig, id: Motion): string[] {
   const can = CAN_DO[id] ?? CAN_DO.toy;
   const names = new Set(r.question?.options.flatMap((o) => o.actions.map((a) => a.name)) ?? []);
-  return [...names].filter((n) => !can.includes(LEGACY_KIND[n] ?? n));
+  return [...names].filter((n) => {
+    const capability = CAPABILITY[n];
+    return capability === undefined || !can.includes(capability);
+  });
 }
 
 export function freshChoice(q: ReflexQuestion): string {
