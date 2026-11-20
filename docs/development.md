@@ -53,25 +53,98 @@ never import each other.
 `phone/dev.html`, `phone/dev.js` and `phone/panels/` are instruments rather than product; read
 `docs/instruments.md` before changing them, and skip them until you need them.
 
-`core/bodies.js` is one table of bodies: what each needs, how you get it (a
-board to flash, a phone, nothing), which of hear/speak/show/move/sense it has,
-and which actions the brain may offer it. The admin's cards, the brain's action
-limits (`CAN_DO`) and the simulator's demo checks all read it. A body is added
-as a row in `BODIES`, the artifact it is flashed with, and — if it should show
-something — its pictures. `bodyProblem()` in the same file refuses a row that
-claims an action its capabilities cannot support, and `test/bodies.test.js`
-runs it on every row. Never keep a second list of actions: `CAN_DO` is derived
-from the table on purpose.
+## Bodies: capabilities, verbs, actions
 
-The dry run is in the table but not in the admin's picker: open the admin with
-`?bench` to see it. It reads, speaks and logs the moves it would have made, so
-it is how a prompt is tried with no hardware on the desk.
+Three layers; only the actions are a person's to write.
 
-Which tools and which prompt a body gets is not from this table yet:
-`toolsFor()` and `buildSystemPrompt()` in `core/brain.js` still pick by id, so a
-new body with new capabilities has to be added there too. Deriving them from
-the table is the second segment of the body redesign (spec §6), and until then
-"one row" is one row plus those two functions.
+- **Capabilities** are what the body has: `hear`, `speak`, `show`, `move`
+  (`CAPABILITIES` in `core/bodies.js`). They describe hardware, not behaviour.
+- **Verbs** are the closed set of five things the hardware can be told to do:
+  `drive`, `halt`, `voice`, `pose`, `draw` (`core/verbs.js`). Each one names the
+  capability it needs (`needs`), the arguments it takes, and the sentence that
+  bounds it (`bounded`) — a bound written only in a comment drifts away from the
+  code that enforces it.
+- **Actions** are the model's vocabulary: a name, the `say` text that teaches
+  when to call it, an optional args schema, and a `run` program of verbs
+  (`core/actions.js` checks the shape; `expand` fills an argument into each
+  step and drops one that does not fit). `toolsOf(body)` in `core/brain.js`
+  turns a body's actions into tools, and the caller adds the one fixed
+  `set_reply_language`.
+
+A **body** is a template (`TEMPLATES` in `core/bodies.js`): its capabilities, its
+ways (the source and the parts each one costs), its actions, its prompts, its
+triggers and its firmware. There are five — `none`, `pet`, `tarot`, `toy`, and a
+hidden `dry-run` (open the admin with `?bench`). `resolveBody(id, patch)` copies
+one into the body a character uses: a patch that carries its own `actions` is a
+body of its own, one without them follows `template ?? id`, and an unknown id
+falls back to `none`. A character written before the setting has no `body` key
+and stays `toy` (`bodyOf` in `core/config.js`).
+
+`bodyProblem()` in the same file is the single check on any body, template or
+hand-written: it refuses an action that needs a capability the body lacks, a
+trigger naming an action that is not there, a missing voice or a malformed rules
+list, and a body that both poses and draws (one screen, one surface).
+`test/bodies.test.js` runs it on every template.
+
+The dry run is in the table but not in the picker (`?bench` shows it). As far
+as the model can tell it is the toy — the same prompt and the same four actions
+— but every verb is only written to the brain's log, and no frame reaches the
+screen. It is how the orders are read back with nothing to drive.
+
+### Adding an action
+
+No code and no firmware. In the admin's Body tab, open **Actions** and edit the
+JSON: copy the template's actions first ("Copy this template"), then change one
+or add one. The editor validates the edit with `bodyProblem` and shows the
+sentence when it refuses; a whole edit is saved and takes effect the next time
+the body connects.
+
+An action is `{ name, label, say, args?, run, returns?, rules? }`:
+
+- `name` is what the model calls — lowercase, digits and `_`, and not
+  `set_reply_language`, which is reserved.
+- `say` is the only thing that teaches the model *when* to call it.
+- `run` is a list of steps, each `{ verb, args?, each? }`. `args` values written
+  as `$name` are filled from the call's arguments; inside an `each` step,
+  `$each.field` is the current element. Only the five verbs may appear.
+- Everything it asks for has to exist: a `pose` name in `core/poses.js` or a
+  `voice` clip in `core/audio/sfx.js` written literally is checked now.
+- `returns: true` is only for a single `draw` step: that is the one result the
+  model is asked again with.
+- `rules` is a paragraph appended to the system prompt after the body's own.
+
+### Adding a verb
+
+This one is hardware. A verb is only real if the firmware can be told to do it,
+so the work is three places and a test:
+
+1. A message or frame the firmware already answers — `move`, `stop` and `hush`
+   on the body socket (`core/protocol.js`), or a screen frame over
+   `server/screen-link.js`. A new one means new firmware; the shared cases in
+   `firmware/test/brain-messages.json` are judged by both parsers
+   (`test/firmware-vectors.test.js` and `firmware/test/test_proto.c`), so add
+   one there.
+2. A row in `VERBS` (`core/verbs.js`) with `needs`, `args` and `bounded`.
+3. A carrier for it in `makeExecutor`/`CompositeExecutor` (`server/robot.js`),
+   which is where each verb is handed to the motors, the screen, or the log.
+4. `test/verbs.test.js` pins the five names and what each one needs; it has to
+   change with the table. Nothing compares that list to the firmware sources, so
+   keeping the two in step is a review duty, not a test.
+
+Adding an action never needs a verb. A verb that no firmware or brain implements
+would be a promise with nothing behind it, which is why the layer is closed.
+
+### The prompt
+
+`buildSystemPrompt()` (`core/brain.js`) assembles the prompt from the body, not
+from its id: the persona (the admin's, or `DEFAULT_PERSONA`), then
+`prompts.voice`, then `prompts.rules` in the order the body keeps them, then each
+action's `rules` in `actions` order, then — for a body that answers in `tts` and
+has a recorded preference — the line naming the reply language. A body that
+answers in clips gets no such line. `test/prompts-golden.js` freezes the prompts
+of the toy, the voice-only body, the pet and the tarot reader byte for byte, so
+a change to any of those strings is a decision, not a snapshot update. The dry
+run has no prompt of its own: it carries the toy's.
 
 Two habits that pay off here. **The comments carry the argument, not a
 description of the code** — where one says why some other approach was rejected,

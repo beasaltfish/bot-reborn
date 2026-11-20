@@ -155,15 +155,15 @@ runs timed moves on a car's motor driver inputs (GPIO 4–7).
   board finds the brain on its own.
 - Turn **Barge-in off** for this character. The body has no echo cancellation,
   so it would hear itself and interrupt itself.
-- Driving a toy, give the character **Body: Car**, wire the four motor inputs,
+- Driving a toy, give the character **Body: Toy on wheels**, wire the four motor inputs,
   and calibrate: `cal drive` if it goes backwards, `cal steer` if it turns the
   wrong way. The board stops the car within a second of losing the brain.
 
 The phone body — an Android phone plus an FT232H, which is what drove the car
 in the demos above — still works, but it is not the direction here and the
 README does not teach it: [`docs/hardware.md`](docs/hardware.md) does. Without
-wheels, set a character's body to **Dry run** and the moves only reach the
-brain's log, or to **Cannot move** for a robot that just talks.
+wheels, open the admin with `?bench` and set a character's body to **Dry run**:
+the moves only reach the brain's log. **Voice only** is a robot that just talks.
 
 ## What runs where
 
@@ -191,26 +191,33 @@ something the workbench can teach and the board cannot run yet.
 
 ### What a body can do
 
-A body is a set of capabilities, not a firmware. The admin's Body tab draws one
-card per row of [`core/bodies.js`](core/bodies.js), and the brain's action limits
-and the simulator's demo checks are that table too. Which tools and prompt a body
-gets is still chosen by its id in `core/brain.js`; deriving those from
-capabilities is the next step.
+A body is a template, not a firmware and not the character. There are five, in
+[`core/bodies.js`](core/bodies.js): voice only, a pet on a screen, a tarot
+reader, a toy on wheels, and a dry run kept out of the picker (open the admin
+with `?bench` to see it). The admin's Body tab draws one card per template: the
+capabilities it has — hear, speak, show, move — the parts each body costs, and
+the actions the model may call.
 
-| Body | Hears | Speaks | Shows | Moves | Senses | Runs on |
-|---|---|---|---|---|---|---|
-| Toy on wheels | yes | yes | a face | drives, cruises, stops | — | a $4 toy robot + the ESP32 board, or a phone + FT232H |
-| Pet on a screen | yes | yes | a dog | — | — | the ESP32 board + a screen |
-| Tarot reader | yes | yes | cards | — | draws a card | the ESP32 board + a screen + a wand |
-| Dry run | yes | yes | nowhere to show it | logged, never sent | — | no hardware at all |
-| Voice only | yes | yes | — | — | — | the board + a mic and an amp, or your phone |
+| Template | Capabilities | Actions the model may call | Parts |
+|---|---|---|---|
+| Voice only (`none`) | hear, speak | `play_sound` | ESP32 board, mic, amp |
+| Pet on a screen (`pet`) | hear, speak, show | `pose`, `play_sound` | ESP32 board, mic, amp, screen |
+| Tarot reader (`tarot`) | hear, speak, show | `draw_card` | ESP32 board, mic, amp, screen, wand (optional) |
+| Toy on wheels (`toy`) | hear, speak, show, move | `move`, `cruise`, `stop`, `play_sound` | toy, ESP32 board, mic, amp |
+| Dry run (`dry-run`) | hear, speak, show, move | the toy's four | nothing: every verb is logged, never sent |
 
-All five play the robot's audio; a card's badges are what the brain may call,
-and the line under them is what it never will.
+A body's actions are yours to edit. The Body tab holds them as JSON, and once
+you write your own the body keeps them instead of following the template; the
+model is then offered those actions (plus the one fixed language tool) and the
+prompt is built from that body's own words. Nothing is compiled and nothing is
+flashed for this — an action is a program of the five verbs the hardware already
+answers (`drive`, `halt`, `voice`, `pose`, `draw`). The parts list is the other
+half: it is what to buy, and it is fixed by the template.
 
-Adding a body is a row in `core/bodies.js` plus, if it shows something, its
-pictures; where its tools come from still has to be said in `core/brain.js`
-until that second step.
+A character with no body chosen is voice only; a character file written before
+this setting has no `body` key and is still the toy
+([`core/config.js`](core/config.js)). The rest of the account — the verbs, and
+what an action may say — is in [`docs/development.md`](docs/development.md#bodies-capabilities-verbs-actions).
 
 ## Status and limits
 
