@@ -1,11 +1,11 @@
 import { DEFAULT_PERSONA, MAX_PERSONA } from '../../core/brain.js';
 import { t } from './i18n';
-import { PhoneLink } from './PhoneLink';
 import { TokenBox } from './TokenBox';
 import type { Detail, Patch } from './types';
 
-// Pairing the phone is about this character's body, but it is not the body
-// picker: that is its own tab, where each body says when it needs a phone.
+// The phone is this character's body, so it is paired on the Body tab, beside
+// the cards that say which bodies use one. What stays here is the token, for a
+// device that cannot scan a code.
 export function BasicTab({ detail, update, onToken }: { detail: Detail; update(p: Patch): void; onToken(token: string): void }) {
   const c = detail.config;
   return (
@@ -48,7 +48,6 @@ export function BasicTab({ detail, update, onToken }: { detail: Detail; update(p
         </label>
       </div>
       <div className="pairing">
-        <PhoneLink token={detail.token} />
         <TokenBox id={detail.id} onToken={onToken} />
       </div>
     </>

@@ -234,7 +234,7 @@ describe('Editor', () => {
   it('reflex: says which configured actions this body will ignore', async () => {
     installFakeApi([{ name: 'A' }]);
     render(<Editor {...props({ initialTab: 'body' })} />);
-    await userEvent.click(await screen.findByRole('radio', { name: /no moving parts/i }));
+    await userEvent.click(await screen.findByRole('radio', { name: /phone only/i }));
     await userEvent.click(screen.getByRole('tab', { name: 'Reflex' }));
     await userEvent.selectOptions(screen.getByLabelText('Reflex preset'), 'commands');
     expect(screen.getByRole('note')).toHaveTextContent(/move/);

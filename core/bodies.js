@@ -115,12 +115,14 @@ export const BODIES = [
   },
   {
     id: 'none',
-    label: 'No moving parts',
-    labelZh: '无身体',
+    label: 'Phone only',
+    labelZh: '只连手机',
     needs: ['phone'],
     sources: ['phone'],
     firmware: null,
-    capabilities: ['hear', 'speak'],
+    // The phone page draws a face — it is the head even when nothing else
+    // moves — so this body shows; it just has nothing to drive.
+    capabilities: ['hear', 'speak', 'show'],
     actions: ['sound'],
     preview: 'voice',
   },

@@ -78,7 +78,7 @@ export function Editor(props: EditorSlot & { check?: CheckFn; tryReflex?: TryFn 
         {save.error && <p role="alert" className="error">{t('saveFailed')}{save.error}</p>}
         {tab === 'reflex' && <ReflexSwitch reflex={detail.config.reflex} update={update} />}
         {tab === 'basic' && <BasicTab detail={detail} update={update} onToken={(token) => setDetail((d) => (d ? { ...d, token } : d))} />}
-        {tab === 'body' && <BodyTab detail={detail} update={update} />}
+        {tab === 'body' && <BodyTab detail={detail} update={update} onToken={(token) => setDetail((d) => (d ? { ...d, token } : d))} />}
         {isLayer(tab) && (
           <LayerTab key={tab} id={id} layer={tab} config={detail.config} endpoints={detail.endpoints} update={update} check={props.check ?? runCheck} />
         )}

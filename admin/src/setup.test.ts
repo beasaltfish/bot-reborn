@@ -43,13 +43,17 @@ describe('setupSteps', () => {
     expect(phone.find((s) => s.id === 'board')).toEqual({ id: 'board', done: false, source: 'none', optionalFor: 'phone' });
   });
 
-  it('does not guess "phone" from motion before anything has connected', () => {
-    // A phone driving a car and a board driving the same car look alike until one connects.
-    for (const motion of ['none', 'dry-run', 'car'] as const) {
+  it('a body that needs no board skips the flash, because the body is a choice', () => {
+    for (const motion of ['none', 'dry-run'] as const) {
       const steps = stepsFor({ ...summary, motion }, null);
-      expect(steps.find((s) => s.id === 'board')).toMatchObject({ done: false });
-      expect(steps.find((s) => s.id === 'board')?.optionalFor).toBeUndefined();
+      expect(steps.find((s) => s.id === 'board')).toEqual({ id: 'board', done: false, source: 'none', optionalFor: 'phone' });
     }
+  });
+
+  it('a car still asks for the flash until a phone says it is the body', () => {
+    // A car can be either, so the card cannot skip the board on the user's behalf.
+    expect(stepsFor({ ...summary, motion: 'car' }, null).find((s) => s.id === 'board')).toMatchObject({ done: false });
+    expect(stepsFor({ ...summary, motion: 'car' }, flash).find((s) => s.id === 'board')).toMatchObject({ done: true });
   });
 
   it('does not credit a flash from before the pairing token changed', () => {

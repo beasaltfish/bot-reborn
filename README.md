@@ -203,7 +203,7 @@ capabilities is the next step.
 | Pet on a screen | yes | yes | a dog | — | — | the ESP32 board + a screen |
 | Tarot reader | yes | yes | cards | — | draws a card | the ESP32 board + a screen + a wand |
 | Dry run | yes | yes | nowhere to show it | logged, never sent | — | no hardware at all |
-| No moving parts | yes | yes | — | — | — | your phone |
+| Phone only | yes | yes | a face on the phone | — | — | your phone |
 
 All five play the robot's audio; a card's badges are what the brain may call,
 and the line under them is what it never will.

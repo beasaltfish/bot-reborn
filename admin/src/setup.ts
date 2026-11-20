@@ -1,3 +1,4 @@
+import { bodyById } from '../../core/bodies.js';
 import type { BoardMemory } from './boardMemory';
 import type { Summary } from './types';
 
@@ -17,15 +18,19 @@ export function setupSteps({ characters, current, board }: {
     && (current.setupId == null || board?.setupId === current.setupId);
   const seen = current?.lastSeenAt != null;
   const spoke = current?.lastSpokeAt != null;
-  // Only the hello marker says a phone is on the other end. Motion cannot: a
-  // phone driving a car and a board driving the same car look identical until
-  // one of them connects, so guessing would label the wrong step.
+  // Two different facts, and only one of them is a guess the admin cannot make.
+  // The chosen body says whether a board is needed at all (`Phone only` and a
+  // dry run need none). Whether THIS car is being driven by a phone is what
+  // only the hello marker knows: a phone driving a car and a board driving the
+  // same car look identical until one of them connects.
   const phone = current?.bodyKind === 'phone';
+  const chosen = current?.motion ? bodyById(current.motion) : undefined;
+  const needsBoard = chosen ? chosen.sources.includes('board') : true;
   // Flashing comes before connecting: a board has to be flashed to join at all.
   return [
     { id: 'character', done: characters.length > 0, source: 'brain' },
     { id: 'keys', done: current?.ready === true, source: current ? 'brain' : 'none' },
-    phone
+    phone || !needsBoard
       ? { id: 'board', done: false, source: 'none', optionalFor: 'phone' }
       : { id: 'board', done: flashed, source: flashed ? 'browser' : 'none' },
     { id: 'body-screen', done: seen || flashed, source: seen ? 'brain' : flashed ? 'browser' : 'none' },

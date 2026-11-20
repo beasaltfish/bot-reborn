@@ -1,21 +1,21 @@
-// The body, as five cards that each say what it can and cannot do.
+// The body, as five cards that each say what it needs and what it does.
 //
 // The old Basic tab had a dropdown of five names the firmware understood. A
 // name is not a decision anyone can make: "tarot" tells you nothing about
 // whether it moves, and nothing at all about whether you have the hardware.
 // So each row of core/bodies.js is a card, and the attributes are the ones a
-// person can check against the box on their desk.
+// person can check against the box on their desk. What a body lacks is not
+// printed: five lines of "cannot" is a page that argues against itself, and
+// the badges above already say what it does.
 import { useEffect, useState } from 'react';
-import { BODIES, CAPABILITIES, labelOf } from '../../core/bodies.js';
+import { BODIES, labelOf } from '../../core/bodies.js';
+import { PhoneLink } from './PhoneLink';
 import { PreviewFrames } from './PreviewFrames';
 import { lang, t, type Key } from './i18n';
 import type { Detail, Motion, Patch } from './types';
 
 const CAP: Record<string, Key> = {
   hear: 'capHear', speak: 'capSpeak', show: 'capShow', move: 'capMove', sense: 'capSense',
-};
-const LACK: Record<string, Key> = {
-  hear: 'cannotHear', speak: 'cannotSpeak', show: 'cannotShow', move: 'cannotMove', sense: 'cannotSense',
 };
 const SOURCE: Record<string, Key> = {
   board: 'sourceBoard', phone: 'sourcePhone', none: 'sourceNone',
@@ -29,7 +29,7 @@ const NEED: Record<string, Key> = {
   screen: 'needScreen', wand: 'needWand', phone: 'needPhone',
 };
 
-export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): void }) {
+export function BodyTab({ detail, update, onToken }: { detail: Detail; update(p: Patch): void; onToken(token: string): void }) {
   const chosen = detail.config.body.id;
   const body = BODIES.find((b) => b.id === chosen) ?? BODIES[0];
   // Frame paths come from the brain: the admin bundle has no idea what the
@@ -52,7 +52,6 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
       <p className="hint">{t('bodyIntro')}</p>
       <div className="body-cards">
         {BODIES.map((b) => {
-          const lacks = CAPABILITIES.filter((c) => !b.capabilities.includes(c));
           return (
             <label key={b.id} className="body-card" data-selected={b.id === chosen}>
               <input
@@ -63,7 +62,6 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
               <span className="badges">{b.sources.map((src) => <span key={src} className="badge">{t(SOURCE[src])}</span>)}</span>
               {b.needs.length > 0 && <small>{t('bodyNeeds')}: {b.needs.map((n) => t(NEED[n])).join(' · ')}</small>}
               <span className="caps">{b.capabilities.map((c) => t(CAP[c])).join(' · ')}</span>
-              {lacks.length > 0 && <small className="lacks">{lacks.map((c) => t(LACK[c])).join(' · ')}</small>}
             </label>
           );
         })}
@@ -76,6 +74,7 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
         </div>
         <small>{t('previewNote')}</small>
         {body.sources.map((src) => <p key={src}>{t(NEXT[src])}</p>)}
+        {body.sources.includes('phone') && <PhoneLink token={detail.token} />}
       </div>
     </div>
   );
