@@ -107,6 +107,11 @@ export function actionProblem(action, opts) {
   const declared = new Set(Object.keys(properties));
 
   for (const [i, step] of run.entries()) {
+    // The JSON can be valid and still not be a step: `run: [null]` used to
+    // throw out of the editor instead of returning the sentence a person reads.
+    if (!isRecord(step) || typeof step.verb !== 'string') {
+      return `run[${i}] of ${name} is not a step`;
+    }
     const at = `step ${i + 1} of ${name}`;
     const verb = VERB_TABLE[step.verb];
     if (!verb) return `${at} uses unknown verb "${step.verb}"`;

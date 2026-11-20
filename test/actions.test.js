@@ -301,6 +301,15 @@ test('a schema word outside the subset is refused by name', () => {
   assert.match(actionProblem(extra, OPTS) ?? '', /additionalProperties/);
 });
 
+test('a step that is not a step is a sentence, not a TypeError', () => {
+  // Valid JSON can still be a malformed program: `run: [null]` used to throw
+  // reading `step.verb`, which reached the editor as a crash instead of a line.
+  assert.equal(
+    actionProblem(action({ name: 'pose', run: [/** @type {any} */ (null)] }), OPTS),
+    'run[0] of pose is not a step',
+  );
+});
+
 test('an action with nothing to run, or an each that is not an array, is refused', () => {
   assert.match(actionProblem(action({ name: 'empty', run: [] }), OPTS) ?? '', /no steps/);
 

@@ -6,7 +6,7 @@ import {
 } from '../core/brain.js';
 import { MIN_DURATION_MS } from '../phone/executor.js';
 import { KEYWORDS } from '../core/strings.js';
-import { TEMPLATES, resolveBody } from '../core/bodies.js';
+import { TEMPLATES, bodyProblem, resolveBody } from '../core/bodies.js';
 import { GOLDEN } from './prompts-golden.js';
 
 /** The bodies the assertions read, resolved the way the brain resolves them. */
@@ -307,10 +307,13 @@ test('the tools are the body actions, and nothing else', () => {
   assert.equal(byName(body, 'whistle').function.description, 'Whistle a note.');
 });
 
-test('set_reply_language is reserved: a body action may not claim it', () => {
+test('set_reply_language is reserved: bodyProblem says so, toolsOf skips it', () => {
   const body = resolveBody('none');
   body.actions = [{ ...body.actions[0], name: 'set_reply_language' }];
-  assert.throws(() => toolsOf(body), /set_reply_language/);
+  // The sentence belongs to `bodyProblem`, where a person can read it; the
+  // tool list reserves the name instead of throwing where nobody sees the body.
+  assert.match(bodyProblem(body) ?? '', /set_reply_language.*may not take its name/);
+  assert.deepEqual(toolsOf(body).map((tool) => tool.function.name), []);
 });
 
 test('a rejected step says what the model sent and what was expected, word for word', () => {

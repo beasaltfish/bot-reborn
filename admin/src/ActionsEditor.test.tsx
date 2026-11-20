@@ -86,6 +86,59 @@ describe('ActionsEditor', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
+  it('reports a step that is not a step instead of throwing', async () => {
+    const update = vi.fn();
+    render(<ActionsEditor detail={detail('pet')} update={update} />);
+    await open();
+    const broken = [{ ...TEMPLATES.pet.actions[0], run: [null] }] as unknown as BodyAction[];
+    fireEvent.change(box(), { target: { value: JSON.stringify(broken, null, 2) } });
+    expect(screen.getByRole('alert')).toHaveTextContent(/run\[0\] of pose is not a step/);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('validates a trigger resolveBody would have dropped', async () => {
+    const update = vi.fn();
+    const d = detail('pet');
+    // `button -> wave` names an action that is not written yet. `resolveBody`
+    // filters it out; the editor must not read that filter as approval.
+    d.config.body.triggers = [{ on: 'button', action: 'wave' }];
+    render(<ActionsEditor detail={d} update={update} />);
+    await open();
+    fireEvent.change(box(), { target: { value: `${JSON.stringify(TEMPLATES.pet.actions, null, 2)}\n` } });
+    expect(screen.getByRole('alert')).toHaveTextContent(/button trigger names wave/);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('refuses "use the template" when it would strand a trigger', async () => {
+    const update = vi.fn();
+    const d = detail('pet');
+    const wave = {
+      ...TEMPLATES.pet.actions[0],
+      name: 'wave',
+      label: { en: 'Wave', zh: '挥爪' },
+      say: 'Wave a paw.',
+    } as BodyAction;
+    d.config.body = {
+      id: 'pet',
+      actions: [...TEMPLATES.pet.actions, wave],
+      triggers: [{ on: 'button', action: 'wave' }],
+    };
+    render(<ActionsEditor detail={d} update={update} />);
+    await open();
+    await userEvent.click(screen.getByRole('button', { name: t('actionsUse') }));
+    expect(screen.getByRole('alert')).toHaveTextContent(/button trigger names wave/);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('clearing triggers on an unedited template writes only the trigger list', async () => {
+    const update = vi.fn();
+    render(<ActionsEditor detail={detail('tarot')} update={update} />);
+    await open();
+    await userEvent.click(screen.getByRole('button', { name: t('actionsClearTriggers') }));
+    // No actions copy: an unedited tarot must keep following its template.
+    expect(update).toHaveBeenCalledWith({ config: { body: { triggers: [] } } });
+  });
+
   it('using the template removes the override again', async () => {
     const update = vi.fn();
     const own = { id: 'tarot' as const, actions: TEMPLATES.pet.actions as BodyAction[] };

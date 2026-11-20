@@ -8,14 +8,14 @@
 // printed: five lines of "cannot" is a page that argues against itself, and
 // the badges above already say what it does.
 import { useEffect, useState } from 'react';
-import { TEMPLATES, labelOf } from '../../core/bodies.js';
+import { TEMPLATES, bodyProblem, labelOf, resolveBody } from '../../core/bodies.js';
 import { ActionsEditor } from './ActionsEditor';
 import { BodyDiagram } from './BodyDiagram';
 import { lang, t, type Key } from './i18n';
 import type { Detail, Motion, Patch } from './types';
 
 const CAP: Record<string, Key> = {
-  hear: 'capHear', speak: 'capSpeak', show: 'capShow', move: 'capMove', sense: 'capSense',
+  hear: 'capHear', speak: 'capSpeak', show: 'capShow', move: 'capMove',
 };
 const SOURCE: Record<string, Key> = {
   board: 'sourceBoard', phone: 'sourcePhone', none: 'sourceNone',
@@ -31,6 +31,9 @@ const NEED: Record<string, Key> = {
 
 export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): void }) {
   const chosen = detail.config.body.id;
+  const patch = detail.config.body;
+  /** The sentence `bodyProblem` wrote when a switch had to drop the user's edits. */
+  const [notice, setNotice] = useState<string | null>(null);
   // A dry run is a bench tool: it moves nothing and shows nothing, and next to
   // four real bodies it reads as a fifth one. `?bench` brings it back for the
   // person editing prompts without hardware — and it is always shown when it is
@@ -52,7 +55,31 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
     return () => { live = false; };
   }, []);
   const frames = (art[body.preview] ?? []).map((rel) => `/preview/${body.preview}/${rel}`);
-  const pick = (id: string) => update({ config: { body: { id: id as Motion } } });
+  // A switch is a merge: the new id, the actions and triggers the body already
+  // carried. Validate that merge before writing it — an action copied from a
+  // pet cannot run on a voice-only body, and the editor would otherwise save a
+  // body `bodyProblem` refuses. What still fits is kept; what does not is
+  // cleared back to inherited, and the sentence says which.
+  const pick = (id: string) => {
+    const next = id as Motion;
+    const candidate = resolveBody(next, patch);
+    const base = TEMPLATES[(candidate.template ?? next) as Motion] ?? TEMPLATES.none;
+    const rawTriggers = /** @type {any} */ (patch.triggers ?? base.triggers ?? []);
+    const problem = bodyProblem({ ...candidate, triggers: Array.isArray(rawTriggers) ? rawTriggers : [] });
+    if (!problem) {
+      setNotice(null);
+      update({ config: { body: { id: next } } });
+      return;
+    }
+    setNotice(problem);
+    if (Array.isArray(patch.actions)) {
+      update({ config: { body: { id: next, actions: null, triggers: null } } });
+    } else if (patch.triggers !== undefined) {
+      update({ config: { body: { id: next, triggers: null } } });
+    } else {
+      update({ config: { body: { id: next } } });
+    }
+  };
   const name = labelOf(body, lang);
 
   return (
@@ -84,6 +111,11 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
             own is told apart by carrying them. Remounted on a switch, so the
             box starts from the newly chosen body. */}
         <ActionsEditor key={chosen} detail={detail} update={update} />
+        {notice && (
+          <p className="hint" role="status">
+            {t('bodySwitchCleared')} <span>{notice}</span>
+          </p>
+        )}
       </div>
       <div className="body-side">
         <div className="body-preview" data-testid="body-preview">

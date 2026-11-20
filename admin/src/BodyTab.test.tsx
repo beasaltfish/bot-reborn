@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { TEMPLATES } from '../../core/bodies.js';
 import { BodyTab } from './BodyTab';
 import { installFakeApi } from './test/fakeApi';
-import type { Detail } from './types';
+import type { BodyAction, Detail } from './types';
 
 const detail = (id: 'toy' | 'pet' | 'tarot' | 'dry-run' | 'none' = 'pet'): Detail => ({
   id: 'A', name: 'A', token: 'ab'.repeat(16), config: {
@@ -88,6 +88,32 @@ describe('BodyTab', () => {
     renderTab(detail('none'), update);
     await userEvent.click(screen.getByRole('radio', { name: /toy on wheels/i }));
     expect(update).toHaveBeenCalledWith({ config: { body: { id: 'toy' } } });
+  });
+
+  it('keeps actions the body switched to can still run', async () => {
+    const update = vi.fn();
+    const d = detail('none');
+    d.config.body.actions = structuredClone(TEMPLATES.none.actions) as BodyAction[];
+    renderTab(d, update);
+    // `play_sound` needs only the voice, which the pet has too.
+    await userEvent.click(screen.getByRole('radio', { name: /pet on a screen/i }));
+    expect(update).toHaveBeenCalledWith({ config: { body: { id: 'pet' } } });
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('clears a copied pose when switching to a voice-only body, and says so', async () => {
+    const update = vi.fn();
+    const d = detail('pet');
+    d.config.body.actions = structuredClone(TEMPLATES.pet.actions) as BodyAction[];
+    renderTab(d, update);
+    // The pose needs a screen the voice-only body does not have: saving the
+    // merge would leave a body `bodyProblem` refuses.
+    await userEvent.click(screen.getByRole('radio', { name: /voice only/i }));
+    expect(update).toHaveBeenCalledWith({
+      config: { body: { id: 'none', actions: null, triggers: null } },
+    });
+    expect(screen.getByRole('status')).toHaveTextContent(/cannot run the actions or triggers/i);
+    expect(screen.getByRole('status')).toHaveTextContent(/needs show/);
   });
 
   it('draws the chosen body with the frames the brain has, and says it is not a simulation', async () => {

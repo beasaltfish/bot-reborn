@@ -79,25 +79,24 @@ export const SET_REPLY_LANGUAGE = {
  * caller's to add — it is not an action, and `TOOLS` was a second answer to
  * this question, so it is gone.
  *
- * `set_reply_language` is a reserved name: a body action that claimed it would
- * be offered twice, and the fixed tool would shadow it in `validate`.
+ * `set_reply_language` is a reserved name: a body action that claimed it is
+ * skipped here rather than offered twice, so the fixed tool is never shadowed.
+ * `bodyProblem` refuses such a body first, with the sentence a person can read;
+ * this is the last-resort reservation for a file that skipped every check.
  * @param {import('./bodies.js').Body} body
  * @returns {Tool[]}
  */
 export function toolsOf(body) {
-  return body.actions.map((action) => {
-    if (action.name === 'set_reply_language') {
-      throw new Error(`"${action.name}" is the tool that writes config, and a body action may not take its name`);
-    }
-    return {
+  return body.actions
+    .filter((action) => action.name !== 'set_reply_language')
+    .map((action) => ({
       type: /** @type {const} */ ('function'),
       function: {
         name: action.name,
         description: action.say,
         parameters: action.args ?? { type: 'object', properties: {} },
       },
-    };
-  });
+    }));
 }
 
 /**
