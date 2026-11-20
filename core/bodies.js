@@ -98,6 +98,9 @@ export const CAPABILITIES = /** @type {const} */ (['hear', 'speak', 'show', 'mov
 /** The three ways a person gets a body. */
 const SOURCES = /** @type {Source[]} */ (['board', 'phone', 'none']);
 
+/** What may ask for an action: a physical event, not a word. */
+const TRIGGER_ON = /** @type {readonly string[]} */ (['shake', 'button']);
+
 /** Every part a way may ask for. A typo here would render as a blank chip. */
 const NEEDS = ['board', 'mic', 'amp', 'toy', 'ftdi', 'screen', 'wand', 'phone'];
 
@@ -451,7 +454,13 @@ export function resolveBody(id, patch = {}) {
 
   const actions = patch.actions ?? base.actions;
   const promptSource = patch.prompts ? { ...base.prompts, ...patch.prompts } : base.prompts;
-  const triggerSource = patch.triggers ?? base.triggers ?? [];
+  // A patch is config a person typed, so neither of these is trusted to have
+  // the right shape: `rules: 'one paragraph'` must reach `bodyProblem` whole
+  // (spread, it would be one rule per letter and pass), and `triggers: 'shake'`
+  // must resolve to no triggers rather than throw out of `filter`.
+  const rules = /** @type {any} */ (promptSource.rules);
+  const rawTriggers = /** @type {any} */ (patch.triggers ?? base.triggers ?? []);
+  const triggerSource = Array.isArray(rawTriggers) ? rawTriggers : [];
   const actionNames = new Set(actions.map((a) => a.name));
   // A shake may only reach an action the resolved body still has. Without
   // this, a copied tarot reader whose actions were replaced with pose ones
@@ -472,9 +481,12 @@ export function resolveBody(id, patch = {}) {
     actions: structuredClone(actions),
     prompts: {
       voice: promptSource.voice,
-      rules: [...(promptSource.rules ?? [])],
+      rules: Array.isArray(rules) ? [...rules] : rules,
     },
-    ...(triggers.length ? { triggers: structuredClone(triggers) } : {}),
+    // An explicit `triggers` in the patch stays explicit even when empty: an
+    // absent key means "inherit the template's", so a deleted shake would come
+    // back on the next load.
+    ...(triggers.length || patch.triggers !== undefined ? { triggers: structuredClone(triggers) } : {}),
   };
 }
 
@@ -558,6 +570,9 @@ export function bodyProblem(body) {
   }
 
   for (const trig of Array.isArray(row.triggers) ? row.triggers : []) {
+    if (!TRIGGER_ON.includes(trig?.on)) {
+      return `${id}: "${trig?.on}" is not a trigger — a trigger is "shake" or "button"`;
+    }
     if (!names.has(trig.action)) return `${id}: a ${trig.on} trigger names ${trig.action}, which the body does not have`;
   }
 

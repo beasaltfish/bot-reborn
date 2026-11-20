@@ -88,13 +88,47 @@ test('a copied tarot body can shed the shake that no longer has an action', () =
   assert.deepEqual(own.triggers, [{ on: 'shake', action: 'draw_card' }]);
   assert.equal(bodyProblem(own), null);
 
-  // And one that names nothing the body has is dropped, not carried along.
+  // And one that names nothing the body has is dropped — leaving an explicit
+  // empty list, so reading it back does not inherit the template's again.
   const dropped = resolveBody('mine', {
     template: 'pet',
     triggers: [{ on: 'shake', action: 'draw_card' }],
   });
-  assert.equal(dropped.triggers, undefined);
+  assert.deepEqual(dropped.triggers, []);
+  assert.equal(bodyProblem(dropped), null);
 });
+
+test('an emptied trigger list stays empty when it is read back', () => {
+  // Absent means "inherit the template's", so a deleted shake must resolve to
+  // an explicit empty list, or the admin's delete undoes itself on reload.
+  const emptied = resolveBody('mine', { template: 'tarot', triggers: [] });
+  assert.deepEqual(emptied.triggers, []);
+  assert.equal(bodyProblem(emptied), null);
+
+  const again = resolveBody('mine', emptied);
+  assert.deepEqual(again.triggers, []);
+  assert.equal(bodyProblem(again), null);
+
+  // Absent still inherits: a plain copy of the tarot reader keeps its shake.
+  assert.deepEqual(resolveBody('mine', { template: 'tarot' }).triggers, [{ on: 'shake', action: 'draw_card' }]);
+});
+
+test('a trigger that is not a list resolves to no triggers instead of throwing', () => {
+  const mine = resolveBody('mine', { template: 'tarot', triggers: /** @type {any} */ ('shake') });
+  assert.deepEqual(mine.triggers, []);
+  assert.equal(bodyProblem(mine), null);
+});
+
+test('a trigger has to be one the hardware can report', () => {
+  const tarot = structuredClone(TEMPLATES.tarot);
+  assert.equal(bodyProblem(tarot), null);
+  assert.equal(bodyProblem({ ...tarot, triggers: [{ on: 'button', action: 'draw_card' }] }), null);
+  assert.match(
+    bodyProblem({ ...tarot, triggers: [/** @type {any} */ ({ on: 'wobble', action: 'draw_card' })] }) ?? '',
+    /wobble/,
+  );
+});
+
 
 test('the prompt and reply are data the body has to carry', () => {
   const pet = row();
@@ -104,6 +138,17 @@ test('the prompt and reply are data the body has to carry', () => {
   assert.match(bodyProblem({ ...pet, prompts: { voice: 'hi', rules: ['ok', 3] } }) ?? '', /list of strings/);
   assert.match(bodyProblem({ ...pet, reply: 'voice' }) ?? '', /tts/);
   assert.equal(bodyProblem({ ...pet, reply: 'clips', prompts: { voice: 'hi', rules: [] } }), null);
+});
+
+test('a string of rules survives resolveBody intact and is then refused', () => {
+  // The real entry point is `resolveBody`: spreading the string there would
+  // turn one paragraph into one rule per letter, which `bodyProblem` accepts.
+  const mine = resolveBody('mine', {
+    template: 'pet',
+    prompts: /** @type {any} */ ({ rules: 'Say it plainly.' }),
+  });
+  assert.equal(mine.prompts.rules, 'Say it plainly.');
+  assert.match(bodyProblem(mine) ?? '', /list of strings/);
 });
 
 test('a capability nobody implements is refused, not ignored', () => {
