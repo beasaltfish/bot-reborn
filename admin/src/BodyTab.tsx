@@ -71,7 +71,7 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
               {b.ways.map((w) => (
                 <span key={w.source} className="way">
                   <span className="badge">{t(SOURCE[w.source])}</span>
-                  <span>{w.needs.length > 0 ? w.needs.map((n) => t(NEED[n])).join(' · ') : t('bodyNeedsNothing')}</span>
+                  <span>{w.needs.length > 0 ? w.needs.map((n) => t(NEED[n.part])).join(' · ') : t('bodyNeedsNothing')}</span>
                 </span>
               ))}
               <span className="caps">{b.capabilities.map((c) => t(CAP[c])).join(' · ')}</span>
