@@ -416,10 +416,11 @@ test('the page\'s "use the template" sends actions: null, which reads as inherit
   assert.deepEqual(resolveBody(c.body.id, c.body).actions.map((a) => a.name), ['move', 'cruise', 'stop', 'play_sound']);
 });
 
-test('a body that carries actions is kept as written', () => {
-  // A body of one's own is told apart by carrying actions, not by its id, so
-  // an id the templates do not know is not a typo in this case. The actions
-  // come back exactly as saved; the patch is not resolved here.
+test('a body that carries actions is kept as written, id included', () => {
+  // A body of one's own is told apart by carrying actions (or by naming the
+  // template it copied), not by its id, so an id the templates do not know is
+  // not a typo in this case. The admin reads the id back, so rewriting it to
+  // `none` made a user body show as "Voice only".
   const actions = [{
     name: 'pose',
     label: { en: 'Pose', zh: '做个动作' },
@@ -429,10 +430,14 @@ test('a body that carries actions is kept as written', () => {
   }];
   const body = { id: 'my-dog', template: 'pet', label: { en: 'My dog', zh: '我的狗' }, actions };
   const c = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ body }) }));
-  assert.equal(c.body.id, 'none');
+  assert.equal(c.body.id, 'my-dog');
   assert.deepEqual(c.body.actions, actions);
   assert.equal(c.body.template, 'pet');
   assert.deepEqual(c.body.label, body.label);
+
+  // An id with no actions and no template is still a typo, not a body.
+  const typo = loadConfig(fakeStorage({ [CONFIG_KEY]: JSON.stringify({ body: { id: 'my-dog' } }) }));
+  assert.equal(typo.body.id, 'none');
 
   // Through the real pair, not just the read: what saveConfig writes is what
   // loadConfig reads back, the whole body as the user wrote it.

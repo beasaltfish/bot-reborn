@@ -49,10 +49,10 @@
  * }} Verb
  */
 
-/** The same two lists `core/brain.js` validates against. The model's word for
- * a direction, not the wire frame. */
-const DRIVE_VALUES = ['forward', 'backward'];
-const STEER_VALUES = ['left', 'right', 'straight'];
+/** The model's word for a direction, not the wire frame. One source for the
+ * verbs, the actions and the admin's reflex editor. */
+export const DRIVE_VALUES = /** @type {const} */ (['forward', 'backward']);
+export const STEER_VALUES = /** @type {const} */ (['left', 'right', 'straight']);
 
 /**
  * How long to drive. Two shapes, because the model has two intents: a number

@@ -30,8 +30,11 @@ const NEED: Record<string, Key> = {
 };
 
 export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): void }) {
-  const chosen = detail.config.body.id;
   const patch = detail.config.body;
+  // A body of one's own keeps its own id (`my-dog`) and names the template it
+  // copied; the cards are the templates, so the template is what is chosen.
+  // The brain resolves `template ?? id` too.
+  const chosen = patch.template ?? patch.id;
   /** The sentence `bodyProblem` wrote when a switch was refused, and whether
    * the switch then dropped the user's edits or wrote nothing at all. */
   const [notice, setNotice] = useState<{ text: string; cleared: boolean } | null>(null);
@@ -63,9 +66,12 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
   // cleared back to inherited, and the sentence says which.
   const pick = (id: string) => {
     const next = id as Motion;
+    // The chosen template is written beside the id. Leaving the old template
+    // in place made a switch only cosmetic: the brain resolves `template ??
+    // id`, so a stale `pet` kept winning after a click on `toy`.
     /** The body as the brain will read it after a PATCH carrying this patch. */
     const read = (p: typeof patch) => {
-      const candidate = resolveBody(next, p);
+      const candidate = resolveBody(next, { ...p, template: next });
       const base = TEMPLATES[(candidate.template ?? next) as Motion] ?? TEMPLATES.none;
       const rawTriggers = /** @type {any} */ (p.triggers ?? base.triggers ?? []);
       return { ...candidate, triggers: Array.isArray(rawTriggers) ? rawTriggers : [] };
@@ -73,7 +79,7 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
     const problem = bodyProblem(read(patch));
     if (!problem) {
       setNotice(null);
-      update({ config: { body: { id: next } } });
+      update({ config: { body: { id: next, template: next } } });
       return;
     }
     // A switch drops what the new body cannot carry: the actions it wrote and
@@ -82,10 +88,10 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
     // reason the merge is refused, the switch is refused too rather than
     // taking the actions with it and leaving the body just as broken.
     const dropped = Array.isArray(patch.actions)
-      ? { id: next, actions: null, triggers: null }
+      ? { id: next, template: next, actions: null, triggers: null }
       : patch.triggers !== undefined
-        ? { id: next, triggers: null }
-        : { id: next };
+        ? { id: next, template: next, triggers: null }
+        : { id: next, template: next };
     // Validate the patch that would actually be written, not just the merge.
     const settled = bodyProblem(read({ ...patch, ...dropped }));
     if (settled) {

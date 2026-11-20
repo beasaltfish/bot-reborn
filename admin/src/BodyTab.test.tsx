@@ -83,11 +83,11 @@ describe('BodyTab', () => {
     expect(screen.queryByText(/scan the QR code/i)).toBeNull();
   });
 
-  it('picking a body writes its id', async () => {
+  it('picking a body writes its id and the template it follows', async () => {
     const update = vi.fn();
     renderTab(detail('none'), update);
     await userEvent.click(screen.getByRole('radio', { name: /toy on wheels/i }));
-    expect(update).toHaveBeenCalledWith({ config: { body: { id: 'toy' } } });
+    expect(update).toHaveBeenCalledWith({ config: { body: { id: 'toy', template: 'toy' } } });
   });
 
   it('keeps actions the body switched to can still run', async () => {
@@ -97,7 +97,7 @@ describe('BodyTab', () => {
     renderTab(d, update);
     // `play_sound` needs only the voice, which the pet has too.
     await userEvent.click(screen.getByRole('radio', { name: /pet on a screen/i }));
-    expect(update).toHaveBeenCalledWith({ config: { body: { id: 'pet' } } });
+    expect(update).toHaveBeenCalledWith({ config: { body: { id: 'pet', template: 'pet' } } });
     expect(screen.queryByRole('status')).toBeNull();
   });
 
@@ -110,7 +110,7 @@ describe('BodyTab', () => {
     // merge would leave a body `bodyProblem` refuses.
     await userEvent.click(screen.getByRole('radio', { name: /voice only/i }));
     expect(update).toHaveBeenCalledWith({
-      config: { body: { id: 'none', actions: null, triggers: null } },
+      config: { body: { id: 'none', template: 'none', actions: null, triggers: null } },
     });
     expect(screen.getByRole('status')).toHaveTextContent(/cannot run the actions or triggers/i);
     expect(screen.getByRole('status')).toHaveTextContent(/needs show/);

@@ -56,6 +56,50 @@ test('a body with a pose action and a draw action is refused', () => {
   assert.match(bodyProblem(both) ?? '', /one screen|both pose and draw/);
 });
 
+test('a draw step needs returns: true, and a returning action is exactly one draw', () => {
+  const tarot = structuredClone(TEMPLATES.tarot);
+  const draw = tarot.actions[0];
+  assert.equal(bodyProblem(tarot), null, 'the template is the one legal shape');
+
+  // The reverse of the old check: a draw that does not say `returns` is
+  // resolved in the brain and does nothing. Silently, until now.
+  const mute = { ...tarot, actions: [{ ...draw, returns: /** @type {any} */ (undefined) }] };
+  assert.match(bodyProblem(mute) ?? '', /draw step but does not return/);
+
+  // ... and `returns` still means one draw, not a programme with a draw in it.
+  const busy = {
+    ...tarot,
+    actions: [{ ...draw, run: [{ verb: 'draw' }, { verb: 'pose', args: { pose: 'sit' } }] }],
+  };
+  assert.match(bodyProblem(busy) ?? '', /only a single draw/);
+});
+
+test('a schema keyword with the wrong value shape is refused, not thrown at call time', () => {
+  // `required: true` passes a name check and then `for…of true` is a TypeError
+  // on every turn; `enum: 'forward'` silently becomes a substring test.
+  const badRequired = structuredClone(TEMPLATES.none);
+  badRequired.actions[0].args = /** @type {any} */ ({ type: 'object', required: true });
+  assert.match(bodyProblem(badRequired) ?? '', /required/);
+
+  const badEnum = structuredClone(TEMPLATES.none);
+  badEnum.actions[0].args = /** @type {any} */ ({
+    type: 'object',
+    properties: { name: { enum: 'forward' } },
+  });
+  assert.match(bodyProblem(badEnum) ?? '', /enum/);
+
+  const badType = structuredClone(TEMPLATES.none);
+  badType.actions[0].args = /** @type {any} */ ({ type: 'object', properties: { name: { type: 'nil' } } });
+  assert.match(bodyProblem(badType) ?? '', /\.type/);
+
+  const badBound = structuredClone(TEMPLATES.none);
+  badBound.actions[0].args = /** @type {any} */ ({
+    type: 'object',
+    properties: { name: { type: 'string', maxItems: '3' } },
+  });
+  assert.match(bodyProblem(badBound) ?? '', /maxItems/);
+});
+
 test('an action name must be one the model could call, and only once', () => {
   const body = row();
   assert.match(bodyProblem({ ...body, actions: [{ ...body.actions[1], name: 'Play Sound' }] }) ?? '', /Play Sound/);

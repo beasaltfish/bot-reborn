@@ -16,7 +16,7 @@
 // changed, and Task 5's golden file is the evidence it did not.
 
 import { MIN_DURATION_MS } from './motion.js';
-import { VERBS } from './verbs.js';
+import { VERBS, DRIVE_VALUES, STEER_VALUES } from './verbs.js';
 import { actionProblem } from './actions.js';
 import { POSES } from './poses.js';
 import { SOUNDS } from './audio/sfx.js';
@@ -55,7 +55,6 @@ import { SOUNDS } from './audio/sfx.js';
  *   run: import('./actions.js').RunStep[],
  *   returns?: true,
  *   rules?: string,
- *   timeoutMs?: number,
  * }} Action
  */
 /**
@@ -74,6 +73,7 @@ import { SOUNDS } from './audio/sfx.js';
  *   ways: Way[],
  *   capabilities: Capability[],
  *   actions: Action[],
+ *   fixedTools: string[],
  *   triggers?: Trigger[],
  *   prompts: Prompts,
  *   firmware: string | null,
@@ -113,6 +113,13 @@ const NEEDS = ['board', 'mic', 'amp', 'toy', 'ftdi', 'screen', 'wand', 'phone'];
  * is what the brain sends it, not what the board runs.
  */
 export const BODY_FIRMWARE = 'body.bin';
+
+/**
+ * The tools that are not actions and are offered with the bodies that answer
+ * in words. It writes config, so it belongs to the caller, not to a template's
+ * hardware — but which bodies get it is the template's answer.
+ */
+const CONFIG_TOOLS = ['set_reply_language'];
 
 /** How many steps one `move` call may carry. `core/brain.js` said the same. */
 const MAX_STEPS = 5;
@@ -187,9 +194,6 @@ const RULES_TAROT = `- To draw a card, call \`draw_card\`. It gives you the card
 
 /** The last line of the wheels prompt: a default, and the word for "a little". */
 const RULE_DURATION = `- duration_ms: default 600; use ${MIN_DURATION_MS} for "just a little".`;
-
-const DRIVE_VALUES = ['forward', 'backward'];
-const STEER_VALUES = ['left', 'right', 'straight'];
 
 // --- The actions ------------------------------------------------------------
 //
@@ -280,7 +284,6 @@ const ACTIONS = {
     args: { type: 'object', properties: {} },
     run: [{ verb: 'draw' }],
     returns: true,
-    timeoutMs: 20000,
   },
 };
 
@@ -306,6 +309,7 @@ export const TEMPLATES = {
     // phone has a face, a bare board has no screen.
     ways: [{ source: 'board', needs: [{ part: 'board' }, { part: 'mic' }, { part: 'amp' }] }],
     capabilities: ['hear', 'speak'],
+    fixedTools: CONFIG_TOOLS,
     actions: [ACTIONS.play_sound],
     prompts: {
       voice: BODY_STILL,
@@ -323,6 +327,8 @@ export const TEMPLATES = {
       needs: [{ part: 'board' }, { part: 'mic' }, { part: 'amp' }, { part: 'screen' }],
     }],
     capabilities: ['hear', 'speak', 'show'],
+    // A pet answers in clips, not words: there is no reply language to set.
+    fixedTools: [],
     actions: [ACTIONS.pose, ACTIONS.play_sound],
     prompts: {
       voice: BODY_PET,
@@ -348,6 +354,9 @@ export const TEMPLATES = {
       ],
     }],
     capabilities: ['hear', 'speak', 'show'],
+    // The tarot reader's language is the persona's business (as it was before
+    // bodies were data); the one tool is the card.
+    fixedTools: [],
     actions: [ACTIONS.draw_card],
     triggers: [{ on: 'shake', action: 'draw_card' }],
     prompts: {
@@ -368,6 +377,7 @@ export const TEMPLATES = {
     capabilities: ['hear', 'speak', 'move'],
     // A dry run is the toy as far as the model can tell: what is being tested
     // is the real prompt, so it carries the toy's own actions.
+    fixedTools: CONFIG_TOOLS,
     actions: [ACTIONS.move, ACTIONS.cruise, ACTIONS.stop, ACTIONS.play_sound],
     prompts: {
       voice: BODY_WHEELS,
@@ -389,6 +399,7 @@ export const TEMPLATES = {
       needs: [{ part: 'toy' }, { part: 'board' }, { part: 'mic' }, { part: 'amp' }],
     }],
     capabilities: ['hear', 'speak', 'move'],
+    fixedTools: CONFIG_TOOLS,
     actions: [ACTIONS.move, ACTIONS.cruise, ACTIONS.stop, ACTIONS.play_sound],
     prompts: {
       voice: BODY_WHEELS,
@@ -414,7 +425,7 @@ export function bodyById(id) {
  *
  * The rule is the one the admin teaches: a body with `actions` is the person's
  * own, whatever it is called; a body without them follows `template ?? id`,
- * and an id nobody knows falls back to `none` rather than throwing. Everything
+ * and an id with neither falls back to `none` rather than throwing. Everything
  * is copied, so editing a resolved body never edits a template.
  * @param {string} id
  * @param {BodyPatch} [patch]
@@ -527,7 +538,13 @@ export function bodyProblem(body) {
       if (!row.capabilities.includes(verb.needs)) return `${id}: ${name} needs ${verb.needs}`;
     }
     // Only `draw` returns a result the model is asked again with; a name of
-    // one's own has nothing behind it to hand a card back.
+    // one's own has nothing behind it to hand a card back. And the reverse: a
+    // `draw` step in an action that does not say `returns` is resolved in the
+    // brain's `#run` and does nothing — a silent no-op the author never sees.
+    const draws = steps.some((step) => step?.verb === 'draw');
+    if (draws && !action.returns) {
+      return `${id}: ${name} has a draw step but does not return a result`;
+    }
     if (action.returns && !(steps.length === 1 && steps[0].verb === 'draw')) {
       return `${id}: only a single draw can return a result`;
     }

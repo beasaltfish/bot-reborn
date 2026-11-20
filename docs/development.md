@@ -76,9 +76,9 @@ ways (the source and the parts each one costs), its actions, its prompts, its
 triggers and its firmware. There are five — `none`, `pet`, `tarot`, `toy`, and a
 hidden `dry-run` (open the admin with `?bench`). `resolveBody(id, patch)` copies
 one into the body a character uses: a patch that carries its own `actions` is a
-body of its own, one without them follows `template ?? id`, and an unknown id
-falls back to `none`. A character written before the setting has no `body` key
-and stays `toy` (`bodyOf` in `core/config.js`).
+body of its own, one without them follows `template ?? id`, and an id with
+neither falls back to `none`. A character written before the setting has no
+`body` key and stays `toy` (`bodyOf` in `core/config.js`).
 
 `bodyProblem()` in the same file is the single check on any body, template or
 hand-written: it refuses an action that needs a capability the body lacks, a
@@ -90,6 +90,12 @@ The dry run is in the table but not in the picker (`?bench` shows it). As far
 as the model can tell it is the toy — the same prompt and the same four actions
 — but every verb is only written to the brain's log, and no frame reaches the
 screen. It is how the orders are read back with nothing to drive.
+
+A character file has no version number. An older brain reading a file written by
+a newer one silently drops the keys it does not know — a body's `actions`, for
+instance — so a hand-written body comes back as its template with nothing said.
+Keep the brain and the characters together; there is no migration to run when
+going back a version.
 
 ### Adding an action
 
@@ -110,7 +116,8 @@ An action is `{ name, label, say, args?, run, returns?, rules? }`:
 - Everything it asks for has to exist: a `pose` name in `core/poses.js` or a
   `voice` clip in `core/audio/sfx.js` written literally is checked now.
 - `returns: true` is only for a single `draw` step: that is the one result the
-  model is asked again with.
+  model is asked again with. A `draw` step without it is refused — the brain
+  resolves the step and does nothing, so the card would never reach the model.
 - `rules` is a paragraph appended to the system prompt after the body's own.
 
 ### Adding a verb

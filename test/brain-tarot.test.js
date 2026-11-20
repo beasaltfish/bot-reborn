@@ -2,22 +2,22 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  SET_REPLY_LANGUAGE, toolsOf, validate, buildSystemPrompt, SYSTEM_PROMPT_TAROT,
+  toolsOf, validate, buildSystemPrompt, SYSTEM_PROMPT_TAROT,
 } from '../core/brain.js';
 import { resolveBody } from '../core/bodies.js';
 
-const names = (/** @type {any} */ m) => [...toolsOf(resolveBody(m)), SET_REPLY_LANGUAGE]
+const names = (/** @type {any} */ m) => toolsOf(resolveBody(m))
   .map((t) => t.function.name).sort();
 
-test('toolsOf: a tarot body is offered draw_card and the language tool', () => {
-  assert.deepEqual(names('tarot'), ['draw_card', 'set_reply_language']);
+test('toolsOf: a tarot body is offered draw_card and no language tool', () => {
+  assert.deepEqual(names('tarot'), ['draw_card']);
 });
 
 test('toolsOf: every other body gets exactly the tools it had before tarot', () => {
   assert.deepEqual(names('toy'), ['cruise', 'move', 'play_sound', 'set_reply_language', 'stop']);
   assert.deepEqual(names('dry-run'), ['cruise', 'move', 'play_sound', 'set_reply_language', 'stop']);
   assert.deepEqual(names('none'), ['play_sound', 'set_reply_language']);
-  assert.deepEqual(names('pet'), ['play_sound', 'pose', 'set_reply_language']);
+  assert.deepEqual(names('pet'), ['play_sound', 'pose']);
 });
 
 test('draw_card takes no arguments, and it is the returning tool of its body', () => {

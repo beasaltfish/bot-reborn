@@ -137,9 +137,10 @@ function promptsOf(p) {
  *   was a car, so it is a toy;
  * - an id the templates know (or the old `car`) — that id and the rest of the
  *   patch, as saved;
- * - an id nobody knows — `none`, plus the patch keys whose shape is right. A
- *   typo must not claim wheels; a body of one's own is told apart by carrying
- *   `actions`, not by its id.
+ * - an id nobody knows — kept when the patch carries `actions` or `template`
+ *   (a body of one's own), otherwise `none` plus the patch keys whose shape is
+ *   right. A typo must not claim wheels; a body of one's own is told apart by
+ *   carrying `actions`, not by its id.
  *
  * `motion` was the old name for the same five values, so an old file loads
  * unchanged.
@@ -153,7 +154,15 @@ function bodyOf(body) {
   // tapped the motors of, not a category. A saved character keeps working.
   const raw = p.id ?? p.motion;
   const id = raw === 'car' ? 'toy' : raw;
-  return { id: TEMPLATE_IDS.includes(id) ? id : 'none', ...patchOf(p) };
+  const patch = patchOf(p);
+  // An unknown id is a typo only when nothing else says it is a body of one's
+  // own. `actions` (its own program) or `template` (the base it copied) is
+  // that claim; without either the id must not claim wheels. Keeping the id is
+  // what lets the admin show "my-dog" instead of rewriting it to "Voice only".
+  if (TEMPLATE_IDS.includes(id) || patch.actions !== undefined || patch.template !== undefined) {
+    return { id, ...patch };
+  }
+  return { id: 'none', ...patch };
 }
 
 /**

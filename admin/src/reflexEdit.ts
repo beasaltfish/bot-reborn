@@ -3,11 +3,12 @@
 // options array (spec §2.1); the JSON view speaks the decision API's own
 // `questions` shape, so a question from training can be pasted as is.
 import { REFLEX_PRESETS } from '../../core/reflex-presets.js';
+import { DRIVE_VALUES, STEER_VALUES } from '../../core/verbs.js';
 import { isPlain } from './merge';
 import type { ReflexConfig, ReflexQuestion, SavedReflex } from './types';
 
-export const DRIVES = ['forward', 'backward'] as const;
-export const STEERS = ['left', 'right', 'straight'] as const;
+export const DRIVES = DRIVE_VALUES;
+export const STEERS = STEER_VALUES;
 
 export function toUnsloth(q: ReflexQuestion): string {
   const criteria = Object.fromEntries(q.options.map((o) => [o.choice, o.description]));

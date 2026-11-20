@@ -267,6 +267,20 @@ export class Session {
   }
 
   /**
+   * Stopping the car and voiding the brain's queue are one act. Stopping only
+   * the executor left `move → stop → cruise` reproducible: the stop reached the
+   * hardware, then the queued cruise went out from a dispatcher that still
+   * thought it was live. `cancel()` bumps the generation and aborts the turn,
+   * so the queue dies with the motion.
+   *
+   * The brain is optional (`attach` may not have run), like every other use.
+   */
+  #stopBody() {
+    this.#executor.stop();
+    this.#brain?.cancel();
+  }
+
+  /**
    * §5.2 without anywhere to sleep to. The thirty seconds were never only
    * about the face: they are also the longest a cruise can run, and with no
    * wake word there is no SLEEPING to enforce it on the way in. So the car
@@ -275,7 +289,7 @@ export class Session {
    * anybody can see, and a beep every thirty seconds of quiet is a nag.
    */
   #settle() {
-    this.#executor.stop();
+    this.#stopBody();
     this.#brain?.resetHistory();
     this.#lastVoiceAt = this.#now();
   }
@@ -283,7 +297,7 @@ export class Session {
   #sleep() {
     // Never let a running car into SLEEPING (§5.2) — a cruise especially,
     // because nothing else would ever end it.
-    this.#executor.stop();
+    this.#stopBody();
     this.#vad.clear();
     this.#brain?.resetHistory();       // §6.4
     this.#playEarcon('sleep');
@@ -503,7 +517,7 @@ export class Session {
    * different things, and the first one wins.
    */
   onEmergencyStop() {
-    this.#executor.stop();
+    this.#stopBody();
     this.#abortTurn();
     this.#tts.cancel();
     // "Stop now, never mind the rest" — whatever is in hand is not wanted.

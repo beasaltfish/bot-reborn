@@ -390,7 +390,7 @@ it('pet: the body is picked from its card, and the patch says pet', async () => 
   expect(pet).not.toBeChecked();
   await userEvent.click(pet);
   await waitFor(() => expect(fake.patches()).toHaveLength(1), { timeout: 2000 });
-  expect(fake.patches()[0].body).toEqual({ config: { body: { id: 'pet' } } });
+  expect(fake.patches()[0].body).toEqual({ config: { body: { id: 'pet', template: 'pet' } } });
   expect(pet).toBeChecked();
 });
 
@@ -429,7 +429,7 @@ it('tarot: the body is picked from its card, in English', async () => {
   expect(tarot).not.toBeChecked();
   await userEvent.click(tarot);
   await waitFor(() => expect(fake.patches()).toHaveLength(1), { timeout: 2000 });
-  expect(fake.patches()[0].body).toEqual({ config: { body: { id: 'tarot' } } });
+  expect(fake.patches()[0].body).toEqual({ config: { body: { id: 'tarot', template: 'tarot' } } });
   expect(tarot).toBeChecked();
 });
 

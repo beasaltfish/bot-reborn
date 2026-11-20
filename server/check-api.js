@@ -12,7 +12,7 @@ import { toInt16 } from '../core/audio/pcm.js';
 import { encodeWav } from '../core/providers/stt-openai-compat.js';
 import { OpenAiCompatLlm } from '../core/providers/llm-openai-compat.js';
 import { Reflex } from '../core/reflex.js';
-import { SET_REPLY_LANGUAGE, toolsOf, buildSystemPrompt } from '../core/brain.js';
+import { toolsOf, buildSystemPrompt } from '../core/brain.js';
 import { resolveBody } from '../core/bodies.js';
 import { parseWav } from './audio/pcm.js';
 import { FIXTURES_DIR } from './dist-pages.js';
@@ -54,7 +54,7 @@ export function createCheckApi(opts = {}) {
           toInt16(wav.samples), wav.rate);
       } else if (layer === 'llm') {
         text = await checkLlm(new OpenAiCompatLlm(config, { ...net, timeoutMs }), {
-          tools: [...toolsOf(resolveBody('toy')), SET_REPLY_LANGUAGE],
+          tools: toolsOf(resolveBody('toy')),
           systemPrompt: buildSystemPrompt({ replyLang: null }),
         });
       } else {

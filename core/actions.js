@@ -83,6 +83,13 @@ const SCHEMA_WORDS = new Set([
 ]);
 
 /**
+ * The `type` values this checker understands. `type: 'nil'` would otherwise
+ * reach `fitsSchema`'s default branch and refuse every value at call time,
+ * which is a schema an author can write and never debug.
+ */
+const SCHEMA_TYPES = new Set(['object', 'array', 'string', 'integer', 'number', 'boolean']);
+
+/**
  * The verb table, seen as a lookup that may miss: `VERBS` is typed as a total
  * record of the five names, and a program may name a sixth.
  * @type {Record<string, Verb | undefined>}
@@ -280,6 +287,27 @@ function schemaProblem(node, path) {
 
   const schema = /** @type {JsonSchemaSubset} */ (node);
 
+  // Keyword NAMES were the first half of this check; the value shapes are the
+  // second. `required: true` and `enum: 'forward'` both pass a name check and
+  // then throw or silently mis-answer at call time — `for…of true`, and
+  // `'forward'.includes('forward')` as a substring test.
+  if (schema.type !== undefined && !SCHEMA_TYPES.has(schema.type)) {
+    return `has ${path}.type, which is not a type this checker reads`;
+  }
+  if (schema.required !== undefined
+    && (!Array.isArray(schema.required) || schema.required.length === 0
+      || schema.required.some((key) => typeof key !== 'string'))) {
+    return `has ${path}.required, which is not a non-empty list of names`;
+  }
+  if (schema.enum !== undefined && (!Array.isArray(schema.enum) || schema.enum.length === 0)) {
+    return `has ${path}.enum, which is not a non-empty list`;
+  }
+  for (const keyword of /** @type {const} */ (['maxItems', 'minimum', 'maximum'])) {
+    if (schema[keyword] !== undefined && typeof schema[keyword] !== 'number') {
+      return `has ${path}.${keyword}, which is not a number`;
+    }
+  }
+
   // Values under `properties` are schemas; their keys are argument names and
   // may be anything. `items` and `anyOf` are schemas too, so they are walked.
   if (schema.properties !== undefined) {
@@ -473,8 +501,15 @@ export function fitsSchema(value, schema) {
 function fitsObject(value, schema) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const obj = /** @type {Record<string, unknown>} */ (value);
-  for (const key of schema.required ?? []) if (!(key in obj)) return false;
-  for (const [key, sub] of Object.entries(schema.properties ?? {})) {
+  // The shape is refused by `schemaProblem` when a person writes it, but this
+  // half must not throw on a file that skipped that check: `for…of true` was
+  // every turn failing with a TypeError instead of a refusal.
+  const required = Array.isArray(schema.required) ? schema.required : [];
+  for (const key of required) if (!(key in obj)) return false;
+  const properties = schema.properties && typeof schema.properties === 'object' && !Array.isArray(schema.properties)
+    ? schema.properties
+    : {};
+  for (const [key, sub] of Object.entries(properties)) {
     if (key in obj && !fitsSchema(obj[key], sub)) return false;
   }
   return true;

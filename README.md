@@ -219,6 +219,12 @@ this setting has no `body` key and is still the toy
 ([`core/config.js`](core/config.js)). The rest of the account — the verbs, and
 what an action may say — is in [`docs/development.md`](docs/development.md#bodies-capabilities-verbs-actions).
 
+A character file has no version number. An older brain reading a file written by
+a newer one silently drops the keys it does not know: a body's `actions`, for
+instance, disappear with no error and the body falls back to its template. Keep
+the brain and the characters you wrote them with; there is no migration step to
+run on a downgrade.
+
 ## Status and limits
 
 **ESP32 body:** hears, talks, shows a pet dog on a breadboard and drives a toy's

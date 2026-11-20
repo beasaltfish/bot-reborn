@@ -188,6 +188,10 @@ GPIO 4–7 那四个给小车用的电机脚，以及 I²C 上的 MPU-6050。表
 （[`core/config.js`](core/config.js)）。动词是什么、一个动作能写什么，见
 [`docs/development.md`](docs/development.md#bodies-capabilities-verbs-actions)。
 
+角色文件没有版本号。旧大脑读新版本写下的文件时，会静默丢掉它不认识的键——比如身体自带
+的 `actions`——不报错，身体直接退回模板。请用写下角色时的那版大脑，回退版本没有迁移
+步骤可做。
+
 ## 状态和边界
 
 **ESP32 身体：** 在面包板上会听、会说、屏幕上有一只宠物狗，也能驱动玩具车的电机输入，

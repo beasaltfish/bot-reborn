@@ -837,13 +837,19 @@ test('without a wake word, 30 s of silence still stops the car — and stays awa
   // cruise can run. Losing SLEEPING must not lose that.
   const h = awake();
   let reset = 0;
-  h.session.attach({ handle: async () => {}, cancel() {}, resetHistory() { reset++; } });
+  let cancelled = 0;
+  h.session.attach({
+    handle: async () => {},
+    cancel() { cancelled++; },
+    resetHistory() { reset++; },
+  });
   h.session.start();
   h.tick(80);
   h.tick(IDLE_TO_SLEEP_MS + 1);
   h.feed('vad');
   assert.equal(h.session.state, 'LISTENING');
   assert.equal(h.took('executor.stop'), 1);
+  assert.equal(cancelled, 1, 'the brain\'s queue dies with the motion, or a cruise resumes');
   assert.equal(reset, 1, 'a pause that long is a new conversation');
   assert.ok(!h.calls.some((c) => c[0] === 'earcon' && c[1] === 'sleep'), 'nothing went to sleep');
   // And the clock starts over, rather than firing on every frame from now on.

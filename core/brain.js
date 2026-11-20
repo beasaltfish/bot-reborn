@@ -53,10 +53,9 @@ const LANG_NAME = { zh: 'Chinese', en: 'English' };
 
 /**
  * The one tool that is not an action. It writes the language preference into
- * the config, not the body, so the caller adds it to every body's list and no
- * body may add one of its own (spec §6.2, rule 5). Exported because a caller
- * beyond the brain (`server/check-api.js`) asks a provider to accept the same
- * list.
+ * the config, not the body, so no body may declare it as an action (spec §6.2,
+ * rule 5). A template names it in `fixedTools`, and `toolsOf` appends it —
+ * `server/check-api.js` asks a provider to accept the same list through that.
  * @type {Tool}
  */
 export const SET_REPLY_LANGUAGE = {
@@ -73,11 +72,19 @@ export const SET_REPLY_LANGUAGE = {
 };
 
 /**
+ * The fixed tools a template may name in `fixedTools`. A name with no entry
+ * here is skipped rather than invented: only `set_reply_language` exists, and
+ * `bodies.js` chooses which templates get it.
+ * @type {Record<string, Tool>}
+ */
+const FIXED_TOOLS = { set_reply_language: SET_REPLY_LANGUAGE };
+
+/**
  * The tools a body is offered: one per action it carries, in its own order,
- * described by the words the body wrote. No branch on an id: a body that
- * cannot pose is a body with no pose action. `set_reply_language` is the
- * caller's to add — it is not an action, and `TOOLS` was a second answer to
- * this question, so it is gone.
+ * described by the words the body wrote, then the fixed tools its template
+ * names (`fixedTools`). No branch on an id: a body that cannot pose is a body
+ * with no pose action, and a pet that answers in clips is a body with no
+ * `set_reply_language`.
  *
  * `set_reply_language` is a reserved name: a body action that claimed it is
  * skipped here rather than offered twice, so the fixed tool is never shadowed.
@@ -87,7 +94,7 @@ export const SET_REPLY_LANGUAGE = {
  * @returns {Tool[]}
  */
 export function toolsOf(body) {
-  return body.actions
+  const tools = body.actions
     .filter((action) => action.name !== 'set_reply_language')
     .map((action) => ({
       type: /** @type {const} */ ('function'),
@@ -97,16 +104,11 @@ export function toolsOf(body) {
         parameters: action.args ?? { type: 'object', properties: {} },
       },
     }));
-}
-
-/**
- * What the brain hands a provider: the body's own actions plus the one fixed
- * tool. Kept as a function so no caller has to remember the order.
- * @param {import('./bodies.js').Body} body
- * @returns {Tool[]}
- */
-function toolsWithConfig(body) {
-  return [...toolsOf(body), SET_REPLY_LANGUAGE];
+  for (const name of body.fixedTools ?? []) {
+    const fixed = FIXED_TOOLS[name];
+    if (fixed) tools.push(fixed);
+  }
+  return tools;
 }
 
 /**
@@ -793,7 +795,7 @@ export class Brain {
               body,
             }),
           }, ...this.#history],
-          tools ?? toolsWithConfig(body),
+          tools ?? toolsOf(body),
           { signal: turn.signal },
         );
       } catch (err) {

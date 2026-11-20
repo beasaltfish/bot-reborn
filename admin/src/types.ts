@@ -52,7 +52,6 @@ export interface BodyAction {
   run: Array<{ verb: string; args?: Record<string, unknown>; each?: string }>;
   returns?: true;
   rules?: string;
-  timeoutMs?: number;
 }
 
 export interface BodyTrigger { on: 'shake' | 'button'; action: string }

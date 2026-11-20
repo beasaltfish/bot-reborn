@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  SYSTEM_PROMPT, SYSTEM_PROMPT_STILL, DEFAULT_PERSONA, MAX_PERSONA, SET_REPLY_LANGUAGE,
+  SYSTEM_PROMPT, SYSTEM_PROMPT_STILL, DEFAULT_PERSONA, MAX_PERSONA,
   toolsOf, buildSystemPrompt, validate, Brain,
 } from '../core/brain.js';
 import { MIN_DURATION_MS } from '../phone/executor.js';
@@ -17,22 +17,24 @@ const STILL = resolveBody('none');
 const DRY = resolveBody('dry-run');
 
 /** @param {import('../core/bodies.js').Body} body @param {string} name @returns {any} */
-const byName = (body, name) => [...toolsOf(body), SET_REPLY_LANGUAGE]
+const byName = (body, name) => toolsOf(body)
   .find((t) => t.function.name === name);
 /** @param {import('../core/bodies.js').Body} body @returns {string[]} */
-const namesOf = (body) => [...toolsOf(body), SET_REPLY_LANGUAGE].map((t) => t.function.name).sort();
+const namesOf = (body) => toolsOf(body).map((t) => t.function.name).sort();
 
 test('the seven tool names are the seven, and each body chooses among them', () => {
   // The names are fixed by the product (spec §6.2); which of them a body is
-  // offered is its own actions, plus the one tool that writes config.
+  // offered is its own actions, plus the fixed tools its template names.
   const known = new Set(Object.values(TEMPLATES).flatMap((b) => b.actions.map((a) => a.name)));
   known.add('set_reply_language');
   assert.deepEqual([...known].sort(),
     ['cruise', 'draw_card', 'move', 'play_sound', 'pose', 'set_reply_language', 'stop']);
 
   assert.deepEqual(namesOf(TOY), ['cruise', 'move', 'play_sound', 'set_reply_language', 'stop']);
-  assert.deepEqual(namesOf(TAROT), ['draw_card', 'set_reply_language']);
-  assert.deepEqual(namesOf(PET), ['play_sound', 'pose', 'set_reply_language']);
+  // A tarot reader and a pet do not speak in words (the pet at all), so they
+  // are not offered the tool that writes `replyLang` — base 8553a2b's rule.
+  assert.deepEqual(namesOf(TAROT), ['draw_card']);
+  assert.deepEqual(namesOf(PET), ['play_sound', 'pose']);
   assert.deepEqual(namesOf(STILL), ['play_sound', 'set_reply_language']);
 });
 
@@ -297,23 +299,24 @@ test('validate: play_sound with an unknown name is dropped, with a reason', () =
   assert.match(r.reasons[0], /play_sound: rejected.*moo/);
 });
 
-test('the tools are the body actions, and nothing else', () => {
+test('the tools are the body actions, and then its own fixed tools', () => {
   // The list is read, not written: an action of one's own appears without an
-  // edit here. The fixed config tool is the caller's to add, so it is not in
-  // `toolsOf` — the advertised list is the body, whole.
+  // edit here. The fixed config tool comes from the template's `fixedTools`,
+  // so the advertised list is the body, whole.
   const body = resolveBody('none');
   body.actions = [{ ...body.actions[0], name: 'whistle', say: 'Whistle a note.' }];
-  assert.deepEqual(toolsOf(body).map((t) => t.function.name), ['whistle']);
+  assert.deepEqual(toolsOf(body).map((t) => t.function.name), ['whistle', 'set_reply_language']);
   assert.equal(byName(body, 'whistle').function.description, 'Whistle a note.');
 });
 
-test('set_reply_language is reserved: bodyProblem says so, toolsOf skips it', () => {
+test('set_reply_language is reserved: bodyProblem says so, toolsOf skips the action', () => {
   const body = resolveBody('none');
   body.actions = [{ ...body.actions[0], name: 'set_reply_language' }];
   // The sentence belongs to `bodyProblem`, where a person can read it; the
   // tool list reserves the name instead of throwing where nobody sees the body.
+  // The template's fixed tool is still offered, once, not twice.
   assert.match(bodyProblem(body) ?? '', /set_reply_language.*may not take its name/);
-  assert.deepEqual(toolsOf(body).map((tool) => tool.function.name), []);
+  assert.deepEqual(toolsOf(body).map((tool) => tool.function.name), ['set_reply_language']);
 });
 
 test('a rejected step says what the model sent and what was expected, word for word', () => {
@@ -1884,7 +1887,7 @@ test('pose offers exactly the three poses', () => {
 });
 
 test('toolsOf: pet gets pose and play_sound; no other body is offered pose', () => {
-  assert.deepEqual(namesOf(PET), ['play_sound', 'pose', 'set_reply_language']);
+  assert.deepEqual(namesOf(PET), ['play_sound', 'pose']);
   assert.deepEqual(namesOf(TOY), ['cruise', 'move', 'play_sound', 'set_reply_language', 'stop']);
   assert.deepEqual(namesOf(DRY), namesOf(TOY));
   assert.deepEqual(namesOf(STILL), ['play_sound', 'set_reply_language']);
