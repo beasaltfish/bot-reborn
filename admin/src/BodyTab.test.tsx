@@ -24,11 +24,32 @@ afterEach(() => { vi.unstubAllGlobals(); });
 describe('BodyTab', () => {
   it('shows a card per body with what it needs and what it does', () => {
     renderTab(detail());
-    expect(screen.getAllByRole('radio')).toHaveLength(5);
+    expect(screen.getAllByRole('radio')).toHaveLength(4);
     const pet = screen.getByRole('radio', { name: /pet on a screen/i });
     expect(pet).toBeChecked();
     const card = within(pet.closest('label') as HTMLElement);
     expect(card.getByText(/hears you · speaks · shows/)).toBeVisible();
+  });
+
+  it('keeps the bench-only dry run out of the picker unless it is asked for', () => {
+    renderTab(detail('car'));
+    expect(screen.getAllByRole('radio')).toHaveLength(4);
+    expect(screen.queryByRole('radio', { name: /dry run/i })).toBeNull();
+  });
+
+  it('shows the dry run for a bench run', () => {
+    window.history.replaceState({}, '', '/?bench');
+    try {
+      renderTab(detail('car'));
+      expect(screen.getAllByRole('radio')).toHaveLength(5);
+    } finally {
+      window.history.replaceState({}, '', '/');
+    }
+  });
+
+  it('never hides the body that is already chosen', () => {
+    renderTab(detail('dry-run'));
+    expect(screen.getByRole('radio', { name: /dry run/i })).toBeChecked();
   });
 
   it('never spends a line on what a body cannot do', () => {
@@ -76,17 +97,20 @@ describe('BodyTab', () => {
     expect(update).toHaveBeenCalledWith({ config: { body: { id: 'car' } } });
   });
 
-  it('previews the chosen body with the frames the brain has, and says it is not a simulation', async () => {
+  it('draws the chosen body with the frames the brain has, and says it is not a simulation', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ pet: [], tarot: ['320x240/back.jpg'] }) })));
     renderTab(detail('tarot'));
-    expect(await screen.findByRole('img', { name: 'Tarot reader' })).toHaveAttribute('src', '/preview/tarot/320x240/back.jpg');
+    expect(await screen.findByRole('img', { name: 'Tarot reader' })).toBeInTheDocument();
+    await vi.waitFor(() => expect(screen.getByTestId('body-preview').querySelector('image')?.getAttribute('href'))
+      .toBe('/preview/tarot/320x240/back.jpg'));
     expect(screen.getByText(/not a simulation/i)).toBeInTheDocument();
   });
 
-  it('a body with no art still names itself instead of showing a broken picture', async () => {
+  it('a body with no art is still drawn, without a broken picture in it', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ pet: [], tarot: [] }) })));
-    renderTab(detail('dry-run'));
-    expect(screen.queryByRole('img')).toBeNull();
-    expect(screen.getByTestId('body-preview')).toHaveTextContent(/dry run/i);
+    renderTab(detail('tarot'));
+    expect(await screen.findByRole('img', { name: 'Tarot reader' })).toBeInTheDocument();
+    expect(screen.getByTestId('body-preview').querySelector('image')).toBeNull();
+    expect(screen.getByTestId('body-preview').querySelector('[data-part="screen"]')).not.toBeNull();
   });
 });

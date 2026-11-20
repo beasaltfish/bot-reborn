@@ -9,8 +9,8 @@
 // the badges above already say what it does.
 import { useEffect, useState } from 'react';
 import { BODIES, labelOf } from '../../core/bodies.js';
+import { BodyDiagram } from './BodyDiagram';
 import { PhoneLink } from './PhoneLink';
-import { PreviewFrames } from './PreviewFrames';
 import { lang, t, type Key } from './i18n';
 import type { Detail, Motion, Patch } from './types';
 
@@ -32,6 +32,12 @@ const NEED: Record<string, Key> = {
 
 export function BodyTab({ detail, update, onToken }: { detail: Detail; update(p: Patch): void; onToken(token: string): void }) {
   const chosen = detail.config.body.id;
+  // A dry run is a bench tool: it moves nothing and shows nothing, and next to
+  // four real bodies it reads as a fifth one. `?bench` brings it back for the
+  // person editing prompts without hardware — and it is always shown when it is
+  // already the choice, or the card would vanish from under them.
+  const bench = new URLSearchParams(window.location.search).has('bench');
+  const shown = BODIES.filter((b) => bench || b.id !== 'dry-run' || b.id === chosen);
   const body = BODIES.find((b) => b.id === chosen) ?? BODIES[0];
   // Frame paths come from the brain: the admin bundle has no idea what the
   // render tools left on disk, and a guessed path is a broken picture.
@@ -52,7 +58,7 @@ export function BodyTab({ detail, update, onToken }: { detail: Detail; update(p:
     <div className="body-tab">
       <p className="hint">{t('bodyIntro')}</p>
       <div className="body-cards">
-        {BODIES.map((b) => {
+        {shown.map((b) => {
           return (
             <label key={b.id} className="body-card" data-selected={b.id === chosen}>
               <input
@@ -76,9 +82,7 @@ export function BodyTab({ detail, update, onToken }: { detail: Detail; update(p:
       </div>
       <div className="body-side">
         <div className="body-preview" data-testid="body-preview">
-          {frames.length > 0
-            ? <PreviewFrames key={body.id} frames={frames} alt={name} />
-            : <span>{name}</span>}
+          <BodyDiagram key={body.id} kind={body.preview} frames={frames} label={name} />
         </div>
         <small>{t('previewNote')}</small>
         {body.ways.map((w) => <p key={w.source}>{t(NEXT[w.source])}</p>)}

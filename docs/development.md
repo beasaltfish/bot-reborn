@@ -63,6 +63,10 @@ claims an action its capabilities cannot support, and `test/bodies.test.js`
 runs it on every row. Never keep a second list of actions: `CAN_DO` is derived
 from the table on purpose.
 
+The dry run is in the table but not in the admin's picker: open the admin with
+`?bench` to see it. It reads, speaks and logs the moves it would have made, so
+it is how a prompt is tried with no hardware on the desk.
+
 Which tools and which prompt a body gets is not from this table yet:
 `toolsFor()` and `buildSystemPrompt()` in `core/brain.js` still pick by id, so a
 new body with new capabilities has to be added there too. Deriving them from

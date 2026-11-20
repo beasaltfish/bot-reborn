@@ -66,7 +66,7 @@ describe('Editor', () => {
     expect(await screen.findByRole('tab', { name: 'Body' })).toBeInTheDocument();
     expect(screen.queryByLabelText('Body')).toBeNull();
     await userEvent.click(screen.getByRole('tab', { name: 'Body' }));
-    expect(screen.getAllByRole('radio')).toHaveLength(5);
+    expect(screen.getAllByRole('radio')).toHaveLength(4);
     expect(fake.chars.get('A')?.config.body.id).toBe('car');
   });
 

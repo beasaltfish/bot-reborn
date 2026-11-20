@@ -142,7 +142,7 @@ table.criteria td:nth-child(2) input { width: 100%; box-sizing: border-box; }
 .body-card .caps { grid-column: 2 / -1; font-size: 12px; }
 .body-side { display: flex; flex-direction: column; gap: 8px; }
 .body-preview { display: grid; place-items: center; min-height: 160px; padding: 8px; border: 2px solid var(--line); border-radius: 16px; background: var(--panel); }
-.body-preview img { max-width: 100%; border-radius: 10px; image-rendering: pixelated; }
-.body-preview span { font-family: var(--display); }
+.body-diagram { width: 100%; height: auto; max-height: 240px; }
+.body-diagram image { image-rendering: pixelated; }
 .body-side p { margin: 0; font-size: 13px; }
 @media (max-width: 720px) { .body-tab { grid-template-columns: 1fr; } }
