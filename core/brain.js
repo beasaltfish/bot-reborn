@@ -137,6 +137,56 @@ export const TOOLS = [
 ];
 
 /**
+ * One tool as the provider sees it (spec §6.2): a name, the words the body
+ * wrote for it, and the arguments it takes. Providers reject fields they do not
+ * know, so nothing else may be added here.
+ * @typedef {{
+ *   type: 'function',
+ *   function: { name: string, description: string, parameters: import('./verbs.js').JsonSchemaSubset },
+ * }} Tool
+ */
+
+/**
+ * The one tool that is not an action. It writes the language preference into
+ * the config, not the body, so every body is offered it and no body can add one
+ * (spec §6.2, rule 5).
+ * @type {Tool}
+ */
+const SET_REPLY_LANGUAGE = {
+  type: 'function',
+  function: {
+    name: 'set_reply_language',
+    description: 'Record a LASTING preference for which language to reply in. Call this ONLY when the user explicitly asks you to always use a language ("from now on speak Chinese", "stop speaking English"). Do NOT call it for a one-off request like "say that again in English" — just do that directly without calling anything. Use "auto" to go back to following whatever language the user speaks.',
+    parameters: {
+      type: 'object',
+      required: ['lang'],
+      properties: { lang: { enum: ['zh', 'en', 'auto'] } },
+    },
+  },
+};
+
+/**
+ * The tools a body is offered: one per action it carries, in its own order,
+ * described by the words the body wrote, plus `set_reply_language`. No branch
+ * on an id: a body that cannot pose is a body with no pose action.
+ * @param {import('./bodies.js').Body} body
+ * @returns {Tool[]}
+ */
+export function toolsOf(body) {
+  return [
+    ...body.actions.map((action) => ({
+      type: /** @type {const} */ ('function'),
+      function: {
+        name: action.name,
+        description: action.say,
+        parameters: action.args ?? { type: 'object', properties: {} },
+      },
+    })),
+    SET_REPLY_LANGUAGE,
+  ];
+}
+
+/**
  * Tools whose result goes back to the model, which is asked again with it
  * (tarot mode spec §4). Every other tool is an action: done, and forgotten.
  * A set beside TOOLS, not a field on each tool, because providers reject
@@ -264,10 +314,13 @@ export const SYSTEM_PROMPT_PET = buildSystemPrompt({ replyLang: null, body: reso
  * is WHICH field this robot refused.
  *
  * @param {Array<{ id?: string, name: string, args: object | null, rawArguments: string }>} toolCalls
+ * @param {import('./bodies.js').Body} [body] the body the turn runs on. Read
+ *   once the switch below is gone; until then this argument only fixes the
+ *   shape the tests are written against.
  * @returns {{ actions: Action[], replyLang: 'zh'|'en'|'auto'|null, dropped: number,
  *             reasons: string[], hadMoveIntent: boolean }}
  */
-export function validate(toolCalls) {
+export function validate(toolCalls, body) {
   /** @type {Action[]} */
   const actions = [];
   /** @type {'zh'|'en'|'auto'|null} */

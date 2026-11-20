@@ -1,28 +1,46 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  TOOLS, SYSTEM_PROMPT, SYSTEM_PROMPT_STILL, DEFAULT_PERSONA, MAX_PERSONA, toolsFor, buildSystemPrompt, validate, Brain,
+  SYSTEM_PROMPT, SYSTEM_PROMPT_STILL, DEFAULT_PERSONA, MAX_PERSONA, toolsOf, buildSystemPrompt, validate, Brain,
 } from '../core/brain.js';
 import { MIN_DURATION_MS } from '../phone/executor.js';
 import { KEYWORDS } from '../core/strings.js';
-import { resolveBody } from '../core/bodies.js';
+import { TEMPLATES, resolveBody } from '../core/bodies.js';
 import { GOLDEN } from './prompts-golden.js';
 
-/** @param {string} name @returns {any} */
-const byName = (name) => TOOLS.find((t) => t.function.name === name);
+/** The bodies the assertions read, resolved the way the brain resolves them. */
+const TOY = resolveBody('toy');
+const PET = resolveBody('pet');
+const TAROT = resolveBody('tarot');
+const STILL = resolveBody('none');
+const DRY = resolveBody('dry-run');
 
-test('there are exactly the seven tools: spec §6.2 plus play_sound, pose and draw_card', () => {
-  assert.deepEqual(TOOLS.map((t) => t.function.name).sort(),
+/** @param {import('../core/bodies.js').Body} body @param {string} name @returns {any} */
+const byName = (body, name) => toolsOf(body).find((t) => t.function.name === name);
+/** @param {import('../core/bodies.js').Body} body @returns {string[]} */
+const namesOf = (body) => toolsOf(body).map((t) => t.function.name).sort();
+
+test('the seven tool names are the seven, and each body chooses among them', () => {
+  // The names are fixed by the product (spec §6.2); which of them a body is
+  // offered is its own actions, plus the one tool that writes config.
+  const known = new Set(Object.values(TEMPLATES).flatMap((b) => b.actions.map((a) => a.name)));
+  known.add('set_reply_language');
+  assert.deepEqual([...known].sort(),
     ['cruise', 'draw_card', 'move', 'play_sound', 'pose', 'set_reply_language', 'stop']);
+
+  assert.deepEqual(namesOf(TOY), ['cruise', 'move', 'play_sound', 'set_reply_language', 'stop']);
+  assert.deepEqual(namesOf(TAROT), ['draw_card', 'set_reply_language']);
+  assert.deepEqual(namesOf(PET), ['play_sound', 'pose', 'set_reply_language']);
+  assert.deepEqual(namesOf(STILL), ['play_sound', 'set_reply_language']);
 });
 
 test('play_sound offers exactly the four sounds', () => {
-  assert.deepEqual(byName('play_sound').function.parameters.properties.name.enum,
+  assert.deepEqual(byName(TOY, 'play_sound').function.parameters.properties.name.enum,
     ['bark', 'yip', 'whimper', 'growl']);
 });
 
 test('move: steps maxItems 5, duration_ms has a minimum and NO maximum (spec §6.6)', () => {
-  const params = byName('move').function.parameters;
+  const params = byName(TOY, 'move').function.parameters;
   assert.deepEqual(params.required, ['steps']);
   assert.equal(params.properties.steps.maxItems, 5);
 
@@ -37,21 +55,23 @@ test('move: steps maxItems 5, duration_ms has a minimum and NO maximum (spec §6
 
 test('drive has no "none" anywhere (spec §3.3)', () => {
   for (const name of ['move', 'cruise']) {
-    const props = byName(name).function.parameters.properties;
+    const props = byName(TOY, name).function.parameters.properties;
     const drive = name === 'move' ? props.steps.items.properties.drive : props.drive;
     assert.ok(!drive.enum.includes('none'));
   }
 });
 
 test('set_reply_language: three values, including the auto escape hatch', () => {
-  assert.deepEqual(byName('set_reply_language').function.parameters.properties.lang.enum,
+  assert.deepEqual(byName(TOY, 'set_reply_language').function.parameters.properties.lang.enum,
     ['zh', 'en', 'auto']);
 });
 
 test('every tool description is written in English (spec §6.2)', () => {
-  for (const tool of TOOLS) {
-    assert.ok(!/[一-鿿]/.test(JSON.stringify(tool)),
-      `tool ${tool.function.name} contains CJK text`);
+  for (const body of Object.values(TEMPLATES)) {
+    for (const tool of toolsOf(body)) {
+      assert.ok(!/[一-鿿]/.test(JSON.stringify(tool)),
+        `tool ${tool.function.name} contains CJK text`);
+    }
   }
 });
 
@@ -66,9 +86,11 @@ test('the prompt makes the robot the subject, not a car it drives', () => {
   assert.match(SYSTEM_PROMPT, /You are a small living creature/);
   assert.match(SYSTEM_PROMPT, /You are not a robot or a machine/);
   assert.match(SYSTEM_PROMPT, /Never call yourself a car/);
-  for (const tool of TOOLS) {
-    assert.ok(!/\bcars?\b/i.test(tool.function.description),
-      `tool ${tool.function.name} still calls it a car`);
+  for (const body of Object.values(TEMPLATES)) {
+    for (const tool of toolsOf(body)) {
+      assert.ok(!/\bcars?\b/i.test(tool.function.description),
+        `tool ${tool.function.name} still calls it a car`);
+    }
   }
 });
 
@@ -131,7 +153,7 @@ const call = (name, args, id = 'call_1') =>
   ({ id, name, args, rawArguments: JSON.stringify(args) });
 
 test('validate: a well-formed move passes through untouched', () => {
-  const r = validate([call('move', { steps: [{ drive: 'forward', steer: 'left', duration_ms: 600 }] })]);
+  const r = validate([call('move', { steps: [{ drive: 'forward', steer: 'left', duration_ms: 600 }] })], TOY);
   assert.deepEqual(r.actions, [{ kind: 'move', steps: [{ drive: 'forward', steer: 'left', duration_ms: 600 }] }]);
   assert.equal(r.dropped, 0);
 });
@@ -139,7 +161,7 @@ test('validate: a well-formed move passes through untouched', () => {
 test('validate: a huge duration is NOT clamped (spec §6.6)', () => {
   // Clamping fails silently in the worst direction: the car moves, but by an
   // amount you did not ask for and cannot see. Safety is the slicing loop's job.
-  const r = validate([call('move', { steps: [{ drive: 'forward', steer: 'straight', duration_ms: 60000 }] })]);
+  const r = validate([call('move', { steps: [{ drive: 'forward', steer: 'straight', duration_ms: 60000 }] })], TOY);
   const a0 = /** @type {any} */ (r.actions[0]);
   assert.equal(a0.steps[0].duration_ms, 60000);
   assert.equal(r.dropped, 0);
@@ -150,7 +172,7 @@ test('a move with no steps array is a drop, and says so', () => {
   // sends the step's fields at the top level. `raw` came out empty, the loop
   // never ran, and the turn was counted as ZERO drops — so the one number that
   // could have said "it tried and I refused" said nothing happened at all.
-  const r = validate([call('move', { drive: 'forward', steer: 'straight', duration_ms: 600 })]);
+  const r = validate([call('move', { drive: 'forward', steer: 'straight', duration_ms: 600 })], TOY);
   assert.deepEqual(r.actions, []);
   assert.ok(r.hadMoveIntent, 'it was still a move');
   assert.equal(r.dropped, 1);
@@ -165,18 +187,18 @@ test('every drop carries a reason, because a silent drop cannot be debugged', ()
   // at all.
   const tooShort = validate([call('move', { steps: [
     { drive: 'forward', steer: 'straight', duration_ms: 100 },
-  ] })]);
+  ] })], TOY);
   assert.match(tooShort.reasons.join('\n'), /duration_ms/);
 
-  const badEnum = validate([call('cruise', { drive: 'sideways', steer: 'straight' })]);
+  const badEnum = validate([call('cruise', { drive: 'sideways', steer: 'straight' })], TOY);
   assert.match(badEnum.reasons.join('\n'), /cruise/);
 
   const unparsable = validate([
     { id: 'c1', name: 'move', args: null, rawArguments: '{"steps": [' },
-  ]);
+  ], TOY);
   assert.match(unparsable.reasons.join('\n'), /JSON/i);
 
-  const unknown = validate([call('fly', {})]);
+  const unknown = validate([call('fly', {})], TOY);
   assert.match(unknown.reasons.join('\n'), /fly/);
 });
 
@@ -184,7 +206,7 @@ test('validate rule 1: a duration below the floor drops the step', () => {
   const r = validate([call('move', { steps: [
     { drive: 'forward', steer: 'straight', duration_ms: 100 },
     { drive: 'forward', steer: 'straight', duration_ms: 600 },
-  ] })]);
+  ] })], TOY);
   const a0 = /** @type {any} */ (r.actions[0]);
   assert.equal(a0.steps.length, 1);
   assert.equal(a0.steps[0].duration_ms, 600);
@@ -192,7 +214,7 @@ test('validate rule 1: a duration below the floor drops the step', () => {
 });
 
 test('validate rule 1: a non-integer duration drops the step', () => {
-  const r = validate([call('move', { steps: [{ drive: 'forward', steer: 'straight', duration_ms: 600.5 }] })]);
+  const r = validate([call('move', { steps: [{ drive: 'forward', steer: 'straight', duration_ms: 600.5 }] })], TOY);
   assert.deepEqual(r.actions, []);
   assert.equal(r.dropped, 1);
 });
@@ -202,65 +224,65 @@ test('validate rule 2: an unknown enum value drops the step', () => {
     { drive: 'sideways', steer: 'straight', duration_ms: 600 },
     { drive: 'forward', steer: 'diagonally', duration_ms: 600 },
     { drive: 'forward', steer: 'straight', duration_ms: 600 },
-  ] })]);
+  ] })], TOY);
   const a0 = /** @type {any} */ (r.actions[0]);
   assert.equal(a0.steps.length, 1);
   assert.equal(r.dropped, 2);
 });
 
 test('validate rule 2: drive "none" is rejected (spec §3.3)', () => {
-  const r = validate([call('move', { steps: [{ drive: 'none', steer: 'left', duration_ms: 600 }] })]);
+  const r = validate([call('move', { steps: [{ drive: 'none', steer: 'left', duration_ms: 600 }] })], TOY);
   assert.deepEqual(r.actions, []);
 });
 
 test('validate rule 3: more than five steps are truncated, not rejected', () => {
   const steps = Array.from({ length: 8 }, () => ({ drive: 'forward', steer: 'straight', duration_ms: 400 }));
-  const r = validate([call('move', { steps })]);
+  const r = validate([call('move', { steps })], TOY);
   assert.equal(/** @type {any} */ (r.actions[0]).steps.length, 5);
 });
 
 test('validate rule 4: when every step dies, nothing is dispatched', () => {
-  const r = validate([call('move', { steps: [{ drive: 'up', steer: 'straight', duration_ms: 10 }] })]);
+  const r = validate([call('move', { steps: [{ drive: 'up', steer: 'straight', duration_ms: 10 }] })], TOY);
   assert.deepEqual(r.actions, []);
   assert.equal(r.hadMoveIntent, true, 'the caller needs to know a move was attempted');
 });
 
 test('validate: unparsable arguments drop the whole call', () => {
-  const r = validate([{ id: 'call_1', name: 'move', args: null, rawArguments: '{"steps":[' }]);
+  const r = validate([{ id: 'call_1', name: 'move', args: null, rawArguments: '{"steps":[' }], TOY);
   assert.deepEqual(r.actions, []);
   assert.equal(r.hadMoveIntent, true);
 });
 
 test('validate: cruise and stop', () => {
-  assert.deepEqual(validate([call('cruise', { drive: 'forward', steer: 'straight' })]).actions,
+  assert.deepEqual(validate([call('cruise', { drive: 'forward', steer: 'straight' })], TOY).actions,
     [{ kind: 'cruise', drive: 'forward', steer: 'straight' }]);
-  assert.deepEqual(validate([call('stop', {})]).actions, [{ kind: 'stop' }]);
-  assert.deepEqual(validate([call('cruise', { drive: 'up', steer: 'straight' })]).actions, []);
+  assert.deepEqual(validate([call('stop', {})], TOY).actions, [{ kind: 'stop' }]);
+  assert.deepEqual(validate([call('cruise', { drive: 'up', steer: 'straight' })], TOY).actions, []);
 });
 
 test('validate rule 5: set_reply_language never becomes an action (spec §6.2)', () => {
-  const r = validate([call('set_reply_language', { lang: 'en' })]);
+  const r = validate([call('set_reply_language', { lang: 'en' })], TOY);
   assert.deepEqual(r.actions, [], 'it writes config, it does not drive the car');
   assert.equal(r.replyLang, 'en');
 });
 
 test('validate rule 5: an unknown lang is ignored, config untouched', () => {
-  const r = validate([call('set_reply_language', { lang: 'fr' })]);
+  const r = validate([call('set_reply_language', { lang: 'fr' })], TOY);
   assert.equal(r.replyLang, null);
 });
 
 test('validate: an unknown tool name is dropped', () => {
-  assert.deepEqual(validate([call('launch_missiles', {})]).actions, []);
+  assert.deepEqual(validate([call('launch_missiles', {})], TOY).actions, []);
 });
 
 test('validate: play_sound with a known name becomes a sound action', () => {
-  const r = validate([{ id: 'a', name: 'play_sound', args: { name: 'bark' }, rawArguments: '' }]);
+  const r = validate([{ id: 'a', name: 'play_sound', args: { name: 'bark' }, rawArguments: '' }], TOY);
   assert.deepEqual(r.actions, [{ kind: 'sound', name: 'bark' }]);
   assert.equal(r.hadMoveIntent, false);
 });
 
 test('validate: play_sound with an unknown name is dropped, with a reason', () => {
-  const r = validate([{ id: 'a', name: 'play_sound', args: { name: 'moo' }, rawArguments: '' }]);
+  const r = validate([{ id: 'a', name: 'play_sound', args: { name: 'moo' }, rawArguments: '' }], TOY);
   assert.deepEqual(r.actions, []);
   assert.match(r.reasons[0], /play_sound: rejected.*moo/);
 });
@@ -981,13 +1003,10 @@ test('a refused move beside a sound still beeps the error (rule 4)', async () =>
   assert.deepEqual(h.events, [{ op: 'sound', name: 'bark' }, { op: 'earcon', name: 'error' }]);
 });
 
-test('car and dry-run are offered every tool but pose, none is offered no moving', () => {
-  const everyToolButPose = TOOLS.filter((t) => t.function.name !== 'pose' && t.function.name !== 'draw_card').map((t) => t.function.name).sort();
-  const names = (/** @type {any} */ m = 'car') => toolsFor(m).map((t) => t.function.name).sort();
-  assert.deepEqual(names('car'), everyToolButPose);
-  assert.deepEqual(names('dry-run'), everyToolButPose);
-  assert.deepEqual(names(), everyToolButPose);
-  assert.deepEqual(names('none'), ['play_sound', 'set_reply_language']);
+test('a dry run is a toy as far as the model can tell', () => {
+  // Nothing is tested by a prompt the real body never sees: the same actions,
+  // so the same tools and the same words.
+  assert.deepEqual(namesOf(DRY), namesOf(TOY));
 });
 
 test('the four prompts are what they were, word for word', () => {
@@ -1119,22 +1138,21 @@ test('handle: none — a move the model makes up anyway is dropped, says why, an
 // --- The pet body: it poses and barks, and it never speaks ------------------
 
 test('pose offers exactly the three poses', () => {
-  assert.deepEqual(byName('pose').function.parameters.properties.name.enum, ['sit', 'shake', 'spin', 'stand', 'lie']);
+  assert.deepEqual(byName(PET, 'pose').function.parameters.properties.name.enum, ['sit', 'shake', 'spin', 'stand', 'lie']);
 });
 
-test('toolsFor: pet gets pose and play_sound only; others never get pose', () => {
-  const names = (/** @type {any} */ m) => toolsFor(m).map((t) => t.function.name).sort();
-  assert.deepEqual(names('pet'), ['play_sound', 'pose']);
-  assert.deepEqual(names('car'), ['cruise', 'move', 'play_sound', 'set_reply_language', 'stop']);
-  assert.deepEqual(names('dry-run'), names('car'));
-  assert.deepEqual(names('none'), ['play_sound', 'set_reply_language']);
+test('toolsOf: pet gets pose and play_sound; no other body is offered pose', () => {
+  assert.deepEqual(namesOf(PET), ['play_sound', 'pose', 'set_reply_language']);
+  assert.deepEqual(namesOf(TOY), ['cruise', 'move', 'play_sound', 'set_reply_language', 'stop']);
+  assert.deepEqual(namesOf(DRY), namesOf(TOY));
+  assert.deepEqual(namesOf(STILL), ['play_sound', 'set_reply_language']);
 });
 
 test('pose: rejected unless one of the three', () => {
   const r = validate([
     { id: 'a', name: 'pose', args: { name: 'roll' }, rawArguments: '{"name":"roll"}' },
     { id: 'b', name: 'pose', args: { name: 'sit' }, rawArguments: '{"name":"sit"}' },
-  ]);
+  ], PET);
   assert.deepEqual(r.actions, [{ kind: 'pose', name: 'sit' }]);
   assert.equal(r.dropped, 1);
   assert.equal(r.hadMoveIntent, false, 'a pose is not a request to move');

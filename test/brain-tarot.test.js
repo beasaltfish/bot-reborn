@@ -2,32 +2,31 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  TOOLS, RETURNING_TOOLS, toolsFor, validate, buildSystemPrompt, SYSTEM_PROMPT_TAROT,
+  RETURNING_TOOLS, toolsOf, validate, buildSystemPrompt, SYSTEM_PROMPT_TAROT,
 } from '../core/brain.js';
 import { resolveBody } from '../core/bodies.js';
 
-const names = (/** @type {any} */ m) => toolsFor(m).map((t) => t.function.name).sort();
+const names = (/** @type {any} */ m) => toolsOf(resolveBody(m)).map((t) => t.function.name).sort();
 
-test('toolsFor: a tarot body is offered draw_card and nothing else', () => {
-  assert.deepEqual(names('tarot'), ['draw_card']);
+test('toolsOf: a tarot body is offered draw_card and the language tool', () => {
+  assert.deepEqual(names('tarot'), ['draw_card', 'set_reply_language']);
 });
 
-test('toolsFor: every other body gets exactly the tools it had before tarot', () => {
+test('toolsOf: every other body gets exactly the tools it had before tarot', () => {
   assert.deepEqual(names('toy'), ['cruise', 'move', 'play_sound', 'set_reply_language', 'stop']);
   assert.deepEqual(names('dry-run'), ['cruise', 'move', 'play_sound', 'set_reply_language', 'stop']);
   assert.deepEqual(names('none'), ['play_sound', 'set_reply_language']);
-  assert.deepEqual(names('pet'), ['play_sound', 'pose']);
-  assert.deepEqual(names(undefined), ['cruise', 'move', 'play_sound', 'set_reply_language', 'stop']);
+  assert.deepEqual(names('pet'), ['play_sound', 'pose', 'set_reply_language']);
 });
 
 test('draw_card takes no arguments, and only it is a returning tool', () => {
-  const tool = TOOLS.find((t) => t.function.name === 'draw_card');
+  const tool = toolsOf(resolveBody('tarot')).find((t) => t.function.name === 'draw_card');
   assert.deepEqual(tool?.function.parameters.properties, {});
   assert.deepEqual([...RETURNING_TOOLS], ['draw_card']);
 });
 
 test('validate: a draw_card call becomes a draw action with no card chosen yet', () => {
-  const out = validate([{ name: 'draw_card', args: {}, rawArguments: '{}' }]);
+  const out = validate([{ name: 'draw_card', args: {}, rawArguments: '{}' }], resolveBody('tarot'));
   assert.deepEqual(out.actions, [{ kind: 'draw' }]);
   assert.equal(out.hadMoveIntent, false);
   assert.deepEqual(out.reasons, []);
