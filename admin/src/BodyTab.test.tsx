@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BodyTab } from './BodyTab';
@@ -44,9 +44,19 @@ describe('BodyTab', () => {
     expect(update).toHaveBeenCalledWith({ config: { body: { id: 'car' } } });
   });
 
-  it('previews the chosen body and says it is not a simulation', () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('previews the chosen body with the frames the brain has, and says it is not a simulation', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ pet: [], tarot: ['320x240/back.jpg'] }) })));
     render(<BodyTab detail={detail('tarot')} update={vi.fn()} />);
-    expect(screen.getByTestId('body-preview')).toHaveTextContent(/tarot reader/i);
+    expect(await screen.findByRole('img', { name: 'Tarot reader' })).toHaveAttribute('src', '/preview/tarot/320x240/back.jpg');
     expect(screen.getByText(/not a simulation/i)).toBeInTheDocument();
+  });
+
+  it('a body with no art still names itself instead of showing a broken picture', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ pet: [], tarot: [] }) })));
+    render(<BodyTab detail={detail('dry-run')} update={vi.fn()} />);
+    expect(screen.queryByRole('img')).toBeNull();
+    expect(screen.getByTestId('body-preview')).toHaveTextContent(/dry run/i);
   });
 });

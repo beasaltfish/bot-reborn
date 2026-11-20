@@ -5,7 +5,9 @@
 // whether it moves, and nothing at all about whether you have the hardware.
 // So each row of core/bodies.js is a card, and the attributes are the ones a
 // person can check against the box on their desk.
+import { useEffect, useState } from 'react';
 import { BODIES, CAPABILITIES } from '../../core/bodies.js';
+import { PreviewFrames } from './PreviewFrames';
 import { t, type Key } from './i18n';
 import type { Detail, Motion, Patch } from './types';
 
@@ -22,6 +24,18 @@ const SOURCE: Record<string, Key> = {
 export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): void }) {
   const chosen = detail.config.body.id;
   const body = BODIES.find((b) => b.id === chosen) ?? BODIES[0];
+  // Frame paths come from the brain: the admin bundle has no idea what the
+  // render tools left on disk, and a guessed path is a broken picture.
+  const [art, setArt] = useState<Record<string, string[]>>({});
+  useEffect(() => {
+    let live = true;
+    fetch('/preview/list.json')
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((j: unknown) => { if (live && j && typeof j === 'object') setArt(j as Record<string, string[]>); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, []);
+  const frames = (art[body.preview] ?? []).map((rel) => `/preview/${body.preview}/${rel}`);
   const pick = (id: string) => update({ config: { body: { id: id as Motion } } });
   const next = body.source === 'board' ? t('bodyNextBoard') : body.source === 'phone' ? t('bodyNextPhone') : t('bodyNextNone');
 
@@ -47,7 +61,11 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
         })}
       </div>
       <div className="body-side">
-        <div className="body-preview" data-testid="body-preview">{body.label}</div>
+        <div className="body-preview" data-testid="body-preview">
+          {frames.length > 0
+            ? <PreviewFrames key={body.id} frames={frames} alt={body.label} />
+            : <span>{body.label}</span>}
+        </div>
         <small>{t('previewNote')}</small>
         <p>{next}</p>
       </div>
