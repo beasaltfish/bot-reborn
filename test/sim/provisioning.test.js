@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { planById } from '../../sim/plan.js';
-import { provisionPlan, isRemote, screenMismatch, planScreen, provisionSteps, createProvisioning, manualPairing, paintManualPairing, bootManualPairing } from '../../sim/provision.js';
+import { provisionPlan, isRemote, screenMismatch, planScreen, provisionSteps, createProvisioning, manualPairing, paintManualPairing, bootManualPairing, withdrawManualPairing } from '../../sim/provision.js';
 import { emptyBoard } from '../../sim/bench.js';
 
 const settings = (over = {}) => ({ ...emptyBoard().settings, ...over });
@@ -168,6 +168,18 @@ test('a populated local picker is withdrawn when the brain turns remote', () => 
   assert.equal(panel.helper, true);
 
   assert.equal(paintManualPairing({ firmware: 'body', settings: {}, remote: true, characters, panel }), 'ineligible');
+  assert.deepEqual(panel.list, []);
+  assert.equal(panel.helper, false);
+});
+
+test('a populated local picker is withdrawn when the ROM bootloader opens', () => {
+  const characters = [{ id: 'a', name: 'Asten', ready: true, online: false }];
+  const panel = fakePicker();
+  assert.equal(paintManualPairing({ firmware: 'body', settings: {}, remote: false, characters, panel }), 'shown');
+  assert.deepEqual(panel.list.map((c) => c.id), ['a']);
+  assert.equal(panel.helper, true);
+
+  withdrawManualPairing(panel);
   assert.deepEqual(panel.list, []);
   assert.equal(panel.helper, false);
 });

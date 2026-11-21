@@ -39,6 +39,19 @@ export function manualPairing(o) {
 }
 
 /**
+ * Withdraw the manual picker: hidden helper and no choices. Used when the board
+ * is not a booted local body, including while the ROM bootloader is open.
+ * @param {{
+ *   setCharacterHelper(enabled: boolean): void,
+ *   setCharacters(list: { id: string, name: string }[]): void,
+ * }} panel
+ */
+export function withdrawManualPairing(panel) {
+  panel.setCharacterHelper(false);
+  panel.setCharacters([]);
+}
+
+/**
  * Paint the manual picker for the board as it is now. A board that no longer
  * qualifies — paired, remote, or another firmware — gets a hidden, empty
  * picker so choices from an earlier boot cannot be used.
@@ -57,8 +70,7 @@ export function manualPairing(o) {
 export function paintManualPairing(o) {
   const manual = manualPairing(o);
   if (!manual.show) {
-    o.panel.setCharacterHelper(false);
-    o.panel.setCharacters([]);
+    withdrawManualPairing(o.panel);
     return 'ineligible';
   }
   o.panel.setCharacterHelper(!o.remote);
