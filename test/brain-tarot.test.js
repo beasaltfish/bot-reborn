@@ -16,7 +16,7 @@ test('toolsOf: a tarot body is offered draw_card and no language tool', () => {
 test('toolsOf: every other body gets exactly the tools it had before tarot', () => {
   assert.deepEqual(names('toy'), ['cruise', 'move', 'play_sound', 'set_reply_language', 'stop']);
   assert.deepEqual(names('dry-run'), ['cruise', 'move', 'play_sound', 'set_reply_language', 'stop']);
-  assert.deepEqual(names('none'), ['play_sound', 'set_reply_language']);
+  assert.deepEqual(names('none'), ['set_reply_language']);
   assert.deepEqual(names('pet'), ['play_sound', 'pose']);
 });
 

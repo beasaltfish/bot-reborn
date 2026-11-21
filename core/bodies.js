@@ -158,10 +158,8 @@ const RULES_WHEELS = `- If the user wants you to move, you MUST call a tool. You
 
 const RULES_STILL = `- If the user asks you to move, tell them in your own way that you can't —
   sulk about it or make a joke of it — but never pretend you moved.
-- If the user is chatting or asking a question, answer. You may also react
-  with your voice alone: \`play_sound\` is yours to use.
-- If the user repeats the same thing, do not repeat your reaction — escalate
-  it or change it.`;
+- If the user is chatting or asking a question, answer.
+- If the user repeats the same thing, do not repeat your answer — change it.`;
 
 const RULES_SPOKEN = `- Reply in the same language the user spoke. This instruction is written in
   English; that is not a reason to answer in English.
@@ -310,7 +308,10 @@ export const TEMPLATES = {
     ways: [{ source: 'board', needs: [{ part: 'board' }, { part: 'mic' }, { part: 'amp' }] }],
     capabilities: ['hear', 'speak'],
     fixedTools: CONFIG_TOOLS,
-    actions: [ACTIONS.play_sound],
+    // Speech is the whole answer: a talking board has no use for a dog's
+    // repertoire, and an action the model can call on every turn becomes a
+    // bark before every sentence.
+    actions: [],
     prompts: {
       voice: BODY_STILL,
       rules: [RULES_STILL, RULES_SPOKEN],

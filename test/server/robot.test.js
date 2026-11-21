@@ -380,7 +380,7 @@ test('animators are built from the actions, not the id', () => {
   };
 
   const pose = TEMPLATES.pet.actions.find((a) => a.name === 'pose') ?? TEMPLATES.pet.actions[0];
-  const sound = TEMPLATES.none.actions[0];
+  const sound = TEMPLATES.pet.actions.find((a) => a.name === 'play_sound') ?? TEMPLATES.pet.actions[0];
 
   // A body called `pet` whose actions were replaced with a sound alone has
   // nothing to animate, so no face is ever drawn.

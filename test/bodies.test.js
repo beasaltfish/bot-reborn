@@ -29,7 +29,7 @@ test('five templates say what today says: same actions, same names', () => {
   assert.deepEqual(TEMPLATES.toy.actions.map((a) => a.name), ['move', 'cruise', 'stop', 'play_sound']);
   assert.deepEqual(TEMPLATES.pet.actions.map((a) => a.name), ['pose', 'play_sound']);
   assert.deepEqual(TEMPLATES.tarot.actions.map((a) => a.name), ['draw_card']);
-  assert.deepEqual(TEMPLATES.none.actions.map((a) => a.name), ['play_sound']);
+  assert.deepEqual(TEMPLATES.none.actions, []);
   assert.deepEqual(TEMPLATES['dry-run'].actions.map((a) => a.name), TEMPLATES.toy.actions.map((a) => a.name));
 });
 
@@ -77,22 +77,22 @@ test('a draw step needs returns: true, and a returning action is exactly one dra
 test('a schema keyword with the wrong value shape is refused, not thrown at call time', () => {
   // `required: true` passes a name check and then `for…of true` is a TypeError
   // on every turn; `enum: 'forward'` silently becomes a substring test.
-  const badRequired = structuredClone(TEMPLATES.none);
+  const badRequired = structuredClone(TEMPLATES.toy);
   badRequired.actions[0].args = /** @type {any} */ ({ type: 'object', required: true });
   assert.match(bodyProblem(badRequired) ?? '', /required/);
 
-  const badEnum = structuredClone(TEMPLATES.none);
+  const badEnum = structuredClone(TEMPLATES.toy);
   badEnum.actions[0].args = /** @type {any} */ ({
     type: 'object',
     properties: { name: { enum: 'forward' } },
   });
   assert.match(bodyProblem(badEnum) ?? '', /enum/);
 
-  const badType = structuredClone(TEMPLATES.none);
+  const badType = structuredClone(TEMPLATES.toy);
   badType.actions[0].args = /** @type {any} */ ({ type: 'object', properties: { name: { type: 'nil' } } });
   assert.match(bodyProblem(badType) ?? '', /\.type/);
 
-  const badBound = structuredClone(TEMPLATES.none);
+  const badBound = structuredClone(TEMPLATES.toy);
   badBound.actions[0].args = /** @type {any} */ ({
     type: 'object',
     properties: { name: { type: 'string', maxItems: '3' } },
@@ -330,7 +330,7 @@ test('the actions are the ones the bodies already carry out', () => {
     pet: ['pose', 'play_sound'],
     tarot: ['draw_card'],
     'dry-run': ['move', 'cruise', 'stop', 'play_sound'],
-    none: ['play_sound'],
+    none: [],
   });
 });
 
@@ -364,7 +364,7 @@ test('a user copy resolves to its template until it carries actions', () => {
 test('an id nobody knows falls back to the voice-only template', () => {
   const lost = resolveBody('nope');
   assert.equal(lost.template, 'none');
-  assert.deepEqual(lost.actions.map((a) => a.name), ['play_sound']);
+  assert.deepEqual(lost.actions, []);
 });
 
 test('a resolved body owns its actions: editing one does not edit the template', () => {

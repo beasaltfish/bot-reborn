@@ -35,7 +35,7 @@ test('the seven tool names are the seven, and each body chooses among them', () 
   // are not offered the tool that writes `replyLang` — base 8553a2b's rule.
   assert.deepEqual(namesOf(TAROT), ['draw_card']);
   assert.deepEqual(namesOf(PET), ['play_sound', 'pose']);
-  assert.deepEqual(namesOf(STILL), ['play_sound', 'set_reply_language']);
+  assert.deepEqual(namesOf(STILL), ['set_reply_language']);
 });
 
 test('play_sound offers exactly the four sounds', () => {
@@ -1319,11 +1319,13 @@ test('reflex fired on a still body: the move is dropped and said why, and nothin
   assert.match(/** @type {any} */ (h.brain.history[0]).content, /your reflexes answered: nothing\]$/);
 });
 
-test('reflex fired on a still body: a sound still plays', async () => {
+test('reflex fired on a still body: a sound has nothing to play', async () => {
+  // The voice-only body carries no sounds at all: speech is the whole answer.
   const h = brainHarness({ id: 'none', reply: say('never'), reflex: judgeSaying('fired', [...BARK, ...LEFT]) });
   await h.brain.handle('忘忘');
   await new Promise((r) => setTimeout(r, 0));
-  assert.deepEqual(h.events, [{ op: 'sound', name: 'bark' }]);
+  assert.deepEqual(h.events, []);
+  assert.match(h.traced.join('\n'), /\[reflex\] sound dropped: body "none" does not do sound/);
 });
 
 test('reflex fired: a configured call validate() refuses is dropped with its reason', async () => {
@@ -1531,7 +1533,7 @@ test('handle: the LLM is asked with the tools for this body', async () => {
   const h = brainHarness({ id: 'none', reply: say('我动不了呀。') });
   await h.brain.handle('往前走');
   assert.deepEqual(h.llm.calls[0].tools.map((/** @type {any} */ t) => t.function.name).sort(),
-    ['play_sound', 'set_reply_language']);
+    ['set_reply_language']);
   assert.equal(h.llm.calls[0].messages[0].content, SYSTEM_PROMPT_STILL);
 });
 
@@ -1551,9 +1553,10 @@ test('handle: none — a move the model makes up anyway is dropped, says why, an
   ]) });
   await h.brain.handle('往前走');
   await new Promise((r) => setTimeout(r, 0));
-  assert.deepEqual(h.events, [{ op: 'sound', name: 'yip' }, { op: 'speak', text: '好的！' }]);
+  assert.deepEqual(h.events, [{ op: 'speak', text: '好的！' }]);
   assert.match(h.traced.join('\n'), /dropped — move: this body cannot move/);
   assert.match(h.traced.join('\n'), /dropped — cruise: this body cannot move/);
+  assert.match(h.traced.join('\n'), /dropped — sound: this body cannot move/);
 });
 
 // --- A body of one's own --------------------------------------------------
@@ -1890,7 +1893,7 @@ test('toolsOf: pet gets pose and play_sound; no other body is offered pose', () 
   assert.deepEqual(namesOf(PET), ['play_sound', 'pose']);
   assert.deepEqual(namesOf(TOY), ['cruise', 'move', 'play_sound', 'set_reply_language', 'stop']);
   assert.deepEqual(namesOf(DRY), namesOf(TOY));
-  assert.deepEqual(namesOf(STILL), ['play_sound', 'set_reply_language']);
+  assert.deepEqual(namesOf(STILL), ['set_reply_language']);
 });
 
 test('pose: rejected unless one of the three', () => {
