@@ -1,12 +1,15 @@
+import type { ReactNode } from 'react';
 import { DEFAULT_PERSONA, MAX_PERSONA } from '../../core/brain.js';
 import { t } from './i18n';
 import { TokenBox } from './TokenBox';
 import type { Detail, Patch } from './types';
 
-// The phone is this character's body, so it is paired on the Body tab, beside
-// the cards that say which bodies use one. What stays here is the token, for a
-// device that cannot scan a code.
-export function BasicTab({ detail, update, onToken }: { detail: Detail; update(p: Patch): void; onToken(token: string): void }) {
+// The phone is this character's body, so it is paired beside the cards that say
+// which bodies use one; those cards, and everything else about the body and the
+// reflex, are under Advanced at the bottom. What stays in front is the token,
+// for a device that cannot scan a code.
+export function BasicTab({ detail, update, onToken, advanced }:
+  { detail: Detail; update(p: Patch): void; onToken(token: string): void; advanced?: ReactNode }) {
   const c = detail.config;
   return (
     <>
@@ -50,6 +53,12 @@ export function BasicTab({ detail, update, onToken }: { detail: Detail; update(p
       <div className="pairing">
         <TokenBox id={detail.id} onToken={onToken} />
       </div>
+      {advanced && (
+        <details className="advanced">
+          <summary>{t('advanced')}</summary>
+          {advanced}
+        </details>
+      )}
     </>
   );
 }

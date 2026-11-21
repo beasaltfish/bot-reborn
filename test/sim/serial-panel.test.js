@@ -71,6 +71,23 @@ test('choosing a character only fills the input with token <hex>', async () => {
   } finally { restore(); }
 });
 
+test('a late character answer does not fill the input after the picker is hidden', async () => {
+  /** @type {((value: any) => void) | undefined} */ let answer;
+  globalThis.fetch = /** @type {any} */ (() => new Promise((resolve) => { answer = resolve; }));
+  const { panel, restore } = setup();
+  try {
+    const pick = /** @type {HTMLSelectElement} */ (panel.element.querySelector('select[data-role="character"]'));
+    const input = /** @type {HTMLInputElement} */ (panel.element.querySelector('input[data-role="line"]'));
+    pick.value = 'rex';
+    pick.dispatchEvent(new (globalThis.document.defaultView?.Event ?? Event)('change', { bubbles: true }));
+    // The board is unplugged or turns remote while the brain is answering.
+    panel.setCharacterHelper(false);
+    answer?.({ ok: true, json: async () => ({ token: 'a'.repeat(32) }) });
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(input.value, '');
+  } finally { restore(); }
+});
+
 test('type() sends a line the way the input form would', () => {
   const { panel, changes, restore } = setup();
   try {

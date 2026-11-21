@@ -31,7 +31,7 @@ import { createBoardRuntime, bootMode } from './firmware/runtime.js';
 import { createBodyAudio } from './body.js';
 import { createBodyAudioLink } from './firmware/audio-link.js';
 import { demoSkips, lookupCharacter } from './capabilities.js';
-import { isRemote, provisionSteps, screenMismatch, createProvisioning, tokenCandidates } from './provision.js';
+import { isRemote, provisionSteps, screenMismatch, createProvisioning, tokenCandidates, paintManualPairing, bootManualPairing, showBootloader, offerTokenRepair } from './provision.js';
 import { firmwareById, firmwareFor, FIRMWARES } from './firmware/index.js';
 import { ledPattern } from './firmware/led.js';
 import { createSerialPanel } from './ui/serial-panel.js';
@@ -39,6 +39,7 @@ import { runFlash, canFlash } from './firmware/flash.js';
 import { deviceInitialized } from './firmware/parts-view.js';
 import { createSketchContext, gpioInputLevel } from './firmware/sketch-context.js';
 import { createFirmwareStudio } from './ui/firmware-studio.js';
+import { rejectCopy } from './ui/reject-copy.js';
 import { runCustomFlash } from './firmware/flash.js';
 import { compile } from './firmware/lang/index.js';
 import { EXAMPLES } from './firmware/examples.js';
@@ -189,10 +190,34 @@ const serial = createSerialPanel({
   onChange: (settings) => {
     bench = { ...bench, board: { ...bench.board, settings } };
     setBench(bench);
+    repaintManualPicker();
   },
   onReboot: () => rebootBoard(),
 });
 document.body.append(serial.element);
+
+/** Characters the manual picker last received; repainted when the board changes. */
+/** @type {{ id: string, name: string, ready?: boolean, online?: boolean }[]} */
+let manualCharacters = [];
+/** Whether the status line currently carries the manual pairing hint. */
+let manualPairingHint = false;
+
+/**
+ * Repaint the manual picker from the board as it is now. A body plan owns the
+ * picker with its own list, so leave that list alone.
+ * @param {string} [firmware]
+ * @param {import('./bench.js').Settings} [settings]
+ */
+function repaintManualPicker(firmware = bench.board.firmware, settings = bench.board.settings) {
+  if (activeProject && activeProject.connection === 'body') return;
+  paintManualPairing({
+    firmware,
+    settings,
+    remote: isRemote(settings.url, location.origin),
+    characters: manualCharacters,
+    panel: serial,
+  });
+}
 /** @param {import('./selection.js').Selection} selection */
 function showContext(selection) {
   if (!selection || selection.kind === 'part') { context.hide(); return; }
@@ -881,7 +906,11 @@ async function plugIn(meta = {}) {
 
   if (bootMode({ blocked: Boolean(blocked), pendingFlash: meta.pendingFlash }) === 'bootloader') {
     const target = firmwareById(meta.pendingFlash ?? '');
-    serial.show(true);
+    // The ROM bootloader is not a booted body: an earlier boot's pairing list
+    // must not stay selectable behind the disabled console.
+    manualCharacters = [];
+    manualPairingHint = false;
+    showBootloader(serial);
     serial.setFirmware(/** @type {any} */ (target ?? firmwareById('body')));
     serial.append(`esptool: ${target?.image?.label ?? 'firmware'} ready for flashing`);
     updateStudio();
@@ -893,8 +922,11 @@ async function plugIn(meta = {}) {
     panels.status(simText(document.documentElement.lang, 'board.noFirmware'));
     return;
   }
+  manualCharacters = [];
+  manualPairingHint = false;
   serial.setFirmware(firmware);
   serial.setSettings(bench.board.settings);
+  repaintManualPicker();
   serial.show(true);
   line.ending = meta.ending ?? null;
   bodyAudioLink?.stop();
@@ -930,6 +962,24 @@ async function plugIn(meta = {}) {
       return verdicts;
     },
     brainUrl: `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/body`,
+    rejectText: (reason) => rejectCopy(reason, document.documentElement.lang === 'zh' ? 'zh' : 'en'),
+    onReject: (reason) => {
+      // A rejection ends the provisioning wait whatever language it printed in.
+      provisioning?.gaveUp();
+      line.fault = rejectCopy(reason, document.documentElement.lang === 'zh' ? 'zh' : 'en');
+      showLine();
+      // A stale local token is recoverable in place: offer the character list
+      // even though a token is stored, so its fresh token can replace it.
+      if (reason === 'token' && !isRemote(bench.board.settings.url, location.origin)) {
+        void fetch('/api/characters')
+          .then((r) => r.json())
+          .then((list) => {
+            if (!usb.plugged) return;
+            if (Array.isArray(list)) offerTokenRepair(serial, list);
+          })
+          .catch(() => {});
+      }
+    },
     audio: bodyAudioLink ?? undefined,
     sketch: {
       ctx: () => {
@@ -1053,14 +1103,18 @@ async function flashFirmwareNow(/** @type {string} */ id) {
   bench = { ...bench, board: result.board };
   setBench(bench);
   const firmware = firmwareById(id);
-  if (firmware) serial.setFirmware(firmware);
+  if (firmware) {
+    serial.setFirmware(firmware);
+    repaintManualPicker(firmware.id);
+  }
   if (usb.plugged) plugIn({ ending: line.ending });
 }
 
 /**
  * The single ready character this brain could start, or a list to choose from
- * when more than one could be meant.
- * @returns {Promise<{ token?: string, list?: { id: string, name: string, ready?: boolean, online?: boolean }[] }>}
+ * when more than one could be meant. `failed` means the list could not be read
+ * at all — not that nothing is ready.
+ * @returns {Promise<{ token?: string, list?: { id: string, name: string, ready?: boolean, online?: boolean }[], failed?: true }>}
  */
 async function tokenCandidate() {
   try {
@@ -1069,7 +1123,7 @@ async function tokenCandidate() {
     const detail = await (await fetch(`/api/characters/${encodeURIComponent(ready[0].id)}`)).json();
     return detail?.token ? { token: detail.token, list: ready } : { list: ready };
   } catch {
-    return {};
+    return { failed: true };
   }
 }
 
@@ -1082,27 +1136,71 @@ async function tokenCandidate() {
  */
 async function maybeProvision(mine) {
   const plan = /** @type {import('./plan.js').Plan | null} */ (activeProject);
-  if (!plan || plan.connection !== 'body') return;
+  if (!plan || plan.connection !== 'body') {
+    /** @type {{ id: string, name: string, ready?: boolean, online?: boolean }[]} */
+    let fetched = [];
+    const result = await bootManualPairing({
+      characters: async () => {
+        // A failed or malformed read must reach the caller as "unreadable",
+        // not as "no character is set up".
+        const body = await (await fetch('/api/characters')).json();
+        if (!Array.isArray(body)) throw new Error('character list is not a list');
+        fetched = body;
+        return fetched;
+      },
+      isCurrent: () => mine === plugs,
+      board: () => ({ firmware: bench.board.firmware, settings: bench.board.settings }),
+      origin: location.origin,
+      panel: serial,
+    });
+    if (result === 'stale') return;
+    manualCharacters = fetched;
+    const lang = document.documentElement.lang;
+    if (result === 'ineligible') return;
+    if (result === 'shown') {
+      if (manualPairingHint) { panels.status(null); manualPairingHint = false; }
+      return;
+    }
+    manualPairingHint = true;
+    const text = result === 'unreadable'
+      ? simText(lang, 'board.charactersUnreadable')
+      : simText(lang, 'board.noReadyCharacter');
+    panels.status(text, {
+      actions: [{ label: simText(lang, 'board.checkAgain'), run: () => { void maybeProvision(mine); } }],
+    });
+    return;
+  }
   if (provisionedFor === plan.id) return;
   provisionedFor = plan.id;
   const lang = document.documentElement.lang;
   const remote = isRemote(bench.board.settings.url, location.origin);
   serial.show(true);
-  serial.setCharacterHelper(!remote);
   if (remote) {
+    serial.setCharacterHelper(false);
     const steps = provisionSteps(plan, bench.board.settings);
     if (steps.commands.length) panels.status(simText(lang, 'board.provisionRemote'));
     return;
   }
   let token = bench.board.settings.token;
   /** @type {{ id: string, name: string }[] | null} */ let list = null;
+  let unreadable = false;
   if (!token) {
     const candidate = await tokenCandidate();
-    list = (candidate.list ?? []).map((c) => ({ id: c.id, name: c.name }));
-    token = candidate.token ?? '';
+    if (candidate.failed) unreadable = true;
+    else {
+      list = (candidate.list ?? []).map((c) => ({ id: c.id, name: c.name }));
+      token = candidate.token ?? '';
+    }
   }
   if (mine !== plugs) return;
-  if (list) serial.setCharacters(list);
+  // No list to choose from is no picker: an empty one reads as a broken board.
+  if (list) {
+    serial.setCharacterHelper(list.length > 0);
+    serial.setCharacters(list);
+  } else {
+    serial.setCharacterHelper(false);
+    serial.setCharacters([]);
+  }
   const mismatch = screenMismatch(plan, bench.board.settings);
   const missing = provisionSteps(plan, bench.board.settings, { token, replaceScreen: false }).missing;
   if (!missing.length && !mismatch) return;
@@ -1154,7 +1252,14 @@ async function maybeProvision(mine) {
   }
 
   if (!token) {
-    panels.status(simText(lang, 'board.provisionManual'));
+    // The first-run dead end: say whether nothing is ready or the list could
+    // not be read, and offer to look again after the admin page.
+    panels.status(simText(lang, unreadable ? 'board.charactersUnreadable' : 'board.noReadyCharacter'), {
+      actions: [{
+        label: simText(lang, 'board.checkAgain'),
+        run: () => { provisionedFor = null; void maybeProvision(mine); },
+      }],
+    });
     return;
   }
 
@@ -1198,6 +1303,7 @@ function unplug() {
   bodyAudio.close();
   serial.show(false);
   panels.closePicker();
+  manualPairingHint = false;
   effects.setAlive(false);
   effects.playing([]);
   effects.led('off');

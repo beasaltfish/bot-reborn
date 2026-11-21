@@ -8,7 +8,7 @@
 // printed: five lines of "cannot" is a page that argues against itself, and
 // the badges above already say what it does.
 import { useEffect, useState } from 'react';
-import { TEMPLATES, bodyProblem, labelOf, resolveBody } from '../../core/bodies.js';
+import { TEMPLATES, bodyById, bodyProblem, labelOf, resolveBody } from '../../core/bodies.js';
 import { ActionsEditor } from './ActionsEditor';
 import { BodyDiagram } from './BodyDiagram';
 import { lang, t, type Key } from './i18n';
@@ -33,8 +33,9 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
   const patch = detail.config.body;
   // A body of one's own keeps its own id (`my-dog`) and names the template it
   // copied; the cards are the templates, so the template is what is chosen.
-  // The brain resolves `template ?? id` too.
-  const chosen = patch.template ?? patch.id;
+  // The brain resolves `template ?? id` too, so an old config with no template
+  // must land on the same card as the solver does — not on a missing id.
+  const chosen = /** @type {Motion} */ ((resolveBody(patch.id ?? 'toy', patch).template) ?? 'toy');
   /** The sentence `bodyProblem` wrote when a switch was refused, and whether
    * the switch then dropped the user's edits or wrote nothing at all. */
   const [notice, setNotice] = useState<{ text: string; cleared: boolean } | null>(null);
@@ -46,7 +47,7 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
   const bodies = Object.values(TEMPLATES);
   const shown = bodies.filter((b) => bench || !b.hidden || b.id === chosen);
   // The fallback is the id config.js falls back to, not whatever sorts first.
-  const body = TEMPLATES[chosen] ?? TEMPLATES.toy;
+  const body = bodyById(chosen) ?? TEMPLATES.toy;
   // Frame paths come from the brain: the admin bundle has no idea what the
   // render tools left on disk, and a guessed path is a broken picture.
   const [art, setArt] = useState<Record<string, string[]>>({});
@@ -66,9 +67,16 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
   // cleared back to inherited, and the sentence says which.
   const pick = (id: string) => {
     const next = id as Motion;
-    // The chosen template is written beside the id. Leaving the old template
-    // in place made a switch only cosmetic: the brain resolves `template ??
-    // id`, so a stale `pet` kept winning after a click on `toy`.
+    // A body of one's own keeps its name. Only an id that is itself a template
+    // is rewritten: `my-dog` stays `my-dog`, and `template` says what it
+    // follows. The chosen template is still written beside a template id.
+    // Leaving the old template in place made a switch only cosmetic: the brain
+    // resolves `template ?? id`, so a stale `pet` kept winning after a click on
+    // `toy`. `hasOwn`, not a property read: `TEMPLATES.constructor` is a
+    // function, so a body named `constructor` would lose its name.
+    const named = Object.hasOwn(TEMPLATES, patch.id ?? '');
+    /** The body keys this switch writes: a template id, or the template alone. */
+    const follow = (value: Motion) => (named ? { id: value, template: value } : { template: value });
     /** The body as the brain will read it after a PATCH carrying this patch. */
     const read = (p: typeof patch) => {
       const candidate = resolveBody(next, { ...p, template: next });
@@ -79,7 +87,7 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
     const problem = bodyProblem(read(patch));
     if (!problem) {
       setNotice(null);
-      update({ config: { body: { id: next, template: next } } });
+      update({ config: { body: follow(next) } });
       return;
     }
     // A switch drops what the new body cannot carry: the actions it wrote and
@@ -88,10 +96,10 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
     // reason the merge is refused, the switch is refused too rather than
     // taking the actions with it and leaving the body just as broken.
     const dropped = Array.isArray(patch.actions)
-      ? { id: next, template: next, actions: null, triggers: null }
+      ? { ...follow(next), actions: null, triggers: null }
       : patch.triggers !== undefined
-        ? { id: next, template: next, triggers: null }
-        : { id: next, template: next };
+        ? { ...follow(next), triggers: null }
+        : follow(next);
     // Validate the patch that would actually be written, not just the merge.
     const settled = bodyProblem(read({ ...patch, ...dropped }));
     if (settled) {

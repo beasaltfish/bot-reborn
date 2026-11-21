@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { planById } from '../../sim/plan.js';
-import { provisionPlan, isRemote, screenMismatch, planScreen, provisionSteps, createProvisioning } from '../../sim/provision.js';
+import { provisionPlan, isRemote, screenMismatch, planScreen, provisionSteps, createProvisioning, manualPairing, paintManualPairing, bootManualPairing, showBootloader, offerTokenRepair } from '../../sim/provision.js';
 import { emptyBoard } from '../../sim/bench.js';
 
 const settings = (over = {}) => ({ ...emptyBoard().settings, ...over });
@@ -130,4 +130,168 @@ test('pairing candidates are ready and offline, never filtered by capability', (
     { id: 'c', name: 'Busy', ready: true, online: true, motion: 'pet' },
   ];
   assert.deepEqual(tokenCandidates(list).map((c) => c.id), ['a']);
+});
+
+test('a body with no token and no demo still gets a character list', () => {
+  const list = [{ id: 'a', name: 'Asten', ready: true, online: false }];
+  assert.deepEqual(manualPairing({ firmware: 'body', settings: {}, remote: false, characters: list }), { show: true, list });
+});
+
+test('a paired body, a remote brain, or another firmware gets nothing', () => {
+  const list = [{ id: 'a', name: 'Asten', ready: true, online: false }];
+  assert.equal(manualPairing({ firmware: 'body', settings: { token: 't' }, remote: false, characters: list }).show, false);
+  assert.equal(manualPairing({ firmware: 'body', settings: {}, remote: true, characters: list }).show, false);
+  assert.equal(manualPairing({ firmware: 'sketch-sonar', settings: {}, remote: false, characters: list }).show, false);
+});
+
+/** A serial panel whose picker state the tests can read back. */
+function fakePicker() {
+  /** @type {{ visible: boolean, helper: boolean, list: { id: string, name: string }[],
+   *   show(visible: boolean): void, setCharacterHelper(enabled: boolean): void,
+   *   setCharacters(list: { id: string, name: string }[]): void }} */
+  const panel = {
+    visible: false,
+    helper: false,
+    list: [],
+    show(visible) { panel.visible = visible; },
+    setCharacterHelper(enabled) { panel.helper = enabled; },
+    setCharacters(list) { panel.list = list; },
+  };
+  return panel;
+}
+
+test('a populated local picker is withdrawn when the brain turns remote', () => {
+  const characters = [{ id: 'a', name: 'Asten', ready: true, online: false }];
+  const panel = fakePicker();
+  assert.equal(paintManualPairing({ firmware: 'body', settings: {}, remote: false, characters, panel }), 'shown');
+  assert.deepEqual(panel.list.map((c) => c.id), ['a']);
+  assert.equal(panel.helper, true);
+
+  assert.equal(paintManualPairing({ firmware: 'body', settings: {}, remote: true, characters, panel }), 'ineligible');
+  assert.deepEqual(panel.list, []);
+  assert.equal(panel.helper, false);
+});
+
+test('a populated local picker is withdrawn before the ROM bootloader panel shows', () => {
+  const characters = [{ id: 'a', name: 'Asten', ready: true, online: false }];
+  const panel = fakePicker();
+  assert.equal(paintManualPairing({ firmware: 'body', settings: {}, remote: false, characters, panel }), 'shown');
+  assert.deepEqual(panel.list.map((c) => c.id), ['a']);
+  assert.equal(panel.helper, true);
+
+  /** @type {string[]} */ const calls = [];
+  /** @type {boolean} */ let helper = panel.helper;
+  /** @type {{ id: string, name: string }[]} */ let list = panel.list;
+  /** @type {{ show(visible: boolean): void, setCharacterHelper(enabled: boolean): void,
+   *   setCharacters(list: { id: string, name: string }[]): void }} */
+  const recording = {
+    show(visible) { calls.push(`show:${visible}:${helper}:${list.length}`); },
+    setCharacterHelper(enabled) { helper = enabled; calls.push(`helper:${enabled}`); },
+    setCharacters(next) { list = next; calls.push(`characters:${next.length}`); },
+  };
+  showBootloader(recording);
+
+  // At the moment show(true) runs the helper is hidden and the list is empty.
+  assert.deepEqual(calls, ['helper:false', 'characters:0', 'show:true:false:0']);
+});
+
+test('an empty list hides the picker rather than showing only a placeholder', () => {
+  const panel = fakePicker();
+  assert.equal(paintManualPairing({ firmware: 'body', settings: {}, remote: false, characters: [], panel }), 'empty');
+  assert.equal(panel.helper, false);
+  assert.deepEqual(panel.list, []);
+});
+
+test('the pairing lookup can be retried after the user sets a character up', async () => {
+  const panel = fakePicker();
+  let characters = /** @type {{ id: string, name: string, ready?: boolean, online?: boolean }[]} */ ([]);
+  const boot = () => bootManualPairing({
+    characters: async () => characters,
+    isCurrent: () => true,
+    board: () => ({ firmware: 'body', settings: { token: '', url: '' } }),
+    origin: 'http://localhost:8787',
+    panel,
+  });
+  assert.equal(await boot(), 'empty');
+  assert.equal(panel.helper, false);
+  assert.deepEqual(panel.list, []);
+
+  // Back from the admin page with a character that is ready to pair.
+  characters = [{ id: 'a', name: 'Asten', ready: true, online: false }];
+  assert.equal(await boot(), 'shown');
+  assert.equal(panel.helper, true);
+  assert.deepEqual(panel.list, [{ id: 'a', name: 'Asten' }]);
+});
+
+test('a list that could not be read is not reported as an empty brain', async () => {
+  const panel = fakePicker();
+  const status = await bootManualPairing({
+    characters: async () => { throw new Error('offline'); },
+    isCurrent: () => true,
+    board: () => ({ firmware: 'body', settings: { token: '', url: '' } }),
+    origin: 'http://localhost:8787',
+    panel,
+  });
+  assert.equal(status, 'unreadable');
+  assert.equal(panel.visible, false);
+  assert.equal(panel.helper, false);
+});
+
+test('a stale token still gets the list, so its replacement can be picked', () => {
+  const characters = [
+    { id: 'a', name: 'Asten', ready: true, online: false },
+    { id: 'b', name: 'Busy', ready: true, online: true },
+  ];
+  const panel = fakePicker();
+  // Boot stays quiet: a token is set, so manualPairing does not offer the list.
+  assert.equal(manualPairing({ firmware: 'body', settings: { token: 'stale' }, remote: false, characters }).show, false);
+  assert.equal(offerTokenRepair(panel, characters), 1);
+  assert.deepEqual(panel.list.map((c) => c.id), ['a']);
+  assert.equal(panel.helper, true);
+});
+
+test('a stale token with nothing to pick leaves the helper hidden', () => {
+  const panel = fakePicker();
+  assert.equal(offerTokenRepair(panel, [{ id: 'b', name: 'Busy', ready: true, online: true }]), 0);
+  assert.deepEqual(panel.list, []);
+  assert.equal(panel.helper, false);
+});
+
+test('a deferred answer is discarded when the brain turned remote during the fetch', async () => {
+  const panel = fakePicker();
+  /** @type {((list: { id: string, name: string, ready?: boolean, online?: boolean }[]) => void) | undefined} */
+  let answer;
+  let url = '';
+  const boot = bootManualPairing({
+    characters: () => new Promise((resolve) => { answer = resolve; }),
+    isCurrent: () => true,
+    board: () => ({ firmware: 'body', settings: { token: '', url } }),
+    origin: 'http://localhost:8787',
+    panel,
+  });
+  url = 'ws://other:8787/body';
+  answer?.([{ id: 'a', name: 'Asten', ready: true, online: false }]);
+  assert.equal(await boot, 'ineligible');
+  assert.deepEqual(panel.list, []);
+  assert.equal(panel.helper, false);
+});
+
+test('a late answer from a boot the user left never reaches the picker', async () => {
+  const panel = fakePicker();
+  /** @type {((list: { id: string, name: string, ready?: boolean, online?: boolean }[]) => void) | undefined} */
+  let answer;
+  let current = true;
+  const boot = bootManualPairing({
+    characters: () => new Promise((resolve) => { answer = resolve; }),
+    isCurrent: () => current,
+    board: () => ({ firmware: 'body', settings: { token: '', url: '' } }),
+    origin: 'http://localhost:8787',
+    panel,
+  });
+  current = false;
+  answer?.([{ id: 'a', name: 'Asten', ready: true, online: false }]);
+  assert.equal(await boot, 'stale');
+  assert.deepEqual(panel.list, []);
+  assert.equal(panel.helper, false);
+  assert.equal(panel.visible, false);
 });

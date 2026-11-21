@@ -26,6 +26,137 @@ export function tokenCandidates(list) {
   return (Array.isArray(list) ? list : []).filter((c) => c.ready && !c.online);
 }
 
+/**
+ * A bench wired by hand has no demo to say which character it means, so the
+ * serial panel offers the list itself. Only an unpaired local body qualifies.
+ * @param {{ firmware: string, settings: { token?: string }, remote: boolean,
+ *            characters: { id: string, name: string, ready?: boolean, online?: boolean }[] }} o
+ * @returns {{ show: boolean, list: { id: string, name: string, ready?: boolean, online?: boolean }[] }}
+ */
+export function manualPairing(o) {
+  const show = o.firmware === 'body' && !o.remote && !o.settings.token;
+  return { show, list: tokenCandidates(o.characters) };
+}
+
+/**
+ * Withdraw the manual picker: hidden helper and no choices. Used when the board
+ * is not a booted local body, including while the ROM bootloader is open.
+ * @param {{
+ *   setCharacterHelper(enabled: boolean): void,
+ *   setCharacters(list: { id: string, name: string }[]): void,
+ * }} panel
+ */
+export function withdrawManualPairing(panel) {
+  panel.setCharacterHelper(false);
+  panel.setCharacters([]);
+}
+
+/**
+ * Show the serial panel for the ROM bootloader. It is not a booted body, so an
+ * earlier boot's pairing choices are withdrawn before the panel appears.
+ * @param {{
+ *   show(visible: boolean): void,
+ *   setCharacterHelper(enabled: boolean): void,
+ *   setCharacters(list: { id: string, name: string }[]): void,
+ * }} panel
+ */
+export function showBootloader(panel) {
+  withdrawManualPairing(panel);
+  panel.show(true);
+}
+
+/**
+ * Paint the manual picker for the board as it is now. A board that no longer
+ * qualifies — paired, remote, or another firmware — gets a hidden, empty
+ * picker so choices from an earlier boot cannot be used.
+ * @param {{
+ *   firmware: string,
+ *   settings: { token?: string },
+ *   remote: boolean,
+ *   characters: { id: string, name: string, ready?: boolean, online?: boolean }[],
+ *   panel: {
+ *     setCharacterHelper(enabled: boolean): void,
+ *     setCharacters(list: { id: string, name: string }[]): void,
+ *   },
+ * }} o
+ * @returns {'shown'|'empty'|'ineligible'}
+ */
+export function paintManualPairing(o) {
+  const manual = manualPairing(o);
+  if (!manual.show) {
+    withdrawManualPairing(o.panel);
+    return 'ineligible';
+  }
+  // An empty picker reads as a bug, not as "nothing is ready". The status line
+  // offers to look again instead.
+  if (!manual.list.length) {
+    withdrawManualPairing(o.panel);
+    return 'empty';
+  }
+  o.panel.setCharacterHelper(true);
+  o.panel.setCharacters(manual.list.map((c) => ({ id: c.id, name: c.name })));
+  return 'shown';
+}
+
+/**
+ * The manual pairing branch of a boot: ask the brain for its characters, then
+ * paint the picker only if this boot is still current and the board still
+ * qualifies. A late answer from a boot the user has left is dropped.
+ * @param {{
+ *   characters(): Promise<{ id: string, name: string, ready?: boolean, online?: boolean }[]>,
+ *   isCurrent(): boolean,
+ *   board(): { firmware: string, settings: { token?: string, url: string } },
+ *   origin: string,
+ *   panel: {
+ *     show(visible: boolean): void,
+ *     setCharacterHelper(enabled: boolean): void,
+ *     setCharacters(list: { id: string, name: string }[]): void,
+ *   },
+ * }} o
+ * @returns {Promise<'shown'|'empty'|'stale'|'ineligible'|'unreadable'>}
+ */
+export async function bootManualPairing(o) {
+  /** @type {{ id: string, name: string, ready?: boolean, online?: boolean }[] | null} */
+  let characters = null;
+  try {
+    characters = await o.characters();
+  } catch {
+    characters = null;
+  }
+  if (!o.isCurrent()) return 'stale';
+  // "Could not read the list" is not "no character is set up".
+  if (!characters) return 'unreadable';
+  const board = o.board();
+  const status = paintManualPairing({
+    firmware: board.firmware,
+    settings: board.settings,
+    remote: isRemote(board.settings.url, o.origin),
+    characters,
+    panel: o.panel,
+  });
+  if (status !== 'ineligible') o.panel.show(true);
+  return status;
+}
+
+/**
+ * The picker for a body whose stored token the brain refused: a stale token is
+ * still set, so boot does not offer the list, but the user can pick the
+ * character now, send its fresh token, then reboot. A remote brain has no
+ * trusted local list, so it keeps hand-typed tokens only (the caller decides).
+ * @param {{
+ *   setCharacterHelper(enabled: boolean): void,
+ *   setCharacters(list: { id: string, name: string }[]): void,
+ * }} panel
+ * @param {{ id: string, name: string, ready?: boolean, online?: boolean }[]} characters
+ * @returns {number} how many characters are now selectable
+ */
+export function offerTokenRepair(panel, characters) {
+  const list = tokenCandidates(characters).map((c) => ({ id: c.id, name: c.name }));
+  panel.setCharacterHelper(list.length > 0);
+  panel.setCharacters(list);
+  return list.length;
+}
+
 /** @param {string} url @param {string} origin */
 export function isRemote(url, origin) {
   if (!url) return false;
