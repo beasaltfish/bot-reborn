@@ -8,7 +8,7 @@
 // printed: five lines of "cannot" is a page that argues against itself, and
 // the badges above already say what it does.
 import { useEffect, useState } from 'react';
-import { TEMPLATES, bodyProblem, labelOf, resolveBody } from '../../core/bodies.js';
+import { TEMPLATES, bodyById, bodyProblem, labelOf, resolveBody } from '../../core/bodies.js';
 import { ActionsEditor } from './ActionsEditor';
 import { BodyDiagram } from './BodyDiagram';
 import { lang, t, type Key } from './i18n';
@@ -46,7 +46,7 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
   const bodies = Object.values(TEMPLATES);
   const shown = bodies.filter((b) => bench || !b.hidden || b.id === chosen);
   // The fallback is the id config.js falls back to, not whatever sorts first.
-  const body = TEMPLATES[chosen] ?? TEMPLATES.toy;
+  const body = bodyById(chosen) ?? TEMPLATES.toy;
   // Frame paths come from the brain: the admin bundle has no idea what the
   // render tools left on disk, and a guessed path is a broken picture.
   const [art, setArt] = useState<Record<string, string[]>>({});
@@ -71,8 +71,9 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
     // follows. The chosen template is still written beside a template id.
     // Leaving the old template in place made a switch only cosmetic: the brain
     // resolves `template ?? id`, so a stale `pet` kept winning after a click on
-    // `toy`.
-    const named = TEMPLATES[(patch.id ?? '') as Motion] !== undefined;
+    // `toy`. `hasOwn`, not a property read: `TEMPLATES.constructor` is a
+    // function, so a body named `constructor` would lose its name.
+    const named = Object.hasOwn(TEMPLATES, patch.id ?? '');
     /** The body keys this switch writes: a template id, or the template alone. */
     const follow = (value: Motion) => (named ? { id: value, template: value } : { template: value });
     /** The body as the brain will read it after a PATCH carrying this patch. */

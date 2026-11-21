@@ -99,6 +99,24 @@ describe('BodyTab', () => {
     expect(update).toHaveBeenCalledWith({ config: { body: { template: 'none' } } });
   });
 
+  it('does not mistake a property name for a template when keeping a body of one’s own', async () => {
+    const update = vi.fn();
+    const d = detail();
+    // `TEMPLATES.constructor` is a function: a property read would call this a
+    // template id and overwrite it.
+    d.config.body = { id: 'constructor' as Motion, template: 'pet' };
+    render(<BodyTab detail={d} update={update} />);
+    await userEvent.click(screen.getByRole('radio', { name: /^voice only/i }));
+    expect(update).toHaveBeenCalledWith({ config: { body: { template: 'none' } } });
+  });
+
+  it('draws the fallback rather than an Object property for a body named after one', () => {
+    const d = detail();
+    d.config.body = { id: 'constructor' as Motion };
+    render(<BodyTab detail={d} update={vi.fn()} />);
+    expect(screen.getByRole('img', { name: 'Toy on wheels' })).toBeInTheDocument();
+  });
+
   it('keeps actions the body switched to can still run', async () => {
     const update = vi.fn();
     const d = detail('none');
