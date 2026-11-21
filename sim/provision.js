@@ -87,9 +87,15 @@ export function paintManualPairing(o) {
     withdrawManualPairing(o.panel);
     return 'ineligible';
   }
-  o.panel.setCharacterHelper(!o.remote);
+  // An empty picker reads as a bug, not as "nothing is ready". The status line
+  // offers to look again instead.
+  if (!manual.list.length) {
+    withdrawManualPairing(o.panel);
+    return 'empty';
+  }
+  o.panel.setCharacterHelper(true);
   o.panel.setCharacters(manual.list.map((c) => ({ id: c.id, name: c.name })));
-  return manual.list.length ? 'shown' : 'empty';
+  return 'shown';
 }
 
 /**
@@ -107,11 +113,19 @@ export function paintManualPairing(o) {
  *     setCharacters(list: { id: string, name: string }[]): void,
  *   },
  * }} o
- * @returns {Promise<'shown'|'empty'|'stale'|'ineligible'>}
+ * @returns {Promise<'shown'|'empty'|'stale'|'ineligible'|'unreadable'>}
  */
 export async function bootManualPairing(o) {
-  const characters = await o.characters();
+  /** @type {{ id: string, name: string, ready?: boolean, online?: boolean }[] | null} */
+  let characters = null;
+  try {
+    characters = await o.characters();
+  } catch {
+    characters = null;
+  }
   if (!o.isCurrent()) return 'stale';
+  // "Could not read the list" is not "no character is set up".
+  if (!characters) return 'unreadable';
   const board = o.board();
   const status = paintManualPairing({
     firmware: board.firmware,

@@ -199,6 +199,8 @@ document.body.append(serial.element);
 /** Characters the manual picker last received; repainted when the board changes. */
 /** @type {{ id: string, name: string, ready?: boolean, online?: boolean }[]} */
 let manualCharacters = [];
+/** Whether the status line currently carries the manual pairing hint. */
+let manualPairingHint = false;
 
 /**
  * Repaint the manual picker from the board as it is now. A body plan owns the
@@ -907,6 +909,7 @@ async function plugIn(meta = {}) {
     // The ROM bootloader is not a booted body: an earlier boot's pairing list
     // must not stay selectable behind the disabled console.
     manualCharacters = [];
+    manualPairingHint = false;
     showBootloader(serial);
     serial.setFirmware(/** @type {any} */ (target ?? firmwareById('body')));
     serial.append(`esptool: ${target?.image?.label ?? 'firmware'} ready for flashing`);
@@ -920,6 +923,7 @@ async function plugIn(meta = {}) {
     return;
   }
   manualCharacters = [];
+  manualPairingHint = false;
   serial.setFirmware(firmware);
   serial.setSettings(bench.board.settings);
   repaintManualPicker();
@@ -1136,12 +1140,11 @@ async function maybeProvision(mine) {
     let fetched = [];
     const result = await bootManualPairing({
       characters: async () => {
-        try {
-          const body = await (await fetch('/api/characters')).json();
-          fetched = Array.isArray(body) ? body : [];
-        } catch {
-          fetched = [];
-        }
+        // A failed or malformed read must reach the caller as "unreadable",
+        // not as "no character is set up".
+        const body = await (await fetch('/api/characters')).json();
+        if (!Array.isArray(body)) throw new Error('character list is not a list');
+        fetched = body;
         return fetched;
       },
       isCurrent: () => mine === plugs,
@@ -1151,7 +1154,19 @@ async function maybeProvision(mine) {
     });
     if (result === 'stale') return;
     manualCharacters = fetched;
-    if (result === 'empty') panels.status(simText(document.documentElement.lang, 'board.noReadyCharacter'));
+    const lang = document.documentElement.lang;
+    if (result === 'ineligible') return;
+    if (result === 'shown') {
+      if (manualPairingHint) { panels.status(null); manualPairingHint = false; }
+      return;
+    }
+    manualPairingHint = true;
+    const text = result === 'unreadable'
+      ? simText(lang, 'board.charactersUnreadable')
+      : simText(lang, 'board.noReadyCharacter');
+    panels.status(text, {
+      actions: [{ label: simText(lang, 'board.checkAgain'), run: () => { void maybeProvision(mine); } }],
+    });
     return;
   }
   if (provisionedFor === plan.id) return;
@@ -1269,6 +1284,7 @@ function unplug() {
   bodyAudio.close();
   serial.show(false);
   panels.closePicker();
+  manualPairingHint = false;
   effects.setAlive(false);
   effects.playing([]);
   effects.led('off');

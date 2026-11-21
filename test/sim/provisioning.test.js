@@ -195,6 +195,48 @@ test('a populated local picker is withdrawn before the ROM bootloader panel show
   assert.deepEqual(calls, ['helper:false', 'characters:0', 'show:true:false:0']);
 });
 
+test('an empty list hides the picker rather than showing only a placeholder', () => {
+  const panel = fakePicker();
+  assert.equal(paintManualPairing({ firmware: 'body', settings: {}, remote: false, characters: [], panel }), 'empty');
+  assert.equal(panel.helper, false);
+  assert.deepEqual(panel.list, []);
+});
+
+test('the pairing lookup can be retried after the user sets a character up', async () => {
+  const panel = fakePicker();
+  let characters = /** @type {{ id: string, name: string, ready?: boolean, online?: boolean }[]} */ ([]);
+  const boot = () => bootManualPairing({
+    characters: async () => characters,
+    isCurrent: () => true,
+    board: () => ({ firmware: 'body', settings: { token: '', url: '' } }),
+    origin: 'http://localhost:8787',
+    panel,
+  });
+  assert.equal(await boot(), 'empty');
+  assert.equal(panel.helper, false);
+  assert.deepEqual(panel.list, []);
+
+  // Back from the admin page with a character that is ready to pair.
+  characters = [{ id: 'a', name: 'Asten', ready: true, online: false }];
+  assert.equal(await boot(), 'shown');
+  assert.equal(panel.helper, true);
+  assert.deepEqual(panel.list.map((c) => c.id), ['a']);
+});
+
+test('a list that could not be read is not reported as an empty brain', async () => {
+  const panel = fakePicker();
+  const status = await bootManualPairing({
+    characters: async () => { throw new Error('offline'); },
+    isCurrent: () => true,
+    board: () => ({ firmware: 'body', settings: { token: '', url: '' } }),
+    origin: 'http://localhost:8787',
+    panel,
+  });
+  assert.equal(status, 'unreadable');
+  assert.equal(panel.visible, false);
+  assert.equal(panel.helper, false);
+});
+
 test('a stale token still gets the list, so its replacement can be picked', () => {
   const characters = [
     { id: 'a', name: 'Asten', ready: true, online: false },
