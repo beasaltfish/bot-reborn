@@ -68,6 +68,9 @@ export function createSerialPanel(o) {
   picker.textContent = simText(o.lang, 'serial.characters');
   const select = document.createElement('select');
   select.dataset.role = 'character';
+  /** Bumped whenever an answer could stop belonging to this picker: the helper
+   * is hidden, the list is replaced, or the selection changes. */
+  let readGeneration = 0;
   const none = document.createElement('option');
   none.value = '';
   none.textContent = simText(o.lang, 'serial.pick');
@@ -115,18 +118,22 @@ export function createSerialPanel(o) {
   }
 
   select.addEventListener('change', async () => {
+    const generation = ++readGeneration;
     const id = select.value;
     if (!id) return;
     try {
       const res = await fetch(`/api/characters/${encodeURIComponent(id)}`);
       if (!res.ok) throw new Error(String(res.status));
       const { token } = await res.json();
+      // The picker may have been withdrawn, the list replaced, or the choice
+      // changed while the brain was answering: only the current one may type.
+      if (generation !== readGeneration) return;
       input.value = `token ${token}`;
       input.focus();
     } catch {
-      append('error: cannot read that character from the brain');
+      if (generation === readGeneration) append('error: cannot read that character from the brain');
     }
-    select.value = '';
+    if (generation === readGeneration) select.value = '';
   });
 
   if (firmware.id !== 'body') {
@@ -153,6 +160,7 @@ export function createSerialPanel(o) {
     /** Replace the character choices; empty leaves only the placeholder. */
     /** @param {{ id: string, name: string }[]} list */
     setCharacters(list) {
+      readGeneration += 1;
       select.replaceChildren(none);
       for (const c of list) {
         const option = document.createElement('option');
@@ -163,7 +171,10 @@ export function createSerialPanel(o) {
     },
     /** A remote brain's local list proves nothing, so the helper is hidden. */
     /** @param {boolean} enabled */
-    setCharacterHelper(enabled) { picker.hidden = !enabled; },
+    setCharacterHelper(enabled) {
+      readGeneration += 1;
+      picker.hidden = !enabled;
+    },
     /** While a provisioning wait is running, offer to stop waiting (not the retry). */
     /** @param {boolean} on @param {() => void} [onCancel] */
     waiting(on, onCancel) {
