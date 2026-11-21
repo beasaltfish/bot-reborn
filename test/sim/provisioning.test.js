@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { planById } from '../../sim/plan.js';
-import { provisionPlan, isRemote, screenMismatch, planScreen, provisionSteps, createProvisioning, manualPairing, paintManualPairing, bootManualPairing, withdrawManualPairing } from '../../sim/provision.js';
+import { provisionPlan, isRemote, screenMismatch, planScreen, provisionSteps, createProvisioning, manualPairing, paintManualPairing, bootManualPairing, showBootloader } from '../../sim/provision.js';
 import { emptyBoard } from '../../sim/bench.js';
 
 const settings = (over = {}) => ({ ...emptyBoard().settings, ...over });
@@ -172,16 +172,27 @@ test('a populated local picker is withdrawn when the brain turns remote', () => 
   assert.equal(panel.helper, false);
 });
 
-test('a populated local picker is withdrawn when the ROM bootloader opens', () => {
+test('a populated local picker is withdrawn before the ROM bootloader panel shows', () => {
   const characters = [{ id: 'a', name: 'Asten', ready: true, online: false }];
   const panel = fakePicker();
   assert.equal(paintManualPairing({ firmware: 'body', settings: {}, remote: false, characters, panel }), 'shown');
   assert.deepEqual(panel.list.map((c) => c.id), ['a']);
   assert.equal(panel.helper, true);
 
-  withdrawManualPairing(panel);
-  assert.deepEqual(panel.list, []);
-  assert.equal(panel.helper, false);
+  /** @type {string[]} */ const calls = [];
+  /** @type {boolean} */ let helper = panel.helper;
+  /** @type {{ id: string, name: string }[]} */ let list = panel.list;
+  /** @type {{ show(visible: boolean): void, setCharacterHelper(enabled: boolean): void,
+   *   setCharacters(list: { id: string, name: string }[]): void }} */
+  const recording = {
+    show(visible) { calls.push(`show:${visible}:${helper}:${list.length}`); },
+    setCharacterHelper(enabled) { helper = enabled; calls.push(`helper:${enabled}`); },
+    setCharacters(next) { list = next; calls.push(`characters:${next.length}`); },
+  };
+  showBootloader(recording);
+
+  // At the moment show(true) runs the helper is hidden and the list is empty.
+  assert.deepEqual(calls, ['helper:false', 'characters:0', 'show:true:false:0']);
 });
 
 test('a deferred answer is discarded when the brain turned remote during the fetch', async () => {

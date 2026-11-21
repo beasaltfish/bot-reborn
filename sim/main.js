@@ -31,7 +31,7 @@ import { createBoardRuntime, bootMode } from './firmware/runtime.js';
 import { createBodyAudio } from './body.js';
 import { createBodyAudioLink } from './firmware/audio-link.js';
 import { demoSkips, lookupCharacter } from './capabilities.js';
-import { isRemote, provisionSteps, screenMismatch, createProvisioning, tokenCandidates, paintManualPairing, bootManualPairing, withdrawManualPairing } from './provision.js';
+import { isRemote, provisionSteps, screenMismatch, createProvisioning, tokenCandidates, paintManualPairing, bootManualPairing, showBootloader } from './provision.js';
 import { firmwareById, firmwareFor, FIRMWARES } from './firmware/index.js';
 import { ledPattern } from './firmware/led.js';
 import { createSerialPanel } from './ui/serial-panel.js';
@@ -906,8 +906,7 @@ async function plugIn(meta = {}) {
     // The ROM bootloader is not a booted body: an earlier boot's pairing list
     // must not stay selectable behind the disabled console.
     manualCharacters = [];
-    withdrawManualPairing(serial);
-    serial.show(true);
+    showBootloader(serial);
     serial.setFirmware(/** @type {any} */ (target ?? firmwareById('body')));
     serial.append(`esptool: ${target?.image?.label ?? 'firmware'} ready for flashing`);
     updateStudio();

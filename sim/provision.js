@@ -52,6 +52,20 @@ export function withdrawManualPairing(panel) {
 }
 
 /**
+ * Show the serial panel for the ROM bootloader. It is not a booted body, so an
+ * earlier boot's pairing choices are withdrawn before the panel appears.
+ * @param {{
+ *   show(visible: boolean): void,
+ *   setCharacterHelper(enabled: boolean): void,
+ *   setCharacters(list: { id: string, name: string }[]): void,
+ * }} panel
+ */
+export function showBootloader(panel) {
+  withdrawManualPairing(panel);
+  panel.show(true);
+}
+
+/**
  * Paint the manual picker for the board as it is now. A board that no longer
  * qualifies — paired, remote, or another firmware — gets a hidden, empty
  * picker so choices from an earlier boot cannot be used.
