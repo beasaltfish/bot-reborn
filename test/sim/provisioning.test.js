@@ -220,7 +220,7 @@ test('the pairing lookup can be retried after the user sets a character up', asy
   characters = [{ id: 'a', name: 'Asten', ready: true, online: false }];
   assert.equal(await boot(), 'shown');
   assert.equal(panel.helper, true);
-  assert.deepEqual(panel.list.map((c) => c.id), ['a']);
+  assert.deepEqual(panel.list, [{ id: 'a', name: 'Asten' }]);
 });
 
 test('a list that could not be read is not reported as an empty brain', async () => {
