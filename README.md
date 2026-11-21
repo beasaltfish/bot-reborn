@@ -123,17 +123,19 @@ touching a board.
    ```
 
    `npm run setup` says what is missing and how to fix it. The admin page opens
-   in your browser. Open a character to see what is left before the first
-   conversation. The card tells you what the brain knows—including whether
-   the character has replied out loud since startup—and what this browser
-   remembers about flashing a board.
+   in your browser: create a character, then fill **Ears**, **Mind** and
+   **Voice** with a provider and key each (any OpenAI-compatible provider).
 2. **Open the workbench:** <http://localhost:8787/sim/> (or the link in the
    admin sidebar). It opens only on the computer the brain runs on — the
    workbench is the brain's own page.
-3. **Open Projects, pick Audio + screen, then Shopping list.** That is what to
-   buy, with the spec to check on each listing and a rough price; print it.
-   Then press Demo to watch it go together in about forty seconds, or **Build
-   it for me** to leave the same bench standing and wire it up by hand.
+3. **No keys yet?** Open Projects, pick **Audio only**, then **Shopping list**.
+   That is what to buy, with the spec to check on each listing and a rough
+   price; print it. Press Demo to watch it go together in about forty seconds,
+   or **Build it for me** to leave the same bench standing and wire it up by
+   hand.
+4. **With keys?** Do the same with **Audio only**, then accept the token the
+   status line offers. The console types it and reboots the board; once it says
+   `welcomed as …`, speak one sentence and listen for the answer.
 
 No parts, no keys, no hardware. When you want the real one, keep reading.
 macOS is what this has been walked through on; Windows is untested.
@@ -155,15 +157,17 @@ runs timed moves on a car's motor driver inputs (GPIO 4–7).
   board finds the brain on its own.
 - Turn **Barge-in off** for this character. The body has no echo cancellation,
   so it would hear itself and interrupt itself.
-- Driving a toy, give the character **Body: Toy on wheels**, wire the four motor inputs,
-  and calibrate: `cal drive` if it goes backwards, `cal steer` if it turns the
-  wrong way. The board stops the car within a second of losing the brain.
+- Driving a toy, open the character's **Basic → Advanced** and set **Body: Toy
+  on wheels**, wire the four motor inputs, and calibrate: `cal drive` if it goes
+  backwards, `cal steer` if it turns the wrong way. The board stops the car
+  within a second of losing the brain.
 
 The phone body — an Android phone plus an FT232H, which is what drove the car
 in the demos above — still works, but it is not the direction here and the
 README does not teach it: [`docs/hardware.md`](docs/hardware.md) does. Without
-wheels, open the admin with `?bench` and set a character's body to **Dry run**:
-the moves only reach the brain's log. **Voice only** is a robot that just talks.
+wheels, open the admin with `?bench`, open the character's **Basic →
+Advanced** and set **Body: Dry run**: the moves only reach the brain's log.
+**Voice only** is a robot that just talks.
 
 ## What runs where
 
@@ -194,9 +198,9 @@ something the workbench can teach and the board cannot run yet.
 A body is a template, not a firmware and not the character. There are five, in
 [`core/bodies.js`](core/bodies.js): voice only, a pet on a screen, a tarot
 reader, a toy on wheels, and a dry run kept out of the picker (open the admin
-with `?bench` to see it). The admin's Body tab draws one card per template: the
-capabilities it has — hear, speak, show, move — the parts each body costs, and
-the actions the model may call.
+with `?bench` to see it). The admin's **Basic → Advanced → Body** draws one card
+per template: the capabilities it has — hear, speak, show, move — the parts each
+body costs, and the actions the model may call.
 
 | Template | Capabilities | Actions the model may call | Parts |
 |---|---|---|---|
@@ -206,11 +210,11 @@ the actions the model may call.
 | Toy on wheels (`toy`) | hear, speak, move | `move`, `cruise`, `stop`, `play_sound` | toy, ESP32 board, mic, amp |
 | Dry run (`dry-run`) | hear, speak, move | the toy's four | nothing: every verb is logged, never sent |
 
-A body's actions are yours to edit. The Body tab holds them as JSON, and once
-you write your own the body keeps them instead of following the template; the
-model is then offered those actions, plus the fixed tools its template names
-(the language setting, for a body that speaks words), and the prompt is
-built from that body's own words. Nothing is compiled and nothing is
+A body's actions are yours to edit. **Basic → Advanced → Body** holds them as
+JSON, and once you write your own the body keeps them instead of following the
+template; the model is then offered those actions, plus the fixed tools its
+template names (the language setting, for a body that speaks words), and the
+prompt is built from that body's own words. Nothing is compiled and nothing is
 flashed for this — an action is a program of the five verbs the hardware already
 answers (`drive`, `halt`, `voice`, `pose`, `draw`). The parts list is the other
 half: it is what to buy, and it is fixed by the template.
