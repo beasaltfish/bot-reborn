@@ -38,6 +38,66 @@ export function manualPairing(o) {
   return { show, list: tokenCandidates(o.characters) };
 }
 
+/**
+ * Paint the manual picker for the board as it is now. A board that no longer
+ * qualifies — paired, remote, or another firmware — gets a hidden, empty
+ * picker so choices from an earlier boot cannot be used.
+ * @param {{
+ *   firmware: string,
+ *   settings: { token?: string },
+ *   remote: boolean,
+ *   characters: { id: string, name: string, ready?: boolean, online?: boolean }[],
+ *   panel: {
+ *     setCharacterHelper(enabled: boolean): void,
+ *     setCharacters(list: { id: string, name: string }[]): void,
+ *   },
+ * }} o
+ * @returns {'shown'|'empty'|'ineligible'}
+ */
+export function paintManualPairing(o) {
+  const manual = manualPairing(o);
+  if (!manual.show) {
+    o.panel.setCharacterHelper(false);
+    o.panel.setCharacters([]);
+    return 'ineligible';
+  }
+  o.panel.setCharacterHelper(!o.remote);
+  o.panel.setCharacters(manual.list.map((c) => ({ id: c.id, name: c.name })));
+  return manual.list.length ? 'shown' : 'empty';
+}
+
+/**
+ * The manual pairing branch of a boot: ask the brain for its characters, then
+ * paint the picker only if this boot is still current and the board still
+ * qualifies. A late answer from a boot the user has left is dropped.
+ * @param {{
+ *   characters(): Promise<{ id: string, name: string, ready?: boolean, online?: boolean }[]>,
+ *   isCurrent(): boolean,
+ *   board(): { firmware: string, settings: { token?: string, url: string } },
+ *   origin: string,
+ *   panel: {
+ *     show(visible: boolean): void,
+ *     setCharacterHelper(enabled: boolean): void,
+ *     setCharacters(list: { id: string, name: string }[]): void,
+ *   },
+ * }} o
+ * @returns {Promise<'shown'|'empty'|'stale'|'ineligible'>}
+ */
+export async function bootManualPairing(o) {
+  const characters = await o.characters();
+  if (!o.isCurrent()) return 'stale';
+  const board = o.board();
+  const status = paintManualPairing({
+    firmware: board.firmware,
+    settings: board.settings,
+    remote: isRemote(board.settings.url, o.origin),
+    characters,
+    panel: o.panel,
+  });
+  if (status !== 'ineligible') o.panel.show(true);
+  return status;
+}
+
 /** @param {string} url @param {string} origin */
 export function isRemote(url, origin) {
   if (!url) return false;

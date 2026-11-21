@@ -31,7 +31,7 @@ import { createBoardRuntime, bootMode } from './firmware/runtime.js';
 import { createBodyAudio } from './body.js';
 import { createBodyAudioLink } from './firmware/audio-link.js';
 import { demoSkips, lookupCharacter } from './capabilities.js';
-import { isRemote, provisionSteps, screenMismatch, createProvisioning, tokenCandidates, manualPairing } from './provision.js';
+import { isRemote, provisionSteps, screenMismatch, createProvisioning, tokenCandidates, paintManualPairing, bootManualPairing } from './provision.js';
 import { firmwareById, firmwareFor, FIRMWARES } from './firmware/index.js';
 import { ledPattern } from './firmware/led.js';
 import { createSerialPanel } from './ui/serial-panel.js';
@@ -189,10 +189,32 @@ const serial = createSerialPanel({
   onChange: (settings) => {
     bench = { ...bench, board: { ...bench.board, settings } };
     setBench(bench);
+    repaintManualPicker();
   },
   onReboot: () => rebootBoard(),
 });
 document.body.append(serial.element);
+
+/** Characters the manual picker last received; repainted when the board changes. */
+/** @type {{ id: string, name: string, ready?: boolean, online?: boolean }[]} */
+let manualCharacters = [];
+
+/**
+ * Repaint the manual picker from the board as it is now. A body plan owns the
+ * picker with its own list, so leave that list alone.
+ * @param {string} [firmware]
+ * @param {import('./bench.js').Settings} [settings]
+ */
+function repaintManualPicker(firmware = bench.board.firmware, settings = bench.board.settings) {
+  if (activeProject && activeProject.connection === 'body') return;
+  paintManualPairing({
+    firmware,
+    settings,
+    remote: isRemote(settings.url, location.origin),
+    characters: manualCharacters,
+    panel: serial,
+  });
+}
 /** @param {import('./selection.js').Selection} selection */
 function showContext(selection) {
   if (!selection || selection.kind === 'part') { context.hide(); return; }
@@ -893,8 +915,10 @@ async function plugIn(meta = {}) {
     panels.status(simText(document.documentElement.lang, 'board.noFirmware'));
     return;
   }
+  manualCharacters = [];
   serial.setFirmware(firmware);
   serial.setSettings(bench.board.settings);
+  repaintManualPicker();
   serial.show(true);
   line.ending = meta.ending ?? null;
   bodyAudioLink?.stop();
@@ -1053,7 +1077,10 @@ async function flashFirmwareNow(/** @type {string} */ id) {
   bench = { ...bench, board: result.board };
   setBench(bench);
   const firmware = firmwareById(id);
-  if (firmware) serial.setFirmware(firmware);
+  if (firmware) {
+    serial.setFirmware(firmware);
+    repaintManualPicker(firmware.id);
+  }
   if (usb.plugged) plugIn({ ending: line.ending });
 }
 
@@ -1083,26 +1110,26 @@ async function tokenCandidate() {
 async function maybeProvision(mine) {
   const plan = /** @type {import('./plan.js').Plan | null} */ (activeProject);
   if (!plan || plan.connection !== 'body') {
-    const remote = isRemote(bench.board.settings.url, location.origin);
     /** @type {{ id: string, name: string, ready?: boolean, online?: boolean }[]} */
-    let characters = [];
-    try {
-      const body = await (await fetch('/api/characters')).json();
-      characters = Array.isArray(body) ? body : [];
-    } catch {
-      characters = [];
-    }
-    const manual = manualPairing({
-      firmware: bench.board.firmware,
-      settings: bench.board.settings,
-      remote,
-      characters,
+    let fetched = [];
+    const result = await bootManualPairing({
+      characters: async () => {
+        try {
+          const body = await (await fetch('/api/characters')).json();
+          fetched = Array.isArray(body) ? body : [];
+        } catch {
+          fetched = [];
+        }
+        return fetched;
+      },
+      isCurrent: () => mine === plugs,
+      board: () => ({ firmware: bench.board.firmware, settings: bench.board.settings }),
+      origin: location.origin,
+      panel: serial,
     });
-    if (!manual.show) return;
-    serial.show(true);
-    serial.setCharacterHelper(!remote);
-    serial.setCharacters(manual.list.map((c) => ({ id: c.id, name: c.name })));
-    if (!manual.list.length) panels.status(simText(document.documentElement.lang, 'board.noReadyCharacter'));
+    if (result === 'stale') return;
+    manualCharacters = fetched;
+    if (result === 'empty') panels.status(simText(document.documentElement.lang, 'board.noReadyCharacter'));
     return;
   }
   if (provisionedFor === plan.id) return;

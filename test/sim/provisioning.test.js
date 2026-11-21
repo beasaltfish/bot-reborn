@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { planById } from '../../sim/plan.js';
-import { provisionPlan, isRemote, screenMismatch, planScreen, provisionSteps, createProvisioning, manualPairing } from '../../sim/provision.js';
+import { provisionPlan, isRemote, screenMismatch, planScreen, provisionSteps, createProvisioning, manualPairing, paintManualPairing, bootManualPairing } from '../../sim/provision.js';
 import { emptyBoard } from '../../sim/bench.js';
 
 const settings = (over = {}) => ({ ...emptyBoard().settings, ...over });
@@ -142,4 +142,71 @@ test('a paired body, a remote brain, or another firmware gets nothing', () => {
   assert.equal(manualPairing({ firmware: 'body', settings: { token: 't' }, remote: false, characters: list }).show, false);
   assert.equal(manualPairing({ firmware: 'body', settings: {}, remote: true, characters: list }).show, false);
   assert.equal(manualPairing({ firmware: 'sketch-sonar', settings: {}, remote: false, characters: list }).show, false);
+});
+
+/** A serial panel whose picker state the tests can read back. */
+function fakePicker() {
+  /** @type {{ visible: boolean, helper: boolean, list: { id: string, name: string }[],
+   *   show(visible: boolean): void, setCharacterHelper(enabled: boolean): void,
+   *   setCharacters(list: { id: string, name: string }[]): void }} */
+  const panel = {
+    visible: false,
+    helper: false,
+    list: [],
+    show(visible) { panel.visible = visible; },
+    setCharacterHelper(enabled) { panel.helper = enabled; },
+    setCharacters(list) { panel.list = list; },
+  };
+  return panel;
+}
+
+test('a populated local picker is withdrawn when the brain turns remote', () => {
+  const characters = [{ id: 'a', name: 'Asten', ready: true, online: false }];
+  const panel = fakePicker();
+  assert.equal(paintManualPairing({ firmware: 'body', settings: {}, remote: false, characters, panel }), 'shown');
+  assert.deepEqual(panel.list.map((c) => c.id), ['a']);
+  assert.equal(panel.helper, true);
+
+  assert.equal(paintManualPairing({ firmware: 'body', settings: {}, remote: true, characters, panel }), 'ineligible');
+  assert.deepEqual(panel.list, []);
+  assert.equal(panel.helper, false);
+});
+
+test('a deferred answer is discarded when the brain turned remote during the fetch', async () => {
+  const panel = fakePicker();
+  /** @type {((list: { id: string, name: string, ready?: boolean, online?: boolean }[]) => void) | undefined} */
+  let answer;
+  let url = '';
+  const boot = bootManualPairing({
+    characters: () => new Promise((resolve) => { answer = resolve; }),
+    isCurrent: () => true,
+    board: () => ({ firmware: 'body', settings: { token: '', url } }),
+    origin: 'http://localhost:8787',
+    panel,
+  });
+  url = 'ws://other:8787/body';
+  answer?.([{ id: 'a', name: 'Asten', ready: true, online: false }]);
+  assert.equal(await boot, 'ineligible');
+  assert.deepEqual(panel.list, []);
+  assert.equal(panel.helper, false);
+});
+
+test('a late answer from a boot the user left never reaches the picker', async () => {
+  const panel = fakePicker();
+  /** @type {((list: { id: string, name: string, ready?: boolean, online?: boolean }[]) => void) | undefined} */
+  let answer;
+  let current = true;
+  const boot = bootManualPairing({
+    characters: () => new Promise((resolve) => { answer = resolve; }),
+    isCurrent: () => current,
+    board: () => ({ firmware: 'body', settings: { token: '', url: '' } }),
+    origin: 'http://localhost:8787',
+    panel,
+  });
+  current = false;
+  answer?.([{ id: 'a', name: 'Asten', ready: true, online: false }]);
+  assert.equal(await boot, 'stale');
+  assert.deepEqual(panel.list, []);
+  assert.equal(panel.helper, false);
+  assert.equal(panel.visible, false);
 });
