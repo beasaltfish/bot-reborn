@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { planById } from '../../sim/plan.js';
-import { provisionPlan, isRemote, screenMismatch, planScreen, provisionSteps, createProvisioning, manualPairing, paintManualPairing, bootManualPairing, showBootloader } from '../../sim/provision.js';
+import { provisionPlan, isRemote, screenMismatch, planScreen, provisionSteps, createProvisioning, manualPairing, paintManualPairing, bootManualPairing, showBootloader, offerTokenRepair } from '../../sim/provision.js';
 import { emptyBoard } from '../../sim/bench.js';
 
 const settings = (over = {}) => ({ ...emptyBoard().settings, ...over });
@@ -193,6 +193,26 @@ test('a populated local picker is withdrawn before the ROM bootloader panel show
 
   // At the moment show(true) runs the helper is hidden and the list is empty.
   assert.deepEqual(calls, ['helper:false', 'characters:0', 'show:true:false:0']);
+});
+
+test('a stale token still gets the list, so its replacement can be picked', () => {
+  const characters = [
+    { id: 'a', name: 'Asten', ready: true, online: false },
+    { id: 'b', name: 'Busy', ready: true, online: true },
+  ];
+  const panel = fakePicker();
+  // Boot stays quiet: a token is set, so manualPairing does not offer the list.
+  assert.equal(manualPairing({ firmware: 'body', settings: { token: 'stale' }, remote: false, characters }).show, false);
+  assert.equal(offerTokenRepair(panel, characters), 1);
+  assert.deepEqual(panel.list.map((c) => c.id), ['a']);
+  assert.equal(panel.helper, true);
+});
+
+test('a stale token with nothing to pick leaves the helper hidden', () => {
+  const panel = fakePicker();
+  assert.equal(offerTokenRepair(panel, [{ id: 'b', name: 'Busy', ready: true, online: true }]), 0);
+  assert.deepEqual(panel.list, []);
+  assert.equal(panel.helper, false);
 });
 
 test('a deferred answer is discarded when the brain turned remote during the fetch', async () => {

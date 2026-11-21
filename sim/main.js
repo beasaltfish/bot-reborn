@@ -31,7 +31,7 @@ import { createBoardRuntime, bootMode } from './firmware/runtime.js';
 import { createBodyAudio } from './body.js';
 import { createBodyAudioLink } from './firmware/audio-link.js';
 import { demoSkips, lookupCharacter } from './capabilities.js';
-import { isRemote, provisionSteps, screenMismatch, createProvisioning, tokenCandidates, paintManualPairing, bootManualPairing, showBootloader } from './provision.js';
+import { isRemote, provisionSteps, screenMismatch, createProvisioning, tokenCandidates, paintManualPairing, bootManualPairing, showBootloader, offerTokenRepair } from './provision.js';
 import { firmwareById, firmwareFor, FIRMWARES } from './firmware/index.js';
 import { ledPattern } from './firmware/led.js';
 import { createSerialPanel } from './ui/serial-panel.js';
@@ -964,6 +964,17 @@ async function plugIn(meta = {}) {
       provisioning?.gaveUp();
       line.fault = rejectCopy(reason, document.documentElement.lang === 'zh' ? 'zh' : 'en');
       showLine();
+      // A stale local token is recoverable in place: offer the character list
+      // even though a token is stored, so its fresh token can replace it.
+      if (reason === 'token' && !isRemote(bench.board.settings.url, location.origin)) {
+        void fetch('/api/characters')
+          .then((r) => r.json())
+          .then((list) => {
+            if (!usb.plugged) return;
+            if (Array.isArray(list)) offerTokenRepair(serial, list);
+          })
+          .catch(() => {});
+      }
     },
     audio: bodyAudioLink ?? undefined,
     sketch: {

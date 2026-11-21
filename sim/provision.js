@@ -124,6 +124,25 @@ export async function bootManualPairing(o) {
   return status;
 }
 
+/**
+ * The picker for a body whose stored token the brain refused: a stale token is
+ * still set, so boot does not offer the list, but the user can pick the
+ * character now, send its fresh token, then reboot. A remote brain has no
+ * trusted local list, so it keeps hand-typed tokens only (the caller decides).
+ * @param {{
+ *   setCharacterHelper(enabled: boolean): void,
+ *   setCharacters(list: { id: string, name: string }[]): void,
+ * }} panel
+ * @param {{ id: string, name: string, ready?: boolean, online?: boolean }[]} characters
+ * @returns {number} how many characters are now selectable
+ */
+export function offerTokenRepair(panel, characters) {
+  const list = tokenCandidates(characters).map((c) => ({ id: c.id, name: c.name }));
+  panel.setCharacterHelper(list.length > 0);
+  panel.setCharacters(list);
+  return list.length;
+}
+
 /** @param {string} url @param {string} origin */
 export function isRemote(url, origin) {
   if (!url) return false;
