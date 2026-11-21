@@ -138,7 +138,7 @@ export function createAdminApi(opts) {
               id: c.id, name: c.name, ready: ready(c.config), online: online.has(c.id),
               // `motion` stays for tabs that predate `verbs`: the bench asks
               // what the body can do, not which template it was copied from.
-              motion: c.config.body?.id ?? null, verbs: verbsOfBody(c.config), setupId,
+              motion: c.config.body?.template ?? c.config.body?.id ?? null, verbs: verbsOfBody(c.config), setupId,
               ...(bodyKind ? { bodyKind } : {}),
               ...(opts.presence?.of(c.id, setupId) ?? {}),
             };

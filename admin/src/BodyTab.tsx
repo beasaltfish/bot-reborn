@@ -66,9 +66,15 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
   // cleared back to inherited, and the sentence says which.
   const pick = (id: string) => {
     const next = id as Motion;
-    // The chosen template is written beside the id. Leaving the old template
-    // in place made a switch only cosmetic: the brain resolves `template ??
-    // id`, so a stale `pet` kept winning after a click on `toy`.
+    // A body of one's own keeps its name. Only an id that is itself a template
+    // is rewritten: `my-dog` stays `my-dog`, and `template` says what it
+    // follows. The chosen template is still written beside a template id.
+    // Leaving the old template in place made a switch only cosmetic: the brain
+    // resolves `template ?? id`, so a stale `pet` kept winning after a click on
+    // `toy`.
+    const named = TEMPLATES[(patch.id ?? '') as Motion] !== undefined;
+    /** The body keys this switch writes: a template id, or the template alone. */
+    const follow = (value: Motion) => (named ? { id: value, template: value } : { template: value });
     /** The body as the brain will read it after a PATCH carrying this patch. */
     const read = (p: typeof patch) => {
       const candidate = resolveBody(next, { ...p, template: next });
@@ -79,7 +85,7 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
     const problem = bodyProblem(read(patch));
     if (!problem) {
       setNotice(null);
-      update({ config: { body: { id: next, template: next } } });
+      update({ config: { body: follow(next) } });
       return;
     }
     // A switch drops what the new body cannot carry: the actions it wrote and
@@ -88,10 +94,10 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
     // reason the merge is refused, the switch is refused too rather than
     // taking the actions with it and leaving the body just as broken.
     const dropped = Array.isArray(patch.actions)
-      ? { id: next, template: next, actions: null, triggers: null }
+      ? { ...follow(next), actions: null, triggers: null }
       : patch.triggers !== undefined
-        ? { id: next, template: next, triggers: null }
-        : { id: next, template: next };
+        ? { ...follow(next), triggers: null }
+        : follow(next);
     // Validate the patch that would actually be written, not just the merge.
     const settled = bodyProblem(read({ ...patch, ...dropped }));
     if (settled) {

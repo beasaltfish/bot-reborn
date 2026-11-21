@@ -258,6 +258,14 @@ test('the list says how each character moves, so the bench can tell a pet', asyn
   await r.server.close();
 });
 
+test('a body of its own answers with the template it follows', async () => {
+  const r = await rig();
+  r.chars.add('dog', (cfg) => { cfg.body.id = 'my-dog'; cfg.body.template = 'pet'; });
+  const { body } = await r.call('/api/characters');
+  assert.equal(body[0].motion, 'pet');
+  await r.server.close();
+});
+
 test('the list carries verbs for the simulator, not action names', async () => {
   const r = await rig();
   r.chars.add('petty', (cfg) => { cfg.body.id = 'pet'; });
