@@ -39,6 +39,7 @@ import { runFlash, canFlash } from './firmware/flash.js';
 import { deviceInitialized } from './firmware/parts-view.js';
 import { createSketchContext, gpioInputLevel } from './firmware/sketch-context.js';
 import { createFirmwareStudio } from './ui/firmware-studio.js';
+import { rejectCopy } from './ui/reject-copy.js';
 import { runCustomFlash } from './firmware/flash.js';
 import { compile } from './firmware/lang/index.js';
 import { EXAMPLES } from './firmware/examples.js';
@@ -957,6 +958,7 @@ async function plugIn(meta = {}) {
       return verdicts;
     },
     brainUrl: `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/body`,
+    rejectText: (reason) => rejectCopy(reason, document.documentElement.lang === 'zh' ? 'zh' : 'en'),
     audio: bodyAudioLink ?? undefined,
     sketch: {
       ctx: () => {

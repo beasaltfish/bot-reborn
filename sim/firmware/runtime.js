@@ -47,6 +47,7 @@ export function bootMode(intent = {}) {
  *   sketch?: { ctx: () => any, render?: () => void, onTrace?: (records: any[]) => void, onTiming?: (ms: number) => void, intervalMs?: number },
  *   onLine(line: string): void,
  *   onLed(mode: string): void,
+ *   rejectText?: (reason: string) => string,
  *   onDevice?(msg: any): void,
  *   audio?: {
  *     attach(send: (pcm: Int16Array) => void): unknown,
@@ -138,7 +139,7 @@ export function createBoardRuntime(o) {
         o.onLine(`lost ${dialed}; trying again`);
       },
       onReject: (/** @type {string} */ reason) => {
-        o.onLine(`rejected: ${reason} — fix it, then type reboot`);
+        o.onLine(o.rejectText?.(reason) ?? `rejected: ${reason} — fix it, then type reboot`);
         o.onLed('REJECTED');
       },
     });
