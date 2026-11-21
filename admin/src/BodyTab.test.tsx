@@ -110,11 +110,18 @@ describe('BodyTab', () => {
     expect(update).toHaveBeenCalledWith({ config: { body: { template: 'none' } } });
   });
 
+  it('a config with no template resolves like the brain: voice only, not a missing body', () => {
+    const d = detail();
+    d.config.body = { id: 'my-bot' as Motion };
+    renderTab(d);
+    expect(screen.getByRole('radio', { name: /^voice only/i })).toBeChecked();
+  });
+
   it('draws the fallback rather than an Object property for a body named after one', () => {
     const d = detail();
     d.config.body = { id: 'constructor' as Motion };
     render(<BodyTab detail={d} update={vi.fn()} />);
-    expect(screen.getByRole('img', { name: 'Toy on wheels' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Voice only' })).toBeInTheDocument();
   });
 
   it('keeps actions the body switched to can still run', async () => {

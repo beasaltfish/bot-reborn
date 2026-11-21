@@ -266,6 +266,15 @@ test('a body of its own answers with the template it follows', async (t) => {
   assert.equal(body[0].motion, 'pet');
 });
 
+test('an old config with no template answers voice only, like the brain', async (t) => {
+  const r = await rig();
+  t.after(() => r.server.close());
+  r.chars.add('bot', (cfg) => { cfg.body = { id: 'my-bot' }; });
+  const { body } = await r.call('/api/characters');
+  assert.equal(body[0].motion, 'none');
+  assert.equal('template' in body[0], false, 'the list never rewrites the stored identity');
+});
+
 test('the list carries verbs for the simulator, not action names', async () => {
   const r = await rig();
   r.chars.add('petty', (cfg) => { cfg.body.id = 'pet'; });

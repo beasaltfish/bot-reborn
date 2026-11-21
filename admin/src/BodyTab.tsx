@@ -33,8 +33,9 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
   const patch = detail.config.body;
   // A body of one's own keeps its own id (`my-dog`) and names the template it
   // copied; the cards are the templates, so the template is what is chosen.
-  // The brain resolves `template ?? id` too.
-  const chosen = patch.template ?? patch.id;
+  // The brain resolves `template ?? id` too, so an old config with no template
+  // must land on the same card as the solver does — not on a missing id.
+  const chosen = /** @type {Motion} */ ((resolveBody(patch.id ?? 'toy', patch).template) ?? 'toy');
   /** The sentence `bodyProblem` wrote when a switch was refused, and whether
    * the switch then dropped the user's edits or wrote nothing at all. */
   const [notice, setNotice] = useState<{ text: string; cleared: boolean } | null>(null);
