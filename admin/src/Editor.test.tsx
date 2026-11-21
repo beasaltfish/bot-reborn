@@ -83,9 +83,18 @@ describe('Editor', () => {
 
   it('opening Advanced writes nothing', async () => {
     const fake = installFakeApi([{ name: 'A' }]);
-    const before = structuredClone(fake.chars.get('A')!.config);
+    const c = fake.chars.get('A')!;
+    // A reflex with something to lose: if mounting the panels queued a patch,
+    // it would show up as a PATCH rather than as a no-op merge of defaults.
+    c.config.reflex = { ...c.config.reflex, baseURL: 'http://studio/v1', apiKey: 'k', model: 'jev-latest', threshold: 0.6 };
+    const before = structuredClone(c.config);
     render(<Editor {...props()} />);
     await openAdvanced();
+    await userEvent.click(screen.getByText('Advanced'));
+    // The autosave goes out 500 ms after the last queued edit. Waiting past
+    // that, with patches still empty, is what says nothing was queued at all.
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    expect(fake.patches()).toEqual([]);
     expect(fake.chars.get('A')!.config).toEqual(before);
   });
 
