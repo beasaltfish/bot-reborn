@@ -1112,8 +1112,9 @@ async function flashFirmwareNow(/** @type {string} */ id) {
 
 /**
  * The single ready character this brain could start, or a list to choose from
- * when more than one could be meant.
- * @returns {Promise<{ token?: string, list?: { id: string, name: string, ready?: boolean, online?: boolean }[] }>}
+ * when more than one could be meant. `failed` means the list could not be read
+ * at all — not that nothing is ready.
+ * @returns {Promise<{ token?: string, list?: { id: string, name: string, ready?: boolean, online?: boolean }[], failed?: true }>}
  */
 async function tokenCandidate() {
   try {
@@ -1122,7 +1123,7 @@ async function tokenCandidate() {
     const detail = await (await fetch(`/api/characters/${encodeURIComponent(ready[0].id)}`)).json();
     return detail?.token ? { token: detail.token, list: ready } : { list: ready };
   } catch {
-    return {};
+    return { failed: true };
   }
 }
 
@@ -1174,21 +1175,32 @@ async function maybeProvision(mine) {
   const lang = document.documentElement.lang;
   const remote = isRemote(bench.board.settings.url, location.origin);
   serial.show(true);
-  serial.setCharacterHelper(!remote);
   if (remote) {
+    serial.setCharacterHelper(false);
     const steps = provisionSteps(plan, bench.board.settings);
     if (steps.commands.length) panels.status(simText(lang, 'board.provisionRemote'));
     return;
   }
   let token = bench.board.settings.token;
   /** @type {{ id: string, name: string }[] | null} */ let list = null;
+  let unreadable = false;
   if (!token) {
     const candidate = await tokenCandidate();
-    list = (candidate.list ?? []).map((c) => ({ id: c.id, name: c.name }));
-    token = candidate.token ?? '';
+    if (candidate.failed) unreadable = true;
+    else {
+      list = (candidate.list ?? []).map((c) => ({ id: c.id, name: c.name }));
+      token = candidate.token ?? '';
+    }
   }
   if (mine !== plugs) return;
-  if (list) serial.setCharacters(list);
+  // No list to choose from is no picker: an empty one reads as a broken board.
+  if (list) {
+    serial.setCharacterHelper(list.length > 0);
+    serial.setCharacters(list);
+  } else {
+    serial.setCharacterHelper(false);
+    serial.setCharacters([]);
+  }
   const mismatch = screenMismatch(plan, bench.board.settings);
   const missing = provisionSteps(plan, bench.board.settings, { token, replaceScreen: false }).missing;
   if (!missing.length && !mismatch) return;
@@ -1240,7 +1252,14 @@ async function maybeProvision(mine) {
   }
 
   if (!token) {
-    panels.status(simText(lang, 'board.provisionManual'));
+    // The first-run dead end: say whether nothing is ready or the list could
+    // not be read, and offer to look again after the admin page.
+    panels.status(simText(lang, unreadable ? 'board.charactersUnreadable' : 'board.noReadyCharacter'), {
+      actions: [{
+        label: simText(lang, 'board.checkAgain'),
+        run: () => { provisionedFor = null; void maybeProvision(mine); },
+      }],
+    });
     return;
   }
 
