@@ -959,6 +959,12 @@ async function plugIn(meta = {}) {
     },
     brainUrl: `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/body`,
     rejectText: (reason) => rejectCopy(reason, document.documentElement.lang === 'zh' ? 'zh' : 'en'),
+    onReject: (reason) => {
+      // A rejection ends the provisioning wait whatever language it printed in.
+      provisioning?.gaveUp();
+      line.fault = rejectCopy(reason, document.documentElement.lang === 'zh' ? 'zh' : 'en');
+      showLine();
+    },
     audio: bodyAudioLink ?? undefined,
     sketch: {
       ctx: () => {

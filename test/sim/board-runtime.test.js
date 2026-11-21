@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 
 import { createBoardRuntime } from '../../sim/firmware/runtime.js';
 import { emptyBench, emptyBoard } from '../../sim/bench.js';
+import { createProvisioning } from '../../sim/provision.js';
+import { rejectCopy } from '../../sim/ui/reject-copy.js';
 
 const bench = emptyBench();
 const board = { ...bench.board, settings: { ...bench.board.settings, token: 'a'.repeat(32) } };
@@ -96,8 +98,38 @@ test('busy rejects retry until the runtime budget ends, then are final', (t) => 
   assert.equal(reject('token'), false);
 });
 
-test('a busy body does not stop the screen link', (t) => {
+test('a known rejection ends the provisioning wait in either language', (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
+  for (const lang of /** @type {const} */ (['en', 'zh'])) {
+    /** @type {any} */ let reject;
+    const reasons = /** @type {string[]} */ ([]);
+    let status = '';
+    const provisioning = createProvisioning({
+      commands: ['token x'], panel: { type() {} }, reboot() {}, onDone() {},
+    });
+    provisioning.start();
+    const h = harness({
+      connect: (/** @type {any} */ o) => { reject = o.onReject; return { close() {}, send() {}, sendAudio() {} }; },
+      rejectText: (/** @type {string} */ reason) => rejectCopy(reason, lang),
+      onReject: (/** @type {string} */ reason) => {
+        // What sim/main.js does: the event, not the printed text, ends the wait.
+        reasons.push(reason);
+        provisioning.gaveUp();
+        status = rejectCopy(reason, lang);
+      },
+    });
+    h.runtime.start();
+    t.mock.timers.tick(1000);
+    reject('token');
+    h.runtime.stop();
+    assert.equal(provisioning.done, true);
+    assert.deepEqual(reasons, ['token']);
+    assert.equal(status, rejectCopy('token', lang));
+    assert.ok(h.lines.at(-1) === status, 'the console prints the same sentence as the status line');
+  }
+});
+
+test('a busy body does not stop the screen link', (t) => {  t.mock.timers.enable({ apis: ['setTimeout'] });
   /** @type {any} */ let reject;
   const opened = /** @type {string[]} */ ([]);
   const h = harness({

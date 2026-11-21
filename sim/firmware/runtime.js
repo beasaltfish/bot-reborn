@@ -47,6 +47,7 @@ export function bootMode(intent = {}) {
  *   sketch?: { ctx: () => any, render?: () => void, onTrace?: (records: any[]) => void, onTiming?: (ms: number) => void, intervalMs?: number },
  *   onLine(line: string): void,
  *   onLed(mode: string): void,
+ *   onReject?(reason: string): void,
  *   rejectText?: (reason: string) => string,
  *   onDevice?(msg: any): void,
  *   audio?: {
@@ -139,6 +140,9 @@ export function createBoardRuntime(o) {
         o.onLine(`lost ${dialed}; trying again`);
       },
       onReject: (/** @type {string} */ reason) => {
+        // The caller hears the event, not the printed line: a translated
+        // refusal no longer starts with `rejected:`.
+        o.onReject?.(reason);
         o.onLine(o.rejectText?.(reason) ?? `rejected: ${reason} — fix it, then type reboot`);
         o.onLed('REJECTED');
       },
