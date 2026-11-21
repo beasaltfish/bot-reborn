@@ -8,3 +8,8 @@ test('a refusal names what to fix', () => {
   assert.match(rejectCopy('unconfigured', 'zh'), /听.*想.*说/);
   assert.match(rejectCopy('busy', 'en'), /rejected: busy/);
 });
+
+test('a prototype name is not a translation', () => {
+  assert.equal(rejectCopy('constructor', 'en'), 'rejected: constructor — fix it, then type reboot');
+  assert.equal(rejectCopy('constructor', 'zh'), 'rejected: constructor — fix it, then type reboot');
+});

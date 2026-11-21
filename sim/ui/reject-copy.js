@@ -18,5 +18,8 @@ const LINES = {
  * @returns {string}
  */
 export function rejectCopy(reason, lang = 'en') {
-  return LINES[lang]?.[reason] ?? `rejected: ${reason} — fix it, then type reboot`;
+  const lines = LINES[lang];
+  // Own properties only: `constructor`, `toString` and friends are not reasons.
+  if (lines && Object.hasOwn(lines, reason)) return lines[reason];
+  return `rejected: ${reason} — fix it, then type reboot`;
 }
