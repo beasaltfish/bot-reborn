@@ -11,6 +11,12 @@ import type { EditorSlot } from './types';
 const props = (over: Partial<EditorSlot> = {}): EditorSlot =>
   ({ id: 'A', online: false, initialTab: 'basic', onChanged: vi.fn(), onDeleted: vi.fn(), ...over });
 
+// Body and Reflex live under Advanced, at the bottom of Basic.
+async function openAdvanced() {
+  await userEvent.click(await screen.findByRole('tab', { name: 'Basic' }));
+  await userEvent.click(screen.getByText('Advanced'));
+}
+
 // A character whose layer already uses a preset, with its key still to type.
 const GROQ = { id: 'groq', name: 'Groq', baseURL: 'https://api.groq.com/openai/v1', apiKey: '' };
 const OPENAI = { id: 'openai', name: 'OpenAI', baseURL: 'https://api.openai.com/v1', apiKey: '' };
@@ -60,14 +66,27 @@ describe('Editor', () => {
     expect(fake.patches()[0].body).toEqual({ config: { bargeIn: false } });
   });
 
-  it('gives the body its own tab, and Basic no longer picks one', async () => {
-    const fake = installFakeApi([{ name: 'A' }]);
+  it('keeps Body and Reflex out of the top tabs', async () => {
+    installFakeApi([{ name: 'A' }]);
     render(<Editor {...props()} />);
-    expect(await screen.findByRole('tab', { name: 'Body' })).toBeInTheDocument();
-    expect(screen.queryByLabelText('Body')).toBeNull();
-    await userEvent.click(screen.getByRole('tab', { name: 'Body' }));
-    expect(screen.getAllByRole('radio')).toHaveLength(4);
-    expect(fake.chars.get('A')?.config.body.id).toBe('toy');
+    expect(await screen.findByRole('tab', { name: 'Basic' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Body' })).toBeNull();
+    expect(screen.queryByRole('tab', { name: 'Reflex' })).toBeNull();
+  });
+
+  it('puts the body cards under Advanced in Basic', async () => {
+    installFakeApi([{ name: 'A' }]);
+    render(<Editor {...props()} />);
+    await openAdvanced();
+    expect(await screen.findByRole('radio', { name: /toy on wheels/i })).toBeVisible();
+  });
+
+  it('opening Advanced writes nothing', async () => {
+    const fake = installFakeApi([{ name: 'A' }]);
+    const before = structuredClone(fake.chars.get('A')!.config);
+    render(<Editor {...props()} />);
+    await openAdvanced();
+    expect(fake.chars.get('A')!.config).toEqual(before);
   });
 
   it('renames through the name field', async () => {
@@ -133,7 +152,8 @@ describe('Editor', () => {
 
   it('reflex: the switch says what is missing while on and incomplete', async () => {
     installFakeApi([{ name: 'A' }]);
-    render(<Editor {...props({ initialTab: 'reflex' })} />);
+    render(<Editor {...props()} />);
+    await openAdvanced();
     expect(await screen.findByRole('button', { name: 'On' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText('On, but not running yet. Needs: Provider, API key, Model, a question')).toBeInTheDocument();
   });
@@ -142,7 +162,8 @@ describe('Editor', () => {
     const fake = installFakeApi([{ name: 'A' }]);
     const c = fake.chars.get('A')!;
     c.config.reflex = { ...c.config.reflex, baseURL: 'http://studio/v1', apiKey: 'k', model: 'jev-latest' };
-    render(<Editor {...props({ initialTab: 'reflex' })} />);
+    render(<Editor {...props()} />);
+    await openAdvanced();
     await userEvent.selectOptions(await screen.findByLabelText('Reflex preset'), 'commands');
     expect(screen.getByText(/^On — /)).toBeInTheDocument();
   });
@@ -162,7 +183,8 @@ describe('Editor', () => {
 
   it('reflex: picking a preset saves its question, state and threshold', async () => {
     const fake = installFakeApi([{ name: 'A' }]);
-    render(<Editor {...props({ initialTab: 'reflex' })} />);
+    render(<Editor {...props()} />);
+    await openAdvanced();
     await userEvent.selectOptions(await screen.findByLabelText('Reflex preset'), 'commands');
     await waitFor(() => expect(fake.patches()).toHaveLength(1), { timeout: 2000 });
     expect(fake.patches()[0].body.config.reflex.question).toEqual(REFLEX_PRESETS[1].question);
@@ -173,7 +195,8 @@ describe('Editor', () => {
   it('reflex: None turns it off, and the brain is told so', async () => {
     // Review focus 5: null must survive both deepMerges.
     const fake = installFakeApi([{ name: 'A' }]);
-    render(<Editor {...props({ initialTab: 'reflex' })} />);
+    render(<Editor {...props()} />);
+    await openAdvanced();
     const preset = await screen.findByLabelText('Reflex preset');
     await userEvent.selectOptions(preset, 'bark');
     await waitFor(() => expect(fake.patches()).toHaveLength(1), { timeout: 2000 });
@@ -185,7 +208,8 @@ describe('Editor', () => {
 
   it('reflex: removing an option takes its actions with it', async () => {
     const fake = installFakeApi([{ name: 'A' }]);
-    render(<Editor {...props({ initialTab: 'reflex' })} />);
+    render(<Editor {...props()} />);
+    await openAdvanced();
     await userEvent.selectOptions(await screen.findByLabelText('Reflex preset'), 'commands');
     await userEvent.click(screen.getByRole('button', { name: 'Remove option left' }));
     await waitFor(() => expect(fake.chars.get('A')?.config.reflex.question?.options.map((o) => o.choice))
@@ -195,7 +219,8 @@ describe('Editor', () => {
 
   it('reflex: an action is edited in its row', async () => {
     const fake = installFakeApi([{ name: 'A' }]);
-    render(<Editor {...props({ initialTab: 'reflex' })} />);
+    render(<Editor {...props()} />);
+    await openAdvanced();
     await userEvent.selectOptions(await screen.findByLabelText('Reflex preset'), 'commands');
     await userEvent.selectOptions(screen.getByLabelText('left action 1 steer'), 'right');
     await waitFor(() => {
@@ -209,7 +234,8 @@ describe('Editor', () => {
   it('reflex: JSON edits keep actions by choice name', async () => {
     // Review focus 1: a key renamed and typed back still owns its actions.
     const fake = installFakeApi([{ name: 'A' }]);
-    render(<Editor {...props({ initialTab: 'reflex' })} />);
+    render(<Editor {...props()} />);
+    await openAdvanced();
     await userEvent.selectOptions(await screen.findByLabelText('Reflex preset'), 'commands');
     await userEvent.click(screen.getByRole('button', { name: 'JSON' }));
     const box = screen.getByLabelText('Question as JSON');
@@ -224,18 +250,19 @@ describe('Editor', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(/Not valid JSON/);
   });
 
-  it('reflex: keeps its own provider and key on the same tab', async () => {
+  it('reflex: keeps its own provider and key in Advanced', async () => {
     installFakeApi([{ name: 'A' }]);
-    render(<Editor {...props({ initialTab: 'reflex' })} />);
+    render(<Editor {...props()} />);
+    await openAdvanced();
     expect(await screen.findByLabelText('Provider')).toBeInTheDocument();
     expect(screen.getByLabelText('API key')).toBeInTheDocument();
   });
 
   it('reflex: says which configured actions this body will ignore', async () => {
     installFakeApi([{ name: 'A' }]);
-    render(<Editor {...props({ initialTab: 'body' })} />);
+    render(<Editor {...props()} />);
+    await openAdvanced();
     await userEvent.click(await screen.findByRole('radio', { name: /voice only/i }));
-    await userEvent.click(screen.getByRole('tab', { name: 'Reflex' }));
     await userEvent.selectOptions(screen.getByLabelText('Reflex preset'), 'commands');
     expect(screen.getByRole('note')).toHaveTextContent(/move/);
   });
@@ -257,7 +284,8 @@ describe('Editor', () => {
   it('reflex: Try with something missing names all of it and asks nothing', async () => {
     installFakeApi([{ name: 'A' }]);
     const tryReflex = vi.fn();
-    render(<Editor {...props({ initialTab: 'reflex' })} tryReflex={tryReflex} />);
+    render(<Editor {...props()} tryReflex={tryReflex} />);
+    await openAdvanced();
     await userEvent.click(await screen.findByRole('button', { name: 'Try' }));
     expect(screen.getByRole('status')).toHaveTextContent('Still needed: Provider, API key, Model, a question, Person said');
     expect(tryReflex).not.toHaveBeenCalled();
@@ -265,7 +293,8 @@ describe('Editor', () => {
 
   it('reflex: switching it off keeps the question, and saves only the switch', async () => {
     const fake = installFakeApi([{ name: 'A' }]);
-    render(<Editor {...props({ initialTab: 'reflex' })} />);
+    render(<Editor {...props()} />);
+    await openAdvanced();
     await userEvent.selectOptions(await screen.findByLabelText('Reflex preset'), 'commands');
     await waitFor(() => expect(fake.patches()).toHaveLength(1), { timeout: 2000 });
     await userEvent.click(screen.getByRole('button', { name: 'Off' }));
@@ -279,7 +308,8 @@ describe('Editor', () => {
   it('reflex: saves the question under a name, and the list shows it picked', async () => {
     const fake = installFakeApi([{ name: 'A' }]);
     vi.spyOn(window, 'prompt').mockReturnValueOnce('  Loose turns ');
-    render(<Editor {...props({ initialTab: 'reflex' })} />);
+    render(<Editor {...props()} />);
+    await openAdvanced();
     const preset = await screen.findByLabelText('Reflex preset');
     await userEvent.selectOptions(preset, 'commands');
     await userEvent.click(screen.getByRole('button', { name: 'Remove option left' }));
@@ -296,7 +326,8 @@ describe('Editor', () => {
     fake.chars.get('A')!.savedReflexes = [{ name: 'Mine', threshold: 0.8, state: DEFAULT_STATE, question: REFLEX_PRESETS[0].question }];
     vi.spyOn(window, 'prompt').mockReturnValueOnce('Mine');
     const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false);
-    render(<Editor {...props({ initialTab: 'reflex' })} />);
+    render(<Editor {...props()} />);
+    await openAdvanced();
     await userEvent.selectOptions(await screen.findByLabelText('Reflex preset'), 'commands');
     await userEvent.click(screen.getByRole('button', { name: 'Save as preset' }));
     expect(confirm).toHaveBeenCalledTimes(1);
@@ -308,7 +339,8 @@ describe('Editor', () => {
     fake.chars.get('A')!.savedReflexes = [{ name: 'Mine', threshold: 0.6, state: DEFAULT_STATE, question: REFLEX_PRESETS[0].question }];
     vi.spyOn(window, 'prompt').mockReturnValueOnce('Ours');
     vi.spyOn(window, 'confirm').mockReturnValueOnce(true);
-    render(<Editor {...props({ initialTab: 'reflex' })} />);
+    render(<Editor {...props()} />);
+    await openAdvanced();
     const preset = await screen.findByLabelText('Reflex preset');
     await userEvent.selectOptions(preset, 'saved:Mine');
     expect(screen.getByLabelText('Fire at probability')).toHaveValue(0.6);
@@ -325,7 +357,8 @@ describe('Editor', () => {
     const c = fake.chars.get('A')!;
     c.config.reflex = { ...c.config.reflex, baseURL: 'http://studio/v1', apiKey: 'k', model: 'jev-latest' };
     const tryReflex = vi.fn().mockResolvedValueOnce('“turn left” → fired (left 0.97, 180 ms) → move');
-    render(<Editor {...props({ initialTab: 'reflex' })} tryReflex={tryReflex} />);
+    render(<Editor {...props()} tryReflex={tryReflex} />);
+    await openAdvanced();
     await userEvent.selectOptions(await screen.findByLabelText('Reflex preset'), 'commands');
     await userEvent.type(screen.getByLabelText('Person said'), 'turn left');
     await userEvent.type(screen.getByLabelText('Robot said (optional)'), 'Okay!');
@@ -338,7 +371,8 @@ describe('Editor', () => {
     // Final review I1: the box kept the old question, and the next keystroke
     // wrote it back over the preset.
     installFakeApi([{ name: 'A' }]);
-    render(<Editor {...props({ initialTab: 'reflex' })} />);
+    render(<Editor {...props()} />);
+    await openAdvanced();
     const preset = await screen.findByLabelText('Reflex preset');
     await userEvent.selectOptions(preset, 'bark');
     await userEvent.click(screen.getByRole('button', { name: 'JSON' }));
@@ -350,7 +384,8 @@ describe('Editor', () => {
     // Final review I2: None and the presets replace the question outright.
     installFakeApi([{ name: 'A' }]);
     const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
-    render(<Editor {...props({ initialTab: 'reflex' })} />);
+    render(<Editor {...props()} />);
+    await openAdvanced();
     const preset = await screen.findByLabelText('Reflex preset');
     await userEvent.selectOptions(preset, 'commands');
     expect(confirm).not.toHaveBeenCalled();
@@ -365,7 +400,8 @@ describe('Editor', () => {
   it('reflex: says when the brain would read the question differently', async () => {
     // Final review I3: the brain normalises; the page showed what it would drop.
     installFakeApi([{ name: 'A' }]);
-    render(<Editor {...props({ initialTab: 'reflex' })} />);
+    render(<Editor {...props()} />);
+    await openAdvanced();
     await userEvent.selectOptions(await screen.findByLabelText('Reflex preset'), 'commands');
     expect(screen.queryByText(/brain will read this differently/)).toBeNull();
     const second = screen.getByLabelText('Option 2');
@@ -376,7 +412,8 @@ describe('Editor', () => {
 
   it('reflex: the last two options cannot be removed', async () => {
     installFakeApi([{ name: 'A' }]);
-    render(<Editor {...props({ initialTab: 'reflex' })} />);
+    render(<Editor {...props()} />);
+    await openAdvanced();
     await userEvent.click(await screen.findByRole('button', { name: 'Write a question' }));
     expect(screen.getByRole('button', { name: 'Remove option yes' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Remove option pass' })).toBeDisabled();
@@ -385,7 +422,8 @@ describe('Editor', () => {
 
 it('pet: the body is picked from its card, and the patch says pet', async () => {
   const fake = installFakeApi([{ name: 'A' }]);
-  render(<Editor {...props({ initialTab: 'body' })} />);
+  render(<Editor {...props()} />);
+  await openAdvanced();
   const pet = await screen.findByRole('radio', { name: /pet on a screen/i });
   expect(pet).not.toBeChecked();
   await userEvent.click(pet);
@@ -396,7 +434,8 @@ it('pet: the body is picked from its card, and the patch says pet', async () => 
 
 it('pet: the reflex preset writes a question the editor can show', async () => {
   const fake = installFakeApi([{ name: 'A' }]);
-  render(<Editor {...props({ initialTab: 'reflex' })} />);
+  render(<Editor {...props()} />);
+  await openAdvanced();
   await userEvent.selectOptions(await screen.findByLabelText('Reflex preset'), 'pet');
   await waitFor(() => expect(fake.patches()).toHaveLength(1), { timeout: 2000 });
   expect(fake.patches()[0].body.config.reflex.question?.options.map((o: any) => o.choice))
@@ -406,7 +445,8 @@ it('pet: the reflex preset writes a question the editor can show', async () => {
 
 it('pet: an action can be a pose, and the pose is picked from the three', async () => {
   const fake = installFakeApi([{ name: 'A' }]);
-  render(<Editor {...props({ initialTab: 'reflex' })} />);
+  render(<Editor {...props()} />);
+  await openAdvanced();
   await userEvent.selectOptions(await screen.findByLabelText('Reflex preset'), 'commands');
   await waitFor(() => expect(fake.patches()).toHaveLength(1), { timeout: 2000 });
   const kind = screen.getByLabelText('stop action 1');
@@ -424,7 +464,8 @@ it('pet: an action can be a pose, and the pose is picked from the three', async 
 
 it('tarot: the body is picked from its card, in English', async () => {
   const fake = installFakeApi([{ name: 'A' }]);
-  render(<Editor {...props({ initialTab: 'body' })} />);
+  render(<Editor {...props()} />);
+  await openAdvanced();
   const tarot = await screen.findByRole('radio', { name: /tarot reader/i });
   expect(tarot).not.toBeChecked();
   await userEvent.click(tarot);
@@ -435,7 +476,8 @@ it('tarot: the body is picked from its card, in English', async () => {
 
 it('tarot: the reflex preset writes a question the editor can show', async () => {
   const fake = installFakeApi([{ name: 'A' }]);
-  render(<Editor {...props({ initialTab: 'reflex' })} />);
+  render(<Editor {...props()} />);
+  await openAdvanced();
   await userEvent.selectOptions(await screen.findByLabelText('Reflex preset'), 'tarot');
   await waitFor(() => expect(fake.patches()).toHaveLength(1), { timeout: 2000 });
   expect(fake.patches()[0].body.config.reflex.question?.options.map((o: any) => o.choice)).toEqual(['draw', 'pass']);
@@ -444,7 +486,8 @@ it('tarot: the reflex preset writes a question the editor can show', async () =>
 
 it('tarot: an action can be draw_card, with nothing else to fill in', async () => {
   installFakeApi([{ name: 'A' }]);
-  render(<Editor {...props({ initialTab: 'reflex' })} />);
+  render(<Editor {...props()} />);
+  await openAdvanced();
   await userEvent.selectOptions(await screen.findByLabelText('Reflex preset'), 'tarot');
   const kind = await screen.findByLabelText('draw action 1');
   expect(kind).toHaveValue('draw_card');
