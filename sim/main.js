@@ -1072,6 +1072,9 @@ async function plugIn(meta = {}) {
       else if (msg.type === 'hush') { bodyAudioLink?.hush(); }
     },
   });
+  // A working bench is alive: the waveform above the mic and the cones follow
+  // the levels. The bootloader path returned above, so a blank chip stays dark.
+  effects.setAlive(true);
   boardRuntime.start();
   if (!meta.keepSelection) {
     studioSelection = selectionForFirmware(bench.board.firmware);
