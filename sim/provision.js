@@ -26,6 +26,18 @@ export function tokenCandidates(list) {
   return (Array.isArray(list) ? list : []).filter((c) => c.ready && !c.online);
 }
 
+/**
+ * A bench wired by hand has no demo to say which character it means, so the
+ * serial panel offers the list itself. Only an unpaired local body qualifies.
+ * @param {{ firmware: string, settings: { token?: string }, remote: boolean,
+ *            characters: { id: string, name: string, ready?: boolean, online?: boolean }[] }} o
+ * @returns {{ show: boolean, list: { id: string, name: string, ready?: boolean, online?: boolean }[] }}
+ */
+export function manualPairing(o) {
+  const show = o.firmware === 'body' && !o.remote && !o.settings.token;
+  return { show, list: tokenCandidates(o.characters) };
+}
+
 /** @param {string} url @param {string} origin */
 export function isRemote(url, origin) {
   if (!url) return false;

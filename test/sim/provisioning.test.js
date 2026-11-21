@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { planById } from '../../sim/plan.js';
-import { provisionPlan, isRemote, screenMismatch, planScreen, provisionSteps, createProvisioning } from '../../sim/provision.js';
+import { provisionPlan, isRemote, screenMismatch, planScreen, provisionSteps, createProvisioning, manualPairing } from '../../sim/provision.js';
 import { emptyBoard } from '../../sim/bench.js';
 
 const settings = (over = {}) => ({ ...emptyBoard().settings, ...over });
@@ -130,4 +130,16 @@ test('pairing candidates are ready and offline, never filtered by capability', (
     { id: 'c', name: 'Busy', ready: true, online: true, motion: 'pet' },
   ];
   assert.deepEqual(tokenCandidates(list).map((c) => c.id), ['a']);
+});
+
+test('a body with no token and no demo still gets a character list', () => {
+  const list = [{ id: 'a', name: 'Asten', ready: true, online: false }];
+  assert.deepEqual(manualPairing({ firmware: 'body', settings: {}, remote: false, characters: list }), { show: true, list });
+});
+
+test('a paired body, a remote brain, or another firmware gets nothing', () => {
+  const list = [{ id: 'a', name: 'Asten', ready: true, online: false }];
+  assert.equal(manualPairing({ firmware: 'body', settings: { token: 't' }, remote: false, characters: list }).show, false);
+  assert.equal(manualPairing({ firmware: 'body', settings: {}, remote: true, characters: list }).show, false);
+  assert.equal(manualPairing({ firmware: 'sketch-sonar', settings: {}, remote: false, characters: list }).show, false);
 });

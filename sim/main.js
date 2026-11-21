@@ -31,7 +31,7 @@ import { createBoardRuntime, bootMode } from './firmware/runtime.js';
 import { createBodyAudio } from './body.js';
 import { createBodyAudioLink } from './firmware/audio-link.js';
 import { demoSkips, lookupCharacter } from './capabilities.js';
-import { isRemote, provisionSteps, screenMismatch, createProvisioning, tokenCandidates } from './provision.js';
+import { isRemote, provisionSteps, screenMismatch, createProvisioning, tokenCandidates, manualPairing } from './provision.js';
 import { firmwareById, firmwareFor, FIRMWARES } from './firmware/index.js';
 import { ledPattern } from './firmware/led.js';
 import { createSerialPanel } from './ui/serial-panel.js';
@@ -1082,7 +1082,29 @@ async function tokenCandidate() {
  */
 async function maybeProvision(mine) {
   const plan = /** @type {import('./plan.js').Plan | null} */ (activeProject);
-  if (!plan || plan.connection !== 'body') return;
+  if (!plan || plan.connection !== 'body') {
+    const remote = isRemote(bench.board.settings.url, location.origin);
+    /** @type {{ id: string, name: string, ready?: boolean, online?: boolean }[]} */
+    let characters = [];
+    try {
+      const body = await (await fetch('/api/characters')).json();
+      characters = Array.isArray(body) ? body : [];
+    } catch {
+      characters = [];
+    }
+    const manual = manualPairing({
+      firmware: bench.board.firmware,
+      settings: bench.board.settings,
+      remote,
+      characters,
+    });
+    if (!manual.show) return;
+    serial.show(true);
+    serial.setCharacterHelper(!remote);
+    serial.setCharacters(manual.list.map((c) => ({ id: c.id, name: c.name })));
+    if (!manual.list.length) panels.status(simText(document.documentElement.lang, 'board.noReadyCharacter'));
+    return;
+  }
   if (provisionedFor === plan.id) return;
   provisionedFor = plan.id;
   const lang = document.documentElement.lang;
