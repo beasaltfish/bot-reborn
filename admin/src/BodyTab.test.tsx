@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { TEMPLATES } from '../../core/bodies.js';
+import { TEMPLATES, registerPlugins } from '../../core/bodies.js';
 import { BodyTab } from './BodyTab';
 import { installFakeApi } from './test/fakeApi';
 import type { BodyAction, Detail, Motion } from './types';
@@ -27,9 +27,29 @@ const fetchMock = (routes: Record<string, unknown>) => vi.stubGlobal('fetch', vi
   return { ok: true, json: async () => routes[path] };
 }));
 
-const SERVO = { id: 'my-servo', label: { en: 'Servo', zh: '舵机' }, commands: ['point'], source: 'plugin' };
+/** One plugin as `/api/bodies` sends it: enough to build the body again. */
+const SERVO = {
+  id: 'my-servo',
+  label: { en: 'Servo', zh: '舵机' },
+  commands: [{ name: 'point', run: [{ op: 'pin.write', args: { pin: 'sig', value: 1 } }], timeoutMs: 100 }],
+  resources: [{ kind: 'gpio', name: 'sig', gpio: 5, direction: 'output', safe: 0 }],
+};
 
-afterEach(() => { vi.unstubAllGlobals(); });
+/** A character that already follows the plugin: the card must come up checked.
+ * `template` is typed as the template union, but the page writes a plugin id
+ * there too (the brain reads `template ?? id`), so this fixture does the same. */
+const servoDetail = (): Detail => {
+  const d = detail();
+  d.config.body = { id: 'my-servo', template: 'my-servo' as Motion };
+  return d;
+};
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  // The registry is process-wide and BodyTab fills it from the brain: the next
+  // test starts from an empty one, as a page with no plugins would.
+  registerPlugins({});
+});
 
 describe('BodyTab', () => {
   it('shows a card per body with what it needs and what it does', () => {
@@ -200,6 +220,33 @@ describe('BodyTab', () => {
     renderTab(detail('none'), update);
     await userEvent.click(await screen.findByRole('radio', { name: /servo/i }));
     expect(update).toHaveBeenCalledWith({ config: { body: { id: 'my-servo', template: 'my-servo' } } });
+  });
+
+  it('marks the plugin body checked when the config already follows it', async () => {
+    fetchMock({ '/api/bodies': [SERVO] });
+    renderTab(servoDetail());
+    // The page must register the plugin before resolving: an empty registry
+    // sends `my-servo` back to `none`, and the wrong radio wins.
+    expect(await screen.findByRole('radio', { name: /servo/i })).toBeChecked();
+    expect(screen.getByRole('radio', { name: /^voice only/i })).not.toBeChecked();
+  });
+
+  it('accepts an action that calls a plugin command, and refuses one that does not', async () => {
+    fetchMock({ '/api/bodies': [SERVO] });
+    const update = vi.fn();
+    renderTab(servoDetail(), update);
+    await screen.findByRole('radio', { name: /servo/i });
+    const action = (command: string) => [{
+      name: 'point_at', label: { en: 'Point', zh: '指' }, say: 'Point at something.', run: [{ command }],
+    }];
+    const box = screen.getByLabelText('Actions') as HTMLTextAreaElement;
+
+    fireEvent.change(box, { target: { value: JSON.stringify(action('point'), null, 2) } });
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(update).toHaveBeenCalledWith({ config: { body: { actions: action('point') } } });
+
+    fireEvent.change(box, { target: { value: JSON.stringify(action('nope'), null, 2) } });
+    expect(screen.getByRole('alert')).toHaveTextContent(/unknown command "nope"/);
   });
 
   it('leaves the built-in cards exactly as they are when the plugin list fails', async () => {

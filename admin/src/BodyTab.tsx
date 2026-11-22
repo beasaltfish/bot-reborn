@@ -1,4 +1,6 @@
-// The body, as five cards that each say what it needs and what it does.
+// The body, as a card per template — plus one per plugin body the brain loaded,
+// which reaches this page through `/api/bodies` and is registered with
+// `core/bodies.js` before it is drawn.
 //
 // The old Basic tab had a dropdown of five names the firmware understood. A
 // name is not a decision anyone can make: "tarot" tells you nothing about
@@ -8,11 +10,13 @@
 // printed: five lines of "cannot" is a page that argues against itself, and
 // the badges above already say what it does.
 import { useEffect, useState } from 'react';
-import { TEMPLATES, bodyById, bodyProblem, labelOf, resolveBody } from '../../core/bodies.js';
+import { TEMPLATES, bodyById, bodyProblem, labelOf, registerPlugins, resolveBody } from '../../core/bodies.js';
 import { ActionsEditor } from './ActionsEditor';
 import { BodyDiagram } from './BodyDiagram';
 import { lang, t, type Key } from './i18n';
 import type { Detail, Motion, Patch } from './types';
+
+type Body = import('../../core/bodies.js').Body;
 
 const CAP: Record<string, Key> = {
   hear: 'capHear', speak: 'capSpeak', show: 'capShow', move: 'capMove',
@@ -29,24 +33,59 @@ const NEED: Record<string, Key> = {
   screen: 'needScreen', wand: 'needWand', phone: 'needPhone',
 };
 
-/** One plugin body as the brain lists it. The card has no ways or artwork of
- * its own: a plugin hears and speaks like a bare board, and adds commands. */
+/** One plugin body as the brain lists it: enough to build the same body here,
+ * so `resolveBody` and `bodyById` agree with the brain about a plugin id. The
+ * card has no ways or artwork of its own: a plugin hears and speaks like a
+ * bare board, and adds commands. */
 interface PluginBody {
   id: string;
   label: { en: string; zh: string };
-  commands: string[];
-  source: 'plugin';
+  commands: NonNullable<Body['commands']>;
+  resources: NonNullable<Body['resources']>;
 }
 
-/** @returns {PluginBody | null} one entry, if it has the fields a card reads */
+/**
+ * One entry, if it has what a body and a card need. The brain validates every
+ * plugin at load, so this is only the page refusing to crash on a shape from an
+ * older or newer brain — a refused entry is skipped, like a failed fetch.
+ * @returns {PluginBody | null}
+ */
 function asPlugin(value: unknown): PluginBody | null {
   if (!value || typeof value !== 'object') return null;
-  const row = value as Partial<PluginBody>;
+  const row = value as Record<string, unknown>;
   if (typeof row.id !== 'string' || row.id === '') return null;
-  const label = row.label;
+  const label = row.label as { en?: unknown; zh?: unknown } | undefined;
   if (!label || typeof label.en !== 'string' || typeof label.zh !== 'string') return null;
-  const commands = Array.isArray(row.commands) ? row.commands.filter((c): c is string => typeof c === 'string') : [];
-  return { id: row.id, label: { en: label.en, zh: label.zh }, commands, source: 'plugin' };
+  /** @param {unknown} entry */
+  const named = (entry: unknown) => Boolean(entry)
+    && typeof entry === 'object'
+    && typeof (entry as { name?: unknown }).name === 'string';
+  const { commands, resources } = row;
+  if (!Array.isArray(commands) || !commands.every(named)) return null;
+  if (!Array.isArray(resources) || !resources.every(named)) return null;
+  return {
+    id: row.id,
+    label: { en: label.en, zh: label.zh },
+    commands: commands as PluginBody['commands'],
+    resources: resources as PluginBody['resources'],
+  };
+}
+
+/**
+ * The body the brain built from the manifest: voice-only plus the plugin's own
+ * id, label, commands and pins. `template` names the plugin itself, so
+ * `resolveBody` lands on this row rather than on a template's.
+ * @param {PluginBody} p @returns {Body}
+ */
+function pluginBody(p: PluginBody): Body {
+  return {
+    ...TEMPLATES.none,
+    id: p.id,
+    template: p.id,
+    label: { ...p.label },
+    commands: p.commands,
+    resources: p.resources,
+  };
 }
 
 export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): void }) {
@@ -71,17 +110,25 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
   // Frame paths come from the brain: the admin bundle has no idea what the
   // render tools left on disk, and a guessed path is a broken picture.
   const [art, setArt] = useState<Record<string, string[]>>({});
-  // A plugin is installed on the brain, not in this bundle: the cards come
-  // from the endpoint, and a brain without it (or a page opened while it was
-  // down) simply shows the templates it already has.
+  // A plugin is installed on the brain, not in this bundle: the page asks for
+  // the bodies, registers them so `resolveBody`/`bodyById` can find a plugin id,
+  // and draws a card each. A brain without the endpoint (or a page opened while
+  // it was down) simply shows the templates it already has.
   const [plugins, setPlugins] = useState<PluginBody[]>([]);
   useEffect(() => {
     let live = true;
     fetch('/api/bodies')
-      .then((r) => (r.ok ? r.json() : []))
+      .then((r) => (r.ok ? r.json() : null))
       .then((j: unknown) => {
         if (!live || !Array.isArray(j)) return;
-        setPlugins(j.map(asPlugin).filter((p): p is PluginBody => p !== null));
+        const entries = j.map(asPlugin).filter((p): p is PluginBody => p !== null);
+        // Replacement, not a merge: an empty list must clear what a previous
+        // fetch (or a test) registered, and the cards below read the same list.
+        /** @type {Record<string, Body>} */
+        const registry: Record<string, Body> = {};
+        for (const p of entries) registry[p.id] = pluginBody(p);
+        registerPlugins(registry);
+        setPlugins(entries);
       })
       .catch(() => {});
     return () => { live = false; };
@@ -187,7 +234,7 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
             </span>
             <span className="caps">
               {t('capVoiceOnly')}
-              {p.commands.length > 0 && <> · {t('pluginCommands')}: {p.commands.join(' · ')}</>}
+              {p.commands.length > 0 && <> · {t('pluginCommands')}: {p.commands.map((c) => c.name).join(' · ')}</>}
             </span>
           </label>
         ))}

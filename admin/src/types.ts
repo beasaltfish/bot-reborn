@@ -101,7 +101,10 @@ export interface Patch {
 }
 
 export interface Summary {
-  id: string; name: string; ready: boolean; online: boolean; motion?: Motion | null;
+  id: string; name: string; ready: boolean; online: boolean;
+  /** The resolved template, or a plugin body's id: no reader treats it as a
+   * key into `TEMPLATES`, so it is a plain string. */
+  motion?: string | null;
   /** Non-secret name for this pairing; absent from older brains. */
   setupId?: string;
   /** The last body admitted in this brain's life; absent when it sent no marker. */

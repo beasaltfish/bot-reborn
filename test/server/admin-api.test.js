@@ -63,7 +63,8 @@ test('the plugin bodies the server loaded are offered to the admin', async (t) =
       ...structuredClone(TEMPLATES.none),
       id: 'my-servo',
       label: { en: 'Servo', zh: '舵机' },
-      commands: [{ name: 'point', run: [], timeoutMs: 100 }],
+      commands: [{ name: 'point', run: [{ op: 'pin.write', args: { pin: 'sig', value: 1 } }], timeoutMs: 100 }],
+      resources: [{ kind: 'gpio', name: 'sig', gpio: 5, direction: 'output', safe: 0 }],
     },
   });
   t.after(() => registerPlugins({}));
@@ -71,9 +72,12 @@ test('the plugin bodies the server loaded are offered to the admin', async (t) =
   t.after(() => r.server.close());
   const { status, body } = await r.call('/api/bodies');
   assert.equal(status, 200);
-  assert.deepEqual(body, [
-    { id: 'my-servo', label: { en: 'Servo', zh: '舵机' }, commands: ['point'], source: 'plugin' },
-  ]);
+  assert.deepEqual(body, [{
+    id: 'my-servo',
+    label: { en: 'Servo', zh: '舵机' },
+    commands: [{ name: 'point', run: [{ op: 'pin.write', args: { pin: 'sig', value: 1 } }], timeoutMs: 100 }],
+    resources: [{ kind: 'gpio', name: 'sig', gpio: 5, direction: 'output', safe: 0 }],
+  }]);
 });
 
 test('with no plugin installed, the admin is offered none', async (t) => {

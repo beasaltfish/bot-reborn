@@ -75,18 +75,18 @@ export function createAdminApi(opts) {
       // reach, and the port this request came in on.
       return send(200, { port: req.socket.localPort, addresses: (opts.addresses ?? lanAddresses)() });
     }
-    // The plugin bodies this brain loaded, so the admin can draw them beside
-    // the templates. Everything a card needs to look like a template is here:
-    // the label in both languages and the commands it answers. `source` says
-    // where the card came from, because the page may not assume every plugin
-    // is visible from what `TEMPLATES` holds.
+    // The plugin bodies this brain loaded, with everything needed to build the
+    // same body in the page: the label in both languages, the commands and the
+    // pins they may touch. All of it is local plugin data, none of it secret.
+    // The page registers these bodies before drawing them, so `resolveBody`
+    // agrees with the brain about `chosen`, `bodyProblem` and the actions box.
     if (path === '/api/bodies') {
       if (req.method !== 'GET') return send(405, { error: 'method not allowed' });
       return send(200, Object.values(pluginBodies()).map((b) => ({
         id: b.id,
         label: { en: b.label.en, zh: b.label.zh },
-        commands: (b.commands ?? []).map((command) => command.name),
-        source: 'plugin',
+        commands: b.commands ?? [],
+        resources: b.resources ?? [],
       })));
     }
     // A way to draw a card before the wand has a message of its own. Not a
