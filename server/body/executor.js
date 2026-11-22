@@ -32,6 +32,13 @@ export const IO_TIMEOUT_MS = 5000;
  */
 const IO_SLACK_MS = 200;
 
+/**
+ * The wire's id is one byte (body plugins design: `cmd` ids are 1..255), so the
+ * allocator wraps. Wrapping is only safe because an id still in the map is
+ * skipped: reusing one would let an answer for the old op settle the new call.
+ */
+const MAX_IO_ID = 255;
+
 /** @typedef {{ resolve: (value: unknown) => void, reject: (err: Error) => void, timer: ReturnType<typeof setTimeout> | null }} Pending */
 
 /**
@@ -41,6 +48,10 @@ const IO_SLACK_MS = 200;
  * Ids are this class's own counter and pending calls live in this class's own
  * map — never the motion generation, which moves on every order and would let
  * a late answer settle an unrelated op.
+ *
+ * The design allows at most four ops in flight on one body; that bound is the
+ * caller's (Task 5 awaits each op before starting the next), not this carrier's
+ * — it does not queue, it only refuses when all 255 ids are somehow taken.
  */
 export class IoExecutor {
   #send; #connected;
@@ -65,14 +76,31 @@ export class IoExecutor {
   }
 
   /**
+   * The next id that is not still waiting for an answer: 1..255, wrapping, and
+   * never one already in the map. `null` means every id is out, which the
+   * caller's serial dispatch makes unreachable — refusing is still the only
+   * honest answer.
+   * @returns {number | null}
+   */
+  #allocateId() {
+    for (let tries = 0; tries < MAX_IO_ID; tries++) {
+      if (this.#nextId > MAX_IO_ID) this.#nextId = 1;
+      const id = this.#nextId++;
+      if (!this.#pending.has(id)) return id;
+    }
+    return null;
+  }
+
+  /**
    * One op, answered by the body or not at all.
    * @param {import('../../core/io-program.js').Op} op
    * @returns {Promise<unknown>}
    */
   io(op) {
     if (!this.#connected) return Promise.reject(new Error('disconnected'));
+    const id = this.#allocateId();
+    if (id === null) return Promise.reject(new Error('busy'));
 
-    const id = this.#nextId++;
     /** @type {Pending} */
     const entry = /** @type {any} */ ({});
     const promise = new Promise((resolve, reject) => {

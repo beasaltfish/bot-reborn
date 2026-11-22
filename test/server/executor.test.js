@@ -123,6 +123,54 @@ test('an id nobody is waiting for settles nothing', async () => {
   assert.doesNotThrow(() => ex.onResult({ ok: true }));
 });
 
+test('cmd ids wrap at 255, skipping one still in flight, so a late answer cannot land on the wrong call', async () => {
+  const { sent, ex } = ioRig();
+  /** @param {number} pin */
+  const op = (pin) => ({ op: 'pin.read', args: { pin } });
+
+  // id 1 is left waiting; every id up to 254 is answered at once.
+  const first = ex.io(op(0));
+  assert.equal(sent.at(-1).id, 1);
+  for (let id = 2; id <= 254; id++) {
+    const p = ex.io(op(id));
+    assert.equal(sent.at(-1).id, id);
+    ex.onResult({ id, ok: true, value: id });
+    assert.equal(await p, id);
+  }
+  // id 255 is left waiting too, so the wrap must skip id 1 and take 2.
+  const last = ex.io(op(255));
+  assert.equal(sent.at(-1).id, 255);
+  const wrapped = ex.io(op(256));
+  assert.equal(sent.at(-1).id, 2, 'the allocator must wrap, not keep growing');
+
+  // The answer to the FIRST call may only settle the first call.
+  let wrappedSettled = false;
+  void wrapped.then(() => { wrappedSettled = true; });
+  ex.onResult({ id: 1, ok: true, value: 'first' });
+  assert.equal(await first, 'first');
+  await Promise.resolve();
+  assert.equal(wrappedSettled, false, 'a late id-1 result settled the wrapped op');
+
+  ex.onResult({ id: 2, ok: true, value: 'wrapped' });
+  assert.equal(await wrapped, 'wrapped');
+  ex.onResult({ id: 255, ok: true, value: 'last' });
+  assert.equal(await last, 'last');
+});
+
+test('with every one of the 255 ids in flight, the next op is refused rather than sharing an id', async () => {
+  const { ex } = ioRig();
+  /** @type {Promise<unknown>[]} */
+  const pending = [];
+  for (let i = 0; i < 255; i++) {
+    const p = ex.io({ op: 'pin.read', args: { pin: 5 } });
+    p.catch(() => {});
+    pending.push(p);
+  }
+  await assert.rejects(ex.io({ op: 'pin.read', args: { pin: 5 } }), /busy/);
+  ex.connected = false;
+  await Promise.allSettled(pending);
+});
+
 test('losing the link rejects every pending io at once, not at its timeout', async () => {
   const { ex } = ioRig();
   const first = assert.rejects(ex.io({ op: 'pin.write', args: { pin: 5, level: 1 }, safe: 0, timeoutMs: 5000 }),
