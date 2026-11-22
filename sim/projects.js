@@ -255,9 +255,8 @@ export function projectById(id, options) {
   if (id === MOTOR_PROJECT.id) return MOTOR_PROJECT;
   if (id === STRIP_PROJECT.id) return STRIP_PROJECT;
   if (id === TAROT_PROJECT.id) return TAROT_PROJECT;
-  if (id === LED_MODULE_PROJECT.id) return LED_MODULE_PROJECT;
   const recipe = RECIPES.find(candidate => candidate.id === id);
-  if (!recipe) return null;
+  if (!recipe) return PROJECTS.find(project => project.id === id) ?? null;
   if (options?.screenId || options?.wand) return adapt(recipe, options.screenId, options.wand);
   return PROJECTS.find(project => project.id === id) ?? null;
 }

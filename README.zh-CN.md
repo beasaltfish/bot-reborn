@@ -87,7 +87,7 @@ provider。key 留在
 - **Build it for me** 把音频那套直接接好留在台上；**Demo** 则用四十秒演一遍它是怎么接
   起来的。两种都可以撤销，让你自己再来一遍。
 - **错误是有边界的，其中一些会烧掉虚拟零件**——电源接反是经典的一例。
-- **十个器件家族**，每家配一节双语五阶段实验课，另有九个引导项目：搭出一个小东西，
+- **十个器件家族**，每家配一节双语五阶段实验课，另有十四个引导项目：搭出一个小东西，
   再自己检查。
 
 <p align="center"><a href="https://youtube.com/shorts/0MMilmoEPdo"><img src="docs/media/wire-it-for-me.gif" width="300" alt="接线模拟器：按一下 Demo，ESP32 就接上麦克风、喇叭和屏幕"></a></p>

@@ -21,10 +21,10 @@ import { wireEnd } from './snap.js';
 /** @param {import('./recipes.js').Step} step @returns {step is Extract<import('./recipes.js').Step, {kind:'part'}>} */
 const isPartStep = step => step.kind === 'part';
 
-// Fixed on-board holes for project parts, following the recipe layout: the
-// ESP32 occupies columns 6-27, so project modules start at x -1 (column 31)
-// and use the right of the ESP32's body (x 9, like the recipe amp), one row
-// per group, never sharing the ESP's strips.
+// Fixed on-board holes for project parts that have not chosen one, following
+// the recipe layout: the ESP32 occupies columns 6-27, so project modules start
+// at x -1 (column 31) and use the right of the ESP32's body (x 9, like the
+// recipe amp), one row per group, never sharing the ESP's strips.
 const SEAT_ROWS = [-4, -2, -6, 15, 17];
 const SEAT_GAP = 2;
 const BOARD_LEFT = 9;
@@ -35,6 +35,10 @@ function seatSteps(steps) {
   const seats = [];
   steps.forEach((step, index) => {
     if (step.kind !== 'part') return;
+    // A step that already says seated chose its holes on purpose (the audio
+    // bench, or a module's own fixed seat). Leave it there; auto-arranging it
+    // can put it on another part's strip, which is a short, not a layout.
+    if (step.seated) return;
     const def = PARTS[step.part];
     if (!def?.onBoard || def.id === 'esp32' || def.pins.every(pin => pin.wireOnly)) return;
     seats.push({ index, width: Math.max(...def.pins.map(pin => pin.x)) + 1 });

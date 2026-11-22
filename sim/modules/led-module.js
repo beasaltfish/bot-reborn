@@ -45,5 +45,5 @@ export const LED_MODULE = {
       { a: 'led:K', b: 'esp:GND', why: 'Return to ground.' },
     ],
   },
-  note: { en: 'Works on the bench and on the board.', zh: '模拟器与真板都可用。' },
+  note: { en: 'Works on the bench; the board needs the bridge firmware.', zh: '模拟器里可用；真板需要 bridge 固件。' },
 };

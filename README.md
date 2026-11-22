@@ -102,7 +102,7 @@ machine. It exists so the first hour of a build costs nothing:
 - **Mistakes are bounded, and some of them burn a virtual part** — a reversed
   supply is the classic.
 - **Ten device families** come with a bilingual five-stage lesson each, and
-  there are nine guided projects that build something small and check it.
+  there are fourteen guided projects that build something small and check it.
 
 <p align="center"><a href="https://youtube.com/shorts/0MMilmoEPdo"><img src="docs/media/wire-it-for-me.gif" width="300" alt="The wiring simulator: press Demo and an ESP32 gets a mic, a speaker and a screen"></a></p>
 
