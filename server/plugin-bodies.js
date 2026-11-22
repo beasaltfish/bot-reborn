@@ -118,8 +118,10 @@ function manifestProblem(manifest) {
 /**
  * The body a manifest describes, built on the voice-only template: a plugin
  * adds commands, not abilities, so it hears and speaks exactly like the bare
- * board it is flashed onto. `parts` is kept for the simulator, which seats the
- * devices; the manifest carries no firmware of its own.
+ * board it is flashed onto. `resources` is the table a command's `pin` name
+ * resolves against, so it travels with the commands; `parts` is kept for the
+ * simulator, which seats the devices; the manifest carries no firmware of its
+ * own.
  * @param {any} manifest
  * @returns {import('../core/bodies.js').Body}
  */
@@ -130,6 +132,7 @@ function bodyFrom(manifest) {
     label: { en: manifest.label.en, zh: manifest.label.zh },
     parts: [...manifest.parts],
     commands: structuredClone(manifest.commands),
+    resources: structuredClone(manifest.resources),
   };
 }
 

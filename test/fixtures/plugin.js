@@ -24,11 +24,15 @@ export const pointResources = [
 /**
  * The body a plugin manifest becomes, without touching disk. Mirrors the
  * loader on purpose: a plugin body is the voice-only body with its own id,
- * label and commands.
- * @param {{ id: string, commands?: import('../../core/io-program.js').Command[] }} spec
+ * label, resources and commands.
+ * @param {{
+ *   id: string,
+ *   commands?: import('../../core/io-program.js').Command[],
+ *   resources?: import('../../core/io-program.js').Resource[],
+ * }} spec
  * @returns {import('../../core/bodies.js').Body}
  */
-export function pluginBody({ id, commands = [] }) {
+export function pluginBody({ id, commands = [], resources = pointResources }) {
   return {
     id,
     label: { en: id, zh: id },
@@ -38,6 +42,7 @@ export function pluginBody({ id, commands = [] }) {
     actions: [],
     fixedTools: ['set_reply_language'],
     commands,
+    resources: structuredClone(resources),
     prompts: structuredClone(TEMPLATES.none.prompts),
     firmware: BODY_FIRMWARE,
     preview: 'voice',

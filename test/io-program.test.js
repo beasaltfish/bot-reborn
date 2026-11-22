@@ -87,10 +87,63 @@ test('pwm without a map is the raw pulse width', () => {
 });
 
 test('reads carry no safe and no timeout', () => {
-  const read = { ...point, run: [{ op: 'pin.read', args: { pin: 'button' } }] };
+  /** @type {import('../core/io-program.js').Command} */
+  const read = { ...point, returns: true, run: [{ op: 'pin.read', args: { pin: 'button' } }] };
   assert.equal(commandProblem(read, resources), null);
   assert.deepEqual(expandCommand(read, {}, resources).ops,
     [{ op: 'pin.read', args: { pin: 4 } }]);
+});
+
+test('returns is exactly one read, and it is the last step', () => {
+  // The one legal shape: work first, then the value that comes back.
+  /** @type {import('../core/io-program.js').Command} */
+  const ok = {
+    ...point,
+    returns: true,
+    run: [
+      { op: 'pin.write', args: { pin: 'sig', level: 1 } },
+      { op: 'pin.read', args: { pin: 'button' } },
+    ],
+  };
+  assert.equal(commandProblem(ok, resources), null);
+
+  // `returns` with nothing to return.
+  assert.match(
+    commandProblem({ ...point, returns: true }, resources) ?? '',
+    /returns needs exactly one read at the end/,
+  );
+
+  // Two reads cannot both be the value.
+  assert.match(
+    commandProblem({
+      ...point,
+      returns: true,
+      run: [
+        { op: 'pin.read', args: { pin: 'button' } },
+        { op: 'pin.read', args: { pin: 'button' } },
+      ],
+    }, resources) ?? '',
+    /returns needs exactly one read at the end/,
+  );
+
+  // A read that is not the last step runs for nothing.
+  assert.match(
+    commandProblem({
+      ...point,
+      returns: true,
+      run: [
+        { op: 'pin.read', args: { pin: 'button' } },
+        { op: 'pin.write', args: { pin: 'sig', level: 1 } },
+      ],
+    }, resources) ?? '',
+    /returns needs exactly one read at the end/,
+  );
+
+  // The reverse: a read nobody receives is a value silently swallowed.
+  assert.match(
+    commandProblem({ ...point, run: [{ op: 'pin.read', args: { pin: 'button' } }] }, resources) ?? '',
+    /a trailing read needs returns/,
+  );
 });
 
 test('a read must target a gpio input', () => {

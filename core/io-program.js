@@ -45,6 +45,9 @@ export const IO_OPS = /** @type {const} */ ([
 /** Ops that put a value on hardware, and so must be revocable with a `safe`. */
 const WRITES = new Set(['pin.write', 'pwm', 'i2c.write']);
 
+/** Ops that read a value back. Only the last step of a `returns` command may. */
+const READS = new Set(['pin.read', 'i2c.read', 'adc.read']);
+
 /** The bound on how long one command may hold the body. */
 const TIMEOUT_MS = { min: 1, max: 5000 };
 
@@ -193,6 +196,21 @@ export function commandProblem(command, resources) {
   for (const step of command.run) {
     const checked = checkStep(step, resources);
     if ('problem' in checked) return checked.problem;
+  }
+
+  // `returns` is a promise about the result: exactly one read, and it is what
+  // the command ends on. Two reads would have to choose which value comes
+  // back; a read before the end would be run for nothing. And the reverse: a
+  // read nobody receives is a value silently dropped, so a command that ends
+  // in one must say `returns`.
+  const last = command.run[command.run.length - 1];
+  const reads = command.run.filter((step) => READS.has(step.op)).length;
+  if (command.returns === true) {
+    if (reads !== 1 || !READS.has(last?.op)) {
+      return 'returns needs exactly one read at the end';
+    }
+  } else if (last && READS.has(last.op)) {
+    return 'a trailing read needs returns';
   }
   return null;
 }

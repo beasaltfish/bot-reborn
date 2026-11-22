@@ -46,6 +46,9 @@ test('a good plugin becomes a body, a broken one is named and skipped', (t) => {
   assert.deepEqual(Object.keys(bodies), ['my-servo']);
   assert.equal(bodies['my-servo'].commands?.[0].name, 'point');
   assert.deepEqual(bodies['my-servo'].capabilities, ['hear', 'speak']);
+  // Commands name pins; the table that turns `sig` into gpio 5 travels too.
+  assert.equal(bodies['my-servo'].resources?.[0].gpio, 5);
+  assert.deepEqual(bodies['my-servo'].resources, pointResources);
   assert.match(problems.join('\n'), /bad-pin.*pin/);
 
   // A plugin is the voice-only body with its own commands: no firmware of its

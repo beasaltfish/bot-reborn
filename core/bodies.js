@@ -75,6 +75,7 @@ import { SOUNDS } from './audio/sfx.js';
  *   actions: Action[],
  *   fixedTools: string[],
  *   commands?: import('./io-program.js').Command[],
+ *   resources?: import('./io-program.js').Resource[],
  *   parts?: string[],
  *   triggers?: Trigger[],
  *   prompts: Prompts,
