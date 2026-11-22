@@ -17,8 +17,17 @@
 // end (`led:A`, `r:1`, `esp:GND`) is the simulator's to resolve, not this
 // module's to guess at.
 
-import { commandProblem } from './io-program.js';
-import { TEMPLATES, bodyProblem } from './bodies.js';
+import { bodyProblem, TEMPLATES } from './bodies.js';
+import { bodyFrom, commandsProblem, resourcesProblem } from './plugin-manifest.js';
+
+/**
+ * Escapes a template name so a regex built from `TEMPLATES` cannot misfire.
+ * @param {string} text
+ * @returns {string}
+ */
+function escapeRegExp(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 /**
  * A module id names a directory and reaches `config.body.template`. The shape
@@ -28,14 +37,8 @@ import { TEMPLATES, bodyProblem } from './bodies.js';
  * is refused without editing this line.
  */
 export const MODULE_ID = new RegExp(
-  `^(?!(${Object.keys(TEMPLATES).join('|')})$)[a-z][a-z0-9_-]*$`,
+  `^(?!(?:${Object.keys(TEMPLATES).map(escapeRegExp).join('|')})$)[a-z][a-z0-9_-]*$`,
 );
-
-/** A command name is how an action calls it: no spaces, no caps. */
-const COMMAND_NAME = /^[a-z][a-z0-9_]*$/;
-
-/** The two directions a gpio pin may have. */
-const DIRECTIONS = new Set(['input', 'output']);
 
 /** The one wiring end this checker reads: the board's own pin. */
 const ESP_PIN = /^esp:GPIO(\d+)$/;
@@ -68,85 +71,6 @@ function isText(value) {
 }
 
 /**
- * The resource table is the module's whole permission slip, and the rule is the
- * plugin loader's, word for word: only a gpio with a number, a direction, and —
- * for an output — a `safe` the bridge can restore. A second, looser reading here
- * would let a module install and then fail to run.
- * @param {unknown} resources
- * @returns {string | null}
- */
-function resourcesProblem(resources) {
-  if (!Array.isArray(resources)) return 'resources must be an array';
-  /** @type {Set<string>} */
-  const names = new Set();
-  for (const resource of resources) {
-    if (!isObject(resource)) return 'resources must be a list of resources';
-    if (!isText(resource.name)) return 'a resource has no name';
-    if (names.has(resource.name)) return `two resources are called ${resource.name}`;
-    names.add(resource.name);
-    if (resource.kind !== 'gpio') return `resource "${resource.name}" is not a gpio pin`;
-    if (!Number.isInteger(resource.gpio)) return `resource "${resource.name}" has no gpio number`;
-    if (!DIRECTIONS.has(resource.direction)) {
-      return `resource "${resource.name}" is not an input or an output`;
-    }
-    if (resource.direction === 'output' && !Number.isFinite(resource.safe)) {
-      return `output "${resource.name}" has no safe value`;
-    }
-    if (resource.direction === 'output' && resource.safe !== 0 && resource.safe !== 1) {
-      return `output "${resource.name}" needs a safe of 0 or 1`;
-    }
-  }
-  return null;
-}
-
-/**
- * Every command is checked against the table above by `commandProblem`, so the
- * module catalogue and the plugin loader agree on what "the pin is declared"
- * means. The name is checked here because it is what an action will call.
- * @param {unknown} commands
- * @param {unknown} resources
- * @returns {string | null}
- */
-function commandsProblem(commands, resources) {
-  if (!Array.isArray(commands)) return 'commands must be an array';
-  /** @type {Set<string>} */
-  const names = new Set();
-  for (const command of commands) {
-    if (!isObject(command)) return 'commands must be a list of commands';
-    if (!isText(command.name) || !COMMAND_NAME.test(command.name)) {
-      return `command "${String(command.name)}" is not a command name`;
-    }
-    if (names.has(command.name)) return `two commands are called ${command.name}`;
-    names.add(command.name);
-    const problem = commandProblem(
-      /** @type {any} */ (command),
-      /** @type {any} */ (resources),
-    );
-    if (problem) return `command ${command.name}: ${problem}`;
-  }
-  return null;
-}
-
-/**
- * The body a module manifest describes, built exactly as the plugin loader
- * builds one: the voice-only template, its own id, label, parts, commands and
- * resources, and no actions of its own. `examples` are not installed on the
- * body — they are copied into a character, and only when a person says so.
- * @param {any} manifest
- * @returns {import('./bodies.js').Body}
- */
-function bodyFrom(manifest) {
-  return {
-    ...structuredClone(TEMPLATES.none),
-    id: manifest.id,
-    label: { en: manifest.label.en, zh: manifest.label.zh },
-    parts: [...manifest.parts],
-    commands: structuredClone(manifest.commands),
-    resources: structuredClone(manifest.resources),
-  };
-}
-
-/**
  * Every `esp:GPIO<n>` a link names has to be a gpio the manifest declared. The
  * other end of a link is a part pin, and resolving it is the simulator's work;
  * a `esp:GND` or `esp:3V3` names no permission and is left alone.
@@ -174,7 +98,15 @@ function wiringProblem(wiring, resources) {
       const point = link[end];
       if (typeof point !== 'string') return `wiring.links[${i}].${end} is not a point`;
       const pin = ESP_PIN.exec(point);
-      if (!pin) continue;
+      if (!pin) {
+        // `esp:GPIO5x` almost passes for a board pin; left alone it would be
+        // resolved by the simulator as a part name and fail there, far from the
+        // typo. Anything else (`esp:GND`, `led:A`) is not ours to judge.
+        if (point.startsWith('esp:GPIO')) {
+          return `wiring.links[${i}].${end} is ${point}, which is not an esp:GPIO<n> pin`;
+        }
+        continue;
+      }
       if (!declared.has(Number(pin[1]))) {
         return `wiring.links[${i}].${end} is ${point}, which is not declared by a gpio resource`;
       }

@@ -27,6 +27,12 @@ test('a wiring pin the resources do not declare is refused', () => {
   assert.match(moduleProblem(m) ?? '', /GPIO9.*not declared/);
 });
 
+test('a misspelled board pin is refused as a spelling error', () => {
+  const m = led();
+  m.wiring.links[0].a = 'esp:GPIO5x';
+  assert.match(moduleProblem(m) ?? '', /esp:GPIO5x, which is not an esp:GPIO<n> pin/);
+});
+
 test('a broken example action is refused by name', () => {
   const m = led();
   m.examples[0].run = [{ command: 'nope' }];
