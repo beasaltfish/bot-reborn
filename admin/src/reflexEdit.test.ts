@@ -91,7 +91,7 @@ describe('unsupported', () => {
     expect(unsupported(r, body('toy'))).toEqual([]);
     expect(unsupported(r, body('dry-run'))).toEqual([]);
     expect(unsupported(r, body('none')).sort()).toEqual(['cruise', 'move', 'stop']);
-    expect(unsupported(withQ(REFLEX_PRESETS[0].question), body('none'))).toEqual([]);
+    expect(unsupported(withQ(REFLEX_PRESETS[0].question), body('none'))).toEqual(['play_sound']);
     expect(unsupported(withQ(null), body('none'))).toEqual([]);
   });
 });
