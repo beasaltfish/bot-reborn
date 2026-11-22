@@ -15,8 +15,12 @@
 // resource's `name`; the name must be declared, and only a gpio pin is
 // addressable — the i2c/adc resource contract is not settled, so those are
 // refused rather than guessed at. Writes go to outputs and carry the resource's
-// `safe`; reads come from inputs and carry neither. A `pwm` may carry one
-// linear `map`, and that is the only place a unit is allowed to exist.
+// `safe`; reads come from inputs and carry no `safe`. Every op carries the
+// command's `timeoutMs`, so a read the body never answers is bounded too. A
+// `pwm` may carry one linear `map`, and that is the only place a unit is
+// allowed to exist.
+
+import { expectationOf, fitsSchema } from './schema.js';
 
 /** @typedef {{ name: string, args?: object, run: OpStep[], returns?: true, timeoutMs: number }} Command */
 /** @typedef {{ op: string, args: Record<string, unknown> }} OpStep */
@@ -117,6 +121,12 @@ function targetOf(step, resources, write) {
     if (!Number.isFinite(resource.safe)) {
       return { problem: `output "${resource.name}" has no safe value` };
     }
+    // A level is a logic value, not a number that happens to be near one:
+    // `safe: 2` used to be read as 1 by the bench and restored to a drive. The
+    // bridge can only restore what it can express, so 0 and 1 are the whole set.
+    if (resource.safe !== 0 && resource.safe !== 1) {
+      return { problem: `output "${resource.name}" needs a safe of 0 or 1` };
+    }
   } else if (resource.direction !== 'input') {
     return { problem: `resource "${resource.name}" is not a gpio input` };
   }
@@ -161,6 +171,13 @@ function checkStep(step, resources) {
   const target = targetOf(step, resources, WRITES.has(op));
   if ('problem' in target) return target;
 
+  // A level is 0, 1, or the whole value of one argument. Anything else — a
+  // missing level, `7`, the word `high` — is refused here rather than at the
+  // bridge, and checked again after substitution, because the call's own value
+  // is what actually drives the pin.
+  if (op === 'pin.write' && !isLevel(args.level)) {
+    return { problem: 'pin.write needs a level of 0, 1, or $argument' };
+  }
   if (op !== 'pwm' && args.map !== undefined) return { problem: 'map is only for pwm' };
   if (op === 'pwm') {
     const value = args.value;
@@ -273,11 +290,49 @@ function dataArgs(args, given) {
 }
 
 /**
+ * Whether a `pin.write` level is a logic value or a whole argument reference.
+ * `$level` stands for whatever the action supplies; it is checked again once
+ * substitution has put a value there.
+ * @param {unknown} level
+ * @returns {boolean}
+ */
+function isLevel(level) {
+  if (level === 0 || level === 1) return true;
+  return typeof level === 'string' && level.startsWith('$') && level.length > 1;
+}
+
+/**
+ * Whether a step's substituted data fits the command's own argument schema.
+ * `commandProblem` judges a literal call; a `$argument` is only known at call
+ * time, and an `angle: 10000` against `maximum: 180` used to reach the wire
+ * because nothing looked at it after substitution.
+ * @param {Command} command
+ * @param {Record<string, unknown>} values
+ * @returns {string | null}
+ */
+function givenProblem(command, values) {
+  const schema = /** @type {import('./verbs.js').JsonSchemaSubset | undefined} */ (command.args);
+  if (!schema || typeof schema !== 'object') return null;
+  const required = Array.isArray(schema.required) ? schema.required : [];
+  for (const key of required) {
+    if (!Object.hasOwn(values, key)) return `argument "${key}" is missing`;
+  }
+  return fitsSchema(values, schema)
+    ? null
+    : `arguments ${JSON.stringify(values)} do not fit: ${expectationOf(schema)}`;
+}
+
+/**
  * One `map` point, linear only. A step without a map is the raw value: the
  * spec allows a linear `map` but never requires one, and with no map there is
  * no unit to convert, so the number already *is* the pulse width. A span of
  * zero — `from: [90, 90]` — is still a legitimately declared map; every input
  * lands on the span's start, so the result is `to[0]` with no division by zero.
+ *
+ * The result is clamped to the `to` span: a map says "this input range becomes
+ * this output range", so an input past `from` is its endpoint, not a pulse
+ * width nobody declared. (The input itself is still the schema's to refuse —
+ * clamping is for a value that got through.)
  * @param {number} value
  * @param {{ from: number[], to: number[] } | undefined} map
  * @returns {number}
@@ -287,7 +342,10 @@ function applyMap(value, map) {
   const { from, to } = map;
   if (from[1] === from[0]) return to[0];
   const span = (value - from[0]) / (from[1] - from[0]);
-  return Math.round(to[0] + span * (to[1] - to[0]));
+  const mapped = Math.round(to[0] + span * (to[1] - to[0]));
+  const low = Math.min(to[0], to[1]);
+  const high = Math.max(to[0], to[1]);
+  return Math.min(high, Math.max(low, mapped));
 }
 
 /**
@@ -300,7 +358,10 @@ function applyMap(value, map) {
  *
  * Whole ops only: on any refusal `ops` is empty and `drop` is the phrase. A
  * write op gets the resource's `safe` and the command's `timeoutMs`; a read op
- * gets neither, because there is nothing to restore and nothing to time out.
+ * gets the same `timeoutMs` but no `safe`, because there is nothing to restore.
+ * The values a `$argument` stood for are judged against the command's own
+ * schema here, after substitution: a literal was judged by `commandProblem`,
+ * and a bound that only applies to one of the two is a bound nobody can trust.
  * `pwm`'s `map` becomes `us` and its `value`/`map` arguments are consumed; with
  * no map the value already is `us`. A non-finite input or output is a refusal,
  * never `NaN` on the wire.
@@ -314,6 +375,9 @@ export function expandCommand(command, given, resources) {
   if (problem) return { ops: [], drop: problem };
 
   const values = given ?? {};
+  const unfit = givenProblem(command, values);
+  if (unfit) return { ops: [], drop: unfit };
+
   /** @type {Op[]} */
   const ops = [];
   for (const step of command.run) {
@@ -324,6 +388,12 @@ export function expandCommand(command, given, resources) {
 
     const { value: data, missing } = dataArgs(step.args ?? {}, values);
     if (missing) return { ops: [], drop: `argument "${missing}" is missing` };
+
+    // The static check above only knows the shape. This is the value that will
+    // actually drive the pin, so a `$level` of 7 stops here.
+    if (op === 'pin.write' && data.level !== 0 && data.level !== 1) {
+      return { ops: [], drop: 'pin.write needs a level of 0 or 1' };
+    }
 
     if (op === 'pwm') {
       const { map, value, ...rest } = data;
@@ -349,7 +419,7 @@ export function expandCommand(command, given, resources) {
       ops.push({ op, args, safe: resource.safe, timeoutMs: command.timeoutMs });
       continue;
     }
-    ops.push({ op, args });
+    ops.push({ op, args, timeoutMs: command.timeoutMs });
   }
   return { ops };
 }

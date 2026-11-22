@@ -18,7 +18,11 @@ test('the six ops are the closed set', () => {
 });
 
 test('a command expands to bounded ops with a safe value', () => {
-  const { ops, drop } = expandCommand({ ...point, run: [{ op: 'pin.write', args: { pin: 'sig', level: '$level' } }] }, { level: 1 }, resources);
+  const { ops, drop } = expandCommand({
+    ...point,
+    args: { type: 'object', properties: { level: { type: 'integer' } } },
+    run: [{ op: 'pin.write', args: { pin: 'sig', level: '$level' } }],
+  }, { level: 1 }, resources);
   assert.equal(drop, undefined);
   assert.deepEqual(ops, [{ op: 'pin.write', args: { pin: 5, level: 1 }, safe: 0, timeoutMs: 500 }]);
 });
@@ -43,6 +47,56 @@ test('an output without a safe value is refused', () => {
     commandProblem({ ...point, run: [{ op: 'pin.write', args: { pin: 'led', level: 1 } }] }, [...resources, led]) ?? '',
     /output "led" has no safe value/,
   );
+});
+
+test('a safe value that is not 0 or 1 is refused, not rounded to a level', () => {
+  // The bench used to read `safe: 2` as 1 and restore a drive on disconnect.
+  const led = { kind: 'gpio', name: 'led', gpio: 6, direction: 'output', safe: 2 };
+  assert.match(
+    commandProblem({ ...point, run: [{ op: 'pin.write', args: { pin: 'led', level: 1 } }] }, [...resources, led]) ?? '',
+    /output "led" needs a safe of 0 or 1/,
+  );
+});
+
+test('pin.write needs a level that is 0, 1 or one argument', () => {
+  /** @param {unknown} level */
+  const write = (level) => commandProblem(
+    /** @type {any} */ ({ ...point, args: undefined, run: [{ op: 'pin.write', args: { pin: 'sig', level } }] }),
+    resources,
+  ) ?? '';
+  assert.match(write(undefined), /level of 0, 1, or \$argument/);
+  assert.match(write(7), /level of 0, 1, or \$argument/);
+  assert.match(write('high'), /level of 0, 1, or \$argument/);
+  assert.equal(write(1), '');
+  assert.equal(write('$level'), '');
+});
+
+test('a substituted level is checked again: a $level of 7 never reaches the pin', () => {
+  const command = {
+    ...point,
+    args: { type: 'object', properties: { level: { type: 'integer' } } },
+    run: [{ op: 'pin.write', args: { pin: 'sig', level: '$level' } }],
+  };
+  const { ops, drop } = expandCommand(command, { level: 7 }, resources);
+  assert.deepEqual(ops, []);
+  assert.match(drop ?? '', /level of 0 or 1/);
+});
+
+test('a substituted argument is held to the command schema, not just the literal', () => {
+  // `actionProblem` judged the literal 999; this is the same bound on a value
+  // that only exists at call time.
+  const { ops, drop } = expandCommand(point, { angle: 10000 }, resources);
+  assert.deepEqual(ops, []);
+  assert.match(drop ?? '', /angle must be an integer >= 0 <= 180/);
+});
+
+test('a map output is clamped to its to range', () => {
+  // The input past `from` is an endpoint, not a pulse width the author never
+  // declared: 200° is 2500 µs by extrapolation, outside the map's own `to`.
+  const { ops } = expandCommand({ ...point, args: undefined }, { angle: 200 }, resources);
+  assert.deepEqual(ops[0].args, { pin: 5, us: 2400 });
+  const under = expandCommand({ ...point, args: undefined }, { angle: -20 }, resources);
+  assert.deepEqual(under.ops[0].args, { pin: 5, us: 500 });
 });
 
 test('an input cannot be written even when it carries a safe value', () => {
@@ -78,20 +132,36 @@ test('i2c and adc ops fail closed, with no gpio stand-in', () => {
 test('pwm without a map is the raw pulse width', () => {
   const raw = { ...point, run: [{ op: 'pwm', args: { pin: 'sig', value: 90 } }] };
   assert.equal(commandProblem(raw, resources), null);
-  assert.deepEqual(expandCommand(raw, {}, resources).ops,
+  assert.deepEqual(expandCommand(raw, { angle: 90 }, resources).ops,
     [{ op: 'pwm', args: { pin: 5, us: 90 }, safe: 0, timeoutMs: 500 }]);
 
-  const fromArg = { ...point, run: [{ op: 'pwm', args: { pin: 'sig', value: '$angle' } }] };
+  // No map, and a schema with no upper bound: the number is the pulse width.
+  const fromArg = {
+    ...point,
+    args: { type: 'object', properties: { angle: { type: 'integer' } } },
+    run: [{ op: 'pwm', args: { pin: 'sig', value: '$angle' } }],
+  };
   assert.deepEqual(expandCommand(fromArg, { angle: 1500 }, resources).ops,
     [{ op: 'pwm', args: { pin: 5, us: 1500 }, safe: 0, timeoutMs: 500 }]);
 });
 
-test('reads carry no safe and no timeout', () => {
+test('reads carry no safe, and carry the command time', () => {
   /** @type {import('../core/io-program.js').Command} */
-  const read = { ...point, returns: true, run: [{ op: 'pin.read', args: { pin: 'button' } }] };
+  const read = { ...point, args: undefined, returns: true, run: [{ op: 'pin.read', args: { pin: 'button' } }] };
   assert.equal(commandProblem(read, resources), null);
   assert.deepEqual(expandCommand(read, {}, resources).ops,
-    [{ op: 'pin.read', args: { pin: 4 } }]);
+    [{ op: 'pin.read', args: { pin: 4 }, timeoutMs: 500 }]);
+});
+
+test('a read is bounded by the command’s timeout, not by the link’s 5 s', () => {
+  // The timeout belongs to the command that asked for the read: a command that
+  // allows itself 50 ms must not hold the turn for the carrier's fallback.
+  /** @type {import('../core/io-program.js').Command} */
+  const quick = {
+    ...point, args: undefined, timeoutMs: 50, returns: true,
+    run: [{ op: 'pin.read', args: { pin: 'button' } }],
+  };
+  assert.equal(expandCommand(quick, {}, resources).ops[0].timeoutMs, 50);
 });
 
 test('returns is exactly one read, and it is the last step', () => {
@@ -180,9 +250,13 @@ test('pwm without a value is refused, not expanded to NaN', () => {
   assert.match(commandProblem(faceless, resources) ?? '', /pwm needs a value/);
   assert.equal(expandCommand(faceless, {}, resources).ops.length, 0);
 
+  // A literal that is not a number never becomes one; a substituted value the
+  // command's own schema refuses is refused by that schema first.
+  const literal = { ...point, run: [{ op: 'pwm', args: { pin: 'sig', value: 'hot' } }] };
+  assert.match(expandCommand(literal, {}, resources).drop ?? '', /pwm value must be a finite number/);
   const { ops, drop } = expandCommand(point, { angle: 'hot' }, resources);
   assert.deepEqual(ops, []);
-  assert.match(drop ?? '', /pwm value must be a finite number/);
+  assert.match(drop ?? '', /angle must be an integer >= 0 <= 180/);
 });
 
 test('an unresolved argument is refused, not sent as undefined', () => {
@@ -210,7 +284,8 @@ test('malformed data is a phrase, never a throw', () => {
 
 test('a __proto__ key is copied as data, not as a prototype', () => {
   const args = JSON.parse('{"pin":"sig","level":1,"__proto__":{"polluted":true}}');
-  const { ops } = expandCommand({ ...point, run: [{ op: 'pin.write', args }] }, {}, resources);
+  const plain = { ...point, args: undefined };
+  const { ops } = expandCommand({ ...plain, run: [{ op: 'pin.write', args }] }, {}, resources);
   assert.deepEqual(ops[0].args.pin, 5);
   assert.equal(Object.getPrototypeOf(ops[0].args), Object.prototype);
   assert.equal(/** @type {any} */ ({}).polluted, undefined);

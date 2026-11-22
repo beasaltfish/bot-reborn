@@ -95,11 +95,15 @@ test('a command that cannot run lands in problems with its own phrase', (t) => {
     'no-safe': manifest('no-safe', {
       resources: [{ kind: 'gpio', name: 'sig', gpio: 5, direction: 'output' }],
     }),
+    'odd-safe': manifest('odd-safe', {
+      resources: [{ kind: 'gpio', name: 'sig', gpio: 5, direction: 'output', safe: 2 }],
+    }),
   }, t);
   const { bodies, problems } = loadPlugins(dir);
   assert.deepEqual(bodies, {});
   assert.match(problems.join('\n'), /plugin unknown-op: command point: op "servo" is not one of the IO ops/);
   assert.match(problems.join('\n'), /plugin no-safe: output "sig" has no safe value/);
+  assert.match(problems.join('\n'), /plugin odd-safe: output "sig" needs a safe of 0 or 1/);
 });
 
 test('the manifest has to name itself, both labels, and its parts', (t) => {

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { actionProblem, expand, expectationOf } from '../core/actions.js';
+import { actionProblem, expand, expectationOf, verbsOf } from '../core/actions.js';
 import { VERB_NAMES } from '../core/verbs.js';
 import { pointCommand, pointResources } from './fixtures/plugin.js';
 
@@ -347,6 +347,19 @@ test('a command no body carries is refused by name', () => {
   );
 });
 
+test('a command step adds no verb, and commands that are not a list are a refusal', () => {
+  // `verbsOf` is what the simulator asks ("can it pose?"): a command runs IO
+  // ops, not a verb, so the action contributes none — and a body that names a
+  // command it does not carry is caught by `bodyProblem`, not by a missing verb.
+  const light = action({ name: 'light', run: [{ command: 'point', args: { angle: 90 } }] });
+  assert.deepEqual(verbsOf([light]), []);
+
+  // A hand-edited `commands: "point"` is not a list; the lookup says so.
+  const bad = /** @type {any} */ ({ ...OPTS, commands: 'point' });
+  assert.match(actionProblem(light, bad) ?? '', /unknown command "point"/);
+  assert.match(expand(light, {}, bad).dropped[0]?.expect ?? '', /unknown command "point"/);
+});
+
 test('a command call is held to the command schema and the declared arguments', () => {
   // No reference, so the call is the same on every run: judge it now.
   const wide = action({ name: 'wide', run: [{ command: 'point', args: { angle: 999 } }] });
@@ -375,7 +388,9 @@ test('a command that refuses at call time is one drop with its own phrase', () =
   assert.deepEqual(r.dropped, [{
     where: 'steps[0]',
     value: { command: 'point', args: { angle: '$angle' } },
-    expect: 'pwm value must be a finite number',
+    // The command's own schema knows `angle` is an integer: the substituted
+    // value is judged by it now, before any op is built.
+    expect: 'arguments {"angle":"sideways"} do not fit: angle must be an integer >= 0 <= 180',
   }]);
   assert.equal(r.hadDrive, false);
 });

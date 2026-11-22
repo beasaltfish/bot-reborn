@@ -60,6 +60,12 @@ function resourcesProblem(resources) {
     if (resource.direction === 'output' && !Number.isFinite(resource.safe)) {
       return `output "${resource.name}" has no safe value`;
     }
+    // The value the pin returns to on disconnect is a level, not a number near
+    // one: the bridge can only restore 0 or 1, so anything else is refused here
+    // rather than by the command that happens to name this pin.
+    if (resource.direction === 'output' && resource.safe !== 0 && resource.safe !== 1) {
+      return `output "${resource.name}" needs a safe of 0 or 1`;
+    }
   }
   return null;
 }
