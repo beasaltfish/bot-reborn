@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { TEMPLATES, registerPlugins } from '../../core/bodies.js';
+import { TEMPLATES, pluginBodies, registerPlugins } from '../../core/bodies.js';
 import { BodyTab } from './BodyTab';
 import { installFakeApi } from './test/fakeApi';
 import type { BodyAction, Detail } from './types';
@@ -253,6 +253,17 @@ describe('BodyTab', () => {
     renderTab(detail());
     expect(screen.getAllByRole('radio')).toHaveLength(4);
     expect(screen.queryByText('Servo')).toBeNull();
+  });
+
+  it('clears the browser plugin registry when the brain lists none', async () => {
+    // The registry is process-wide: a page that already found a plugin (or a
+    // previous test) holds one body, and an empty answer must replace it rather
+    // than merge into it. Without this the `my-servo` card outlives the plugin.
+    registerPlugins({ 'my-servo': { ...structuredClone(TEMPLATES.none), id: 'my-servo', label: { en: 'Servo', zh: '舵机' } } });
+    fetchMock({ '/api/bodies': [] });
+    renderTab(detail());
+    await vi.waitFor(() => expect(pluginBodies()).toEqual({}));
+    expect(screen.getAllByRole('radio')).toHaveLength(4);
   });
 
   it('offers the chosen body\'s actions under the cards, as the template has them', () => {
