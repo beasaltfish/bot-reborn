@@ -9,11 +9,13 @@
 // manifest is a `module <dir>: <phrase>` line, and a broken install is an
 // `error` the caller can show.
 
-import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, unlinkSync, writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TEMPLATES, registerPlugins } from '../core/bodies.js';
-import { moduleProblem } from '../core/module-manifest.js';
+import { MODULE_ID, moduleProblem } from '../core/module-manifest.js';
 import { loadPlugins } from './plugin-bodies.js';
 
 /** The repo root, resolved the way the rest of `server/` resolves shared files. */
@@ -117,13 +119,44 @@ function pluginFields(manifest) {
 }
 
 /**
+ * Run a cleanup step and forget its failure. The point of the caller is to
+ * return an error; a locked or vanished file must not turn that into a throw.
+ * @param {() => void} step
+ * @returns {void}
+ */
+function quietly(step) {
+  try {
+    step();
+  } catch {
+    // The disk is somebody else's; the caller already has the real error.
+  }
+}
+
+/**
+ * Replace `file` with `data` in one step a reader can only see whole. The
+ * temporary name is a sibling so the rename stays on one filesystem.
+ * @param {string} file
+ * @param {string | Buffer} data
+ * @returns {void}
+ */
+function writeAtomically(file, data) {
+  const temporary = `${file}.tmp`;
+  writeFileSync(temporary, data);
+  renameSync(temporary, file);
+}
+
+/**
  * Install one module: write its body and register it without a restart.
  *
  * The id is looked up in the catalogue, never path-joined from the request, so
- * an unknown or template id is a refusal and not a directory name. The file is
- * written first and read back through the same loader a plugin install goes
- * through; if that loader refuses it, the directory this call created is
- * removed and the loader's own phrase is returned.
+ * an unknown or template id is a refusal and not a directory name. The body is
+ * written to a temporary file and renamed over the target, so a failed write
+ * leaves an already-installed body byte-identical; the loader is then asked
+ * about that same directory, and its own phrase is returned if it refuses.
+ *
+ * Nothing here throws. Every removal is best-effort, because an install that
+ * cannot clean up a temporary file should still answer with the error that
+ * caused the cleanup.
  * @param {string} id
  * @param {{
  *   modules: Record<string, ModuleManifest>,
@@ -133,32 +166,60 @@ function pluginFields(manifest) {
  * @returns {{ body: import('../core/bodies.js').Body, examples: Action[] } | { error: string }}
  */
 export function installModule(id, { modules, bodiesDir, log = console.error }) {
+  // The catalogue is the caller's map, so its keys are re-checked as names: a
+  // hand-built map must not smuggle a path or a template into a directory.
   if (typeof id !== 'string'
+    || !MODULE_ID.test(id)
     || Object.hasOwn(TEMPLATES, id)
-    || !Object.hasOwn(modules, id)) {
+    || !Object.hasOwn(modules, id)
+    || modules[id]?.id !== id) {
     return { error: `${String(id)} is not a module` };
   }
   const manifest = modules[id];
   const dir = join(bodiesDir, id);
+  const file = join(dir, 'body.json');
+  const temporary = `${file}.tmp`;
+
+  // Read the old body before touching anything: it is what a refusal puts back.
+  /** @type {Buffer | null} */
+  let previous = null;
+  try {
+    previous = readFileSync(file);
+  } catch {
+    // No body yet is the normal first install.
+  }
+  const created = !existsSync(dir);
 
   try {
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, 'body.json'), `${JSON.stringify(pluginFields(manifest), null, 2)}\n`);
+    writeAtomically(file, `${JSON.stringify(pluginFields(manifest), null, 2)}\n`);
   } catch {
-    rmSync(dir, { recursive: true, force: true });
+    quietly(() => unlinkSync(temporary));
+    // Removing the directory is only this call's business if this call made it.
+    if (created) quietly(() => rmSync(dir, { recursive: true, force: true }));
     return { error: `cannot write the ${id} module` };
   }
 
   const { bodies, problems } = loadPlugins(bodiesDir);
   registerPlugins(bodies);
 
-  if (!Object.hasOwn(bodies, id)) {
-    // Refused after all. Remove what this call wrote and reload, so the
-    // registry is what remains on disk rather than a half-installed set.
-    rmSync(dir, { recursive: true, force: true });
+  // The loader prefixes a refusal with the directory it read, which is the id.
+  // `hasOwn(bodies, id)` is not enough: another directory may already claim the
+  // id, and that refusal is still ours to undo.
+  const refusal = problems.find((problem) => problem.startsWith(`plugin ${id}:`))
+    ?? (Object.hasOwn(bodies, id) ? null : `${id} was refused by the plugin loader`);
+
+  if (refusal) {
+    // Put the disk back the way it was found: the old bytes, or no directory.
+    if (previous !== null) {
+      quietly(() => writeAtomically(file, previous));
+    } else {
+      quietly(() => unlinkSync(file));
+      quietly(() => unlinkSync(temporary));
+      if (created) quietly(() => rmSync(dir, { recursive: true, force: true }));
+    }
     registerPlugins(loadPlugins(bodiesDir).bodies);
-    const refusal = problems.find((problem) => problem.startsWith(`plugin ${id}:`));
-    return { error: refusal ?? `${id} was refused by the plugin loader` };
+    return { error: refusal };
   }
 
   // Other plugins may also have been refused on the reload; the caller's log is

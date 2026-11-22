@@ -93,6 +93,45 @@ function errorOf(out) {
   return out.error;
 }
 
+test('a failed write leaves an already-installed body byte-identical', (t) => {
+  const bodiesDir = tempBodies(t);
+  const modules = loadModules(REPO_MODULES).modules;
+  if ('error' in installModule('led-module', { modules, bodiesDir })) assert.fail('first install failed');
+  const file = join(bodiesDir, 'led-module', 'body.json');
+  const before = readFileSync(file);
+
+  // A directory where the temporary file must go makes the write fail, with
+  // the real body already in place.
+  mkdirSync(`${file}.tmp`);
+  const out = installModule('led-module', { modules, bodiesDir });
+
+  assert.match(errorOf(out), /cannot write the led-module module/);
+  assert.deepEqual(readFileSync(file), before);
+  assert.deepEqual(readdirSync(bodiesDir), ['led-module']);
+});
+
+test('a duplicate id from an earlier directory is refused and the old body restored', (t) => {
+  const bodiesDir = tempBodies(t);
+  const modules = loadModules(REPO_MODULES).modules;
+  if ('error' in installModule('led-module', { modules, bodiesDir })) assert.fail('first install failed');
+  const file = join(bodiesDir, 'led-module', 'body.json');
+  const before = readFileSync(file);
+
+  // `aaa-dup` sorts first, claims the id, and makes the loader refuse the
+  // directory this install is about to rewrite.
+  mkdirSync(join(bodiesDir, 'aaa-dup'));
+  writeFileSync(
+    join(bodiesDir, 'aaa-dup', 'body.json'),
+    JSON.stringify({ ...ledManifest(), label: { en: 'Other', zh: '另一个' } }),
+  );
+  const out = installModule('led-module', { modules, bodiesDir });
+
+  assert.match(errorOf(out), /plugin led-module: led-module is already loaded/);
+  assert.deepEqual(readFileSync(file), before);
+  assert.deepEqual(readdirSync(bodiesDir).sort(), ['aaa-dup', 'led-module']);
+  assert.equal(pluginBodies()['led-module']?.label.en, 'Other');
+});
+
 test('install refuses an unknown id and a template id', (t) => {
   const bodiesDir = tempBodies(t);
   const modules = loadModules(REPO_MODULES).modules;
@@ -105,5 +144,11 @@ test('install refuses an unknown id and a template id', (t) => {
     /not a module/,
   );
   assert.match(errorOf(installModule('../led-module', { modules, bodiesDir })), /not a module/);
+  // A catalogue key that disagrees with the manifest's own id is not trusted.
+  const renamed = { ...modules['led-module'], id: 'other-module' };
+  assert.match(
+    errorOf(installModule('led-module', { modules: { 'led-module': renamed }, bodiesDir })),
+    /not a module/,
+  );
   assert.deepEqual(readdirSync(bodiesDir), []);
 });
