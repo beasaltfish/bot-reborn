@@ -1,3 +1,5 @@
+import type { RunStep } from '../../core/actions.js';
+
 export type LayerName = 'stt' | 'llm' | 'tts' | 'reflex';
 export type TabName = 'basic' | 'body' | LayerName;
 
@@ -49,7 +51,7 @@ export interface BodyAction {
   /** The tool description, straight into the prompt. */
   say: string;
   args?: Record<string, any>;
-  run: Array<{ verb: string; args?: Record<string, unknown>; each?: string }>;
+  run: RunStep[];
   returns?: true;
   rules?: string;
 }

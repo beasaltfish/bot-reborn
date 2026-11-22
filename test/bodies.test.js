@@ -394,3 +394,20 @@ test('a registered plugin resolves like any other body', (t) => {
   assert.equal(resolveBody('my-servo').template, 'none');
 });
 
+
+test('a plugin body validates an action that calls its own command', () => {
+  const point = {
+    name: 'point_at',
+    args: { type: 'object', properties: {} },
+    run: [{ command: 'point', args: { angle: 90 } }],
+  };
+  const own = pluginBody({ id: 'my-servo', commands: [pointCommand] });
+  /** @type {any} */ (own).actions = [point];
+  assert.equal(bodyProblem(own), null);
+
+  // The same action on a body that carries no such command is refused at load,
+  // where the author can read it — not at call time when the model asks.
+  const bare = pluginBody({ id: 'bare', commands: [] });
+  /** @type {any} */ (bare).actions = [point];
+  assert.match(bodyProblem(bare) ?? '', /unknown command "point"/);
+});

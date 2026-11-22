@@ -567,11 +567,15 @@ export function bodyProblem(body) {
       poses: [...POSES],
       clips: [...SOUNDS],
       has: (verb) => verb in VERBS,
+      commands: row.commands,
+      resources: row.resources,
     });
     if (bad) return `${id}: ${bad}`;
 
     const steps = Array.isArray(action.run) ? action.run : [];
     for (const step of steps) {
+      // A command step runs ops, not a verb: `io-program.js` already judged it.
+      if (typeof step.verb !== 'string') continue;
       const verb = /** @type {Record<string, import('./verbs.js').Verb | undefined>} */ (VERBS)[step.verb];
       if (!verb) continue; // actionProblem has already said so
       verbs.add(step.verb);

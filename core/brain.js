@@ -495,7 +495,7 @@ function moves(steps) {
  * Whether these steps include a `drive`. `hadMoveIntent` means this, and only
  * this: a `halt` needs the `move` capability too, but a turn that only stops is
  * not a movement attempt that failed (design §4.3).
- * @param {Array<{ verb: string }>} steps
+ * @param {import('./actions.js').RunStep[]} steps
  * @returns {boolean}
  */
 function drives(steps) {

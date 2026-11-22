@@ -15,19 +15,29 @@
 // `pattern` would make an action that looks stricter than it is.
 
 import { VERBS, VERB_NAMES } from './verbs.js';
+import { commandProblem, expandCommand } from './io-program.js';
 
 /** @typedef {import('./verbs.js').JsonSchemaSubset} JsonSchemaSubset */
 /** @typedef {import('./verbs.js').Verb} Verb */
+/** @typedef {import('./io-program.js').Command} Command */
+/** @typedef {import('./io-program.js').Resource} Resource */
 
 /**
- * One line of an action's program: a verb, the arguments to give it, and — when
- * this step runs once per element of an array argument — the name of that
- * argument. Inside an `each` step an element's field is written `$each.field`;
- * there is no second variable.
+ * One line of an action's program. It is either a verb step — a verb, the
+ * arguments to give it, and, when this step runs once per element of an array
+ * argument, the name of that argument (`$each.field` is the element's field;
+ * there is no second variable) — or a command step, which names one of the
+ * body's commands and expands to the ops that command runs.
  * @typedef {{
  *   verb: string,
  *   args?: Record<string, unknown>,
  *   each?: string,
+ *   command?: undefined,
+ * } | {
+ *   command: string,
+ *   args?: Record<string, unknown>,
+ *   verb?: undefined,
+ *   each?: undefined,
  * }} RunStep
  */
 
@@ -68,6 +78,8 @@ import { VERBS, VERB_NAMES } from './verbs.js';
  *   poses: string[],
  *   clips: string[],
  *   has: (verb: string) => boolean,
+ *   commands?: Command[],
+ *   resources?: Resource[],
  * }} ProblemOpts
  */
 
@@ -116,10 +128,20 @@ export function actionProblem(action, opts) {
   for (const [i, step] of run.entries()) {
     // The JSON can be valid and still not be a step: `run: [null]` used to
     // throw out of the editor instead of returning the sentence a person reads.
-    if (!isRecord(step) || typeof step.verb !== 'string') {
+    if (!isRecord(step) || (typeof step.verb !== 'string' && typeof step.command !== 'string')) {
       return `run[${i}] of ${name} is not a step`;
     }
     const at = `step ${i + 1} of ${name}`;
+
+    // The other kind of line: a call to a command the body carries. Its own
+    // program is checked by `io-program.js`, whose phrase says which pin or
+    // which op is wrong, so that phrase is passed through as it is.
+    if (typeof step.command === 'string') {
+      const bad = commandStepProblem(step, at, declared, opts);
+      if (bad) return bad;
+      continue;
+    }
+
     const verb = VERB_TABLE[step.verb];
     if (!verb) return `${at} uses unknown verb "${step.verb}"`;
     if (!opts.has(step.verb)) return `this body does not have the verb ${step.verb}, which ${at} needs`;
@@ -164,6 +186,43 @@ export function actionProblem(action, opts) {
 }
 
 /**
+ * One command line, checked against the commands the body carries. A command
+ * is looked up by name — a name no body supplies is refused here, not at call
+ * time — and its own program is checked once, so an action cannot promise a
+ * pin the command cannot reach. Arguments a step leaves as `$ref` are judged
+ * against the action's declared arguments; a line with no reference is the
+ * same call on every run, so the command's own schema judges it now.
+ * @param {RunStep & { command: string }} step
+ * @param {string} at
+ * @param {ReadonlySet<string>} declared
+ * @param {ProblemOpts} opts
+ * @returns {string | null}
+ */
+function commandStepProblem(step, at, declared, opts) {
+  if (step.each !== undefined) return `${at} calls a command and cannot walk ${step.each}`;
+
+  const command = (opts.commands ?? []).find((candidate) => isRecord(candidate) && candidate.name === step.command);
+  if (!command) return `${at} uses unknown command "${step.command}"`;
+
+  const problem = commandProblem(command, opts.resources ?? []);
+  if (problem) return `${at} calls command "${step.command}", which cannot run: ${problem}`;
+
+  const used = refs(step.args);
+  for (const ref of used) {
+    if (ref.startsWith('$each.')) return `${at} uses ${ref} outside a step that walks an array`;
+    if (!declared.has(ref.slice(1))) {
+      return `${at} refers to ${ref}, but ${ref.slice(1)} is not one of its arguments`;
+    }
+  }
+
+  const literal = step.args ?? {};
+  if (used.length === 0 && !fitsSchema(literal, /** @type {any} */ (command.args))) {
+    return `${at} gives ${step.command} ${JSON.stringify(literal)}; ${expectationOf(command.args)}`;
+  }
+  return null;
+}
+
+/**
  * Fill `$name` from the call's arguments and `$each.field` from the current
  * element, then keep only the steps that fit their verb. Whole values only: a
  * string that starts with `$` is a reference, and nothing else about it is
@@ -172,15 +231,23 @@ export function actionProblem(action, opts) {
  * An element that does not fit is one `Drop` and the rest still run, which is
  * what `move.steps` does today. A program naming a verb that does not exist is
  * not partly runnable at all, so it expands to nothing.
+ *
+ * A command step expands through `expandCommand`, one `{ verb: 'io' }` step per
+ * op. A command the body does not carry, or one that refuses this call, is one
+ * `Drop` with the command's own phrase; the rest of the program still runs, so
+ * a command that cannot point does not silence the sound after it.
  * @param {Action} action
  * @param {Record<string, unknown>} args
+ * @param {{ commands?: Command[], resources?: Resource[] }} [opts]
  * @returns {{ steps: Step[], dropped: Drop[], hadDrive: boolean }}
  */
-export function expand(action, args) {
+export function expand(action, args, opts = {}) {
   const name = action.name || 'this action';
   const run = Array.isArray(action.run) ? action.run : [];
+  const commands = opts.commands ?? [];
+  const resources = opts.resources ?? [];
 
-  const badAt = run.findIndex((step) => !VERB_TABLE[step.verb]);
+  const badAt = run.findIndex((step) => !isCommandStep(step) && !VERB_TABLE[step.verb]);
   if (badAt >= 0) {
     const guilty = run[badAt];
     const unknown = `unknown verb "${guilty.verb}"; one of the verbs: ${VERB_NAMES.join(', ')}`;
@@ -203,6 +270,26 @@ export function expand(action, args) {
   const dropped = [];
 
   for (const [i, step] of run.entries()) {
+    if (isCommandStep(step)) {
+      const command = commands.find((candidate) => isRecord(candidate) && candidate.name === step.command);
+      if (!command) {
+        // `actionProblem` refuses this before a call; if it ever does not, the
+        // line still gets a reason rather than vanishing.
+        dropped.push({ where: at(i), value: step, expect: `unknown command "${step.command}"` });
+        continue;
+      }
+      const given = asRecord(fill(step.args ?? {}, args, null));
+      const { ops, drop } = expandCommand(command, given, resources);
+      if (drop) {
+        dropped.push({ where: at(i), value: step, expect: drop });
+        continue;
+      }
+      for (const op of ops) {
+        steps.push({ verb: 'io', args: { op: op.op, args: op.args, safe: op.safe, timeoutMs: op.timeoutMs } });
+      }
+      continue;
+    }
+
     const verb = VERB_TABLE[step.verb];
     if (!verb) {
       // The scan above already answered this. If it ever stops, fail loudly: a
@@ -429,6 +516,15 @@ function at(index) {
  */
 function isRecord(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
+ * Whether a line is a call to a command rather than a verb step.
+ * @param {unknown} step
+ * @returns {step is { command: string, args?: Record<string, unknown> }}
+ */
+function isCommandStep(step) {
+  return isRecord(step) && typeof step.command === 'string';
 }
 
 /**
