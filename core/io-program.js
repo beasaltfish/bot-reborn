@@ -12,9 +12,11 @@
 // command that writes two pins must never half-run.
 //
 // The vocabulary is small on purpose. Every op names its target resource by the
-// resource's `name`; the seal is that the name must be declared, and only a
-// write may carry a value on hardware. A `pwm` may carry one linear `map`, and
-// that is the only place a unit is allowed to exist.
+// resource's `name`; the name must be declared, and only a gpio pin is
+// addressable — the i2c/adc resource contract is not settled, so those are
+// refused rather than guessed at. Writes go to outputs and carry the resource's
+// `safe`; reads come from inputs and carry neither. A `pwm` may carry one
+// linear `map`, and that is the only place a unit is allowed to exist.
 
 /** @typedef {{ name: string, args?: object, run: OpStep[], returns?: true, timeoutMs: number }} Command */
 /** @typedef {{ op: string, args: Record<string, unknown> }} OpStep */
@@ -24,13 +26,12 @@
  * A resource as a plugin declares it. `name` is the only field every kind
  * shares; the rest says where the resource lives on the board. `safe` exists
  * only on outputs — it is the value the bridge restores on disconnect, so an
- * input has none and writing an input is refused.
+ * input has none and writing an input is refused. Only `kind: 'gpio'` with a
+ * numeric `gpio` field is runnable today.
  * @typedef {{
  *   kind?: string,
  *   name: string,
  *   gpio?: number,
- *   pin?: number,
- *   channel?: number,
  *   direction?: string,
  *   safe?: number,
  * }} Resource
@@ -48,20 +49,31 @@ const WRITES = new Set(['pin.write', 'pwm', 'i2c.write']);
 const TIMEOUT_MS = { min: 1, max: 5000 };
 
 /**
- * Where a resource sits on the board, as the number an op's `pin` becomes.
- * GPIO is the shape v1 writes; `pin` and `channel` are the same fact in the
- * other resource kinds' words. A resource that declares none of them keeps its
- * name — there is no number to invent, and a made-up address is worse than a
- * visible one.
- * @param {Resource} resource
- * @returns {number | string}
+ * The shape of the data itself, before any of it is believed. A command that is
+ * not an object, a `run` that is not an array, a step or `args` that is not an
+ * object, or a `resources` table that is not an array is refused here — the
+ * walkers below may then trust those shapes and never throw.
+ * @param {unknown} command
+ * @param {unknown} resources
+ * @returns {string | null}
  */
-function addressOf(resource) {
-  for (const key of /** @type {const} */ (['gpio', 'pin', 'channel'])) {
-    const value = resource[key];
-    if (typeof value === 'number') return value;
+function structureProblem(command, resources) {
+  if (typeof command !== 'object' || command === null || Array.isArray(command)) {
+    return 'command must be an object';
   }
-  return resource.name;
+  const run = /** @type {Record<string, unknown>} */ (command).run;
+  if (!Array.isArray(run)) return 'run must be an array of steps';
+  if (!Array.isArray(resources)) return 'resources must be an array';
+  for (const step of run) {
+    if (typeof step !== 'object' || step === null || Array.isArray(step)) {
+      return 'run must be an array of steps';
+    }
+    const { args } = /** @type {Record<string, unknown>} */ (step);
+    if (args !== undefined && (typeof args !== 'object' || args === null || Array.isArray(args))) {
+      return 'step args must be an object';
+    }
+  }
+  return null;
 }
 
 /**
@@ -71,7 +83,41 @@ function addressOf(resource) {
  */
 function resourceNamed(resources, name) {
   if (typeof name !== 'string') return undefined;
-  return resources.find((resource) => resource.name === name);
+  return resources.find((resource) => (
+    typeof resource === 'object' && resource !== null && resource.name === name
+  ));
+}
+
+/**
+ * Where a step points, checked once. Writes need a gpio output with a numeric
+ * pin and a `safe`; reads need a gpio input. Any other kind, or a gpio without
+ * a number, is refused: a name quietly passed to the bridge is not an address.
+ * @param {OpStep} step
+ * @param {Resource[]} resources
+ * @param {boolean} write
+ * @returns {{ resource: Resource } | { problem: string }}
+ */
+function targetOf(step, resources, write) {
+  const args = step.args ?? {};
+  const resource = resourceNamed(resources, args.pin);
+  if (!resource) return { problem: `pin "${String(args.pin)}" is not declared` };
+  if (resource.kind !== 'gpio' || !Number.isInteger(resource.gpio)) {
+    return { problem: `resource "${resource.name}" is not a gpio pin` };
+  }
+  if (write) {
+    if (resource.direction === 'input') {
+      return { problem: `input "${resource.name}" cannot be written` };
+    }
+    if (resource.direction !== 'output') {
+      return { problem: `resource "${resource.name}" is not a gpio output` };
+    }
+    if (!Number.isFinite(resource.safe)) {
+      return { problem: `output "${resource.name}" has no safe value` };
+    }
+  } else if (resource.direction !== 'input') {
+    return { problem: `resource "${resource.name}" is not a gpio input` };
+  }
+  return { resource };
 }
 
 /**
@@ -90,6 +136,39 @@ function isLinearMap(map) {
 }
 
 /**
+ * Every static thing a step cannot get wrong, plus its resolved target. Shared
+ * by both entry points so `expandCommand` never looks up a different resource
+ * than the one `commandProblem` approved.
+ * @param {OpStep} step
+ * @param {Resource[]} resources
+ * @returns {{ resource: Resource } | { problem: string }}
+ */
+function checkStep(step, resources) {
+  const { op } = step;
+  if (!IO_OPS.includes(/** @type {any} */ (op))) {
+    return { problem: `op "${op}" is not one of the IO ops` };
+  }
+
+  const args = step.args ?? {};
+  const target = targetOf(step, resources, WRITES.has(op));
+  if ('problem' in target) return target;
+
+  if (op !== 'pwm' && args.map !== undefined) return { problem: 'map is only for pwm' };
+  if (op === 'pwm') {
+    const value = args.value;
+    if (value === undefined) return { problem: 'pwm needs a value' };
+    const runtimeArg = typeof value === 'string' && value.startsWith('$') && value.length > 1;
+    if (typeof value === 'number' ? !Number.isFinite(value) : !runtimeArg) {
+      return { problem: 'pwm value must be a finite number' };
+    }
+    if (args.map !== undefined && !isLinearMap(args.map)) {
+      return { problem: 'map is linear only: from and to must both have two numbers' };
+    }
+  }
+  return target;
+}
+
+/**
  * The phrase for the first thing in `command.run` that cannot run, or null when
  * the whole program is runnable. A phrase, not a sentence: the loader prefixes
  * it with the plugin and command it names.
@@ -98,28 +177,17 @@ function isLinearMap(map) {
  * @returns {string | null}
  */
 export function commandProblem(command, resources) {
+  const malformed = structureProblem(command, resources);
+  if (malformed) return malformed;
+
   const { timeoutMs } = command;
   if (!Number.isInteger(timeoutMs) || timeoutMs < TIMEOUT_MS.min || timeoutMs > TIMEOUT_MS.max) {
     return `timeoutMs must be ${TIMEOUT_MS.min}..${TIMEOUT_MS.max}`;
   }
 
-  const run = Array.isArray(command.run) ? command.run : [];
-  const declared = Array.isArray(resources) ? resources : [];
-  for (const step of run) {
-    const op = step?.op;
-    if (!IO_OPS.includes(/** @type {any} */ (op))) {
-      return `op "${op}" is not one of the IO ops`;
-    }
-
-    const args = step.args ?? {};
-    const resource = resourceNamed(declared, args.pin);
-    if (!resource) return `pin "${String(args.pin)}" is not declared`;
-    if (WRITES.has(op) && !Number.isFinite(resource.safe)) {
-      return `output "${resource.name}" has no safe value`;
-    }
-    if (op === 'pwm' && args.map !== undefined && !isLinearMap(args.map)) {
-      return 'map is linear only: from and to must both have two numbers';
-    }
+  for (const step of command.run) {
+    const checked = checkStep(step, resources);
+    if ('problem' in checked) return checked.problem;
   }
   return null;
 }
@@ -128,7 +196,8 @@ export function commandProblem(command, resources) {
  * `$name` stands for the whole value of that argument — never a fragment of one.
  * Substitution reaches into arrays and plain objects because an op's argument
  * may be one (`i2c.write`'s bytes), and a `$` the caller cannot resolve is
- * refused rather than sent as `undefined`.
+ * refused rather than sent as `undefined`. Copies use `Object.fromEntries` so a
+ * `__proto__` key from plugin data is an own field, not a prototype change.
  * @param {unknown} value
  * @param {Record<string, unknown>} given
  * @returns {{ value: unknown, missing?: string }}
@@ -149,16 +218,35 @@ function substitute(value, given) {
     return { value: out };
   }
   if (typeof value === 'object' && value !== null) {
-    /** @type {Record<string, unknown>} */
-    const out = {};
+    const pairs = [];
     for (const [key, item] of Object.entries(value)) {
       const done = substitute(item, given);
       if (done.missing) return done;
-      out[key] = done.value;
+      pairs.push([key, done.value]);
     }
-    return { value: out };
+    return { value: Object.fromEntries(pairs) };
   }
   return { value };
+}
+
+/**
+ * Substitute the step's data slots, leaving `pin` alone: the pin is a static
+ * reference checked against the resource table, not a value the caller supplies.
+ * A `$arg` that names the pin is therefore refused by validation, not resolved
+ * into a different target at expansion time.
+ * @param {Record<string, unknown>} args
+ * @param {Record<string, unknown>} given
+ * @returns {{ value: Record<string, unknown>, missing?: string }}
+ */
+function dataArgs(args, given) {
+  const pairs = [];
+  for (const [key, item] of Object.entries(args)) {
+    if (key === 'pin') continue;
+    const done = substitute(item, given);
+    if (done.missing) return { value: {}, missing: done.missing };
+    pairs.push([key, done.value]);
+  }
+  return { value: Object.fromEntries(pairs) };
 }
 
 /**
@@ -178,48 +266,62 @@ function applyMap(value, { from, to }) {
 /**
  * Expand one command for one call.
  *
+ * `resources` is required: the same declared table that `commandProblem` checks
+ * is what makes a name an address and what carries `safe` onto a write. It is
+ * not optional, because an omitted table would silently turn every command into
+ * "pin not declared" (or, worse, be papered over).
+ *
  * Whole ops only: on any refusal `ops` is empty and `drop` is the phrase. A
  * write op gets the resource's `safe` and the command's `timeoutMs`; a read op
  * gets neither, because there is nothing to restore and nothing to time out.
- * `pwm`'s `map` becomes `us` and its `value`/`map` arguments are consumed.
+ * `pwm`'s `map` becomes `us` and its `value`/`map` arguments are consumed. A
+ * non-finite input or output is a refusal, never `NaN` on the wire.
  * @param {Command} command
  * @param {Record<string, unknown>} given
- * @param {Resource[]} [resources]
+ * @param {Resource[]} resources
  * @returns {{ ops: Op[], drop?: string }}
  */
-export function expandCommand(command, given, resources = []) {
+export function expandCommand(command, given, resources) {
   const problem = commandProblem(command, resources);
   if (problem) return { ops: [], drop: problem };
 
+  const values = given ?? {};
   /** @type {Op[]} */
   const ops = [];
   for (const step of command.run) {
     const { op } = step;
-    const { value: args, missing } = substitute(step.args ?? {}, given ?? {});
+    const checked = checkStep(step, resources);
+    if ('problem' in checked) return { ops: [], drop: checked.problem };
+    const { resource } = checked;
+
+    const { value: data, missing } = dataArgs(step.args ?? {}, values);
     if (missing) return { ops: [], drop: `argument "${missing}" is missing` };
 
-    /** @type {Record<string, unknown>} */
-    const resolved = /** @type {Record<string, unknown>} */ (args);
-    const resource = /** @type {Resource} */ (resourceNamed(resources, resolved.pin));
-    resolved.pin = addressOf(resource);
-
-    if (op === 'pwm' && resolved.map !== undefined) {
-      const { map, value, ...rest } = resolved;
+    if (op === 'pwm') {
+      const { map, value, ...rest } = data;
+      const input = Number(value);
+      if (!Number.isFinite(input)) {
+        return { ops: [], drop: 'pwm value must be a finite number' };
+      }
+      const us = applyMap(input, /** @type {{ from: number[], to: number[] }} */ (map));
+      if (!Number.isFinite(us)) {
+        return { ops: [], drop: 'pwm result is not a finite number' };
+      }
       ops.push({
         op,
-        args: { ...rest, us: applyMap(Number(value), /** @type {{ from: number[], to: number[] }} */ (map)) },
+        args: Object.fromEntries([['pin', resource.gpio], ...Object.entries(rest), ['us', us]]),
         safe: resource.safe,
         timeoutMs: command.timeoutMs,
       });
       continue;
     }
 
+    const args = Object.fromEntries([['pin', resource.gpio], ...Object.entries(data)]);
     if (WRITES.has(op)) {
-      ops.push({ op, args: resolved, safe: resource.safe, timeoutMs: command.timeoutMs });
+      ops.push({ op, args, safe: resource.safe, timeoutMs: command.timeoutMs });
       continue;
     }
-
-    ops.push({ op, args: resolved });
+    ops.push({ op, args });
   }
   return { ops };
 }
