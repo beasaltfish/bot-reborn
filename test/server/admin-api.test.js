@@ -111,6 +111,9 @@ test('modules are listed with their examples, then installed', async (t) => {
   assert.equal(list[0].id, 'led-module');
   assert.equal(list[0].installed, false);
   assert.equal(list[0].examples.length, 2);
+  assert.deepEqual(list[0].commands, ['led_on', 'led_off']);
+  assert.deepEqual(list[0].note, { en: 'Works on the bench; the board needs the bridge firmware.', zh: '模拟器里可用；真板需要 bridge 固件。' });
+  assert.deepEqual(list[0].parts, ['esp32', 'led-5mm', 'resistor']);
 
   const posted = await r.call('/api/modules/led-module/install', { method: 'POST', headers: W });
   assert.equal(posted.status, 200);
@@ -122,6 +125,18 @@ test('modules are listed with their examples, then installed', async (t) => {
   assert.deepEqual(bodies.map((/** @type {any} */ b) => b.id), ['led-module']);
 });
 
+test('the module list is read-only and an install needs the page header', async (t) => {
+  registerPlugins({});
+  t.after(() => registerPlugins({}));
+  const r = await rig(tempCharacters(), moduleDirs());
+  t.after(() => r.server.close());
+  const written = await r.call('/api/modules', { method: 'POST', headers: W });
+  assert.equal(written.status, 405);
+  // A non-GET without the header is refused before routing, as everywhere else.
+  const bare = await r.call('/api/modules', { method: 'POST' });
+  assert.equal(bare.status, 403);
+});
+
 test('an unknown module is a 404, not a path', async (t) => {
   registerPlugins({});
   t.after(() => registerPlugins({}));
@@ -129,8 +144,10 @@ test('an unknown module is a 404, not a path', async (t) => {
   t.after(() => r.server.close());
   const res = await r.call('/api/modules/../../etc/install', { method: 'POST', headers: W });
   assert.equal(res.status, 404);
-  // The same name, encoded so the URL parser cannot fold it away: the id
-  // reaching the installer is still `..`, and it is still not a module.
+  // A percent-encoded dot segment is folded away by URL normalisation, so this
+  // request never reaches the module route: the 404 is the missing path, not
+  // the installer refusing a traversal. The route itself looks the id up in the
+  // catalogue and never joins it to a directory.
   const encoded = await r.call('/api/modules/%2e%2e/install', { method: 'POST', headers: W });
   assert.equal(encoded.status, 404);
 });

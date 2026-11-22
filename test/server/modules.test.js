@@ -110,6 +110,17 @@ test('a failed write leaves an already-installed body byte-identical', (t) => {
   assert.deepEqual(readdirSync(bodiesDir), ['led-module']);
 });
 
+test('an unreadable existing body is refused before anything is written', (t) => {
+  const bodiesDir = tempBodies(t);
+  const modules = loadModules(REPO_MODULES).modules;
+  // A directory where `body.json` must be makes the read fail with a non-ENOENT
+  // error: that is not a first install, so the install must not overwrite it.
+  mkdirSync(join(bodiesDir, 'led-module', 'body.json'), { recursive: true });
+  const out = installModule('led-module', { modules, bodiesDir });
+  assert.match(errorOf(out), /cannot read the existing led-module body/);
+  assert.deepEqual(readdirSync(join(bodiesDir, 'led-module')), ['body.json']);
+});
+
 test('a duplicate id from an earlier directory is refused and the old body restored', (t) => {
   const bodiesDir = tempBodies(t);
   const modules = loadModules(REPO_MODULES).modules;

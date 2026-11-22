@@ -181,12 +181,16 @@ export function installModule(id, { modules, bodiesDir, log = console.error }) {
   const temporary = `${file}.tmp`;
 
   // Read the old body before touching anything: it is what a refusal puts back.
+  // A body that is there but cannot be read is not a first install: writing over
+  // it would destroy the bytes a refusal has to restore.
   /** @type {Buffer | null} */
   let previous = null;
-  try {
-    previous = readFileSync(file);
-  } catch {
-    // No body yet is the normal first install.
+  if (existsSync(file)) {
+    try {
+      previous = readFileSync(file);
+    } catch {
+      return { error: `cannot read the existing ${id} body` };
+    }
   }
   const created = !existsSync(dir);
 
