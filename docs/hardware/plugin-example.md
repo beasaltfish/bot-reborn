@@ -141,3 +141,17 @@ that refuses the op) is text the model reads, not a failed turn.
 
 A refused plugin is one line in the brain's log at startup:
 `plugin <directory>: <what is wrong>`.
+
+## Modules
+
+The repository also ships modules: a plugin manifest plus the parts and links
+that make its pins true, in `modules/<id>/module.json`. Install one from the
+admin under **Advanced → Body → Modules** — no restart, the body is registered
+as it installs. Then open `/sim/`, pick the module's project (the LED module is
+in the **Demo builds** group), and wire it as the steps say; the project starts
+from the Audio only bench and adds only the module's own parts. Plug in USB to
+pair, say "turn on the light", and the bench LED lights. Only the LED module
+ships today, and like a hand-written plugin it runs on the bench only.
+
+The example actions are offered at install, never written into a character
+without that confirmation.

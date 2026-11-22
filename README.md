@@ -237,6 +237,13 @@ a plugin body is turned away from it.
 [`docs/hardware/plugin-example.md`](docs/hardware/plugin-example.md) has the
 whole format.
 
+Some bodies also ship in the repository as **modules** — a plugin manifest plus
+the wiring that makes its pins true. Install one from the admin
+(**Advanced → Body → Modules**), then open the workbench, pick its project (the
+LED module's is in **Demo builds**) and wire it as the steps say. Plug in USB to
+pair, say "turn on the light", and the bench LED lights. Only the LED module
+ships today.
+
 A character file has no version number. An older brain reading a file written by
 a newer one silently drops the keys it does not know: a body's `actions`, for
 instance, disappear with no error and the body falls back to its template. Keep
