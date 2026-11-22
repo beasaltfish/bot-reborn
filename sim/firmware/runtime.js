@@ -50,6 +50,7 @@ export function bootMode(intent = {}) {
  *   onReject?(reason: string): void,
  *   rejectText?: (reason: string) => string,
  *   onDevice?(msg: any): void,
+ *   onIo?(op: { op: string, args?: Record<string, unknown>, safe?: number, timeoutMs?: number }): Promise<unknown>,
  *   audio?: {
  *     attach(send: (pcm: Int16Array) => void): unknown,
  *     downlink(bytes: ArrayBuffer): void,
@@ -112,6 +113,26 @@ export function createBoardRuntime(o) {
 
   function openLink() {
     if (!firmware?.link) return;
+    /** @param {any} msg */
+    async function answer(msg) {
+      const socket = conn;
+      /** @type {Record<string, unknown>} */
+      let reply;
+      try {
+        if (!o.onIo) throw new Error('unavailable: this board has no IO bridge');
+        const op = {
+          op: msg.op,
+          args: msg.args,
+          ...(msg.safe === undefined ? {} : { safe: msg.safe }),
+          ...(msg.timeoutMs === undefined ? {} : { timeoutMs: msg.timeoutMs }),
+        };
+        reply = { type: 'result', id: msg.id, ok: true, value: await o.onIo(op) };
+      } catch (error) {
+        // A failed op is an answer, not a crash: the brain traces the phrase.
+        reply = { type: 'result', id: msg.id, ok: false, error: error instanceof Error ? error.message : String(error) };
+      }
+      socket?.send(reply);
+    }
     conn = o.connect({
       url: dialed,
       token: o.board.settings.token,
@@ -133,7 +154,10 @@ export function createBoardRuntime(o) {
           void o.audio?.attach((pcm) => conn?.sendAudio(pcm));
         }
       },
-      onMessage: (/** @type {any} */ msg) => o.onDevice?.(msg),
+      onMessage: (/** @type {any} */ msg) => {
+        if (msg.type === 'cmd') { void answer(msg); return; }
+        o.onDevice?.(msg);
+      },
       onAudio: (/** @type {ArrayBuffer} */ bytes) => o.audio?.downlink(bytes),
       onLost: () => {
         o.audio?.hush?.();

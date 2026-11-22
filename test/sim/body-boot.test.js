@@ -21,7 +21,7 @@ test('missing token stops at not set up and never opens the link', () => {
 
 test('a configured token dials and says hello', () => {
   const events = run();
-  assert.ok(events.some((e) => e.line === 'body: protocol 2, brain at auto (found on the network)'));
+  assert.ok(events.some((e) => e.line === 'body: protocol 3, brain at auto (found on the network)'));
   assert.ok(events.some((e) => e.link === 'open'));
 });
 

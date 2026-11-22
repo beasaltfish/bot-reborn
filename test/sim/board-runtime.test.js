@@ -36,6 +36,56 @@ test('start schedules the boot lines and opens the link', (t) => {
   h.runtime.stop();
 });
 
+test('a cmd is answered with a result on the same connection', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  /** @type {any} */ let opts;
+  /** @type {any[]} */ const sent = [];
+  const h = harness({
+    connect: (/** @type {any} */ o) => { opts = o; return { close() {}, send: (/** @type {any} */ m) => sent.push(m), sendAudio() {} }; },
+    onIo: async (/** @type {any} */ op) => (op.op === 'pin.read' ? 1 : 0),
+  });
+  h.runtime.start();
+  t.mock.timers.tick(1000);
+  opts.onMessage({ type: 'cmd', id: 7, op: 'pin.read', args: { pin: 4 } });
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual(sent.at(-1), { type: 'result', id: 7, ok: true, value: 1 });
+  h.runtime.stop();
+});
+
+test('a failing or unknown op becomes ok:false, and the runtime keeps running', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  /** @type {any} */ let opts;
+  /** @type {any[]} */ const sent = [];
+  const h = harness({
+    connect: (/** @type {any} */ o) => { opts = o; return { close() {}, send: (/** @type {any} */ m) => sent.push(m), sendAudio() {} }; },
+    onIo: async () => { throw new Error('unavailable: op "servo" is not on this bench'); },
+  });
+  h.runtime.start();
+  t.mock.timers.tick(1000);
+  opts.onMessage({ type: 'cmd', id: 8, op: 'servo', args: {} });
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual(sent.at(-1), { type: 'result', id: 8, ok: false, error: 'unavailable: op "servo" is not on this bench' });
+  // A later cmd still gets its own answer: the failure was the op's, not the board's.
+  opts.onMessage({ type: 'cmd', id: 9, op: 'pin.write', args: { pin: 5, level: 0 } });
+  await new Promise((r) => setImmediate(r));
+  assert.equal(sent.at(-1).id, 9);
+  h.runtime.stop();
+});
+
+test('a cmd on a runtime with no IO answers unavailable instead of hanging', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  /** @type {any} */ let opts;
+  /** @type {any[]} */ const sent = [];
+  const h = harness({ connect: (/** @type {any} */ o) => { opts = o; return { close() {}, send: (/** @type {any} */ m) => sent.push(m), sendAudio() {} }; } });
+  h.runtime.start();
+  t.mock.timers.tick(1000);
+  opts.onMessage({ type: 'cmd', id: 3, op: 'pin.read', args: { pin: 4 } });
+  await new Promise((r) => setImmediate(r));
+  assert.equal(sent.at(-1).ok, false);
+  assert.match(sent.at(-1).error, /unavailable/);
+  h.runtime.stop();
+});
+
 test('stop closes the link and ignores a late welcome', (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const h = harness();

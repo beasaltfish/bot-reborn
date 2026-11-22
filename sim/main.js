@@ -29,6 +29,7 @@ import { isViewPeekShortcut } from './view-shortcut.js';
 import { faultText, adminLink, keepsFault } from './body.js';
 import { createBoardRuntime, bootMode } from './firmware/runtime.js';
 import { createBodyAudio } from './body.js';
+import { createBenchIo } from './bench-io.js';
 import { createBodyAudioLink } from './firmware/audio-link.js';
 import { demoSkips, lookupCharacter } from './capabilities.js';
 import { isRemote, provisionSteps, screenMismatch, createProvisioning, tokenCandidates, paintManualPairing, bootManualPairing, showBootloader, offerTokenRepair } from './provision.js';
@@ -113,6 +114,9 @@ let warnedGpioReads = new Set();
 /** The board runtime: boot events, the brain link and the screen feed. */
 /** @type {ReturnType<typeof createBoardRuntime> | null} */
 let boardRuntime = null;
+/** The bench's answer to `cmd` for the body on the link this boot. */
+/** @type {ReturnType<typeof createBenchIo> | null} */
+let benchIo = null;
 /** @type {import('./projects.js').Project | null} */
 /** @type {import('./plan.js').Plan|import('./projects.js').Project|null} */
 let activeProject = null;
@@ -776,6 +780,10 @@ function driveStop() {
  * writing into the new one.
  */
 function stopBoard() {
+  // Any pin the body drove goes back to its safe value before the runtime that
+  // knew about it is gone.
+  void benchIo?.disconnect();
+  benchIo = null;
   boardRuntime?.stop();
   boardRuntime = null;
   studioRunError = null;
@@ -946,6 +954,28 @@ async function plugIn(meta = {}) {
       armSoundGesture();
     },
   }) : null;
+  benchIo = createBenchIo({
+    writePin: (pin, level) => {
+      gpioOutputs[pin] = level ? 'high' : 'low';
+      refreshDeviceVisuals();
+    },
+    readPin: (pin) => {
+      const evaluation = evaluateBench(bench, {
+        firmware: firmwareFor(bench.board),
+        ownership: ownershipOf(bench),
+        deviceStates: boardRuntime?.deviceStates() ?? {},
+        gpioOutputs,
+        stimuli: simulationStimuli(),
+      }).engineering;
+      return gpioInputLevel(evaluation, pin) ?? 'LOW';
+    },
+    // A servo-style op has no level of its own; what the bench shows, and what
+    // the rest of the simulation reads, is the pin held high while it pulses.
+    pwm: (pin, us) => {
+      gpioOutputs[pin] = us > 0 ? 'high' : 'low';
+      refreshDeviceVisuals();
+    },
+  });
   boardRuntime = createBoardRuntime({
     board: bench.board,
     bench,
@@ -964,6 +994,8 @@ async function plugIn(meta = {}) {
     brainUrl: `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/body`,
     rejectText: (reason) => rejectCopy(reason, document.documentElement.lang === 'zh' ? 'zh' : 'en'),
     onReject: (reason) => {
+      // The brain said no for good: nothing will be asked of these pins again.
+      void benchIo?.disconnect();
       // A rejection ends the provisioning wait whatever language it printed in.
       provisioning?.gaveUp();
       line.fault = rejectCopy(reason, document.documentElement.lang === 'zh' ? 'zh' : 'en');
@@ -980,6 +1012,7 @@ async function plugIn(meta = {}) {
           .catch(() => {});
       }
     },
+    onIo: (op) => (benchIo ? benchIo.run(op) : Promise.reject(new Error('unavailable: the bench is not booted'))),
     audio: bodyAudioLink ?? undefined,
     sketch: {
       ctx: () => {
@@ -1022,7 +1055,7 @@ async function plugIn(meta = {}) {
       const link = connectBody({
         url: opts.url, token: opts.token, retryOnReject: opts.retryOnReject,
         onWelcome: opts.onWelcome, onMessage: opts.onMessage, onAudio: opts.onAudio,
-        onLost: () => { driveStop(); bodyAudioLink?.hush(); opts.onLost?.(); }, onReject: opts.onReject,
+        onLost: () => { driveStop(); void benchIo?.disconnect(); bodyAudioLink?.hush(); opts.onLost?.(); }, onReject: opts.onReject,
       });
       return { close: () => link.close(), send: (msg) => link.send(msg), sendAudio: (pcm) => link.sendAudio(pcm) };
     },
