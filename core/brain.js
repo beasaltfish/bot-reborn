@@ -877,10 +877,10 @@ export class Brain {
   /**
    * How a call returns a result, if it does. A body action says `returns` and
    * what it runs, so the handler is chosen by the expanded **verb**: `draw`
-   * draws a card, and an `io` step runs the command's last op and hands the
-   * value back — a plugin reads a pin exactly the way a tarot body draws a
-   * card, and the model is asked again with it. The action's arguments are
-   * judged before the handler runs, with the same check `validate` uses.
+   * draws a card, and a program of `io` steps runs them in order and hands back
+   * the last op's value — a plugin reads a pin exactly the way a tarot body
+   * draws a card, and the model is asked again with it. The action's arguments
+   * are judged before the handler runs, with the same check `validate` uses.
    *
    * An injected `returningTools`/`returning` pair (the mechanism's own tests)
    * names tools that are not body actions; those still look up by name.
@@ -907,22 +907,28 @@ export class Brain {
       const refusal = checked?.rejected ? [checked.rejected] : checked?.reasons ?? [];
       return { handler: null, action, args: call.args, refusal };
     }
-    const step = checked.steps[0];
-    // A read op is the value itself, not a method name: the command's last op
-    // is handed to the executor and the answer is the result text. A failed op
-    // throws, and `#runReturning` turns that into the model's result — a read
-    // that could not happen is something the model may say, not a dead turn.
-    if (step.verb === 'io') {
+    const steps = checked.steps;
+    // A command's program is carried whole: a returning command is "write,
+    // then read" as often as a bare read, and the value is the last op's. Only
+    // the FIRST was sent before, so the model read `null` for a legal shape.
+    // A failed op throws; `#runReturning` turns that into the model's result —
+    // a read that could not happen is something the model may say, not a dead
+    // turn.
+    if (steps.every((step) => step.verb === 'io')) {
+      const ops = steps.map((step) => /** @type {import('./io-program.js').Op} */ (step.args));
       return {
-        handler: async () => formatIoValue(
-          await this.#write(/** @type {import('./io-program.js').Op} */ (step.args)),
-        ),
+        handler: async () => {
+          /** @type {unknown} */
+          let value;
+          for (const op of ops) value = await this.#write(op);
+          return formatIoValue(value);
+        },
         action,
         args: checked.args,
         refusal: null,
       };
     }
-    const handler = this.#returning[step.verb] ?? this.#returning[call.name];
+    const handler = this.#returning[steps[0].verb] ?? this.#returning[call.name];
     return handler ? { handler, action, args: checked.args, refusal: null } : null;
   }
 

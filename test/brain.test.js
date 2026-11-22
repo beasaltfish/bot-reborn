@@ -626,8 +626,53 @@ test('a returning command gives the model the pin value, and the answer is spoke
   assert.deepEqual(h.events.filter((e) => e.op === 'speak'), [{ op: 'speak', text: '按钮是按下的。' }]);
 });
 
-test('a read that fails is a result the model reads, not a failed turn', async (t) => {
+test('a write-then-read command runs both ops, and the model gets the read', async (t) => {
+  // A `returns` command may do work before its read (one read, last). Only the
+  // first op used to be sent, so the model was handed `null` for a legal shape.
+  /** @type {import('../core/io-program.js').Command} */
+  const armThenRead = {
+    name: 'arm_and_read',
+    args: { type: 'object', properties: {} },
+    timeoutMs: 500,
+    returns: true,
+    run: [
+      { op: 'pin.write', args: { pin: 'sig', level: 1 } },
+      { op: 'pin.read', args: { pin: 'button' } },
+    ],
+  };
   registerPlugins({
+    'my-reader': pluginBody({ id: 'my-reader', commands: [armThenRead], resources: readResources }),
+  });
+  t.after(() => registerPlugins({}));
+  const h = brainHarness({
+    id: 'my-reader',
+    actions: [{
+      name: 'arm',
+      label: { en: 'Arm and read', zh: '上电再读' },
+      say: 'Power the output, then read the button.',
+      args: { type: 'object', properties: {} },
+      run: [{ command: 'arm_and_read' }],
+      returns: true,
+    }],
+    reply: (/** @type {number} */ n) => (n === 1
+      ? say('', [{ id: 'p1', name: 'arm', args: {} }])
+      : say('按钮是按下的。')),
+  });
+  /** @type {any} */ (h.executor).io = async (/** @type {any} */ op) => {
+    h.events.push({ op: 'io', args: op });
+    return op.op === 'pin.read' ? 1 : undefined;
+  };
+
+  await h.brain.handle('上电，然后看看按钮');
+  await flushMicrotasks();
+
+  assert.deepEqual(h.events.filter((e) => e.op === 'io').map((e) => e.args.op),
+    ['pin.write', 'pin.read'], 'both ops run, in the command’s order');
+  const tool = h.llm.calls[1].messages.find((/** @type {any} */ m) => m.role === 'tool');
+  assert.equal(tool.content, '1', 'the result is the read, not null');
+});
+
+test('a read that fails is a result the model reads, not a failed turn', async (t) => {  registerPlugins({
     'my-reader': pluginBody({ id: 'my-reader', commands: [isPressedCommand], resources: readResources }),
   });
   t.after(() => registerPlugins({}));

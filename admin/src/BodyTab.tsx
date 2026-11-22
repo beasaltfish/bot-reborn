@@ -226,7 +226,7 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
             <strong>{lang === 'zh' ? p.label.zh : p.label.en}</strong>
             {/* A plugin is the bare board plus the commands its author wrote:
                 there is no art to draw and no other way to reach it, so the
-                card says how it is flashed and what it can be asked for. */}
+                card says it is simulator-only and what it can be asked for. */}
             <span className="way">
               <span className="badge">{t('sourcePlugin')}</span>
               <span>{t('pluginOnBoard')}</span>

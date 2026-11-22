@@ -38,8 +38,8 @@ function isText(value) {
 
 /**
  * The resource table is the plugin's whole permission slip: a command may only
- * name a resource declared here. Part A settles only `gpio`, so anything else
- * is refused with the same phrase the IO program uses rather than guessed at.
+ * name a resource declared here. Part A settles only `gpio`, so any other kind
+ * is refused by name (`resource "x" is not a gpio pin`) rather than guessed at.
  * @param {unknown} resources
  * @returns {string | null}
  */

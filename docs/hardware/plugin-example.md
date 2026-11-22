@@ -58,8 +58,9 @@ from an action of your own.
 - `resources` is the permission slip: the only pins a command may name. Only
   `kind: "gpio"` is runnable. `direction` is `input` or `output`; an output also
   needs `safe`, the level (0 or 1) the pin returns to when the body disconnects.
-  `i2c` and `adc` resources are refused **at load**, with the same phrase the IO
-  program uses: their contract is not settled.
+  `i2c` and `adc` resources are refused **at load**: the loader says
+  `resource "x" is not a gpio pin`, because only gpio is runnable here and their
+  contract is not settled.
 - `commands` are named IO programs. `args` is the schema of the values the
   caller supplies, `timeoutMs` is required (1–5000 ms), and `run` holds the ops
   in order. `$angle` (any other `$name`) is replaced by that argument, and the
