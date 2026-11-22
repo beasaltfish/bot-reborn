@@ -14,7 +14,7 @@ import { TEMPLATES, bodyById, bodyProblem, labelOf, registerPlugins, resolveBody
 import { ActionsEditor } from './ActionsEditor';
 import { BodyDiagram } from './BodyDiagram';
 import { lang, t, type Key } from './i18n';
-import type { Detail, Motion, Patch } from './types';
+import type { Detail, Patch } from './types';
 
 type Body = import('../../core/bodies.js').Body;
 
@@ -94,7 +94,7 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
   // copied; the cards are the templates, so the template is what is chosen.
   // The brain resolves `template ?? id` too, so an old config with no template
   // must land on the same card as the solver does — not on a missing id.
-  const chosen = /** @type {Motion} */ ((resolveBody(patch.id ?? 'toy', patch).template) ?? 'toy');
+  const chosen = resolveBody(patch.id ?? 'toy', patch).template ?? 'toy';
   /** The sentence `bodyProblem` wrote when a switch was refused, and whether
    * the switch then dropped the user's edits or wrote nothing at all. */
   const [notice, setNotice] = useState<{ text: string; cleared: boolean } | null>(null);
@@ -147,8 +147,7 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
   // pet cannot run on a voice-only body, and the editor would otherwise save a
   // body `bodyProblem` refuses. What still fits is kept; what does not is
   // cleared back to inherited, and the sentence says which.
-  const pick = (id: string) => {
-    const next = id as Motion;
+  const pick = (next: string) => {
     // A body of one's own keeps its name. Only an id that is itself a template
     // is rewritten: `my-dog` stays `my-dog`, and `template` says what it
     // follows. The chosen template is still written beside a template id.
@@ -158,11 +157,11 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
     // function, so a body named `constructor` would lose its name.
     const named = Object.hasOwn(TEMPLATES, patch.id ?? '');
     /** The body keys this switch writes: a template id, or the template alone. */
-    const follow = (value: Motion) => (named ? { id: value, template: value } : { template: value });
+    const follow = (value: string) => (named ? { id: value, template: value } : { template: value });
     /** The body as the brain will read it after a PATCH carrying this patch. */
     const read = (p: typeof patch) => {
       const candidate = resolveBody(next, { ...p, template: next });
-      const base = TEMPLATES[(candidate.template ?? next) as Motion] ?? TEMPLATES.none;
+      const base = bodyById(candidate.template ?? next) ?? TEMPLATES.none;
       const rawTriggers = /** @type {any} */ (p.triggers ?? base.triggers ?? []);
       return { ...candidate, triggers: Array.isArray(rawTriggers) ? rawTriggers : [] };
     };

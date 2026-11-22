@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { TEMPLATES, registerPlugins } from '../../core/bodies.js';
 import { BodyTab } from './BodyTab';
 import { installFakeApi } from './test/fakeApi';
-import type { BodyAction, Detail, Motion } from './types';
+import type { BodyAction, Detail } from './types';
 
 const detail = (id: 'toy' | 'pet' | 'tarot' | 'dry-run' | 'none' = 'pet'): Detail => ({
   id: 'A', name: 'A', token: 'ab'.repeat(16), config: {
@@ -36,11 +36,10 @@ const SERVO = {
 };
 
 /** A character that already follows the plugin: the card must come up checked.
- * `template` is typed as the template union, but the page writes a plugin id
- * there too (the brain reads `template ?? id`), so this fixture does the same. */
+ * `template` holds a plugin id there, exactly as the page writes it. */
 const servoDetail = (): Detail => {
   const d = detail();
-  d.config.body = { id: 'my-servo', template: 'my-servo' as Motion };
+  d.config.body = { id: 'my-servo', template: 'my-servo' };
   return d;
 };
 
@@ -123,7 +122,7 @@ describe('BodyTab', () => {
   it('keeps a body of one’s own when switching template', async () => {
     const update = vi.fn();
     const d = detail();
-    d.config.body = { id: 'my-dog' as Motion, template: 'pet' };
+    d.config.body = { id: 'my-dog', template: 'pet' };
     render(<BodyTab detail={d} update={update} />);
     await userEvent.click(screen.getByRole('radio', { name: /^voice only/i }));
     expect(update).toHaveBeenCalledWith({ config: { body: { template: 'none' } } });
@@ -134,7 +133,7 @@ describe('BodyTab', () => {
     const d = detail();
     // `TEMPLATES.constructor` is a function: a property read would call this a
     // template id and overwrite it.
-    d.config.body = { id: 'constructor' as Motion, template: 'pet' };
+    d.config.body = { id: 'constructor', template: 'pet' };
     render(<BodyTab detail={d} update={update} />);
     await userEvent.click(screen.getByRole('radio', { name: /^voice only/i }));
     expect(update).toHaveBeenCalledWith({ config: { body: { template: 'none' } } });
@@ -142,14 +141,14 @@ describe('BodyTab', () => {
 
   it('a config with no template resolves like the brain: voice only, not a missing body', () => {
     const d = detail();
-    d.config.body = { id: 'my-bot' as Motion };
+    d.config.body = { id: 'my-bot' };
     renderTab(d);
     expect(screen.getByRole('radio', { name: /^voice only/i })).toBeChecked();
   });
 
   it('draws the fallback rather than an Object property for a body named after one', () => {
     const d = detail();
-    d.config.body = { id: 'constructor' as Motion };
+    d.config.body = { id: 'constructor' };
     render(<BodyTab detail={d} update={vi.fn()} />);
     expect(screen.getByRole('img', { name: 'Voice only' })).toBeInTheDocument();
   });

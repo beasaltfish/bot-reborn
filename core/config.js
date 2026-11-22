@@ -144,7 +144,8 @@ function promptsOf(p) {
  *   that is not a string is no id at all.
  *
  * `motion` was the old name for the same five values, so an old file loads
- * unchanged.
+ * unchanged. `template` is a template id or a plugin body's id: both are plain
+ * strings, and the admin writes whichever one was chosen.
  * @param {unknown} body
  * @returns {BodyConfig}
  */
