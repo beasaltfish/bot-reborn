@@ -19,6 +19,8 @@ import { createDistPages, DIST_DIR, FIXTURES_DIR } from './dist-pages.js';
 import { createAdminApi, setupIdFor } from './admin-api.js';
 import { createPresence } from './presence.js';
 import { resolveBody } from '../core/bodies.js';
+import { loadModules } from './modules.js';
+import { BODIES_DIR } from './plugin-startup.js';
 
 /**
  * @param {{
@@ -31,7 +33,11 @@ import { resolveBody } from '../core/bodies.js';
  *   addresses?: () => string[], petFrames?: import('./pet/frames.js').PetFrames,
  *   tarotFrames?: import('./tarot/frames.js').TarotFrames,
  *   dev?: boolean,
+ *   modulesDir?: string, bodiesDir?: string,
  * }} opts
+ *   `modulesDir` is the catalogue the repository ships (read once, here);
+ *   `bodiesDir` is where an install writes, and must be the directory the boot
+ *   step loaded plugins from, or a reload would forget them.
  */
 export function createBrainServer(opts) {
   const log = opts.log ?? console.log;
@@ -79,6 +85,12 @@ export function createBrainServer(opts) {
     if (!(await pages.serve(req, res))) say(res, 404, 'Not found\n');
   }
   const pages = (opts.pages ?? (() => createDistPages({ dist: DIST_DIR, fixtures: FIXTURES_DIR })))(http);
+  // The catalogue is the repository's, read once so no request touches disk:
+  // a module refused here is one line in the log, not a failed boot. The bodies
+  // directory defaults to the one plugin-startup.js reads.
+  const corpus = loadModules(opts.modulesDir);
+  const bodiesDir = opts.bodiesDir ?? BODIES_DIR;
+  for (const problem of corpus.problems) log(problem);
   // An upgrade socket outlives every HTTP timeout, so one nobody takes is
   // refused here rather than left open: /body is the link's, /screen is the
   // pet screen's, hot reload is the dev pages', and nothing else is anyone's.
@@ -185,6 +197,9 @@ export function createBrainServer(opts) {
   api = createAdminApi({
     dir: opts.dir, link, addresses: opts.addresses, fetch: opts.fetch, presence,
     bodyKind: (setupId) => bodyKinds.get(setupId),
+    modules: corpus.modules,
+    bodiesDir,
+    log,
     // Only in dev mode: a way to draw a card before the wand has a message of its own.
     dev: opts.dev ? { draw: (id) => robots.get(id)?.drawCard() ?? false } : undefined,
   });

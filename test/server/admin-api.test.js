@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request, createServer } from 'node:http';
@@ -25,11 +25,26 @@ function dist() {
   return d;
 }
 
-async function rig(chars = tempCharacters()) {
+/**
+ * A modules directory holding this repository's LED module, and an empty
+ * bodies directory beside it: what an install writes must not be the real home.
+ * @returns {{ modulesDir: string, bodiesDir: string }}
+ */
+function moduleDirs() {
+  const root = mkdtempSync(join(tmpdir(), 'modules-'));
+  const modulesDir = join(root, 'modules');
+  mkdirSync(join(modulesDir, 'led-module'), { recursive: true });
+  writeFileSync(join(modulesDir, 'led-module', 'module.json'),
+    readFileSync(new URL('../../modules/led-module/module.json', import.meta.url)));
+  return { modulesDir, bodiesDir: join(root, 'bodies') };
+}
+
+async function rig(chars = tempCharacters(), dirs = {}) {
   const server = createBrainServer({
     dir: chars.dir, pages: () => createDistPages({ dist: dist(), fixtures: FIXTURES_DIR }), fetch: fakeFetch(), sfx: new Map(), earcons: renderEarcons(),
     makeEars: () => ({ kws: { accept: () => [] }, vad: { accept() {}, detected: false, drain: () => [], clear() {} } }),
     log: () => {},
+    ...dirs,
   });
   const port = await server.listen(0);
   const base = `http://127.0.0.1:${port}`;
@@ -85,6 +100,39 @@ test('with no plugin installed, the admin is offered none', async (t) => {
   const r = await rig();
   t.after(() => r.server.close());
   assert.deepEqual((await r.call('/api/bodies')).body, []);
+});
+
+test('modules are listed with their examples, then installed', async (t) => {
+  registerPlugins({});
+  t.after(() => registerPlugins({}));
+  const r = await rig(tempCharacters(), moduleDirs());
+  t.after(() => r.server.close());
+  const list = (await r.call('/api/modules')).body;
+  assert.equal(list[0].id, 'led-module');
+  assert.equal(list[0].installed, false);
+  assert.equal(list[0].examples.length, 2);
+
+  const posted = await r.call('/api/modules/led-module/install', { method: 'POST', headers: W });
+  assert.equal(posted.status, 200);
+  assert.equal(posted.body.body.id, 'led-module');
+
+  const after = (await r.call('/api/modules')).body;
+  assert.equal(after[0].installed, true);
+  const bodies = (await r.call('/api/bodies')).body;
+  assert.deepEqual(bodies.map((/** @type {any} */ b) => b.id), ['led-module']);
+});
+
+test('an unknown module is a 404, not a path', async (t) => {
+  registerPlugins({});
+  t.after(() => registerPlugins({}));
+  const r = await rig(tempCharacters(), moduleDirs());
+  t.after(() => r.server.close());
+  const res = await r.call('/api/modules/../../etc/install', { method: 'POST', headers: W });
+  assert.equal(res.status, 404);
+  // The same name, encoded so the URL parser cannot fold it away: the id
+  // reaching the installer is still `..`, and it is still not a module.
+  const encoded = await r.call('/api/modules/%2e%2e/install', { method: 'POST', headers: W });
+  assert.equal(encoded.status, 404);
 });
 
 test('the setup id is a stable, non-secret fingerprint; the list leaks no credentials', async () => {
