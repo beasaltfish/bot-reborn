@@ -6,8 +6,9 @@ import {
 } from '../core/brain.js';
 import { MIN_DURATION_MS } from '../phone/executor.js';
 import { KEYWORDS } from '../core/strings.js';
-import { TEMPLATES, bodyProblem, resolveBody } from '../core/bodies.js';
+import { TEMPLATES, bodyProblem, registerPlugins, resolveBody } from '../core/bodies.js';
 import { GOLDEN } from './prompts-golden.js';
+import { pluginBody, pointCommand, pointResources } from './fixtures/plugin.js';
 
 /** The bodies the assertions read, resolved the way the brain resolves them. */
 const TOY = resolveBody('toy');
@@ -456,8 +457,27 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
-/** @param {{ id?: 'toy' | 'dry-run' | 'none' | 'pet', actions?: any[], reply?: any, gateMotion?: boolean, reflex?: any, holdSound?: boolean }} [opts] */
-function brainHarness({ id = 'toy', actions, reply, gateMotion = false, reflex = null, holdSound = false } = {}) {
+/**
+ * The action a plugin body in these tests offers: a command step, not a verb
+ * step. `point` is the command the body carries, so the brain's expansion —
+ * not the action's — is what turns it into IO ops.
+ * @type {import('../core/bodies.js').Action}
+ */
+const POINT_ARM = {
+  name: 'point_arm',
+  label: { en: 'Point the arm', zh: '抬手臂' },
+  say: 'Point the arm at an angle in degrees.',
+  args: {
+    type: 'object',
+    required: ['angle'],
+    properties: { angle: { type: 'integer', minimum: 0, maximum: 180 } },
+  },
+  run: [{ command: 'point', args: { angle: '$angle' } }],
+};
+
+/** @param {{ id?: string, actions?: any[], reply?: any, gateMotion?: boolean, reflex?: any, holdSound?: boolean, commands?: any[] | null, resources?: any[] }} [opts] */
+function brainHarness({ id = 'toy', actions, reply, gateMotion = false, reflex = null, holdSound = false,
+  commands = null, resources = pointResources } = {}) {
   /** @type {any[]} */
   const events = [];
   // Only populated when gateMotion is true. Every move/cruise call then gets
@@ -488,6 +508,8 @@ function brainHarness({ id = 'toy', actions, reply, gateMotion = false, reflex =
       await gate.promise;
     },
     stop() { events.push({ op: 'stop' }); return Promise.resolve(); },
+    /** @param {any} op */
+    async io(op) { events.push({ op: 'io', args: op }); },
     /** @param {any} name */
     async pose(name) { events.push({ op: 'pose', name }); },
     /** @param {any} card */
@@ -521,11 +543,18 @@ function brainHarness({ id = 'toy', actions, reply, gateMotion = false, reflex =
     soundGates.push(gate);
     await gate.promise;
   };
-  /** @type {{ lang: 'en' | 'zh', replyLang: 'en' | 'zh' | null, bargeIn: boolean, body: { id: 'toy' | 'dry-run' | 'none' | 'pet', actions?: any[] } }} */
+  /** @type {{ lang: 'en' | 'zh', replyLang: 'en' | 'zh' | null, bargeIn: boolean, body: { id: string, actions?: any[] } }} */
   const config = { lang: 'zh', replyLang: null, bargeIn: true, body: { id } };
   // A body of one's own: its actions replace the template's, exactly as the
   // admin writes them (config.body.actions).
   if (actions) config.body.actions = actions;
+  // A plugin body is registered by id, the way the loader does it: commands and
+  // resources live on the body, so `resolveBody` has to find it there.
+  if (commands) {
+    const body = pluginBody({ id, commands, resources });
+    body.actions = [structuredClone(POINT_ARM)];
+    registerPlugins({ [id]: body });
+  }
   /** @type {Array<'en' | 'zh' | null>} */
   const langChanges = [];
   /** @type {Array<[string, string]>} */
@@ -534,7 +563,9 @@ function brainHarness({ id = 'toy', actions, reply, gateMotion = false, reflex =
   const traced = [];
   return { events, executor, llm, tts, config, motionGates, soundGates, langChanges, faults, traced,
     brain: new Brain({
-      llm, executor, tts, earcon, sound, config, reflex,
+      // A plugin's id is not one of the template `BodyId`s the config type
+      // names, and this harness is how a plugin body reaches a turn.
+      llm, executor, tts, earcon, sound, config: /** @type {any} */ (config), reflex,
       onReplyLangChange: (lang) => langChanges.push(lang),
       onFault: (part, err) => faults.push([part, err.message]),
       trace: (line) => traced.push(line),
@@ -551,6 +582,36 @@ const say = (content, tool_calls) => ({
   text: content ?? '',
   toolCalls: (tool_calls ?? []).map((c) => ({ ...c, rawArguments: JSON.stringify(c.args) })),
   rawMessage: { role: 'assistant', content, ...(tool_calls ? { tool_calls: tool_calls.map((c) => ({ id: c.id, type: 'function', function: { name: c.name, arguments: JSON.stringify(c.args) } })) } : {}) },
+});
+
+test('a plugin command reaches the executor as an IO op', async () => {
+  const h = brainHarness({ id: 'my-servo', commands: [pointCommand], reply: say('好了。', [
+    { id: 't1', name: 'point_arm', args: { angle: 90 } },
+  ]) });
+  await h.brain.handle('把手臂抬到 90 度');
+  assert.deepEqual(h.events.filter((e) => e.op === 'io'),
+    [{ op: 'io', args: { op: 'pwm', args: { pin: 5, us: 1450 }, safe: 0, timeoutMs: 500 } }]);
+  assert.deepEqual(h.events.at(-1), { op: 'speak', text: '好了。' });
+});
+
+test('an IO rejection is traced, and stops the command before its next op', async () => {
+  // A command is whole or nothing on the wire: the op after the failed write is
+  // not sent, and the failure is a line in the trace rather than a rejection
+  // out of the unawaited dispatch (which would be an unhandled rejection).
+  const twoOps = { ...pointCommand, run: [...pointCommand.run, ...structuredClone(pointCommand.run)] };
+  const h = brainHarness({ id: 'my-servo-two', commands: [twoOps], reply: say('好了。', [
+    { id: 't1', name: 'point_arm', args: { angle: 90 } },
+  ]) });
+  let writes = 0;
+  h.executor.io = async () => { writes++; throw new Error('usb write failed'); };
+
+  await h.brain.handle('把手臂抬到 90 度');
+  await flushMicrotasks();
+
+  assert.equal(writes, 1, 'the second op runs only if the first one resolved');
+  assert.ok(h.traced.includes('[turn] io failed — usb write failed'), h.traced.join('\n'));
+  assert.deepEqual(h.events.filter((e) => e.op === 'speak'), [{ op: 'speak', text: '好了。' }],
+    'a failed write is not a second apology');
 });
 
 test('a turn that narrates the move instead of calling it leaves a trace', async () => {
