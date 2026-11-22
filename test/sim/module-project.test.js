@@ -6,7 +6,7 @@ import { projectFromModule } from '../../sim/project-module.js';
 import { projectById } from '../../sim/projects.js';
 import { planById, planSteps } from '../../sim/plan.js';
 import { emptyBench, pinPoints } from '../../sim/bench.js';
-import { PARTS } from '../../sim/parts.js';
+import { PARTS, holeStrip } from '../../sim/parts.js';
 import { startBench, applyStep } from '../../sim/recipes.js';
 import { nets } from '../../sim/netlist.js';
 
@@ -46,6 +46,26 @@ test('the module project is a circuit, not two parts on one strip', () => {
   assert.ok(!netsOf.same('led:A', 'led:K'), 'the LED is not shorted');
   assert.ok(!netsOf.same('r:2', 'esp:GND'), 'the resistor is not on ground');
   assert.ok(netsOf.same('r:2', 'led:A'), 'the resistor feeds the LED anode');
+  assert.ok(netsOf.same('r:1', 'esp:GPIO5'), 'the resistor input is on the LED GPIO');
+
+  // Not sharing a net is not enough: a module part on the mic's or amp's strip
+  // would make a connection the drawing never shows.
+  /** @param {string} id */
+  const strips = (id) => {
+    const placed = bench.placed.find((part) => part.id === id);
+    assert.ok(placed, `${id} is placed`);
+    return pinPoints(bench, placed).flatMap(({ hole }) => {
+      if (!hole) return [];
+      const at = hole.indexOf(':');
+      return [`${hole.slice(0, at + 1)}${holeStrip(hole.slice(at + 1))}`];
+    });
+  };
+  const moduleStrips = new Set([...strips('r'), ...strips('led')]);
+  for (const id of ['mic', 'amp']) {
+    for (const strip of strips(id)) {
+      assert.ok(!moduleStrips.has(strip), `${id} shares strip ${strip} with a module part`);
+    }
+  }
 
   // The audio base keeps its recipe seats, so the mic straddles the trench with
   // every pin in a hole and no module part shares its strips.

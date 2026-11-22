@@ -8,6 +8,26 @@ import { connectionProgress } from '../../sim/project-progress.js';
 import { emptyBench, addWire } from '../../sim/bench.js';
 import { describeSelection } from '../../sim/selection.js';
 
+test('a module project shows its localised title and the module note', () => {
+  const dom = new JSDOM('<!doctype html><body></body>');
+  const previous = globalThis.document;
+  globalThis.document = dom.window.document;
+  try {
+    const project = projectById('module-led-module');
+    assert.ok(project);
+    const progress = connectionProgress(emptyBench(), project);
+    const en = createProjectPanel({ lang: 'en', focus() {} });
+    en.render({ mode: 'guided', project, progress, selection: null, diagnoses: [] });
+    assert.equal(en.element.querySelector('h2')?.textContent, 'LED module');
+    assert.match(en.element.textContent ?? '', /Light the desk LED/);
+    assert.match(en.element.textContent ?? '', /board needs the bridge firmware/);
+    const zh = createProjectPanel({ lang: 'zh', focus() {} });
+    zh.render({ mode: 'guided', project, progress, selection: null, diagnoses: [] });
+    assert.equal(zh.element.querySelector('h2')?.textContent, 'LED 模块');
+    assert.match(zh.element.textContent ?? '', /真板需要 bridge 固件/);
+  } finally { globalThis.document = previous; dom.window.close(); }
+});
+
 test('guided checklist exposes textual states and focuses exact connection endpoints', () => {
   const dom = new JSDOM('<!doctype html><body></body>');
   const previous = globalThis.document;

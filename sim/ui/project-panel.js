@@ -59,6 +59,11 @@ export function createProjectPanel(opts) {
       const goalKey = project.goalKey ?? `goal.${project.id}`;
       const goal = simText(opts.lang, goalKey);
       if (goal !== goalKey) element.append(child('p', goal));
+      // A project built from a module carries the module's own note: what the
+      // bench can do today, and what the board still needs. Absent for the
+      // handwritten projects, which say all of it in the goal.
+      const note = text(`${project.id}.note`);
+      if (note !== `project.${project.id}.note`) element.append(child('p', note));
       const next = current.progress.find(link => link.status !== 'complete');
       if (next) element.append(child('p', `${text('next')}: ${next.a} → ${next.b}`));
       const list = document.createElement('ol');
