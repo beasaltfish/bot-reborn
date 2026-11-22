@@ -189,13 +189,15 @@ GPIO 4–7 那四个给小车用的电机脚，以及 I²C 上的 MPU-6050。表
 
 新角色默认只有声音；在这个设置出现之前写下的角色文件没有 `body` 键，仍然是会动的玩具
 （[`core/config.js`](core/config.js)）。动词是什么、一个动作能写什么，见
-[`docs/development.md`](docs/development.md#bodies-capabilities-verbs-actions)。
+[`docs/development.md`](docs/development.md#bodies-capabilities-io-ops-commands-actions)。
 
 身体也可以来自自己写的插件：`~/.bot-reborn/bodies/` 下一个目录一个身体，目录里的
 `body.json` 写明零件、能碰的 GPIO 和要跑的命令。大脑启动时读一次，清单写错只会在日志
 里留一行，然后 admin 把这个身体排在五个模板旁边。现在只在模拟器里有效：工作台只回应
-普通的引脚读写，`pwm` 和 I²C/ADC 都会拒绝；真板固件还停在协议 2，插件身体会被挡在门
-外。完整格式见 [`docs/hardware/plugin-example.md`](docs/hardware/plugin-example.md)。
+普通的引脚读写；`pwm` 命令会连 `map` 一起展开，但工作台没有脉冲模型，只会回
+`unavailable`；`i2c` 和 `adc` 资源在插件加载时就被拒绝，因为它们的约定还没定。真板子
+同样跑不了：固件还停在协议 2，插件身体会被挡在门外。完整格式见
+[`docs/hardware/plugin-example.md`](docs/hardware/plugin-example.md)。
 
 角色文件没有版本号。旧大脑读新版本写下的文件时，会静默丢掉它不认识的键——比如身体自带
 的 `actions`——不报错，身体直接退回模板。请用写下角色时的那版大脑，回退版本没有迁移

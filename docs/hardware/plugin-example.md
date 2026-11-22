@@ -5,6 +5,12 @@ A body plugin is a body the brain reads from disk: one directory per body under
 `body.json`. Only that file is read today; anything else in the directory is
 ignored.
 
+**A plugin is simulator-only.** The workbench answers `pin.write` and `pin.read`;
+`pwm` is expanded by the brain but has no pulse model on the bench yet, and a
+real board cannot run any of it: the ESP32 firmware speaks protocol 2 and has no
+`cmd`/`result`, so the brain turns a plugin body away from it with `bridge`. The
+bridge firmware (protocol 3) is not written yet.
+
 ## Install
 
 Create `~/.bot-reborn/bodies/my-servo/body.json`:
@@ -41,23 +47,40 @@ from an action of your own.
 
 ## The fields
 
-- `id` names the body: lowercase `a-z`, digits, `_` or `-`. It may not be one of
-  the five templates (`none`, `pet`, `tarot`, `toy`, `dry-run`), nor a plugin
-  that is already loaded. A character that picks this body stores the id in
-  `body.template`.
+- `id` names the body: it must start with a lowercase letter, then lowercase
+  `a-z`, digits, `_` or `-`. It may not be one of the five templates (`none`,
+  `pet`, `tarot`, `toy`, `dry-run`), nor a plugin that is already loaded. A
+  character that picks this body stores the id in `body.template`.
 - `label` is the card's name in English and Chinese; both are required.
 - `parts` lists the devices the body expects (`esp32`, `sg90`,
   `button-module`, …). The loader requires a non-empty list of names; the
   workbench does not seat them from here yet.
-- `resources` is the permission slip: the only pins a command may name. A GPIO
-  output also needs `safe`, the value the pin returns to when the body
-  disconnects. `i2c` and `adc` resources are refused until the bridge firmware
-  defines them.
-- `commands` are named IO programs. `timeoutMs` is required (1–5000 ms). `run`
-  holds the ops in order, and `$angle` (any other `$name`) is replaced by that
-  argument. A `pwm` step may carry a linear `map`; nothing else is computed. A
-  command that ends in a read must say `"returns": true`, and then it has
-  exactly one read, last.
+- `resources` is the permission slip: the only pins a command may name. Only
+  `kind: "gpio"` is runnable. `direction` is `input` or `output`; an output also
+  needs `safe`, the level (0 or 1) the pin returns to when the body disconnects.
+  `i2c` and `adc` resources are refused **at load**, with the same phrase the IO
+  program uses: their contract is not settled.
+- `commands` are named IO programs. `args` is the schema of the values the
+  caller supplies, `timeoutMs` is required (1–5000 ms), and `run` holds the ops
+  in order. `$angle` (any other `$name`) is replaced by that argument, and the
+  substituted value is checked against `args` before any op is built. A `pwm`
+  step may carry one linear `map`, whose output is clamped to its `to` range. A
+  command that ends in a read must also say `"returns": true`, and then it has
+  exactly one read, last — that value is what the model reads back.
+
+### The six ops
+
+| op | args | on | notes |
+| --- | --- | --- | --- |
+| `pin.write` | `pin`, `level` | a gpio output | `level` is `0`, `1`, or `$argument` resolving to one of those. The op carries the output's `safe`. |
+| `pin.read` | `pin` | a gpio input | one level, `0` or `1`; the only kind of read that returns today. |
+| `pwm` | `pin`, `value`, optional `map: { from: [a, b], to: [c, d] }` | a gpio output | `value` is a finite number or `$argument`; with a map the result is `us`, clamped to the `to` range. The bench answers `unavailable` — no pulse model yet. |
+| `i2c.write` | — | an `i2c` resource | refused at load: the i2c contract is not settled. |
+| `i2c.read` | — | an `i2c` resource | refused at load, same reason. |
+| `adc.read` | — | an `adc` resource | refused at load, same reason. |
+
+A `pin` is the resource's `name`, never a `$argument`: the target is a static
+reference, checked once at load, not a value the model chooses.
 
 An action calls a command by name:
 
@@ -78,17 +101,42 @@ Paste it into the body's **Actions** box. A plugin adds commands, not new
 abilities: it hears and speaks like a bare board, and carries no firmware of its
 own.
 
+To read a value back, the command ends in a read and says `"returns": true`, and
+the action that calls it says `returns: true` too:
+
+```json
+{
+  "name": "is_pressed",
+  "args": { "type": "object", "properties": {} },
+  "timeoutMs": 100,
+  "returns": true,
+  "run": [{ "op": "pin.read", "args": { "pin": "button" } }]
+}
+```
+
+with the button declared as an input:
+
+```json
+{ "kind": "gpio", "name": "button", "gpio": 4, "direction": "input" }
+```
+
+An action `{ "run": [{ "command": "is_pressed" }], "returns": true }` then gets
+`0` or `1` back as its tool result, and the model is asked again with it — the
+same path a tarot body's `draw_card` takes. A read that fails (a timeout, a body
+that refuses the op) is text the model reads, not a failed turn.
+
 ## What runs today
 
-- The loader, the admin card, and an action that calls a command all work.
-- On the workbench, `pin.write` and `pin.read` answer. `pwm`, `i2c.*` and
-  `adc.read` refuse with `unavailable`, so this example loads and appears, but
-  `point` does not move the servo. A `pin.write` step is what the bench
-  exercises today.
+- The loader, the admin card, an action that writes a pin, and an action that
+  reads one all work — the read only on the workbench, which is the only body
+  that answers `cmd` today.
+- On the workbench, `pin.write` and `pin.read` answer. `pwm` is expanded by the
+  brain (a map included) but the bench has no pulse model, so it answers
+  `unavailable`; this example loads and appears, and `point` does not move the
+  servo. `i2c.*` and `adc.read` never get that far: a manifest that declares an
+  `i2c`/`adc` resource is refused at load.
 - No real board runs plugins. The ESP32 firmware speaks protocol 2 and has no
-  `cmd`/`result`; the brain rejects a plugin body over it with `bridge`. The
-  bridge firmware (protocol 3) is not written yet, so nothing here changes what
-  a flashed board can do.
+  `cmd`/`result`; the brain rejects a plugin body over it with `bridge`.
 
 A refused plugin is one line in the brain's log at startup:
 `plugin <directory>: <what is wrong>`.
