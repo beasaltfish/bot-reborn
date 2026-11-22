@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { RemoteExecutor } from '../../server/body/executor.js';
+import { IoExecutor, RemoteExecutor } from '../../server/body/executor.js';
 import { FakeClock } from './fake-clock.js';
 
 function rig(connected = true) {
@@ -80,10 +80,14 @@ test('nothing is sent while the motors are disconnected', async () => {
 // One `cmd` out, one `result` back. The id is what pairs them; the motion
 // generation is not (it moves on every order) and the answer may be late.
 
-/** The executor's own sender, without the rig's clock stamp. */
+/**
+ * The IO carrier on its own. `IoExecutor` is what the robot's composite builds
+ * for a body with commands; `RemoteExecutor` carries motion only, so there is
+ * one implementation of an op and one place a `result` is matched.
+ */
 function ioRig() {
   /** @type {any[]} */ const sent = [];
-  const ex = new RemoteExecutor((m) => sent.push(m), { now: () => 0 });
+  const ex = new IoExecutor({ send: (m) => sent.push(m) });
   return { sent, ex };
 }
 
@@ -115,6 +119,17 @@ test('io gives up after the op’s own timeout plus slack, and a late answer is 
   const next = ex.io({ op: 'pin.read', args: { pin: 5 }, timeoutMs: 50 });
   ex.onResult({ id: sent[1].id, ok: true, value: 0 });
   assert.equal(await next, 0);
+});
+
+test('a read nobody answers rejects at its own timeout, not at the fallback', async () => {
+  // The command that asked for the read owns its bound: a `timeoutMs: 50` read
+  // must not hold a turn for the carrier's 5 s fallback.
+  const { ex } = ioRig();
+  const start = Date.now();
+  await assert.rejects(ex.io({ op: 'pin.read', args: { pin: 5 }, timeoutMs: 50 }), /timeout/);
+  const took = Date.now() - start;
+  assert.ok(took >= 40, `gave up before the op's own timeout: ${took} ms`);
+  assert.ok(took < 1000, `waited past the op's own timeout: ${took} ms`);
 });
 
 test('an id nobody is waiting for settles nothing', async () => {
@@ -182,10 +197,12 @@ test('losing the link rejects every pending io at once, not at its timeout', asy
   await assert.rejects(ex.io({ op: 'pin.read', args: { pin: 5 } }), /disconnected/);
 });
 
-test('stop() abandons pending io, and the next op still works', async () => {
+test('a halt abandons pending io, and the next op still works', async () => {
+  // `CompositeExecutor.stop()` calls this before it stops the motors: a halt
+  // must not leave a turn waiting on an answer the body will never send.
   const { ex } = ioRig();
   const pending = assert.rejects(ex.io({ op: 'pin.read', args: { pin: 5 }, timeoutMs: 5000 }), /disconnected/);
-  await ex.stop();
+  ex.abort();
   await pending;
   // A halt is not a disconnect: the body is still there for the next command.
   const next = ex.io({ op: 'pin.read', args: { pin: 5 }, timeoutMs: 5000 });

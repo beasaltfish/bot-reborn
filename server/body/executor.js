@@ -18,10 +18,10 @@ const realSleep = (/** @type {number} */ ms) => new Promise((r) => setTimeout(r,
 
 /**
  * How long an IO op may wait for its answer when the op itself carries no
- * bound. Reads carry no `timeoutMs` (`core/io-program.js`: there is nothing to
- * restore and nothing to time out on the body), but the brain still must not
- * wait on a promise forever. As long as the longest command the vocabulary
- * allows (5000 ms), so a legitimate write on a slow body is never cut short.
+ * bound. `core/io-program.js` puts the command's `timeoutMs` on every op it
+ * expands, reads included, so this is only for an op sent by hand (a test, an
+ * instrument). As long as the longest command the vocabulary allows (5000 ms),
+ * so a legitimate write on a slow body is never cut short.
  */
 export const IO_TIMEOUT_MS = 5000;
 
@@ -163,7 +163,6 @@ export class RemoteExecutor {
   #send; #sleep; #now;
   #gen = 0;
   #connected;
-  /** @type {IoExecutor} */ #io;
 
   /**
    * @param {(msg: object) => void} send
@@ -174,8 +173,6 @@ export class RemoteExecutor {
     this.#sleep = opts.sleep ?? realSleep;
     this.#now = opts.now ?? (() => performance.now());
     this.#connected = opts.connected ?? true;
-    this.#io = new IoExecutor({ send: (/** @type {object} */ msg) => this.#send(msg) },
-      { connected: this.#connected });
   }
 
   get connected() { return this.#connected; }
@@ -184,7 +181,6 @@ export class RemoteExecutor {
   set connected(value) {
     this.#connected = value;
     if (!value) this.#gen++;
-    this.#io.connected = value;
   }
 
   get generation() { return this.#gen; }
@@ -208,25 +204,9 @@ export class RemoteExecutor {
   /** The bump is synchronous so every loop is dead before anything else runs. */
   stop() {
     this.#gen++;
-    // A halt abandons whatever IO was in flight too; the answer, if it ever
-    // arrives, is for an op nobody is waiting on any more.
-    this.#io.abort();
     this.#send({ type: 'stop' });
     return Promise.resolve();
   }
-
-  /**
-   * One bounded IO op over the link, carried here because the send is here.
-   * @param {import('../../core/io-program.js').Op} op
-   * @returns {Promise<unknown>}
-   */
-  io(op) { return this.#io.io(op); }
-
-  /**
-   * The body's answer to a `cmd` this executor sent.
-   * @param {{ id?: unknown, ok?: unknown, value?: unknown, error?: unknown }} msg
-   */
-  onResult(msg) { this.#io.onResult(msg); }
 
   /**
    * @param {number} gen @param {string} drive @param {string} steer

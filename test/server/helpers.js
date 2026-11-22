@@ -21,11 +21,14 @@ export function readyConfig() {
 
 /**
  * @param {{ heard?: string, reply?: string, steps?: object[], llmHangs?: boolean, tts?: Int16Array,
- *           tool?: { name: string, args: object } }} [opts]
+ *           tool?: { name: string, args: object }, once?: boolean }} [opts]
+ *   `once` offers the tool call on the first request only, so a returning
+ *   tool's second round reaches the plain reply.
  * @returns {typeof fetch & { calls: { url: string, body: any, signal?: AbortSignal | null }[] }}
  */
 export function fakeFetch(opts = {}) {
   /** @type {{ url: string, body: any, signal?: AbortSignal | null }[]} */ const calls = [];
+  let toolOffered = false;
   const f = /** @type {any} */ (async (/** @type {string} */ url, /** @type {RequestInit} */ init) => {
     const body = typeof init?.body === 'string' ? JSON.parse(init.body) : null;
     calls.push({ url, body, signal: init?.signal });
@@ -35,6 +38,11 @@ export function fakeFetch(opts = {}) {
     if (url.endsWith('/chat/completions')) {
       if (opts.llmHangs) {
         return new Promise((_, reject) => init?.signal?.addEventListener('abort', () => reject(new Error('aborted'))));
+      }
+      const offer = !opts.once || !toolOffered;
+      toolOffered = true;
+      if (!offer) {
+        return Response.json({ choices: [{ message: { role: 'assistant', content: opts.reply ?? 'Going!' } }] });
       }
       return Response.json({ choices: [{ message: {
         role: 'assistant',
