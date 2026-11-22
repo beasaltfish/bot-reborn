@@ -222,7 +222,20 @@ half: it is what to buy, and it is fixed by the template.
 A character with no body chosen is voice only; a character file written before
 this setting has no `body` key and is still the toy
 ([`core/config.js`](core/config.js)). The rest of the account — the verbs, and
-what an action may say — is in [`docs/development.md`](docs/development.md#bodies-capabilities-verbs-actions).
+what an action may say — is in [`docs/development.md`](docs/development.md#bodies-capabilities-io-ops-commands-actions).
+
+A body can also come from a plugin you write yourself: one directory per body
+under `~/.bot-reborn/bodies/`, each with a `body.json` that names the parts, the
+GPIO pins the body may touch and the commands it runs. The brain reads them at
+startup and refuses a bad manifest with one line in the log; the admin then shows
+the plugin beside the five templates. This is simulator-only for now. The
+workbench answers plain pin reads and writes; a `pwm` command is expanded, map
+and all, but the bench has no pulse model and answers `unavailable`; `i2c` and
+`adc` resources are refused when the plugin loads, because their contract is not
+settled. No real board runs a plugin either: the firmware speaks protocol 2, so
+a plugin body is turned away from it.
+[`docs/hardware/plugin-example.md`](docs/hardware/plugin-example.md) has the
+whole format.
 
 A character file has no version number. An older brain reading a file written by
 a newer one silently drops the keys it does not know: a body's `actions`, for

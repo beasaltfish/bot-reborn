@@ -53,24 +53,35 @@ never import each other.
 `phone/dev.html`, `phone/dev.js` and `phone/panels/` are instruments rather than product; read
 `docs/instruments.md` before changing them, and skip them until you need them.
 
-## Bodies: capabilities, verbs, actions
+## Bodies: capabilities, IO ops, commands, actions
 
-Three layers; only the actions are a person's to write.
+Four layers; only the last two are a person's to write.
 
 - **Capabilities** are what the body has: `hear`, `speak`, `show`, `move`
   (`CAPABILITIES` in `core/bodies.js`). They describe hardware, not behaviour.
-- **Verbs** are the closed set of five things the hardware can be told to do:
-  `drive`, `halt`, `voice`, `pose`, `draw` (`core/verbs.js`). Each one names the
-  capability it needs (`needs`), the arguments it takes, and the sentence that
-  bounds it (`bounded`) — a bound written only in a comment drifts away from the
-  code that enforces it.
+- **IO ops** are the closed set of six electrical primitives the hardware can be
+  told to perform: `pin.write`, `pin.read`, `pwm`, `i2c.read`, `i2c.write`,
+  `adc.read` (`IO_OPS` in `core/io-program.js`). One op is one wire message,
+  never a sequence, and only a `gpio` resource is addressable today — the
+  `i2c`/`adc` contract is refused at load rather than guessed at.
+- **Verbs** are the closed set of five things a body can be told to do as a
+  whole: `drive`, `halt`, `voice`, `pose`, `draw` (`core/verbs.js`). Each one
+  names the capability it needs (`needs`), the arguments it takes, and the
+  sentence that bounds it (`bounded`) — a bound written only in a comment drifts
+  away from the code that enforces it.
+- **Commands** are a plugin's named IO programs: a name, an argument schema, a
+  `timeoutMs`, and `run` — a list of ops whose `$name` slots are filled from the
+  call. `commandProblem` checks one once at load; `expandCommand` turns one call
+  into the ops to send, after checking the substituted values against the
+  command's own schema. A command that ends in a read says `returns: true`, and
+  that is the single value it hands back.
 - **Actions** are the model's vocabulary: a name, the `say` text that teaches
-  when to call it, an optional args schema, and a `run` program of verbs
-  (`core/actions.js` checks the shape; `expand` fills an argument into each
-  step and drops one that does not fit). `toolsOf(body)` in `core/brain.js`
-  turns a body's actions into tools, then appends the fixed tools the
-  template names in `fixedTools`: only `set_reply_language` exists, and
-  `pet` and `tarot` name none.
+  when to call it, an optional args schema, and a `run` program of verb steps
+  and command steps (`core/actions.js` checks the shape; `expand` fills an
+  argument into each step and drops one that does not fit). `toolsOf(body)` in
+  `core/brain.js` turns a body's actions into tools, then appends the fixed
+  tools the template names in `fixedTools`: only `set_reply_language` exists,
+  and `pet` and `tarot` name none.
 
 A **body** is a template (`TEMPLATES` in `core/bodies.js`): its capabilities, its
 ways (the source and the parts each one costs), its actions, its prompts, its
@@ -80,6 +91,14 @@ one into the body a character uses: a patch that carries its own `actions` is a
 body of its own, one without them follows `template ?? id`, and an id with
 neither falls back to `none`. A character written before the setting has no
 `body` key and stays `toy` (`bodyOf` in `core/config.js`).
+
+A **plugin body** is a `body.json` under `~/.bot-reborn/bodies/<id>/`, read once
+at startup by `server/plugin-bodies.js` and registered with `registerPlugins`.
+It is the voice-only template plus `resources` (the permission slip) and
+`commands`; it carries no abilities of its own and no firmware. A refused
+manifest is one line in the log, never a reason not to start. The format and an
+example are in [`docs/hardware/plugin-example.md`](hardware/plugin-example.md);
+a plugin is **simulator-only** until the bridge firmware exists.
 
 `bodyProblem()` in the same file is the single check on any body, template or
 hand-written: it refuses an action that needs a capability the body lacks, a
@@ -111,14 +130,19 @@ An action is `{ name, label, say, args?, run, returns?, rules? }`:
 - `name` is what the model calls — lowercase, digits and `_`, and not
   `set_reply_language`, which is reserved.
 - `say` is the only thing that teaches the model *when* to call it.
-- `run` is a list of steps, each `{ verb, args?, each? }`. `args` values written
-  as `$name` are filled from the call's arguments; inside an `each` step,
-  `$each.field` is the current element. Only the five verbs may appear.
+- `run` is a list of steps, each `{ verb, args?, each? }` or
+  `{ command, args? }`. `args` values written as `$name` are filled from the
+  call's arguments; inside an `each` step, `$each.field` is the current element.
+  Only the five verbs and the body's own commands may appear, and a step is one
+  or the other — a line carrying both is refused.
 - Everything it asks for has to exist: a `pose` name in `core/poses.js` or a
-  `voice` clip in `core/audio/sfx.js` written literally is checked now.
-- `returns: true` is only for a single `draw` step: that is the one result the
-  model is asked again with. A `draw` step without it is refused — the brain
-  resolves the step and does nothing, so the card would never reach the model.
+  `voice` clip in `core/audio/sfx.js` written literally is checked now, and a
+  command name no body carries is refused by name.
+- `returns: true` is only for a single step that produces a value: a `draw` step,
+  or a command whose last op is a read (`"returns": true` on the command). That
+  is the one result the model is asked again with — a card, or a pin level. A
+  `draw` or a returning command used without it is refused, because the brain
+  would resolve it and drop the value where the model never sees it.
 - `rules` is a paragraph appended to the system prompt after the body's own.
 
 ### Adding a verb

@@ -18,6 +18,7 @@ import { servePreview } from './preview.js';
 import { createDistPages, DIST_DIR, FIXTURES_DIR } from './dist-pages.js';
 import { createAdminApi, setupIdFor } from './admin-api.js';
 import { createPresence } from './presence.js';
+import { resolveBody } from '../core/bodies.js';
 
 /**
  * @param {{
@@ -131,10 +132,21 @@ export function createBrainServer(opts) {
       const who = tokenLookup(token);
       if (typeof who === 'string') return who;
       admitted.set(who.id, /** @type {import('./characters.js').Character} */ (who.character));
+      // A plugin body is the only one that answers `cmd`/`result`; the link
+      // refuses one that greets with protocol 2, because it would do nothing.
+      const body = resolveBody(
+        who.character.config.body?.id ?? 'toy',
+        who.character.config.body,
+      );
       // The optional marker is read only after the token was accepted; the
       // link records it only after its own one-body-per-character admission,
       // so a rejected second body cannot change what the summary says.
-      return { id: who.id, name: who.name, ...(hello?.body === 'phone' ? { bodyKind: /** @type {const} */ ('phone') } : {}) };
+      return {
+        id: who.id,
+        name: who.name,
+        ...(hello?.body === 'phone' ? { bodyKind: /** @type {const} */ ('phone') } : {}),
+        ...(body.commands?.length ? { plugin: true } : {}),
+      };
     },
     onBody: (conn, who) => {
       const c = /** @type {import('./characters.js').Character} */ (admitted.get(who.id));

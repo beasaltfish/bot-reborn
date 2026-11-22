@@ -40,6 +40,15 @@ describe('ActionsEditor', () => {
     expect(screen.queryByText(new RegExp(t('presetCustom')))).toBeNull();
   });
 
+  it('falls back to the voice-only template for a body id that is not a template', () => {
+    // `TEMPLATES` indexed by a string is a property read, and `constructor` is
+    // one of its inherited ones: the old code handed `Object` to `copy()`.
+    const d = detail('none');
+    d.config.body = { id: 'constructor', template: 'constructor' };
+    render(<ActionsEditor detail={d} update={vi.fn()} />);
+    expect(JSON.parse(box().value)).toEqual(TEMPLATES.none.actions);
+  });
+
   it('refuses JSON that does not fit the body, and names the line', async () => {
     const update = vi.fn();
     render(<ActionsEditor detail={detail('pet')} update={update} />);

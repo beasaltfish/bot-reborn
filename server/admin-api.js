@@ -11,7 +11,7 @@ import {
 } from './characters.js';
 import { createCheckApi, LAYERS } from './check-api.js';
 import { listFirmwareSources, readFirmwareSource } from './firmware-sources.js';
-import { resolveBody } from '../core/bodies.js';
+import { pluginBodies, resolveBody } from '../core/bodies.js';
 import { verbsOf } from '../core/actions.js';
 
 const MAX_BODY = 64 * 1024;
@@ -74,6 +74,20 @@ export function createAdminApi(opts) {
       // What the QR code is made of: the address a phone on this Wi-Fi can
       // reach, and the port this request came in on.
       return send(200, { port: req.socket.localPort, addresses: (opts.addresses ?? lanAddresses)() });
+    }
+    // The plugin bodies this brain loaded, with everything needed to build the
+    // same body in the page: the label in both languages, the commands and the
+    // pins they may touch. All of it is local plugin data, none of it secret.
+    // The page registers these bodies before drawing them, so `resolveBody`
+    // agrees with the brain about `chosen`, `bodyProblem` and the actions box.
+    if (path === '/api/bodies') {
+      if (req.method !== 'GET') return send(405, { error: 'method not allowed' });
+      return send(200, Object.values(pluginBodies()).map((b) => ({
+        id: b.id,
+        label: { en: b.label.en, zh: b.label.zh },
+        commands: b.commands ?? [],
+        resources: b.resources ?? [],
+      })));
     }
     // A way to draw a card before the wand has a message of its own. Not a
     // feature: it is only there in dev mode, and without it this path is a 404.

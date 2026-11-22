@@ -66,7 +66,9 @@ export function createScreenLink(opts) {
       if (!welcomed) {
         if (msg.type !== 'hello') return;
         clearTimeout(helloTimer);
-        if (msg.protocol !== PROTOCOL) return reject('protocol');
+        // A screen has no commands, so version 3 adds nothing it needs: a v2
+        // board's own screen socket keeps working with a v3 brain.
+        if (msg.protocol !== 2 && msg.protocol !== PROTOCOL) return reject('protocol');
         const origin = req.headers.origin;
         if (origin && !allowed.has(origin) && !sameHost(origin, req.headers.host)) return reject('origin');
         if (typeof msg.token !== 'string') return reject('token');

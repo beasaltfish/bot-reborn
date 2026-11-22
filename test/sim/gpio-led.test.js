@@ -57,3 +57,59 @@ test('an unknown owner or an uninitialised board LED shows no light', () => {
   const circuit = evaluateDevices(bench, { gpioOutputs: high, ownership: { led: 'circuit' } });
   assert.equal(circuit.leds.led.state, 'on');
 });
+
+import { createBenchIo } from '../../sim/bench-io.js';
+import { liveDiagnosis } from '../../sim/live-diagnosis.js';
+
+const BOARD_LED = /** @type {const} */ ({ led: 'board' });
+
+test('a plugin pin lights a board-owned LED the firmware never claimed', () => {
+  const bench = { ...highSide(), usb: true };
+  /** @type {Record<string, 'high'|'low'|'high-z'>} */
+  const gpioOutputs = { GPIO5: 'high' };
+  const options = { gpioOutputs, ownership: BOARD_LED, deviceStates: {} };
+  assert.equal(evaluateBench(bench, options).engineering.leds.led, undefined, 'no claim, no light');
+  const on = evaluateBench(bench, { ...options, ioPins: new Set([5]) }).engineering;
+  assert.equal(on.leds.led.state, 'on');
+});
+
+test('the IO adapter lights the LED, and disconnect restores safe and turns it off', async () => {
+  const bench = { ...highSide(), usb: true };
+  /** @type {Record<string, 'high'|'low'|'high-z'>} */
+  const gpioOutputs = {};
+  const ioPins = new Set();
+  const io = createBenchIo({
+    writePin: (pin, level) => {
+      gpioOutputs[`GPIO${pin}`] = level ? 'high' : 'low';
+      ioPins.add(pin);
+    },
+    readPin: () => 'LOW',
+  });
+  /** @param {Set<number>} pins */
+  const evaluate = (pins) => evaluateBench(bench, {
+    gpioOutputs, ioPins: pins, ownership: BOARD_LED, deviceStates: { led: 'active' },
+  }).engineering;
+
+  await io.run({ op: 'pin.write', args: { pin: 5, level: 1 }, safe: 0 });
+  assert.equal(evaluate(ioPins).leds.led.state, 'on');
+  await io.disconnect();
+  // sim/main.js's releaseBenchPins does both: restore, then stop admitting.
+  ioPins.clear();
+  assert.equal(io.level(5), 0);
+  assert.equal(evaluate(ioPins).leds.led.state, 'off');
+});
+
+test('a plugin pin shorting an LED is diagnosed, not silently ignored', () => {
+  // Only the board and the LED circuit, so the first hint is the short itself.
+  const wired = highSide(10);
+  const bench = {
+    ...wired, usb: true,
+    placed: wired.placed.filter((p) => !['inmp441', 'max98357a', 'speaker'].includes(p.part)),
+  };
+  const evaluated = evaluateBench(bench, {
+    gpioOutputs: { GPIO5: 'high' }, ioPins: new Set([5]), ownership: BOARD_LED, deviceStates: {},
+  });
+  assert.equal(evaluated.engineering.leds.led.state, 'overcurrent');
+  assert.ok(evaluated.engineering.faults.some((f) => f.code === 'gpio-overcurrent' && f.instances.includes('led')));
+  assert.match(liveDiagnosis(bench, 'en', evaluated)?.text ?? '', /GPIO pin/);
+});

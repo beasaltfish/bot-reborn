@@ -2,6 +2,7 @@
 // DOM. docs/superpowers/specs/2026-11-16-firmware-layer-design.md §8 and the
 // C in firmware/main/main.c are the authority for the order and the strings.
 import { screenById, IDENTITY_CONTROLLERS } from '../../core/screens.js';
+import { PROTOCOL } from '../../core/protocol.js';
 
 /**
  * @typedef {'NO_WIFI'|'CONNECTING'|'REJECTED'|'SLEEPING'|'LISTENING'|'CAPTURING'|'THINKING'|'SPEAKING'} LedMode
@@ -48,7 +49,7 @@ export function bodyBoot({ settings, firmware, bench, outcome }) {
     }
   }
 
-  at(0, { line: `body: protocol 2, brain at ${settings.url || 'auto (found on the network)'}` });
+  at(0, { line: `body: protocol ${PROTOCOL}, brain at ${settings.url || 'auto (found on the network)'}` });
 
   if (!settings.ssid || !settings.token) {
     at(0, { line: `not set up: type ${!settings.ssid ? 'wifi <ssid> [pass]' : 'token <32 hex>'}, then reboot (help lists commands)` });

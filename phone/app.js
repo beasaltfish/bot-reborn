@@ -41,7 +41,7 @@ offerInstall(installButton);
 /** @type {Record<string, import('../core/strings.js').StringKey>} */
 const REJECT = {
   token: 'rejectToken', busy: 'rejectBusy', unconfigured: 'rejectUnconfigured',
-  protocol: 'rejectProtocol', origin: 'rejectOrigin',
+  protocol: 'rejectProtocol', origin: 'rejectOrigin', bridge: 'rejectBridge',
 };
 
 /** @type {AudioPipeline | null} */ let pipeline = null;
@@ -209,6 +209,9 @@ async function start() {
     link = connectBody({
       url: `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${BODY_PATH}`,
       token: /** @type {string} */ (config.token),
+      // The phone is a v2 body: it has no `cmd` bridge, so a plugin character
+      // must turn it away at hello instead of timing out on every op.
+      protocol: 2,
       onWelcome: (name) => { ui.notice(''); ui.log(`▶︎ ${name}`); },
       onMessage: (msg) => {
         if (msg.type === 'move') car?.hold(msg.drive, msg.steer, msg.ms);

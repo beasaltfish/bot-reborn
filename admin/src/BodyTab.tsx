@@ -1,4 +1,6 @@
-// The body, as five cards that each say what it needs and what it does.
+// The body, as a card per template — plus one per plugin body the brain loaded,
+// which reaches this page through `/api/bodies` and is registered with
+// `core/bodies.js` before it is drawn.
 //
 // The old Basic tab had a dropdown of five names the firmware understood. A
 // name is not a decision anyone can make: "tarot" tells you nothing about
@@ -8,11 +10,13 @@
 // printed: five lines of "cannot" is a page that argues against itself, and
 // the badges above already say what it does.
 import { useEffect, useState } from 'react';
-import { TEMPLATES, bodyById, bodyProblem, labelOf, resolveBody } from '../../core/bodies.js';
+import { TEMPLATES, bodyById, bodyProblem, labelOf, registerPlugins, resolveBody } from '../../core/bodies.js';
 import { ActionsEditor } from './ActionsEditor';
 import { BodyDiagram } from './BodyDiagram';
 import { lang, t, type Key } from './i18n';
-import type { Detail, Motion, Patch } from './types';
+import type { Detail, Patch } from './types';
+
+type Body = import('../../core/bodies.js').Body;
 
 const CAP: Record<string, Key> = {
   hear: 'capHear', speak: 'capSpeak', show: 'capShow', move: 'capMove',
@@ -29,13 +33,68 @@ const NEED: Record<string, Key> = {
   screen: 'needScreen', wand: 'needWand', phone: 'needPhone',
 };
 
+/** One plugin body as the brain lists it: enough to build the same body here,
+ * so `resolveBody` and `bodyById` agree with the brain about a plugin id. The
+ * card has no ways or artwork of its own: a plugin hears and speaks like a
+ * bare board, and adds commands. */
+interface PluginBody {
+  id: string;
+  label: { en: string; zh: string };
+  commands: NonNullable<Body['commands']>;
+  resources: NonNullable<Body['resources']>;
+}
+
+/**
+ * One entry, if it has what a body and a card need. The brain validates every
+ * plugin at load, so this is only the page refusing to crash on a shape from an
+ * older or newer brain — a refused entry is skipped, like a failed fetch.
+ * @returns {PluginBody | null}
+ */
+function asPlugin(value: unknown): PluginBody | null {
+  if (!value || typeof value !== 'object') return null;
+  const row = value as Record<string, unknown>;
+  if (typeof row.id !== 'string' || row.id === '') return null;
+  const label = row.label as { en?: unknown; zh?: unknown } | undefined;
+  if (!label || typeof label.en !== 'string' || typeof label.zh !== 'string') return null;
+  /** @param {unknown} entry */
+  const named = (entry: unknown) => Boolean(entry)
+    && typeof entry === 'object'
+    && typeof (entry as { name?: unknown }).name === 'string';
+  const { commands, resources } = row;
+  if (!Array.isArray(commands) || !commands.every(named)) return null;
+  if (!Array.isArray(resources) || !resources.every(named)) return null;
+  return {
+    id: row.id,
+    label: { en: label.en, zh: label.zh },
+    commands: commands as PluginBody['commands'],
+    resources: resources as PluginBody['resources'],
+  };
+}
+
+/**
+ * The body the brain built from the manifest: voice-only plus the plugin's own
+ * id, label, commands and pins. `template` names the plugin itself, so
+ * `resolveBody` lands on this row rather than on a template's.
+ * @param {PluginBody} p @returns {Body}
+ */
+function pluginBody(p: PluginBody): Body {
+  return {
+    ...TEMPLATES.none,
+    id: p.id,
+    template: p.id,
+    label: { ...p.label },
+    commands: p.commands,
+    resources: p.resources,
+  };
+}
+
 export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): void }) {
   const patch = detail.config.body;
   // A body of one's own keeps its own id (`my-dog`) and names the template it
   // copied; the cards are the templates, so the template is what is chosen.
   // The brain resolves `template ?? id` too, so an old config with no template
   // must land on the same card as the solver does — not on a missing id.
-  const chosen = /** @type {Motion} */ ((resolveBody(patch.id ?? 'toy', patch).template) ?? 'toy');
+  const chosen = resolveBody(patch.id ?? 'toy', patch).template ?? 'toy';
   /** The sentence `bodyProblem` wrote when a switch was refused, and whether
    * the switch then dropped the user's edits or wrote nothing at all. */
   const [notice, setNotice] = useState<{ text: string; cleared: boolean } | null>(null);
@@ -51,6 +110,29 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
   // Frame paths come from the brain: the admin bundle has no idea what the
   // render tools left on disk, and a guessed path is a broken picture.
   const [art, setArt] = useState<Record<string, string[]>>({});
+  // A plugin is installed on the brain, not in this bundle: the page asks for
+  // the bodies, registers them so `resolveBody`/`bodyById` can find a plugin id,
+  // and draws a card each. A brain without the endpoint (or a page opened while
+  // it was down) simply shows the templates it already has.
+  const [plugins, setPlugins] = useState<PluginBody[]>([]);
+  useEffect(() => {
+    let live = true;
+    fetch('/api/bodies')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: unknown) => {
+        if (!live || !Array.isArray(j)) return;
+        const entries = j.map(asPlugin).filter((p): p is PluginBody => p !== null);
+        // Replacement, not a merge: an empty list must clear what a previous
+        // fetch (or a test) registered, and the cards below read the same list.
+        /** @type {Record<string, Body>} */
+        const registry: Record<string, Body> = {};
+        for (const p of entries) registry[p.id] = pluginBody(p);
+        registerPlugins(registry);
+        setPlugins(entries);
+      })
+      .catch(() => {});
+    return () => { live = false; };
+  }, []);
   useEffect(() => {
     let live = true;
     fetch('/preview/list.json')
@@ -65,8 +147,7 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
   // pet cannot run on a voice-only body, and the editor would otherwise save a
   // body `bodyProblem` refuses. What still fits is kept; what does not is
   // cleared back to inherited, and the sentence says which.
-  const pick = (id: string) => {
-    const next = id as Motion;
+  const pick = (next: string) => {
     // A body of one's own keeps its name. Only an id that is itself a template
     // is rewritten: `my-dog` stays `my-dog`, and `template` says what it
     // follows. The chosen template is still written beside a template id.
@@ -76,11 +157,11 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
     // function, so a body named `constructor` would lose its name.
     const named = Object.hasOwn(TEMPLATES, patch.id ?? '');
     /** The body keys this switch writes: a template id, or the template alone. */
-    const follow = (value: Motion) => (named ? { id: value, template: value } : { template: value });
+    const follow = (value: string) => (named ? { id: value, template: value } : { template: value });
     /** The body as the brain will read it after a PATCH carrying this patch. */
     const read = (p: typeof patch) => {
       const candidate = resolveBody(next, { ...p, template: next });
-      const base = TEMPLATES[(candidate.template ?? next) as Motion] ?? TEMPLATES.none;
+      const base = bodyById(candidate.template ?? next) ?? TEMPLATES.none;
       const rawTriggers = /** @type {any} */ (p.triggers ?? base.triggers ?? []);
       return { ...candidate, triggers: Array.isArray(rawTriggers) ? rawTriggers : [] };
     };
@@ -136,6 +217,26 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
             </label>
           );
         })}
+        {plugins.map((p) => (
+          <label key={p.id} className="body-card" data-selected={p.id === chosen}>
+            <input
+              type="radio" name="body" value={p.id}
+              checked={p.id === chosen} onChange={() => pick(p.id)}
+            />
+            <strong>{lang === 'zh' ? p.label.zh : p.label.en}</strong>
+            {/* A plugin is the bare board plus the commands its author wrote:
+                there is no art to draw and no other way to reach it, so the
+                card says it is simulator-only and what it can be asked for. */}
+            <span className="way">
+              <span className="badge">{t('sourcePlugin')}</span>
+              <span>{t('pluginOnBoard')}</span>
+            </span>
+            <span className="caps">
+              {t('capVoiceOnly')}
+              {p.commands.length > 0 && <> · {t('pluginCommands')}: {p.commands.map((c) => c.name).join(' · ')}</>}
+            </span>
+          </label>
+        ))}
         {/* Under the cards: the actions are this body's, and a body of one's
             own is told apart by carrying them. Remounted on a switch, so the
             box starts from the newly chosen body. */}
@@ -147,13 +248,19 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
           </p>
         )}
       </div>
-      <div className="body-side">
-        <div className="body-preview" data-testid="body-preview">
-          <BodyDiagram key={body.id} kind={body.preview} frames={frames} label={name} />
+        <div className="body-side">
+          <div className="body-preview" data-testid="body-preview">
+            <BodyDiagram key={body.id} kind={body.preview} frames={frames} label={name} />
+          </div>
+          <small>{t('previewNote')}</small>
+          {/* A plugin body is reached through the bench, not through the body
+              firmware: its ways come from the template it was built on, and
+              repeating that template's "flash it" line would promise a board
+              that cannot answer a command yet. */}
+          {plugins.some((p) => p.id === body.id)
+            ? <p>{t('pluginNext')}</p>
+            : body.ways.map((w) => <p key={w.source}>{t(NEXT[w.source])}</p>)}
         </div>
-        <small>{t('previewNote')}</small>
-        {body.ways.map((w) => <p key={w.source}>{t(NEXT[w.source])}</p>)}
-      </div>
     </div>
   );
 }

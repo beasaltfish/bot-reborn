@@ -34,6 +34,7 @@ const RETRY_MS = [500, 1000, 2000, 5000];
  *   onReject: (reason: string) => void,
  *   retryOnReject?: (reason: string) => boolean,
  *   watchdogMs?: number, heartbeatMs?: number, retryMs?: number[],
+ *   protocol?: number,
  * }} opts
  */
 export function connectBody(opts) {
@@ -41,6 +42,10 @@ export function connectBody(opts) {
   const watchdogMs = opts.watchdogMs ?? WATCHDOG_MS;
   const heartbeatMs = opts.heartbeatMs ?? HEARTBEAT_MS;
   const retryMs = opts.retryMs ?? RETRY_MS;
+  // What this client can do. The phone speaks 2: it carries sound and motion,
+  // never `cmd`/`result`, so a plugin body it cannot be. The simulator passes
+  // the current version because it answers IO.
+  const protocol = opts.protocol ?? PROTOCOL;
 
   /** @type {WebSocketLike | null} */ let ws = null;
   let welcomed = false;
@@ -65,7 +70,7 @@ export function connectBody(opts) {
       // `body` is an optional marker for a brain that cares: this socket is a
       // phone beside an FT232H, not a board with firmware to flash. A brain
       // that does not know the field ignores it; the token still admits us.
-      socket.send(encode({ type: 'hello', protocol: PROTOCOL, token: opts.token, body: 'phone' }));
+      socket.send(encode({ type: 'hello', protocol, token: opts.token, body: 'phone' }));
     };
     socket.onmessage = (ev) => {
       lastHeard = Date.now();

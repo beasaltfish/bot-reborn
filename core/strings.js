@@ -96,6 +96,7 @@ export const STRINGS = {
     rejectToken: 'Its brain does not know this phone any more. Scan the code again.',
     rejectBusy: 'Another body is using this brain right now.',
     rejectUnconfigured: 'Its brain is not set up yet. Fill in its keys on the admin page.',
+    rejectBridge: 'This character needs a body that answers plugin commands (protocol 3); this body speaks protocol 2.',
     rejectProtocol: 'This page and its brain are different versions. Reload the page.',
     rejectOrigin: 'Its brain refused this page.',
     // Plain http without the Chrome flag: the browser hides the car and the
@@ -160,6 +161,7 @@ export const STRINGS = {
     rejectToken: '大脑不认识这台手机了，请重新扫码。',
     rejectBusy: '已经有别的身体在用这个大脑。',
     rejectUnconfigured: '大脑还没设置好，先在管理页面把 key 填上。',
+    rejectBridge: '这个角色需要能应答插件命令（协议 3）的身体；这块身体说的是协议 2。',
     rejectProtocol: '这个页面和大脑版本不一致，请刷新页面。',
     rejectOrigin: '大脑拒绝了这个页面。',
     insecure: 'Chrome 没把这个页面当成安全页面，所以碰不到小车和麦克风。管理页面上有设置方法。',

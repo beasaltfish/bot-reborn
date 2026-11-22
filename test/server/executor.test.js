@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { RemoteExecutor } from '../../server/body/executor.js';
+import { IoExecutor, RemoteExecutor } from '../../server/body/executor.js';
 import { FakeClock } from './fake-clock.js';
 
 function rig(connected = true) {
@@ -74,3 +74,139 @@ test('nothing is sent while the motors are disconnected', async () => {
   assert.deepEqual(sent, []);
   assert.equal(ex.connected, false);
 });
+
+// --- IO ops ----------------------------------------------------------------
+//
+// One `cmd` out, one `result` back. The id is what pairs them; the motion
+// generation is not (it moves on every order) and the answer may be late.
+
+/**
+ * The IO carrier on its own. `IoExecutor` is what the robot's composite builds
+ * for a body with commands; `RemoteExecutor` carries motion only, so there is
+ * one implementation of an op and one place a `result` is matched.
+ */
+function ioRig() {
+  /** @type {any[]} */ const sent = [];
+  const ex = new IoExecutor({ send: (m) => sent.push(m) });
+  return { sent, ex };
+}
+
+test('io sends one cmd and resolves with the body result', async () => {
+  const { sent, ex } = ioRig();
+  const p = ex.io({ op: 'pin.write', args: { pin: 5, level: 1 }, safe: 0, timeoutMs: 200 });
+  assert.deepEqual(sent, [{
+    type: 'cmd', id: 1, op: 'pin.write', args: { pin: 5, level: 1 }, safe: 0, timeoutMs: 200,
+  }]);
+  ex.onResult({ id: 1, ok: true, value: null });
+  assert.equal(await p, null);
+});
+
+test('io rejects when the body says no', async () => {
+  const { ex } = ioRig();
+  const p = ex.io({ op: 'i2c.read', args: {}, timeoutMs: 50 });
+  ex.onResult({ id: 1, ok: false, error: 'unavailable' });
+  await assert.rejects(p, /unavailable/);
+});
+
+test('io gives up after the op’s own timeout plus slack, and a late answer is ignored', async () => {
+  const { sent, ex } = ioRig();
+  const p = ex.io({ op: 'pin.read', args: { pin: 5 }, timeoutMs: 10 });
+  await assert.rejects(p, /timeout/);
+  assert.equal(sent[0].id, 1);
+  // The answer arrives after the wait was given up on: normal, not a fault.
+  assert.doesNotThrow(() => ex.onResult({ id: 1, ok: true, value: 1 }));
+  // And the id is not reused, so the next op cannot be settled by it either.
+  const next = ex.io({ op: 'pin.read', args: { pin: 5 }, timeoutMs: 50 });
+  ex.onResult({ id: sent[1].id, ok: true, value: 0 });
+  assert.equal(await next, 0);
+});
+
+test('a read nobody answers rejects at its own timeout, not at the fallback', async () => {
+  // The command that asked for the read owns its bound: a `timeoutMs: 50` read
+  // must not hold a turn for the carrier's 5 s fallback.
+  const { ex } = ioRig();
+  const start = Date.now();
+  await assert.rejects(ex.io({ op: 'pin.read', args: { pin: 5 }, timeoutMs: 50 }), /timeout/);
+  const took = Date.now() - start;
+  assert.ok(took >= 40, `gave up before the op's own timeout: ${took} ms`);
+  assert.ok(took < 1000, `waited past the op's own timeout: ${took} ms`);
+});
+
+test('an id nobody is waiting for settles nothing', async () => {
+  const { ex } = ioRig();
+  assert.doesNotThrow(() => ex.onResult({ id: 99, ok: true, value: 1 }));
+  assert.doesNotThrow(() => ex.onResult({ ok: true }));
+});
+
+test('cmd ids wrap at 255, skipping one still in flight, so a late answer cannot land on the wrong call', async () => {
+  const { sent, ex } = ioRig();
+  /** @param {number} pin */
+  const op = (pin) => ({ op: 'pin.read', args: { pin } });
+
+  // id 1 is left waiting; every id up to 254 is answered at once.
+  const first = ex.io(op(0));
+  assert.equal(sent.at(-1).id, 1);
+  for (let id = 2; id <= 254; id++) {
+    const p = ex.io(op(id));
+    assert.equal(sent.at(-1).id, id);
+    ex.onResult({ id, ok: true, value: id });
+    assert.equal(await p, id);
+  }
+  // id 255 is left waiting too, so the wrap must skip id 1 and take 2.
+  const last = ex.io(op(255));
+  assert.equal(sent.at(-1).id, 255);
+  const wrapped = ex.io(op(256));
+  assert.equal(sent.at(-1).id, 2, 'the allocator must wrap, not keep growing');
+
+  // The answer to the FIRST call may only settle the first call.
+  let wrappedSettled = false;
+  void wrapped.then(() => { wrappedSettled = true; });
+  ex.onResult({ id: 1, ok: true, value: 'first' });
+  assert.equal(await first, 'first');
+  await Promise.resolve();
+  assert.equal(wrappedSettled, false, 'a late id-1 result settled the wrapped op');
+
+  ex.onResult({ id: 2, ok: true, value: 'wrapped' });
+  assert.equal(await wrapped, 'wrapped');
+  ex.onResult({ id: 255, ok: true, value: 'last' });
+  assert.equal(await last, 'last');
+});
+
+test('with every one of the 255 ids in flight, the next op is refused rather than sharing an id', async () => {
+  const { ex } = ioRig();
+  /** @type {Promise<unknown>[]} */
+  const pending = [];
+  for (let i = 0; i < 255; i++) {
+    const p = ex.io({ op: 'pin.read', args: { pin: 5 } });
+    p.catch(() => {});
+    pending.push(p);
+  }
+  await assert.rejects(ex.io({ op: 'pin.read', args: { pin: 5 } }), /busy/);
+  ex.connected = false;
+  await Promise.allSettled(pending);
+});
+
+test('losing the link rejects every pending io at once, not at its timeout', async () => {
+  const { ex } = ioRig();
+  const first = assert.rejects(ex.io({ op: 'pin.write', args: { pin: 5, level: 1 }, safe: 0, timeoutMs: 5000 }),
+    /disconnected/);
+  const second = assert.rejects(ex.io({ op: 'pin.read', args: { pin: 5 } }), /disconnected/);
+  ex.connected = false;
+  await Promise.all([first, second]);
+  // And a disconnected carrier refuses new ops without touching the wire.
+  await assert.rejects(ex.io({ op: 'pin.read', args: { pin: 5 } }), /disconnected/);
+});
+
+test('a halt abandons pending io, and the next op still works', async () => {
+  // `CompositeExecutor.stop()` calls this before it stops the motors: a halt
+  // must not leave a turn waiting on an answer the body will never send.
+  const { ex } = ioRig();
+  const pending = assert.rejects(ex.io({ op: 'pin.read', args: { pin: 5 }, timeoutMs: 5000 }), /disconnected/);
+  ex.abort();
+  await pending;
+  // A halt is not a disconnect: the body is still there for the next command.
+  const next = ex.io({ op: 'pin.read', args: { pin: 5 }, timeoutMs: 5000 });
+  ex.onResult({ id: 2, ok: true, value: 1 });
+  assert.equal(await next, 1);
+});
+

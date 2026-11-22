@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { TEMPLATES } from '../../core/bodies.js';
+import { TEMPLATES, pluginBodies, registerPlugins } from '../../core/bodies.js';
 import { BodyTab } from './BodyTab';
 import { installFakeApi } from './test/fakeApi';
-import type { BodyAction, Detail, Motion } from './types';
+import type { BodyAction, Detail } from './types';
 
 const detail = (id: 'toy' | 'pet' | 'tarot' | 'dry-run' | 'none' = 'pet'): Detail => ({
   id: 'A', name: 'A', token: 'ab'.repeat(16), config: {
@@ -19,7 +19,36 @@ const detail = (id: 'toy' | 'pet' | 'tarot' | 'dry-run' | 'none' = 'pet'): Detai
 
 const renderTab = (d = detail(), update = vi.fn()) => render(<BodyTab detail={d} update={update} />);
 
-afterEach(() => { vi.unstubAllGlobals(); });
+/** The brain's answers, by path; anything unlisted is a miss, as on a brain
+ * that predates the endpoint. */
+const fetchMock = (routes: Record<string, unknown>) => vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+  const path = String(input);
+  if (!(path in routes)) return { ok: false, json: async () => ({}) };
+  return { ok: true, json: async () => routes[path] };
+}));
+
+/** One plugin as `/api/bodies` sends it: enough to build the body again. */
+const SERVO = {
+  id: 'my-servo',
+  label: { en: 'Servo', zh: '舵机' },
+  commands: [{ name: 'point', run: [{ op: 'pin.write', args: { pin: 'sig', level: 1 } }], timeoutMs: 100 }],
+  resources: [{ kind: 'gpio', name: 'sig', gpio: 5, direction: 'output', safe: 0 }],
+};
+
+/** A character that already follows the plugin: the card must come up checked.
+ * `template` holds a plugin id there, exactly as the page writes it. */
+const servoDetail = (): Detail => {
+  const d = detail();
+  d.config.body = { id: 'my-servo', template: 'my-servo' };
+  return d;
+};
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  // The registry is process-wide and BodyTab fills it from the brain: the next
+  // test starts from an empty one, as a page with no plugins would.
+  registerPlugins({});
+});
 
 describe('BodyTab', () => {
   it('shows a card per body with what it needs and what it does', () => {
@@ -93,7 +122,7 @@ describe('BodyTab', () => {
   it('keeps a body of one’s own when switching template', async () => {
     const update = vi.fn();
     const d = detail();
-    d.config.body = { id: 'my-dog' as Motion, template: 'pet' };
+    d.config.body = { id: 'my-dog', template: 'pet' };
     render(<BodyTab detail={d} update={update} />);
     await userEvent.click(screen.getByRole('radio', { name: /^voice only/i }));
     expect(update).toHaveBeenCalledWith({ config: { body: { template: 'none' } } });
@@ -104,7 +133,7 @@ describe('BodyTab', () => {
     const d = detail();
     // `TEMPLATES.constructor` is a function: a property read would call this a
     // template id and overwrite it.
-    d.config.body = { id: 'constructor' as Motion, template: 'pet' };
+    d.config.body = { id: 'constructor', template: 'pet' };
     render(<BodyTab detail={d} update={update} />);
     await userEvent.click(screen.getByRole('radio', { name: /^voice only/i }));
     expect(update).toHaveBeenCalledWith({ config: { body: { template: 'none' } } });
@@ -112,14 +141,14 @@ describe('BodyTab', () => {
 
   it('a config with no template resolves like the brain: voice only, not a missing body', () => {
     const d = detail();
-    d.config.body = { id: 'my-bot' as Motion };
+    d.config.body = { id: 'my-bot' };
     renderTab(d);
     expect(screen.getByRole('radio', { name: /^voice only/i })).toBeChecked();
   });
 
   it('draws the fallback rather than an Object property for a body named after one', () => {
     const d = detail();
-    d.config.body = { id: 'constructor' as Motion };
+    d.config.body = { id: 'constructor' };
     render(<BodyTab detail={d} update={vi.fn()} />);
     expect(screen.getByRole('img', { name: 'Voice only' })).toBeInTheDocument();
   });
@@ -173,11 +202,87 @@ describe('BodyTab', () => {
     expect(screen.getByText(/not a simulation/i)).toBeInTheDocument();
   });
 
+  it('lists a plugin body from the brain beside the built-in cards', async () => {
+    fetchMock({ '/api/bodies': [SERVO] });
+    renderTab(detail());
+    expect(await screen.findByText('Servo')).toBeVisible();
+    expect(screen.getAllByRole('radio')).toHaveLength(5);
+    const radio = screen.getByRole('radio', { name: /servo/i });
+    const card = within(radio.closest('label') as HTMLElement);
+    expect(card.getByText(/voice only/i)).toBeVisible();
+    expect(card.getByText(/point/)).toBeVisible();
+  });
+
+  it('picking a plugin body writes its id and the template it follows', async () => {
+    fetchMock({ '/api/bodies': [SERVO] });
+    const update = vi.fn();
+    renderTab(detail('none'), update);
+    await userEvent.click(await screen.findByRole('radio', { name: /servo/i }));
+    expect(update).toHaveBeenCalledWith({ config: { body: { id: 'my-servo', template: 'my-servo' } } });
+  });
+
+  it('marks the plugin body checked when the config already follows it', async () => {
+    fetchMock({ '/api/bodies': [SERVO] });
+    renderTab(servoDetail());
+    // The page must register the plugin before resolving: an empty registry
+    // sends `my-servo` back to `none`, and the wrong radio wins.
+    expect(await screen.findByRole('radio', { name: /servo/i })).toBeChecked();
+    expect(screen.getByRole('radio', { name: /^voice only/i })).not.toBeChecked();
+  });
+
+  it('accepts an action that calls a plugin command, and refuses one that does not', async () => {
+    fetchMock({ '/api/bodies': [SERVO] });
+    const update = vi.fn();
+    renderTab(servoDetail(), update);
+    await screen.findByRole('radio', { name: /servo/i });
+    const action = (command: string) => [{
+      name: 'point_at', label: { en: 'Point', zh: '指' }, say: 'Point at something.', run: [{ command }],
+    }];
+    const box = screen.getByLabelText('Actions') as HTMLTextAreaElement;
+
+    fireEvent.change(box, { target: { value: JSON.stringify(action('point'), null, 2) } });
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(update).toHaveBeenCalledWith({ config: { body: { actions: action('point') } } });
+
+    fireEvent.change(box, { target: { value: JSON.stringify(action('nope'), null, 2) } });
+    expect(screen.getByRole('alert')).toHaveTextContent(/unknown command "nope"/);
+  });
+
+  it('leaves the built-in cards exactly as they are when the plugin list fails', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
+    renderTab(detail());
+    expect(screen.getAllByRole('radio')).toHaveLength(4);
+    expect(screen.queryByText('Servo')).toBeNull();
+  });
+
+  it('clears the browser plugin registry when the brain lists none', async () => {
+    // The registry is process-wide: a page that already found a plugin (or a
+    // previous test) holds one body, and an empty answer must replace it rather
+    // than merge into it. Without this the `my-servo` card outlives the plugin.
+    registerPlugins({ 'my-servo': { ...structuredClone(TEMPLATES.none), id: 'my-servo', label: { en: 'Servo', zh: '舵机' } } });
+    fetchMock({ '/api/bodies': [] });
+    renderTab(detail());
+    await vi.waitFor(() => expect(pluginBodies()).toEqual({}));
+    expect(screen.getAllByRole('radio')).toHaveLength(4);
+  });
+
   it('offers the chosen body\'s actions under the cards, as the template has them', () => {
     renderTab(detail('tarot'));
     const box = screen.getByLabelText('Actions') as HTMLTextAreaElement;
     expect(JSON.parse(box.value)).toEqual(TEMPLATES.tarot.actions);
     expect(screen.getByText(/these are the template/i)).toBeInTheDocument();
+  });
+
+  it('tells a plugin body it is simulator-only, not that it can be flashed', async () => {
+    // The body firmware has no command channel: reusing the board line here
+    // promised a flash that would produce a body which cannot answer a `cmd`.
+    fetchMock({ '/api/bodies': [SERVO] });
+    renderTab(servoDetail());
+    await screen.findByRole('radio', { name: /servo/i });
+
+    expect(screen.getByText(/simulator only — no board firmware/i)).toBeInTheDocument();
+    expect(screen.getByText(/wiring the pins it names/i)).toBeInTheDocument();
+    expect(screen.queryByText(/flash it once from set up a board/i)).toBeNull();
   });
 
   it('a body with no art is still drawn, without a broken picture in it', async () => {

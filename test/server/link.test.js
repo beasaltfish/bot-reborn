@@ -64,6 +64,27 @@ test('a wrong protocol version is rejected with the reason', async () => {
   r.close();
 });
 
+test('a protocol 2 body is still welcomed, and the link records its version', async () => {
+  const r = await rig();
+  const { ws, msgs } = await hello(r.url, 2);
+  assert.deepEqual(msgs[0], { type: 'welcome', name: 'n-a' });
+  assert.equal(r.bodies[0].protocol, 2);
+  ws.close(); r.close();
+});
+
+test('a plugin body over protocol 2 is refused with bridge, not welcomed into silence', async () => {
+  /** @param {string} token */
+  const admit = (token) => (token === 'bad' ? 'token' : { id: token, name: `n-${token}`, plugin: true });
+  const r = await rig({ admit });
+  const old = await hello(r.url, 2);
+  assert.deepEqual(old.msgs[0], { type: 'reject', reason: 'bridge' });
+  assert.equal(r.bodies.length, 0);
+  const bridge = await hello(r.url, PROTOCOL);
+  assert.equal(bridge.msgs[0].type, 'welcome');
+  assert.equal(r.bodies[0].protocol, PROTOCOL);
+  old.ws.close(); bridge.ws.close(); r.close();
+});
+
 test('a second body for the same character is turned away and the first keeps working', async () => {
   const r = await rig({ heartbeatMs: 50 });
   const first = await hello(r.url);

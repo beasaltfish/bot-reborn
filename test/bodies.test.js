@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  TEMPLATES, TEMPLATE_IDS, bodyById, bodyProblem, labelOf, resolveBody,
+  TEMPLATES, TEMPLATE_IDS, bodyById, bodyProblem, labelOf, pluginBodies, registerPlugins, resolveBody,
 } from '../core/bodies.js';
+import { pluginBody, pointCommand, pointResources } from './fixtures/plugin.js';
 
 /** Every template, in the admin's order. The table is the only list. */
 const BODIES = Object.values(TEMPLATES);
@@ -71,7 +72,7 @@ test('a draw step needs returns: true, and a returning action is exactly one dra
     ...tarot,
     actions: [{ ...draw, run: [{ verb: 'draw' }, { verb: 'pose', args: { pose: 'sit' } }] }],
   };
-  assert.match(bodyProblem(busy) ?? '', /only a single draw/);
+  assert.match(bodyProblem(busy) ?? '', /only from a single draw or a single command that returns/);
 });
 
 test('a schema keyword with the wrong value shape is refused, not thrown at call time', () => {
@@ -374,3 +375,98 @@ test('a resolved body owns its actions: editing one does not edit the template',
   steps.maxItems = 1;
   assert.equal(/** @type {any} */ (TEMPLATES.toy.actions[0].args).properties.steps.maxItems, 5);
 });
+
+test('a registered plugin resolves like any other body', (t) => {
+  t.after(() => registerPlugins({}));
+  registerPlugins({ 'my-servo': pluginBody({ id: 'my-servo', commands: [pointCommand] }) });
+
+  assert.deepEqual(Object.keys(pluginBodies()), ['my-servo']);
+  assert.equal(bodyById('my-servo')?.id, 'my-servo');
+
+  const b = resolveBody('my-servo', { template: 'my-servo' });
+  assert.equal(b.template, 'my-servo');
+  assert.equal(b.commands?.[0].name, 'point');
+  assert.deepEqual(b.capabilities, ['hear', 'speak']);
+
+  // Registering replaces the whole set: a plugin removed from disk is gone.
+  registerPlugins({});
+  assert.deepEqual(pluginBodies(), {});
+  assert.equal(resolveBody('my-servo').template, 'none');
+});
+
+
+test('a plugin body validates an action that calls its own command', () => {
+  const point = {
+    name: 'point_at',
+    args: { type: 'object', properties: {} },
+    run: [{ command: 'point', args: { angle: 90 } }],
+  };
+  const own = pluginBody({ id: 'my-servo', commands: [pointCommand] });
+  /** @type {any} */ (own).actions = [point];
+  assert.equal(bodyProblem(own), null);
+
+  // The same action on a body that carries no such command is refused at load,
+  // where the author can read it — not at call time when the model asks.
+  const bare = pluginBody({ id: 'bare', commands: [] });
+  /** @type {any} */ (bare).actions = [point];
+  assert.match(bodyProblem(bare) ?? '', /unknown command "point"/);
+});
+
+test('registering a plugin under a template id changes nothing', () => {
+  // `bodyById` reads the registry before the templates, so a plugin called
+  // `pet` would redefine every character that follows `pet` — and the loader
+  // is not the only caller of `registerPlugins` (the admin page registers what
+  // the brain lists).
+  registerPlugins({ pet: pluginBody({ id: 'pet', commands: [pointCommand] }) });
+  assert.deepEqual(pluginBodies(), {});
+  assert.equal(bodyById('pet'), TEMPLATES.pet);
+  registerPlugins({});
+});
+
+test('a command that returns is a result only when the action says returns', () => {
+  /** @type {import('../core/io-program.js').Command} */
+  const isPressed = {
+    name: 'is_pressed',
+    timeoutMs: 50,
+    returns: true,
+    run: [{ op: 'pin.read', args: { pin: 'button' } }],
+  };
+  const resources = [
+    ...structuredClone(pointResources),
+    { kind: 'gpio', name: 'button', gpio: 4, direction: 'input' },
+  ];
+  const body = pluginBody({ id: 'reader', commands: [isPressed], resources });
+  const action = (extra = {}) => ({
+    name: 'pressed',
+    args: { type: 'object', properties: {} },
+    run: [{ command: 'is_pressed' }],
+    ...extra,
+  });
+
+  /** @type {any} */ (body).actions = [action({ returns: true })];
+  assert.equal(bodyProblem(body), null, 'the single returning command is the one legal shape');
+
+  // The value would be dropped on the floor: the dispatcher runs the op and
+  // nobody hands the answer to the model.
+  /** @type {any} */ (body).actions = [action()];
+  assert.match(bodyProblem(body) ?? '', /command that returns and does not return its result/);
+
+  // And `returns` is for one step: two of them have no single value.
+  /** @type {any} */ (body).actions = [action({
+    returns: true,
+    run: [{ command: 'is_pressed' }, { command: 'is_pressed' }],
+  })];
+  assert.match(bodyProblem(body) ?? '', /only from a single draw or a single command that returns/);
+});
+
+test('a step naming both a verb and a command is refused, not silently read as one', () => {
+  const h = { ...TEMPLATES.toy };
+  const mixed = {
+    ...structuredClone(h.actions[0]),
+    name: 'mixed',
+    run: [{ verb: 'halt', command: 'point' }],
+  };
+  const body = { ...structuredClone(h), actions: [/** @type {any} */ (mixed)] };
+  assert.match(bodyProblem(body) ?? '', /is both a verb and a command/);
+});
+

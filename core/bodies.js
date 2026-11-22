@@ -74,6 +74,9 @@ import { SOUNDS } from './audio/sfx.js';
  *   capabilities: Capability[],
  *   actions: Action[],
  *   fixedTools: string[],
+ *   commands?: import('./io-program.js').Command[],
+ *   resources?: import('./io-program.js').Resource[],
+ *   parts?: string[],
  *   triggers?: Trigger[],
  *   prompts: Prompts,
  *   firmware: string | null,
@@ -414,8 +417,60 @@ export const TEMPLATES = {
 /** In the admin's order. @type {BodyId[]} */
 export const TEMPLATE_IDS = /** @type {BodyId[]} */ (Object.keys(TEMPLATES));
 
-/** @param {string} id @returns {Body | undefined} */
+/**
+ * Plugin bodies, by id, as the server loaded them from disk. A module-level
+ * registry rather than an argument because three callers (the brain, the admin
+ * API and the simulator) resolve bodies by id from config, not from a list
+ * handed down at startup.
+ * @type {Record<string, Body>}
+ */
+let PLUGINS = {};
+
+/**
+ * Replace the whole plugin set. Replacement rather than a merge is the point:
+ * the caller has just read a directory, so whatever it found is the truth, and
+ * a plugin deleted from disk must not linger in the registry. A failed load
+ * therefore leaves the previous set untouched instead of a half-built mix.
+ *
+ * An id that is a template's is dropped here as well as by the loader: the
+ * registry is what `bodyById` reads, and a plugin under `pet` would change what
+ * every character that follows `pet` means. Refusing at the door is the only
+ * place that cannot be skipped by another caller.
+ * @param {Record<string, Body>} plugins
+ * @returns {void}
+ */
+export function registerPlugins(plugins) {
+  if (!plugins || typeof plugins !== 'object' || Array.isArray(plugins)) {
+    PLUGINS = {};
+    return;
+  }
+  const templates = /** @type {Record<string, Body>} */ (TEMPLATES);
+  // `Object.fromEntries`, not assignment: an id of `__proto__` from a file is
+  // an own property of the registry, not a change to its prototype.
+  PLUGINS = Object.fromEntries(
+    Object.entries(plugins).filter(([id]) => !Object.hasOwn(templates, id)),
+  );
+}
+
+
+/**
+ * The plugin bodies, by id. A copy, so a reader cannot edit the registry by
+ * accident; the bodies themselves are the loader's and are not shared with
+ * `resolveBody`, which clones what it hands out.
+ * @returns {Record<string, Body>}
+ */
+export function pluginBodies() {
+  return { ...PLUGINS };
+}
+
+/**
+ * One body, by id. Plugins win over templates: a plugin is installed locally
+ * on purpose, and the loader refuses to let one take a template's name, so
+ * there is never an honest collision here.
+ * @param {string} id @returns {Body | undefined}
+ */
 export function bodyById(id) {
+  if (Object.hasOwn(PLUGINS, id)) return PLUGINS[id];
   const table = /** @type {Record<string, Body>} */ (TEMPLATES);
   return Object.hasOwn(table, id) ? table[id] : undefined;
 }
@@ -433,9 +488,8 @@ export function bodyById(id) {
  * @returns {Body}
  */
 export function resolveBody(id, patch = {}) {
-  const table = /** @type {Record<string, Body>} */ (TEMPLATES);
   const wanted = patch.template ?? id;
-  const base = Object.hasOwn(table, wanted) ? table[wanted] : TEMPLATES.none;
+  const base = bodyById(wanted) ?? TEMPLATES.none;
 
   const actions = patch.actions ?? base.actions;
   const promptSource = patch.prompts ? { ...base.prompts, ...patch.prompts } : base.prompts;
@@ -528,26 +582,45 @@ export function bodyProblem(body) {
       poses: [...POSES],
       clips: [...SOUNDS],
       has: (verb) => verb in VERBS,
+      commands: row.commands,
+      resources: row.resources,
     });
     if (bad) return `${id}: ${bad}`;
 
     const steps = Array.isArray(action.run) ? action.run : [];
     for (const step of steps) {
+      // A command step runs ops, not a verb: `io-program.js` already judged it.
+      // A line carrying both is refused by `actionProblem`; it is a command
+      // here too, because that is how `expand` reads it.
+      if (typeof step?.command === 'string') continue;
+      if (typeof step?.verb !== 'string') continue;
       const verb = /** @type {Record<string, import('./verbs.js').Verb | undefined>} */ (VERBS)[step.verb];
       if (!verb) continue; // actionProblem has already said so
       verbs.add(step.verb);
       if (!row.capabilities.includes(verb.needs)) return `${id}: ${name} needs ${verb.needs}`;
     }
-    // Only `draw` returns a result the model is asked again with; a name of
-    // one's own has nothing behind it to hand a card back. And the reverse: a
-    // `draw` step in an action that does not say `returns` is resolved in the
-    // brain's `#run` and does nothing — a silent no-op the author never sees.
+    // A result comes from the hardware: a `draw` that resolves a card, or a
+    // command whose last op is a read. Everything else — two steps, a move, a
+    // command that returns nothing — has no value to hand back, and `returns`
+    // on it would promise the model something that never arrives. And the
+    // reverse: a `draw` or a returning command in an action that does not say
+    // `returns` is silently dropped, which the author never sees.
+    const commands = Array.isArray(row.commands) ? row.commands : [];
+    const only = steps.length === 1 ? steps[0] : null;
+    const returningCommand = typeof only?.command === 'string'
+      && commands.some((command) => Boolean(command)
+        && typeof command === 'object'
+        && command.name === only.command
+        && command.returns === true);
     const draws = steps.some((step) => step?.verb === 'draw');
     if (draws && !action.returns) {
       return `${id}: ${name} has a draw step but does not return a result`;
     }
-    if (action.returns && !(steps.length === 1 && steps[0].verb === 'draw')) {
-      return `${id}: only a single draw can return a result`;
+    if (returningCommand && !action.returns) {
+      return `${id}: ${name} calls a command that returns and does not return its result`;
+    }
+    if (action.returns && !(only?.verb === 'draw' || returningCommand)) {
+      return `${id}: ${name} can return a result only from a single draw or a single command that returns`;
     }
   }
 

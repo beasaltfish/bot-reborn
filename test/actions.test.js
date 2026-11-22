@@ -1,10 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { actionProblem, expand, expectationOf } from '../core/actions.js';
+import { actionProblem, expand, expectationOf, verbsOf } from '../core/actions.js';
 import { VERB_NAMES } from '../core/verbs.js';
+import { pointCommand, pointResources } from './fixtures/plugin.js';
 
 /** @type {{ poses: string[], clips: string[], has: (verb: string) => boolean }} */
 const OPTS = { poses: ['sit', 'shake', 'spin', 'stand', 'lie'], clips: ['hello', 'bye'], has: () => true };
+
+/** The same body, plus the one command and resource table a plugin brings. */
+const PLUGIN = { ...OPTS, commands: [pointCommand], resources: pointResources };
 
 /**
  * Identity with a type, so the literals below are checked as actions.
@@ -322,4 +326,71 @@ test('an action with nothing to run, or an each that is not an array, is refused
 
   const undeclared = action({ name: 'lost', args: { type: 'object', properties: {} }, run: [{ verb: 'pose', each: 'steps' }] });
   assert.match(actionProblem(undeclared, OPTS) ?? '', /steps/);
+});
+
+test('an action may call a plugin command, and it expands to an io step', () => {
+  const lightUp = action({
+    name: 'light_up',
+    args: { type: 'object', required: ['angle'], properties: { angle: { type: 'integer' } } },
+    run: [{ command: 'point', args: { angle: '$angle' } }],
+  });
+  assert.equal(actionProblem(lightUp, PLUGIN), null);
+  const { steps, dropped } = expand(lightUp, { angle: 90 }, { commands: [pointCommand], resources: pointResources });
+  assert.deepEqual(dropped, []);
+  assert.deepEqual(steps, [{ verb: 'io', args: { op: 'pwm', args: { pin: 5, us: 1450 }, safe: 0, timeoutMs: 500 } }]);
+});
+
+test('a command no body carries is refused by name', () => {
+  assert.match(
+    actionProblem(action({ name: 'x', run: [{ command: 'nope' }] }), PLUGIN) ?? '',
+    /unknown command "nope"/,
+  );
+});
+
+test('a command step adds no verb, and commands that are not a list are a refusal', () => {
+  // `verbsOf` is what the simulator asks ("can it pose?"): a command runs IO
+  // ops, not a verb, so the action contributes none — and a body that names a
+  // command it does not carry is caught by `bodyProblem`, not by a missing verb.
+  const light = action({ name: 'light', run: [{ command: 'point', args: { angle: 90 } }] });
+  assert.deepEqual(verbsOf([light]), []);
+
+  // A hand-edited `commands: "point"` is not a list; the lookup says so.
+  const bad = /** @type {any} */ ({ ...OPTS, commands: 'point' });
+  assert.match(actionProblem(light, bad) ?? '', /unknown command "point"/);
+  assert.match(expand(light, {}, bad).dropped[0]?.expect ?? '', /unknown command "point"/);
+});
+
+test('a command call is held to the command schema and the declared arguments', () => {
+  // No reference, so the call is the same on every run: judge it now.
+  const wide = action({ name: 'wide', run: [{ command: 'point', args: { angle: 999 } }] });
+  assert.match(actionProblem(wide, PLUGIN) ?? '', /angle must be an integer >= 0 <= 180/);
+
+  const missing = action({ name: 'blind', run: [{ command: 'point' }] });
+  assert.match(actionProblem(missing, PLUGIN) ?? '', /angle must be an integer/);
+
+  // A `$ref` must name an argument the action declares, as a verb step must.
+  const typo = action({
+    name: 'swing',
+    args: { type: 'object', properties: { angle: { type: 'integer' } } },
+    run: [{ command: 'point', args: { angle: '$degrees' } }],
+  });
+  assert.match(actionProblem(typo, PLUGIN) ?? '', /degrees/);
+});
+
+test('a command that refuses at call time is one drop with its own phrase', () => {
+  const lightUp = action({
+    name: 'light_up',
+    args: { type: 'object', properties: { angle: { type: 'integer' } } },
+    run: [{ command: 'point', args: { angle: '$angle' } }],
+  });
+  const r = expand(lightUp, { angle: 'sideways' }, { commands: [pointCommand], resources: pointResources });
+  assert.deepEqual(r.steps, []);
+  assert.deepEqual(r.dropped, [{
+    where: 'steps[0]',
+    value: { command: 'point', args: { angle: '$angle' } },
+    // The command's own schema knows `angle` is an integer: the substituted
+    // value is judged by it now, before any op is built.
+    expect: 'arguments {"angle":"sideways"} do not fit: angle must be an integer >= 0 <= 180',
+  }]);
+  assert.equal(r.hadDrive, false);
 });

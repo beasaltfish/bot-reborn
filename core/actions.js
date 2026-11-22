@@ -15,19 +15,35 @@
 // `pattern` would make an action that looks stricter than it is.
 
 import { VERBS, VERB_NAMES } from './verbs.js';
+import { commandProblem, expandCommand } from './io-program.js';
+import { fitsSchema, expectationOf } from './schema.js';
+
+// The fit checker and its phrase live in `core/schema.js` because
+// `io-program.js` needs them too; re-exported here so the brain keeps importing
+// the two helpers from the module that judges a call.
+export { fitsSchema, expectationOf } from './schema.js';
 
 /** @typedef {import('./verbs.js').JsonSchemaSubset} JsonSchemaSubset */
 /** @typedef {import('./verbs.js').Verb} Verb */
+/** @typedef {import('./io-program.js').Command} Command */
+/** @typedef {import('./io-program.js').Resource} Resource */
 
 /**
- * One line of an action's program: a verb, the arguments to give it, and — when
- * this step runs once per element of an array argument — the name of that
- * argument. Inside an `each` step an element's field is written `$each.field`;
- * there is no second variable.
+ * One line of an action's program. It is either a verb step — a verb, the
+ * arguments to give it, and, when this step runs once per element of an array
+ * argument, the name of that argument (`$each.field` is the element's field;
+ * there is no second variable) — or a command step, which names one of the
+ * body's commands and expands to the ops that command runs.
  * @typedef {{
  *   verb: string,
  *   args?: Record<string, unknown>,
  *   each?: string,
+ *   command?: undefined,
+ * } | {
+ *   command: string,
+ *   args?: Record<string, unknown>,
+ *   verb?: undefined,
+ *   each?: undefined,
  * }} RunStep
  */
 
@@ -68,6 +84,8 @@ import { VERBS, VERB_NAMES } from './verbs.js';
  *   poses: string[],
  *   clips: string[],
  *   has: (verb: string) => boolean,
+ *   commands?: Command[],
+ *   resources?: Resource[],
  * }} ProblemOpts
  */
 
@@ -116,10 +134,26 @@ export function actionProblem(action, opts) {
   for (const [i, step] of run.entries()) {
     // The JSON can be valid and still not be a step: `run: [null]` used to
     // throw out of the editor instead of returning the sentence a person reads.
-    if (!isRecord(step) || typeof step.verb !== 'string') {
+    if (!isRecord(step) || (typeof step.verb !== 'string' && typeof step.command !== 'string')) {
       return `run[${i}] of ${name} is not a step`;
     }
     const at = `step ${i + 1} of ${name}`;
+    // A line is one thing or the other. Both keys at once used to be read as a
+    // command and the `verb` silently ignored, so the author's word went
+    // nowhere — refuse it instead of picking one.
+    if (typeof step.verb === 'string' && typeof step.command === 'string') {
+      return `${at} is both a verb and a command`;
+    }
+
+    // The other kind of line: a call to a command the body carries. Its own
+    // program is checked by `io-program.js`, whose phrase says which pin or
+    // which op is wrong, so that phrase is passed through as it is.
+    if (typeof step.command === 'string') {
+      const bad = commandStepProblem(step, at, declared, opts);
+      if (bad) return bad;
+      continue;
+    }
+
     const verb = VERB_TABLE[step.verb];
     if (!verb) return `${at} uses unknown verb "${step.verb}"`;
     if (!opts.has(step.verb)) return `this body does not have the verb ${step.verb}, which ${at} needs`;
@@ -164,6 +198,43 @@ export function actionProblem(action, opts) {
 }
 
 /**
+ * One command line, checked against the commands the body carries. A command
+ * is looked up by name — a name no body supplies is refused here, not at call
+ * time — and its own program is checked once, so an action cannot promise a
+ * pin the command cannot reach. Arguments a step leaves as `$ref` are judged
+ * against the action's declared arguments; a line with no reference is the
+ * same call on every run, so the command's own schema judges it now.
+ * @param {RunStep & { command: string }} step
+ * @param {string} at
+ * @param {ReadonlySet<string>} declared
+ * @param {ProblemOpts} opts
+ * @returns {string | null}
+ */
+function commandStepProblem(step, at, declared, opts) {
+  if (step.each !== undefined) return `${at} calls a command and cannot walk ${step.each}`;
+
+  const command = commandList(opts.commands).find((candidate) => isRecord(candidate) && candidate.name === step.command);
+  if (!command) return `${at} uses unknown command "${step.command}"`;
+
+  const problem = commandProblem(command, opts.resources ?? []);
+  if (problem) return `${at} calls command "${step.command}", which cannot run: ${problem}`;
+
+  const used = refs(step.args);
+  for (const ref of used) {
+    if (ref.startsWith('$each.')) return `${at} uses ${ref} outside a step that walks an array`;
+    if (!declared.has(ref.slice(1))) {
+      return `${at} refers to ${ref}, but ${ref.slice(1)} is not one of its arguments`;
+    }
+  }
+
+  const literal = step.args ?? {};
+  if (used.length === 0 && !fitsSchema(literal, /** @type {any} */ (command.args))) {
+    return `${at} gives ${step.command} ${JSON.stringify(literal)}; ${expectationOf(command.args)}`;
+  }
+  return null;
+}
+
+/**
  * Fill `$name` from the call's arguments and `$each.field` from the current
  * element, then keep only the steps that fit their verb. Whole values only: a
  * string that starts with `$` is a reference, and nothing else about it is
@@ -172,15 +243,23 @@ export function actionProblem(action, opts) {
  * An element that does not fit is one `Drop` and the rest still run, which is
  * what `move.steps` does today. A program naming a verb that does not exist is
  * not partly runnable at all, so it expands to nothing.
+ *
+ * A command step expands through `expandCommand`, one `{ verb: 'io' }` step per
+ * op. A command the body does not carry, or one that refuses this call, is one
+ * `Drop` with the command's own phrase; the rest of the program still runs, so
+ * a command that cannot point does not silence the sound after it.
  * @param {Action} action
  * @param {Record<string, unknown>} args
+ * @param {{ commands?: Command[], resources?: Resource[] }} [opts]
  * @returns {{ steps: Step[], dropped: Drop[], hadDrive: boolean }}
  */
-export function expand(action, args) {
+export function expand(action, args, opts = {}) {
   const name = action.name || 'this action';
   const run = Array.isArray(action.run) ? action.run : [];
+  const commands = commandList(opts.commands);
+  const resources = opts.resources ?? [];
 
-  const badAt = run.findIndex((step) => !VERB_TABLE[step.verb]);
+  const badAt = run.findIndex((step) => !isCommandStep(step) && !VERB_TABLE[step.verb]);
   if (badAt >= 0) {
     const guilty = run[badAt];
     const unknown = `unknown verb "${guilty.verb}"; one of the verbs: ${VERB_NAMES.join(', ')}`;
@@ -203,6 +282,37 @@ export function expand(action, args) {
   const dropped = [];
 
   for (const [i, step] of run.entries()) {
+    if (isCommandStep(step)) {
+      const command = commands.find((candidate) => isRecord(candidate) && candidate.name === step.command);
+      if (!command) {
+        // `actionProblem` refuses this before a call; if it ever does not, the
+        // line still gets a reason rather than vanishing.
+        dropped.push({ where: at(i), value: step, expect: `unknown command "${step.command}"` });
+        continue;
+      }
+      const given = asRecord(fill(step.args ?? {}, args, null));
+      const { ops, drop } = expandCommand(command, given, resources);
+      if (drop) {
+        dropped.push({ where: at(i), value: step, expect: drop });
+        continue;
+      }
+      for (const op of ops) {
+        // A read carries no `safe`: there is nothing to restore, and an
+        // `undefined` key on the op would be one more field every reader has to
+        // know is meaningless.
+        steps.push({
+          verb: 'io',
+          args: {
+            op: op.op,
+            args: op.args,
+            ...(op.safe === undefined ? {} : { safe: op.safe }),
+            timeoutMs: op.timeoutMs,
+          },
+        });
+      }
+      continue;
+    }
+
     const verb = VERB_TABLE[step.verb];
     if (!verb) {
       // The scan above already answered this. If it ever stops, fail loudly: a
@@ -262,7 +372,14 @@ export function verbsOf(actions) {
   const verbs = new Set();
   for (const action of actions ?? []) {
     const run = Array.isArray(action?.run) ? action.run : [];
-    for (const step of run) if (typeof step?.verb === 'string') verbs.add(step.verb);
+    for (const step of run) {
+      // A command step runs IO ops, not a verb: it names no verb of its own.
+      // `expand` reads a line with both keys as a command, so a `verb` beside a
+      // `command` is not a verb this body has either.
+      if (isCommandStep(step)) continue;
+      if (typeof step?.verb !== 'string') continue;
+      verbs.add(step.verb);
+    }
   }
   return [...verbs];
 }
@@ -357,61 +474,11 @@ function itemFields(schema) {
 }
 
 /**
- * What a value would have to be to fit `schema`, in the words of the schema
- * itself: `drive must be one of forward/backward, steer one of left/right/
- * straight, duration_ms an integer >= 300`. An object is described field by
- * field, because that is what an author who got one field wrong needs to read;
- * anything else is one bare clause.
- * @param {unknown} schema
- * @returns {string}
- */
-export function expectationOf(schema) {
-  if (isRecord(schema) && schema.type === 'object' && isRecord(schema.properties)) {
-    const parts = Object.entries(schema.properties).map(([key, sub], i) => (
-      // "drive must be one of …, steer one of …": said once, then elided.
-      i === 0 ? `${key} must be ${clauseOf(sub)}` : `${key} ${clauseOf(sub)}`
-    ));
-    if (parts.length > 0) return parts.join(', ');
-  }
-  return `must be ${clauseOf(schema)}`;
-}
-
-/**
- * The predicate half of an expectation — what the value itself has to be.
- * @param {unknown} schema
- * @returns {string}
- */
-function clauseOf(schema) {
-  if (!isRecord(schema)) return 'a value this checker cannot describe';
-
-  if (Array.isArray(schema.enum)) return `one of ${schema.enum.map(shown).join('/')}`;
-  if (schema.const !== undefined) return `the word ${JSON.stringify(schema.const)}`;
-  if (Array.isArray(schema.anyOf)) {
-    const branches = schema.anyOf.map((branch) => clauseOf(branch));
-    return branches.length > 0 ? branches.join(' or ') : 'an allowed value';
-  }
-
-  switch (schema.type) {
-    case 'object': return 'an object';
-    case 'array': return 'an array';
-    case 'string': return 'a string';
-    case 'boolean': return 'a boolean';
-    case 'number': return 'a number';
-    case 'integer': {
-      const low = typeof schema.minimum === 'number' ? ` >= ${schema.minimum}` : '';
-      const high = typeof schema.maximum === 'number' ? ` <= ${schema.maximum}` : '';
-      return `an integer${low}${high}`;
-    }
-    default: return 'a value this checker cannot describe';
-  }
-}
-
-/**
  * @param {unknown} value
- * @returns {string}
+ * @returns {value is Record<string, any>}
  */
-function shown(value) {
-  return typeof value === 'string' ? value : JSON.stringify(value);
+function isRecord(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
 /**
@@ -424,95 +491,23 @@ function at(index) {
 }
 
 /**
- * @param {unknown} value
- * @returns {value is Record<string, unknown>}
+ * Whether a line is a call to a command rather than a verb step.
+ * @param {unknown} step
+ * @returns {step is { command: string, args?: Record<string, unknown> }}
  */
-function isRecord(value) {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+function isCommandStep(step) {
+  return isRecord(step) && typeof step.command === 'string';
 }
 
 /**
- * Whether a filled value fits a schema of the subset actions are written in.
- * This is the one checker both `actions.js` and the brain use: a second copy
- * drifted on an unknown `type` and on a top-level `anyOf`, and two answers to
- * the same question is how a value ends up accepted in one place and refused
- * in the other.
- *
- * A schema that says nothing (`undefined`, a non-object, or no `type` at all)
- * is "cannot tell", not "no": the caller still applies its verb. A type outside
- * the subset is refused — nothing is known to be allowed. `anyOf` tries each
- * branch, top-level included; `ms` is why (an integer from 1 up, or `hold`).
- * The branch is one constraint, not the whole schema: a root `required`
- * written beside the union still has to hold, as it did in the validator this
- * replaced.
- * @param {unknown} value
- * @param {JsonSchemaSubset | undefined} schema
- * @returns {boolean}
+ * The commands a caller handed in, as a list. A body read from disk may carry
+ * anything under `commands`; an array is the only shape the lookup can read,
+ * and a string would make `.find` throw where a person is editing JSON.
+ * @param {unknown} commands
+ * @returns {Command[]}
  */
-export function fitsSchema(value, schema) {
-  if (!schema || typeof schema !== 'object') return true;
-  if (Array.isArray(schema.anyOf) && !schema.anyOf.some((branch) => fitsSchema(value, branch))) {
-    return false;
-  }
-  if (schema.const !== undefined) return value === schema.const;
-  if (Array.isArray(schema.enum)) return schema.enum.includes(/** @type {string | number} */ (value));
-
-  switch (schema.type) {
-    case undefined:
-      // A schema that names fields is an object schema without the word — a
-      // root is often written that way — and its `required` must hold beside
-      // whichever branch the value chose. A schema with no constraints at all
-      // is still "cannot tell".
-      return schema.required === undefined && schema.properties === undefined
-        ? true
-        : fitsObject(value, schema);
-    case 'object':
-      return fitsObject(value, schema);
-    case 'array': {
-      if (!Array.isArray(value)) return false;
-      const items = schema.items;
-      return items ? value.every((item) => fitsSchema(item, items)) : true;
-    }
-    case 'integer': {
-      if (!Number.isInteger(value)) return false;
-      const n = /** @type {number} */ (value);
-      return (schema.minimum === undefined || n >= schema.minimum)
-        && (schema.maximum === undefined || n <= schema.maximum);
-    }
-    case 'number':
-      return typeof value === 'number' && Number.isFinite(value);
-    case 'string':
-      return typeof value === 'string';
-    case 'boolean':
-      return typeof value === 'boolean';
-    default:
-      return false;
-  }
-}
-
-/**
- * The object half of `fitsSchema`: a record, its `required` keys, and whatever
- * properties it carries. Shared by `type: 'object'` and by a schema that names
- * fields without naming its type.
- * @param {unknown} value
- * @param {JsonSchemaSubset} schema
- * @returns {boolean}
- */
-function fitsObject(value, schema) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  const obj = /** @type {Record<string, unknown>} */ (value);
-  // The shape is refused by `schemaProblem` when a person writes it, but this
-  // half must not throw on a file that skipped that check: `for…of true` was
-  // every turn failing with a TypeError instead of a refusal.
-  const required = Array.isArray(schema.required) ? schema.required : [];
-  for (const key of required) if (!(key in obj)) return false;
-  const properties = schema.properties && typeof schema.properties === 'object' && !Array.isArray(schema.properties)
-    ? schema.properties
-    : {};
-  for (const [key, sub] of Object.entries(properties)) {
-    if (key in obj && !fitsSchema(obj[key], sub)) return false;
-  }
-  return true;
+function commandList(commands) {
+  return Array.isArray(commands) ? commands : [];
 }
 
 /**

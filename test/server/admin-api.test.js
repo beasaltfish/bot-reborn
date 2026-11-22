@@ -11,6 +11,7 @@ import { createDistPages, FIXTURES_DIR } from '../../server/dist-pages.js';
 import { renderEarcons } from '../../server/audio/render.js';
 import { connectFakeBody } from '../../server/fake-body.js';
 import { PROTOCOL } from '../../core/protocol.js';
+import { TEMPLATES, registerPlugins } from '../../core/bodies.js';
 import { tempCharacters, fakeFetch, until } from './helpers.js';
 
 const W = { 'X-Bot-Reborn': '1', 'Content-Type': 'application/json' };
@@ -52,6 +53,38 @@ test('the list has names, readiness and presence — never keys or tokens', asyn
     motion: 'toy', verbs: ['drive', 'halt', 'voice'], setupId: setupIdFor(a.token),
   }]);
   await r.server.close();
+});
+
+test('the plugin bodies the server loaded are offered to the admin', async (t) => {
+  // The registry is process-wide and filled at startup; a test fills it the
+  // same way the loader would, then the API reads it.
+  registerPlugins({
+    'my-servo': {
+      ...structuredClone(TEMPLATES.none),
+      id: 'my-servo',
+      label: { en: 'Servo', zh: '舵机' },
+      commands: [{ name: 'point', run: [{ op: 'pin.write', args: { pin: 'sig', value: 1 } }], timeoutMs: 100 }],
+      resources: [{ kind: 'gpio', name: 'sig', gpio: 5, direction: 'output', safe: 0 }],
+    },
+  });
+  t.after(() => registerPlugins({}));
+  const r = await rig();
+  t.after(() => r.server.close());
+  const { status, body } = await r.call('/api/bodies');
+  assert.equal(status, 200);
+  assert.deepEqual(body, [{
+    id: 'my-servo',
+    label: { en: 'Servo', zh: '舵机' },
+    commands: [{ name: 'point', run: [{ op: 'pin.write', args: { pin: 'sig', value: 1 } }], timeoutMs: 100 }],
+    resources: [{ kind: 'gpio', name: 'sig', gpio: 5, direction: 'output', safe: 0 }],
+  }]);
+});
+
+test('with no plugin installed, the admin is offered none', async (t) => {
+  registerPlugins({});
+  const r = await rig();
+  t.after(() => r.server.close());
+  assert.deepEqual((await r.call('/api/bodies')).body, []);
 });
 
 test('the setup id is a stable, non-secret fingerprint; the list leaks no credentials', async () => {

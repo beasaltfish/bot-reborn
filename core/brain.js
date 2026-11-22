@@ -316,7 +316,7 @@ export function validate(toolCalls, body) {
       continue;
     }
 
-    const checked = checkCall(action, args);
+    const checked = checkCall(action, args, body);
     if (checked.rejected) { drop(checked.rejected); continue; }
     for (const why of checked.reasons) drop(why);
     // Rule 4: if every step died, dispatch nothing.
@@ -400,14 +400,21 @@ function walkNames(action) {
  * array whose every element `validate` had just dropped.
  * @param {import('./bodies.js').Action} action
  * @param {any} args
+ * @param {import('./bodies.js').Body} [body] the body whose commands and
+ *   resources a command step expands against. Without it a body action that
+ *   calls a command has nothing to run: the command is unknown, and its line
+ *   is one drop.
  * @returns {{ rejected: string | null, steps: ProgramStep[], args: any, reasons: string[] }}
  */
-function checkCall(action, args) {
+function checkCall(action, args, body) {
   const wrong = argsProblem(action, args);
   if (wrong) return { rejected: wrong, steps: [], args, reasons: [] };
 
   const usable = usableArgs(action, args);
-  const { steps, dropped } = expand(action, usable.args);
+  const { steps, dropped } = expand(action, usable.args, {
+    commands: body?.commands,
+    resources: body?.resources,
+  });
   /** @type {string[]} */
   const reasons = [...usable.reasons];
   for (const refused of dropped) reasons.push(refusalFor(action, refused));
@@ -495,7 +502,7 @@ function moves(steps) {
  * Whether these steps include a `drive`. `hadMoveIntent` means this, and only
  * this: a `halt` needs the `move` capability too, but a turn that only stops is
  * not a movement attempt that failed (design §4.3).
- * @param {Array<{ verb: string }>} steps
+ * @param {import('./actions.js').RunStep[]} steps
  * @returns {boolean}
  */
 function drives(steps) {
@@ -595,7 +602,7 @@ function referenceRefusal(action) {
 function haltsCall(call, body) {
   const action = body.actions.find((candidate) => candidate.name === call.name);
   if (!action || action.returns || call.args === null) return false;
-  const { rejected, steps } = checkCall(action, call.args);
+  const { rejected, steps } = checkCall(action, call.args, body);
   if (rejected) return false;
   return steps.some((step) => VERB_TABLE[step.verb]?.cancelsRest);
 }
@@ -635,6 +642,18 @@ function stepDetail(step) {
   }
 }
 
+/**
+ * A read's value as the tool-result text the model reads. JSON, not prose: a
+ * pin level is `0` or `1` and a sensor's raw word is whatever the body sent,
+ * and the model is the one that knows what to say about it. `undefined` is
+ * written as `null` because a missing key in the request is not a value.
+ * @param {unknown} value
+ * @returns {string}
+ */
+function formatIoValue(value) {
+  return value === undefined ? 'null' : JSON.stringify(value);
+}
+
 // --- One turn --------------------------------------------------------------
 
 export class Brain {
@@ -656,13 +675,13 @@ export class Brain {
   /** @type {AbortController | null} */
   #turn = null;
   /**
-   * The generation of the commands in flight. Every `#dispatch` that sends a
-   * command — `move`, `cruise`, `stop` — bumps it, and `cancel()` bumps it; a
-   * step awaited behind a move checks it after every await. It is not the
-   * turn: a speak-only turn disturbs nothing, and a new dispatch takes over
-   * only when it sends commands. A move that ends inside a LATER turn wakes the
-   * old loop with a live signal, and only this can tell it that the body has
-   * been taken.
+   * The generation of the commands in flight. Every dispatch that sends a
+   * command — a `drive`, a `cruise`, a `halt`, an IO op — bumps it, and
+   * `cancel()` bumps it; a step awaited behind one checks it after every await.
+   * It is not the turn: a speak-only turn disturbs nothing, and a new dispatch
+   * takes over only when it sends commands. A move that ends inside a LATER
+   * turn wakes the old loop with a live signal, and only this can tell it that
+   * the body has been taken.
    */
   #dispatchGen = 0;
   /** @type {object[]} */ #history = [];
@@ -672,6 +691,7 @@ export class Brain {
    *   llm: { chat(messages: object[], tools: object[], opts?: { signal?: AbortSignal }): Promise<{ text: string, toolCalls: any[], rawMessage: object }> },
    *   executor: { move(steps: MoveStep[]): Promise<void>, cruise(d: string, s: string): Promise<void>, stop(): Promise<void>,
    *               pose?(name: import('./poses.js').Pose): Promise<void>,
+   *               io?(op: import('./io-program.js').Op): Promise<unknown>,
    *               draw?(card: import('./tarot.js').Draw): Promise<void>,
    *               reveal?(): Promise<void> },
    *   tts: { speak(text: string, opts?: { signal?: AbortSignal, kind?: 'reply' | 'diagnostic' }): Promise<void> },
@@ -856,10 +876,11 @@ export class Brain {
 
   /**
    * How a call returns a result, if it does. A body action says `returns` and
-   * what it runs, so the handler is chosen by the expanded **verb** (`draw`),
-   * not by the action's name: a renamed `pick` that runs `draw` draws a card and
-   * gets its result, exactly as `draw_card` does. The action's arguments are
-   * judged before the handler runs, with the same check `validate` uses.
+   * what it runs, so the handler is chosen by the expanded **verb**: `draw`
+   * draws a card, and a program of `io` steps runs them in order and hands back
+   * the last op's value — a plugin reads a pin exactly the way a tarot body
+   * draws a card, and the model is asked again with it. The action's arguments
+   * are judged before the handler runs, with the same check `validate` uses.
    *
    * An injected `returningTools`/`returning` pair (the mechanism's own tests)
    * names tools that are not body actions; those still look up by name.
@@ -881,13 +902,33 @@ export class Brain {
     // run on arguments the validator would refuse to give a program: a renamed
     // draw whose `each` list is all bad would otherwise draw a card while
     // `validate` produced zero steps for it.
-    const checked = call.args === null ? null : checkCall(action, call.args);
+    const checked = call.args === null ? null : checkCall(action, call.args, body);
     if (!checked || checked.rejected || checked.steps.length === 0) {
       const refusal = checked?.rejected ? [checked.rejected] : checked?.reasons ?? [];
       return { handler: null, action, args: call.args, refusal };
     }
-    const verb = checked.steps[0].verb;
-    const handler = this.#returning[verb] ?? this.#returning[call.name];
+    const steps = checked.steps;
+    // A command's program is carried whole: a returning command is "write,
+    // then read" as often as a bare read, and the value is the last op's. Only
+    // the FIRST was sent before, so the model read `null` for a legal shape.
+    // A failed op throws; `#runReturning` turns that into the model's result —
+    // a read that could not happen is something the model may say, not a dead
+    // turn.
+    if (steps.every((step) => step.verb === 'io')) {
+      const ops = steps.map((step) => /** @type {import('./io-program.js').Op} */ (step.args));
+      return {
+        handler: async () => {
+          /** @type {unknown} */
+          let value;
+          for (const op of ops) value = await this.#write(op);
+          return formatIoValue(value);
+        },
+        action,
+        args: checked.args,
+        refusal: null,
+      };
+    }
+    const handler = this.#returning[steps[0].verb] ?? this.#returning[call.name];
     return handler ? { handler, action, args: checked.args, refusal: null } : null;
   }
 
@@ -912,7 +953,9 @@ export class Brain {
     try {
       return String(await plan.handler(plan.args, turn.signal));
     } catch (err) {
-      return `error: ${/** @type {Error} */ (err).message}`;
+      // A thrown string is still a result to the model: `err.message` alone
+      // made it read "error: undefined" and gave it nothing to say.
+      return `error: ${err instanceof Error ? err.message : String(err)}`;
     }
   }
 
@@ -986,7 +1029,7 @@ export class Brain {
     if (speak && reply.text) await this.#say(reply.text, turn);
   }
 
-  /** @returns {import('./config.js').Motion} */
+  /** @returns {string} a template id, or a plugin body's id */
   #bodyId() { return this.#config.body?.id ?? 'toy'; }
 
   /**
@@ -1308,7 +1351,17 @@ export class Brain {
           // the emergency stop exists to prevent.
           if (!live()) return;
         }
-        await this.#run(step, claim);
+        try {
+          await this.#run(step, claim);
+        } catch (err) {
+          // An IO step is awaited inside this loop (unlike a move, whose end is
+          // its own), so a command cannot half-run: the ops after a failed
+          // write are never sent, and the turn keeps its sentence. Only `io` is
+          // caught here — anything else is still the last-resort earcon below.
+          if (step.verb !== 'io') throw err;
+          this.#trace(`[turn] io failed — ${/** @type {Error} */ (err).message}`);
+          return;
+        }
       }
       await flush();
     })().catch(() => this.#earcon('error'));
@@ -1335,6 +1388,12 @@ export class Brain {
       case 'halt':
         claim();
         return this.#executor.stop();
+      case 'io':
+        // A command writes the body's own pins: it takes the body exactly as a
+        // move does, so a stop from a later turn voids what is still queued.
+        // The answer belongs to the returning path; dispatch only waits for it.
+        claim();
+        return this.#write(/** @type {import('./io-program.js').Op} */ (args)).then(() => {});
       case 'voice':
         return this.#sound(args.clip);
       case 'pose':
@@ -1344,6 +1403,20 @@ export class Brain {
       default:
         return Promise.resolve();
     }
+  }
+
+  /**
+   * One IO op, awaited by the dispatch loop. The body's answer is returned —
+   * a read has a value and the returning path needs it; a write's answer is
+   * ignored by the caller. A brain wired without a carrier refuses instead of
+   * pretending the write happened, so the turn's trace says why nothing
+   * reached the pins.
+   * @param {import('./io-program.js').Op} op
+   * @returns {Promise<unknown>}
+   */
+  async #write(op) {
+    if (!this.#executor.io) throw new Error('this executor has no IO');
+    return this.#executor.io(op);
   }
 
   /**

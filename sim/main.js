@@ -29,6 +29,7 @@ import { isViewPeekShortcut } from './view-shortcut.js';
 import { faultText, adminLink, keepsFault } from './body.js';
 import { createBoardRuntime, bootMode } from './firmware/runtime.js';
 import { createBodyAudio } from './body.js';
+import { createBenchIo } from './bench-io.js';
 import { createBodyAudioLink } from './firmware/audio-link.js';
 import { demoSkips, lookupCharacter } from './capabilities.js';
 import { isRemote, provisionSteps, screenMismatch, createProvisioning, tokenCandidates, paintManualPairing, bootManualPairing, showBootloader, offerTokenRepair } from './provision.js';
@@ -106,6 +107,8 @@ let environment = defaultStimuli();
 const runtime = { servo: {}, motor: {}, strip: {}, display: {}, buttons: {} };
 /** GPIO levels the running sketch asked for; part of the next evaluation. */
 /** @type {Record<string, 'high'|'low'|'high-z'>} */ let gpioOutputs = {};
+/** Pins a plugin command drives right now: their LEDs count without a firmware claim. */
+/** @type {Set<number>} */ const ioPins = new Set();
 /** Pins already warned about on this boot, so an undefined input says it once. @type {Set<number>} */
 let warnedGpioReads = new Set();
 /** A sonar measurement a sketch latched, until it turns it off or the board stops. */
@@ -113,6 +116,9 @@ let warnedGpioReads = new Set();
 /** The board runtime: boot events, the brain link and the screen feed. */
 /** @type {ReturnType<typeof createBoardRuntime> | null} */
 let boardRuntime = null;
+/** The bench's answer to `cmd` for the body on the link this boot. */
+/** @type {ReturnType<typeof createBenchIo> | null} */
+let benchIo = null;
 /** @type {import('./projects.js').Project | null} */
 /** @type {import('./plan.js').Plan|import('./projects.js').Project|null} */
 let activeProject = null;
@@ -242,9 +248,21 @@ function refreshDeviceVisuals() {
     ownership: ownershipOf(bench),
     deviceStates: boardRuntime?.deviceStates() ?? {},
     gpioOutputs,
+    ioPins,
     firmware: firmwareFor(bench.board),
   }).engineering;
   world.devices(engineering);
+}
+
+/** Restore every pin a plugin command drove, and stop admitting its LEDs. */
+function releaseBenchPins() {
+  // The pins are ours to drop either way: an adapter that is gone drove
+  // nothing, and a plugin's LEDs must not stay lit because its disconnect
+  // could not be called.
+  ioPins.clear();
+  if (!benchIo) return;
+  void benchIo.disconnect();
+  refreshDeviceVisuals();
 }
 
 /** @param {string} partId @param {string} instanceId @returns {import('./ui/device-runtime-panel.js').RuntimeTarget|null} */
@@ -282,7 +300,7 @@ function setBench(b) {
   if (openPart) {
     const selected = bench.placed.find(p => p.id === openPart);
     const sensor = selected?.part === 'bme280-i2c'
-      ? evaluateBench(bench, { stimuli: environment, firmware: firmwareFor(bench.board), ownership: ownershipOf(bench), deviceStates: boardRuntime?.deviceStates() ?? {} }).engineering.bme280[openPart]
+      ? evaluateBench(bench, { stimuli: environment, firmware: firmwareFor(bench.board), ownership: ownershipOf(bench), deviceStates: boardRuntime?.deviceStates() ?? {}, gpioOutputs, ioPins }).engineering.bme280[openPart]
       : undefined;
     panels.refreshPart(openPart, selected?.properties ?? null, sensor, environment);
   }
@@ -293,17 +311,7 @@ function setBench(b) {
   refreshDeviceVisuals();
   // The body normally uses a power-on snapshot; unsafe board power changes
   // instead stop the session and latch until USB is cycled.
-  if (bench.usb && powered) {
-    const evaluated = evaluateBench(bench, { firmware: firmwareFor(bench.board), ownership: ownershipOf(bench) });
-    const fault = powerInterlock.observe(bench, evaluated);
-    const hint = fault
-      ? diagnose(bench, { ...evaluated.legacy, faults: [fault], burns: evaluated.burns }, document.documentElement.lang).find(item => item.kind === 'fault') ?? null
-      : liveDiagnosis(bench, document.documentElement.lang, evaluated);
-    hands.highlightPoints(hint?.points ?? []);
-    const reconnect = powerInterlock.tripped() ? simText(document.documentElement.lang, 'power.reconnect') : '';
-    line.fault = [hint?.text, reconnect].filter(Boolean).join(' ') || null;
-    showLine();
-  }
+  refreshBenchDiagnosis();
   hands.refreshHighlights();
   panels.refreshProject();
   for (const id of result.burns) effects.smoke(id);
@@ -311,6 +319,25 @@ function setBench(b) {
   usb.refresh();
   effects.refresh();
   updateStudio();
+}
+
+/**
+ * The bench's fault/hint sentence, written from the live state. Called on every
+ * bench edit and after an IO write: a plugin can short a pin with a single
+ * `pin.write`, and waiting for the next edit to say so hides the one change the
+ * person just made.
+ */
+function refreshBenchDiagnosis() {
+  if (!(bench.usb && powered)) return;
+  const evaluated = evaluateBench(bench, { firmware: firmwareFor(bench.board), ownership: ownershipOf(bench), gpioOutputs, ioPins });
+  const fault = powerInterlock.observe(bench, evaluated);
+  const hint = fault
+    ? diagnose(bench, { ...evaluated.legacy, faults: [fault], burns: evaluated.burns }, document.documentElement.lang).find(item => item.kind === 'fault') ?? null
+    : liveDiagnosis(bench, document.documentElement.lang, evaluated);
+  hands.highlightPoints(hint?.points ?? []);
+  const reconnect = powerInterlock.tripped() ? simText(document.documentElement.lang, 'power.reconnect') : '';
+  line.fault = [hint?.text, reconnect].filter(Boolean).join(' ') || null;
+  showLine();
 }
 
 /**
@@ -354,6 +381,8 @@ const hands = attachInteraction(world, () => bench, setBench, {
         firmware: firmwareFor(bench.board),
         ownership: ownershipOf(bench),
         deviceStates: boardRuntime?.deviceStates() ?? {},
+        gpioOutputs,
+        ioPins,
       }).engineering.bme280[id], environment,
       change: (/** @type {string} */ key, /** @type {number} */ value) => {
         environment = setStimulus(environment, key, value);
@@ -363,6 +392,8 @@ const hands = attachInteraction(world, () => bench, setBench, {
           firmware: firmwareFor(bench.board),
           ownership: ownershipOf(bench),
           deviceStates: boardRuntime?.deviceStates() ?? {},
+          gpioOutputs,
+          ioPins,
         }).engineering.bme280[id];
         panels.refreshPart(id, current?.properties ?? null, state, environment);
         refreshDeviceVisuals();
@@ -776,6 +807,10 @@ function driveStop() {
  * writing into the new one.
  */
 function stopBoard() {
+  // Any pin the body drove goes back to its safe value before the runtime that
+  // knew about it is gone.
+  releaseBenchPins();
+  benchIo = null;
   boardRuntime?.stop();
   boardRuntime = null;
   studioRunError = null;
@@ -946,6 +981,26 @@ async function plugIn(meta = {}) {
       armSoundGesture();
     },
   }) : null;
+  benchIo = createBenchIo({
+    // The bench's levels are keyed by the ESP32's own pin names (`GPIO5`), the
+    // same shape a sketch writes and the LED/electrical models read.
+    writePin: (pin, level) => {
+      gpioOutputs[`GPIO${pin}`] = level ? 'high' : 'low';
+      ioPins.add(pin);
+      refreshDeviceVisuals();
+    },
+    readPin: (pin) => {
+      const evaluation = evaluateBench(bench, {
+        firmware: firmwareFor(bench.board),
+        ownership: ownershipOf(bench),
+        deviceStates: boardRuntime?.deviceStates() ?? {},
+        gpioOutputs,
+        ioPins,
+        stimuli: simulationStimuli(),
+      }).engineering;
+      return gpioInputLevel(evaluation, pin) ?? 'LOW';
+    },
+  });
   boardRuntime = createBoardRuntime({
     board: bench.board,
     bench,
@@ -964,6 +1019,8 @@ async function plugIn(meta = {}) {
     brainUrl: `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/body`,
     rejectText: (reason) => rejectCopy(reason, document.documentElement.lang === 'zh' ? 'zh' : 'en'),
     onReject: (reason) => {
+      // The brain said no for good: nothing will be asked of these pins again.
+      releaseBenchPins();
       // A rejection ends the provisioning wait whatever language it printed in.
       provisioning?.gaveUp();
       line.fault = rejectCopy(reason, document.documentElement.lang === 'zh' ? 'zh' : 'en');
@@ -980,11 +1037,22 @@ async function plugIn(meta = {}) {
           .catch(() => {});
       }
     },
+    onIo: (op) => {
+      if (!benchIo) return Promise.reject(new Error('unavailable: the bench is not booted'));
+      const answer = benchIo.run(op);
+      // A write is a bench change. Report it the way an edit is reported, so a
+      // plugin short shows up in the fault sentence at once instead of at the
+      // next time somebody touches the bench.
+      if (op?.op === 'pin.write') {
+        void answer.then(() => refreshBenchDiagnosis(), () => {});
+      }
+      return answer;
+    },
     audio: bodyAudioLink ?? undefined,
     sketch: {
       ctx: () => {
         const deviceStates = boardRuntime?.deviceStates() ?? {};
-        const evaluation = evaluateBench(bench, { firmware: firmwareFor(bench.board), ownership: ownershipOf(bench), deviceStates, gpioOutputs, stimuli: simulationStimuli() }).engineering;
+        const evaluation = evaluateBench(bench, { firmware: firmwareFor(bench.board), ownership: ownershipOf(bench), deviceStates, gpioOutputs, ioPins, stimuli: simulationStimuli() }).engineering;
         return createSketchContext({
           bench, evaluation, deviceStates, runtime,
           onPin: (pin, level) => { gpioOutputs[pin] = level; },
@@ -1022,7 +1090,7 @@ async function plugIn(meta = {}) {
       const link = connectBody({
         url: opts.url, token: opts.token, retryOnReject: opts.retryOnReject,
         onWelcome: opts.onWelcome, onMessage: opts.onMessage, onAudio: opts.onAudio,
-        onLost: () => { driveStop(); bodyAudioLink?.hush(); opts.onLost?.(); }, onReject: opts.onReject,
+        onLost: () => { driveStop(); releaseBenchPins(); bodyAudioLink?.hush(); opts.onLost?.(); }, onReject: opts.onReject,
       });
       return { close: () => link.close(), send: (msg) => link.send(msg), sendAudio: (pcm) => link.sendAudio(pcm) };
     },

@@ -2,8 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { startRobot, tarotLang } from '../../server/robot.js';
 import { renderEarcons } from '../../server/audio/render.js';
-import { TEMPLATES } from '../../core/bodies.js';
+import { TEMPLATES, registerPlugins } from '../../core/bodies.js';
 import { readyConfig, fakeFetch, until } from './helpers.js';
+import { PRESSED_ACTION, isPressedCommand, pluginBody, pointCommand, readResources } from '../fixtures/plugin.js';
 
 function fakeConn() {
   /** @type {any[]} */ const sent = [];
@@ -524,3 +525,57 @@ test('a shake message to a car does nothing', async () => {
   assert.equal(r.fetch.calls.filter((c) => c.url.endsWith('/chat/completions')).length, 0);
   r.robot.stop();
 });
+
+test('a body’s result message answers an IO op and is not a turn', async (t) => {
+  registerPlugins({ 'my-servo': pluginBody({ id: 'my-servo', commands: [pointCommand] }) });
+  t.after(() => registerPlugins({}));
+  const r = rig({}, 'my-servo');
+  await until(() => states(r.sent).includes('LISTENING'));
+  const before = states(r.sent).length;
+
+  // Nothing was asked for, so this id is unknown: ignored in silence, and the
+  // session is not taken for a turn by it.
+  r.message({ type: 'result', id: 1, ok: true, value: 1 });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  assert.equal(states(r.sent).length, before, 'a result changed the state');
+  assert.equal(r.fetch.calls.filter((c) => c.url.endsWith('/chat/completions')).length, 0);
+  assert.ok(!r.sent.some((m) => m.type === 'cmd'), 'no op was ever called for');
+  r.robot.stop();
+});
+
+test('a plugin read round-trips through the robot: cmd out, result back, reply spoken', async (t) => {
+  // The one path nothing else covers end to end: the brain expands the command,
+  // the robot puts a `cmd` on the wire, the body answers, and the model's NEXT
+  // request carries the value — then it speaks.
+  const slowEnough = { ...isPressedCommand, timeoutMs: 1000 };
+  registerPlugins({
+    'my-reader': pluginBody({ id: 'my-reader', commands: [slowEnough], resources: readResources }),
+  });
+  t.after(() => registerPlugins({}));
+  const r = rig(
+    { tool: { name: 'pressed', args: {} }, once: true, reply: 'The button is pressed.' },
+    { id: 'my-reader', actions: [structuredClone(PRESSED_ACTION)] },
+  );
+
+  await r.speak();
+  await until(() => r.sent.some((m) => m.type === 'cmd'), 3000, () => `sent ${JSON.stringify(r.sent)}`);
+  const cmd = r.sent.find((m) => m.type === 'cmd');
+  assert.equal(cmd.op, 'pin.read');
+  assert.deepEqual(cmd.args, { pin: 4 });
+  assert.equal(cmd.timeoutMs, 1000, 'the read is bounded by its command');
+
+  r.message({ type: 'result', id: cmd.id, ok: true, value: 1 });
+  await until(() => r.fetch.calls.filter((c) => c.url.endsWith('/chat/completions')).length === 2, 3000,
+    () => `chats ${r.fetch.calls.filter((c) => c.url.endsWith('/chat/completions')).length}`);
+  const second = r.fetch.calls.filter((c) => c.url.endsWith('/chat/completions'))[1];
+  const tool = second.body.messages.find((/** @type {any} */ m) => m.role === 'tool');
+  assert.equal(tool.content, '1', 'the read value reached the model');
+  await until(() => states(r.sent).includes('SPEAKING'), 3000, () => `states ${JSON.stringify(states(r.sent))}`);
+  assert.equal(
+    r.fetch.calls.find((c) => c.url.endsWith('/audio/speech'))?.body.input,
+    'The button is pressed.',
+  );
+  r.robot.stop();
+});
+
