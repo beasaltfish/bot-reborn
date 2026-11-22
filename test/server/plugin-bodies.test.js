@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadPlugins } from '../../server/plugin-bodies.js';
-import { TEMPLATES } from '../../core/bodies.js';
+import { TEMPLATES, pluginBodies, registerPlugins } from '../../core/bodies.js';
 import { manifest, pointCommand, pointResources } from '../fixtures/plugin.js';
 
 /**
@@ -116,4 +116,35 @@ test('the manifest has to name itself, both labels, and its parts', (t) => {
   assert.match(lines, /plugin partless: parts must be a list of part names/);
   assert.match(lines, /plugin bad-id: "Bad Id" is not a plugin id/);
   assert.match(lines, /plugin no-commands: commands must be an array/);
+});
+
+test('startup registers plugins and reports the broken ones', async (t) => {
+  // A HOME of its own: the startup step reads `$BOT_REBORN_HOME/bodies`, and
+  // `server/characters.js` reads that variable once, when it is first imported.
+  // That is why the step is imported here and not at the top of this file.
+  const home = mkdtempSync(join(tmpdir(), 'plugin-home-'));
+  t.after(() => rmSync(home, { recursive: true, force: true }));
+  mkdirSync(join(home, 'bodies', 'my-servo'), { recursive: true });
+  writeFileSync(join(home, 'bodies', 'my-servo', 'body.json'), JSON.stringify(manifest('my-servo')));
+  mkdirSync(join(home, 'bodies', 'broken'));
+  writeFileSync(join(home, 'bodies', 'broken', 'body.json'), '{');
+  const saved = process.env.BOT_REBORN_HOME;
+  process.env.BOT_REBORN_HOME = home;
+  t.after(() => {
+    if (saved === undefined) delete process.env.BOT_REBORN_HOME;
+    else process.env.BOT_REBORN_HOME = saved;
+    registerPlugins({});
+  });
+
+  const { loadBodyPlugins } = await import('../../server/plugin-startup.js');
+  /** @type {string[]} */
+  const lines = [];
+  loadBodyPlugins({ log: (line) => lines.push(line) });
+
+  // The registry is what `/api/bodies` and `resolveBody` read: the valid plugin
+  // is in it, and the broken one never arrives.
+  assert.deepEqual(Object.keys(pluginBodies()), ['my-servo']);
+  assert.equal(pluginBodies()['my-servo'].commands?.[0].name, 'point');
+  // One line per refusal, already prefixed with the plugin's directory.
+  assert.deepEqual(lines, ['plugin broken: body.json is not JSON']);
 });

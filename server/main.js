@@ -22,6 +22,7 @@ import { keepPublished, BRAIN_HOST, SERVICE_TYPE } from './discovery.js';
 import { hostname } from 'node:os';
 import { loadPetFrames } from './pet/frames.js';
 import { loadTarotFrames } from './tarot/frames.js';
+import { loadBodyPlugins } from './plugin-startup.js';
 import { fileURLToPath } from 'node:url';
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -38,6 +39,9 @@ if (!DEV) try {
   process.exit(1);
 }
 for (const p of listCharacters().problems) console.error(`skipped ${p}`);
+// Plugin bodies are installed locally, one directory each. A refused one is a
+// line in this log, not a failed boot: the templates are unaffected.
+loadBodyPlugins();
 
 const sherpa = loadSherpaNode();
 const keywords = loadKeywords();
