@@ -145,12 +145,14 @@ test('a bad command expands to nothing, with the phrase', () => {
 });
 
 test('malformed data is a phrase, never a throw', () => {
-  assert.match(commandProblem({ timeoutMs: 1, run: {} }, resources) ?? '', /run must be an array of steps/);
-  assert.match(commandProblem(null, resources) ?? '', /command must be an object/);
-  assert.match(commandProblem(point, null) ?? '', /resources must be an array/);
-  assert.equal(commandProblem(point, [null, ...resources]), null);
-  assert.match(expandCommand(point, { angle: 90 }, null).drop ?? '', /resources must be an array/);
-  assert.match(expandCommand({ timeoutMs: 1, run: {} }, {}, resources).drop ?? '', /run must be an array of steps/);
+  // Every argument here is deliberately the wrong shape; the casts say "on
+  // purpose", so the test still typechecks while asserting the runtime guard.
+  assert.match(commandProblem(/** @type {any} */ ({ timeoutMs: 1, run: {} }), resources) ?? '', /run must be an array of steps/);
+  assert.match(commandProblem(/** @type {any} */ (null), resources) ?? '', /command must be an object/);
+  assert.match(commandProblem(point, /** @type {any} */ (null)) ?? '', /resources must be an array/);
+  assert.equal(commandProblem(point, /** @type {any} */ ([null, ...resources])), null);
+  assert.match(expandCommand(point, { angle: 90 }, /** @type {any} */ (null)).drop ?? '', /resources must be an array/);
+  assert.match(expandCommand(/** @type {any} */ ({ timeoutMs: 1, run: {} }), {}, resources).drop ?? '', /run must be an array of steps/);
 });
 
 test('a __proto__ key is copied as data, not as a prototype', () => {
@@ -158,5 +160,5 @@ test('a __proto__ key is copied as data, not as a prototype', () => {
   const { ops } = expandCommand({ ...point, run: [{ op: 'pin.write', args }] }, {}, resources);
   assert.deepEqual(ops[0].args.pin, 5);
   assert.equal(Object.getPrototypeOf(ops[0].args), Object.prototype);
-  assert.equal({}.polluted, undefined);
+  assert.equal(/** @type {any} */ ({}).polluted, undefined);
 });
