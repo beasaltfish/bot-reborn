@@ -31,7 +31,7 @@ const fetchMock = (routes: Record<string, unknown>) => vi.stubGlobal('fetch', vi
 const SERVO = {
   id: 'my-servo',
   label: { en: 'Servo', zh: '舵机' },
-  commands: [{ name: 'point', run: [{ op: 'pin.write', args: { pin: 'sig', value: 1 } }], timeoutMs: 100 }],
+  commands: [{ name: 'point', run: [{ op: 'pin.write', args: { pin: 'sig', level: 1 } }], timeoutMs: 100 }],
   resources: [{ kind: 'gpio', name: 'sig', gpio: 5, direction: 'output', safe: 0 }],
 };
 
@@ -271,6 +271,18 @@ describe('BodyTab', () => {
     const box = screen.getByLabelText('Actions') as HTMLTextAreaElement;
     expect(JSON.parse(box.value)).toEqual(TEMPLATES.tarot.actions);
     expect(screen.getByText(/these are the template/i)).toBeInTheDocument();
+  });
+
+  it('tells a plugin body it is simulator-only, not that it can be flashed', async () => {
+    // The body firmware has no command channel: reusing the board line here
+    // promised a flash that would produce a body which cannot answer a `cmd`.
+    fetchMock({ '/api/bodies': [SERVO] });
+    renderTab(servoDetail());
+    await screen.findByRole('radio', { name: /servo/i });
+
+    expect(screen.getByText(/simulator only — no board firmware/i)).toBeInTheDocument();
+    expect(screen.getByText(/wiring the pins it names/i)).toBeInTheDocument();
+    expect(screen.queryByText(/flash it once from set up a board/i)).toBeNull();
   });
 
   it('a body with no art is still drawn, without a broken picture in it', async () => {

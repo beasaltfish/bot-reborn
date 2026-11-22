@@ -23,8 +23,14 @@ export function ActionsEditor({ detail, update }: { detail: Detail; update(p: Pa
   // It is the same thing as inherited after the next read (`core/config.js`
   // keeps `actions` only when it is an array).
   const inherited = patch.actions == null;
+  // A plain string is a key into `TEMPLATES`, and a string can be anything:
+  // `constructor` and `__proto__` are inherited properties, not templates.
+  // `hasOwn` plus the `none` fallback is the same rule `BodyTab` applies.
   const table = TEMPLATES as unknown as Record<string, { actions: BodyAction[]; triggers?: BodyTrigger[] }>;
-  const template = table[body.template ?? patch.id] ?? table.none;
+  const templateId = body.template ?? patch.id;
+  const template = (typeof templateId === 'string' && Object.hasOwn(table, templateId)
+    ? table[templateId]
+    : table.none);
   const [text, setText] = useState(() => JSON.stringify(body.actions, null, 2));
   const [error, setError] = useState<string | null>(null);
   // Whether the box holds an edit that has not reached the config. A rejected

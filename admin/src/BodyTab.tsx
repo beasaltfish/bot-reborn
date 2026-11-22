@@ -248,13 +248,19 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
           </p>
         )}
       </div>
-      <div className="body-side">
-        <div className="body-preview" data-testid="body-preview">
-          <BodyDiagram key={body.id} kind={body.preview} frames={frames} label={name} />
+        <div className="body-side">
+          <div className="body-preview" data-testid="body-preview">
+            <BodyDiagram key={body.id} kind={body.preview} frames={frames} label={name} />
+          </div>
+          <small>{t('previewNote')}</small>
+          {/* A plugin body is reached through the bench, not through the body
+              firmware: its ways come from the template it was built on, and
+              repeating that template's "flash it" line would promise a board
+              that cannot answer a command yet. */}
+          {plugins.some((p) => p.id === body.id)
+            ? <p>{t('pluginNext')}</p>
+            : body.ways.map((w) => <p key={w.source}>{t(NEXT[w.source])}</p>)}
         </div>
-        <small>{t('previewNote')}</small>
-        {body.ways.map((w) => <p key={w.source}>{t(NEXT[w.source])}</p>)}
-      </div>
     </div>
   );
 }
