@@ -148,6 +148,11 @@ function checkStep(step, resources) {
   if (!IO_OPS.includes(/** @type {any} */ (op))) {
     return { problem: `op "${op}" is not one of the IO ops` };
   }
+  // i2c and adc resources have no settled shape in this part, so no step may
+  // use them — and a gpio pin must not stand in for one. Part B defines them.
+  if (op === 'i2c.read' || op === 'i2c.write' || op === 'adc.read') {
+    return { problem: 'i2c/adc resources are not defined yet' };
+  }
 
   const args = step.args ?? {};
   const target = targetOf(step, resources, WRITES.has(op));
@@ -250,14 +255,18 @@ function dataArgs(args, given) {
 }
 
 /**
- * One `map` point, linear only. A span of zero — `from: [90, 90]` — is still a
- * legitimately declared map; every input lands on the span's start, so the
- * result is `to[0]` with no division by zero.
+ * One `map` point, linear only. A step without a map is the raw value: the
+ * spec allows a linear `map` but never requires one, and with no map there is
+ * no unit to convert, so the number already *is* the pulse width. A span of
+ * zero — `from: [90, 90]` — is still a legitimately declared map; every input
+ * lands on the span's start, so the result is `to[0]` with no division by zero.
  * @param {number} value
- * @param {{ from: number[], to: number[] }} map
+ * @param {{ from: number[], to: number[] } | undefined} map
  * @returns {number}
  */
-function applyMap(value, { from, to }) {
+function applyMap(value, map) {
+  if (!map) return value;
+  const { from, to } = map;
   if (from[1] === from[0]) return to[0];
   const span = (value - from[0]) / (from[1] - from[0]);
   return Math.round(to[0] + span * (to[1] - to[0]));
@@ -274,8 +283,9 @@ function applyMap(value, { from, to }) {
  * Whole ops only: on any refusal `ops` is empty and `drop` is the phrase. A
  * write op gets the resource's `safe` and the command's `timeoutMs`; a read op
  * gets neither, because there is nothing to restore and nothing to time out.
- * `pwm`'s `map` becomes `us` and its `value`/`map` arguments are consumed. A
- * non-finite input or output is a refusal, never `NaN` on the wire.
+ * `pwm`'s `map` becomes `us` and its `value`/`map` arguments are consumed; with
+ * no map the value already is `us`. A non-finite input or output is a refusal,
+ * never `NaN` on the wire.
  * @param {Command} command
  * @param {Record<string, unknown>} given
  * @param {Resource[]} resources
@@ -303,7 +313,7 @@ export function expandCommand(command, given, resources) {
       if (!Number.isFinite(input)) {
         return { ops: [], drop: 'pwm value must be a finite number' };
       }
-      const us = applyMap(input, /** @type {{ from: number[], to: number[] }} */ (map));
+      const us = applyMap(input, /** @type {{ from: number[], to: number[] } | undefined} */ (map));
       if (!Number.isFinite(us)) {
         return { ops: [], drop: 'pwm result is not a finite number' };
       }

@@ -55,16 +55,35 @@ test('an input cannot be written even when it carries a safe value', () => {
 
 test('a non-gpio resource has no address and is refused', () => {
   const adc = { kind: 'adc', name: 'light', pin: 34, direction: 'input' };
-  const i2c = { kind: 'i2c', name: 'oled', address: 60 };
   const nameless = { kind: 'gpio', name: 'spare', direction: 'output', safe: 0 };
-  const all = [...resources, adc, i2c, nameless];
+  const all = [...resources, adc, nameless];
 
-  assert.match(commandProblem({ ...point, run: [{ op: 'adc.read', args: { pin: 'light' } }] }, all) ?? '',
-    /resource "light" is not a gpio pin/);
-  assert.match(commandProblem({ ...point, run: [{ op: 'i2c.write', args: { pin: 'oled', value: 1 } }] }, all) ?? '',
-    /resource "oled" is not a gpio pin/);
+  assert.match(commandProblem({ ...point, run: [{ op: 'i2c.write', args: { pin: 'light', value: 1 } }] }, all) ?? '',
+    /i2c\/adc resources are not defined yet/);
   assert.match(commandProblem({ ...point, run: [{ op: 'pin.write', args: { pin: 'spare', level: 1 } }] }, all) ?? '',
     /resource "spare" is not a gpio pin/);
+});
+
+test('i2c and adc ops fail closed, with no gpio stand-in', () => {
+  for (const op of ['i2c.read', 'i2c.write', 'adc.read']) {
+    const step = { op, args: { pin: 'button' } };
+    assert.match(commandProblem({ ...point, run: [step] }, resources) ?? '',
+      /i2c\/adc resources are not defined yet/, op);
+    const { ops, drop } = expandCommand({ ...point, run: [step] }, {}, resources);
+    assert.deepEqual(ops, [], op);
+    assert.match(drop ?? '', /i2c\/adc resources are not defined yet/, op);
+  }
+});
+
+test('pwm without a map is the raw pulse width', () => {
+  const raw = { ...point, run: [{ op: 'pwm', args: { pin: 'sig', value: 90 } }] };
+  assert.equal(commandProblem(raw, resources), null);
+  assert.deepEqual(expandCommand(raw, {}, resources).ops,
+    [{ op: 'pwm', args: { pin: 5, us: 90 }, safe: 0, timeoutMs: 500 }]);
+
+  const fromArg = { ...point, run: [{ op: 'pwm', args: { pin: 'sig', value: '$angle' } }] };
+  assert.deepEqual(expandCommand(fromArg, { angle: 1500 }, resources).ops,
+    [{ op: 'pwm', args: { pin: 5, us: 1500 }, safe: 0, timeoutMs: 500 }]);
 });
 
 test('reads carry no safe and no timeout', () => {
