@@ -8,7 +8,9 @@ import { MIN_DURATION_MS } from '../phone/executor.js';
 import { KEYWORDS } from '../core/strings.js';
 import { TEMPLATES, bodyProblem, registerPlugins, resolveBody } from '../core/bodies.js';
 import { GOLDEN } from './prompts-golden.js';
-import { pluginBody, pointCommand, pointResources } from './fixtures/plugin.js';
+import {
+  PRESSED_ACTION, isPressedCommand, pluginBody, pointCommand, pointResources, readResources,
+} from './fixtures/plugin.js';
 
 /** The bodies the assertions read, resolved the way the brain resolves them. */
 const TOY = resolveBody('toy');
@@ -593,6 +595,60 @@ test('a plugin command reaches the executor as an IO op', async () => {
     [{ op: 'io', args: { op: 'pwm', args: { pin: 5, us: 1450 }, safe: 0, timeoutMs: 500 } }]);
   assert.deepEqual(h.events.at(-1), { op: 'speak', text: '好了。' });
 });
+
+test('a returning command gives the model the pin value, and the answer is spoken', async (t) => {
+  // The point of a `returns` command: read a value and use it. The second LLM
+  // request has to contain the level, or the model is guessing.
+  registerPlugins({
+    'my-reader': pluginBody({ id: 'my-reader', commands: [isPressedCommand], resources: readResources }),
+  });
+  t.after(() => registerPlugins({}));
+  const h = brainHarness({
+    id: 'my-reader',
+    actions: [structuredClone(PRESSED_ACTION)],
+    reply: (/** @type {number} */ n) => (n === 1
+      ? say('', [{ id: 'p1', name: 'pressed', args: {} }])
+      : say('按钮是按下的。')),
+  });
+  /** @type {any} */ (h.executor).io = async (/** @type {any} */ op) => {
+    h.events.push({ op: 'io', args: op });
+    return 1;
+  };
+
+  await h.brain.handle('按钮按下了吗');
+  await flushMicrotasks();
+
+  assert.deepEqual(h.events.filter((e) => e.op === 'io'),
+    [{ op: 'io', args: { op: 'pin.read', args: { pin: 4 }, timeoutMs: 50 } }]);
+  assert.equal(h.llm.calls.length, 2, 'the model reads the value, then answers');
+  const tool = h.llm.calls[1].messages.find((/** @type {any} */ m) => m.role === 'tool');
+  assert.equal(tool.content, '1', 'the tool result is the read value as JSON');
+  assert.deepEqual(h.events.filter((e) => e.op === 'speak'), [{ op: 'speak', text: '按钮是按下的。' }]);
+});
+
+test('a read that fails is a result the model reads, not a failed turn', async (t) => {
+  registerPlugins({
+    'my-reader': pluginBody({ id: 'my-reader', commands: [isPressedCommand], resources: readResources }),
+  });
+  t.after(() => registerPlugins({}));
+  const h = brainHarness({
+    id: 'my-reader',
+    actions: [structuredClone(PRESSED_ACTION)],
+    reply: (/** @type {number} */ n) => (n === 1
+      ? say('', [{ id: 'p1', name: 'pressed', args: {} }])
+      : say('按钮没接上。')),
+  });
+  h.executor.io = async () => { throw new Error('timeout'); };
+
+  await h.brain.handle('按钮按下了吗');
+  await flushMicrotasks();
+
+  const tool = h.llm.calls[1].messages.find((/** @type {any} */ m) => m.role === 'tool');
+  assert.equal(tool.content, 'error: timeout');
+  assert.deepEqual(h.events.filter((e) => e.op === 'speak'), [{ op: 'speak', text: '按钮没接上。' }]);
+  assert.deepEqual(h.faults, [], 'an IO refusal is the tool result, not a fault');
+});
+
 
 test('an IO rejection is traced, and stops the command before its next op', async () => {
   // A command is whole or nothing on the wire: the op after the failed write is

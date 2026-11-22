@@ -642,6 +642,18 @@ function stepDetail(step) {
   }
 }
 
+/**
+ * A read's value as the tool-result text the model reads. JSON, not prose: a
+ * pin level is `0` or `1` and a sensor's raw word is whatever the body sent,
+ * and the model is the one that knows what to say about it. `undefined` is
+ * written as `null` because a missing key in the request is not a value.
+ * @param {unknown} value
+ * @returns {string}
+ */
+function formatIoValue(value) {
+  return value === undefined ? 'null' : JSON.stringify(value);
+}
+
 // --- One turn --------------------------------------------------------------
 
 export class Brain {
@@ -663,13 +675,13 @@ export class Brain {
   /** @type {AbortController | null} */
   #turn = null;
   /**
-   * The generation of the commands in flight. Every `#dispatch` that sends a
-   * command — `move`, `cruise`, `stop` — bumps it, and `cancel()` bumps it; a
-   * step awaited behind a move checks it after every await. It is not the
-   * turn: a speak-only turn disturbs nothing, and a new dispatch takes over
-   * only when it sends commands. A move that ends inside a LATER turn wakes the
-   * old loop with a live signal, and only this can tell it that the body has
-   * been taken.
+   * The generation of the commands in flight. Every dispatch that sends a
+   * command — a `drive`, a `cruise`, a `halt`, an IO op — bumps it, and
+   * `cancel()` bumps it; a step awaited behind one checks it after every await.
+   * It is not the turn: a speak-only turn disturbs nothing, and a new dispatch
+   * takes over only when it sends commands. A move that ends inside a LATER
+   * turn wakes the old loop with a live signal, and only this can tell it that
+   * the body has been taken.
    */
   #dispatchGen = 0;
   /** @type {object[]} */ #history = [];
@@ -864,9 +876,10 @@ export class Brain {
 
   /**
    * How a call returns a result, if it does. A body action says `returns` and
-   * what it runs, so the handler is chosen by the expanded **verb** (`draw`),
-   * not by the action's name: a renamed `pick` that runs `draw` draws a card and
-   * gets its result, exactly as `draw_card` does. The action's arguments are
+   * what it runs, so the handler is chosen by the expanded **verb**: `draw`
+   * draws a card, and an `io` step runs the command's last op and hands the
+   * value back — a plugin reads a pin exactly the way a tarot body draws a
+   * card, and the model is asked again with it. The action's arguments are
    * judged before the handler runs, with the same check `validate` uses.
    *
    * An injected `returningTools`/`returning` pair (the mechanism's own tests)
@@ -894,8 +907,22 @@ export class Brain {
       const refusal = checked?.rejected ? [checked.rejected] : checked?.reasons ?? [];
       return { handler: null, action, args: call.args, refusal };
     }
-    const verb = checked.steps[0].verb;
-    const handler = this.#returning[verb] ?? this.#returning[call.name];
+    const step = checked.steps[0];
+    // A read op is the value itself, not a method name: the command's last op
+    // is handed to the executor and the answer is the result text. A failed op
+    // throws, and `#runReturning` turns that into the model's result — a read
+    // that could not happen is something the model may say, not a dead turn.
+    if (step.verb === 'io') {
+      return {
+        handler: async () => formatIoValue(
+          await this.#write(/** @type {import('./io-program.js').Op} */ (step.args)),
+        ),
+        action,
+        args: checked.args,
+        refusal: null,
+      };
+    }
+    const handler = this.#returning[step.verb] ?? this.#returning[call.name];
     return handler ? { handler, action, args: checked.args, refusal: null } : null;
   }
 
@@ -920,7 +947,9 @@ export class Brain {
     try {
       return String(await plan.handler(plan.args, turn.signal));
     } catch (err) {
-      return `error: ${/** @type {Error} */ (err).message}`;
+      // A thrown string is still a result to the model: `err.message` alone
+      // made it read "error: undefined" and gave it nothing to say.
+      return `error: ${err instanceof Error ? err.message : String(err)}`;
     }
   }
 
@@ -1356,8 +1385,9 @@ export class Brain {
       case 'io':
         // A command writes the body's own pins: it takes the body exactly as a
         // move does, so a stop from a later turn voids what is still queued.
+        // The answer belongs to the returning path; dispatch only waits for it.
         claim();
-        return this.#write(args);
+        return this.#write(/** @type {import('./io-program.js').Op} */ (args)).then(() => {});
       case 'voice':
         return this.#sound(args.clip);
       case 'pose':
@@ -1370,15 +1400,17 @@ export class Brain {
   }
 
   /**
-   * One IO op, awaited by the dispatch loop. A brain wired without a carrier
-   * refuses instead of pretending the write happened, so the turn's trace says
-   * why nothing reached the pins.
+   * One IO op, awaited by the dispatch loop. The body's answer is returned —
+   * a read has a value and the returning path needs it; a write's answer is
+   * ignored by the caller. A brain wired without a carrier refuses instead of
+   * pretending the write happened, so the turn's trace says why nothing
+   * reached the pins.
    * @param {import('./io-program.js').Op} op
-   * @returns {Promise<void>}
+   * @returns {Promise<unknown>}
    */
   async #write(op) {
     if (!this.#executor.io) throw new Error('this executor has no IO');
-    await this.#executor.io(op);
+    return this.#executor.io(op);
   }
 
   /**

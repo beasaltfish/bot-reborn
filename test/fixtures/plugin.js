@@ -22,6 +22,39 @@ export const pointResources = [
 ];
 
 /**
+ * The other half of the vocabulary: a command that reads a button and returns
+ * the level. Its `timeoutMs` is short on purpose — a read the body never
+ * answers must not hold a turn for the carrier's fallback.
+ * @type {import('../../core/io-program.js').Command}
+ */
+export const isPressedCommand = {
+  name: 'is_pressed',
+  args: { type: 'object', properties: {} },
+  timeoutMs: 50,
+  returns: true,
+  run: [{ op: 'pin.read', args: { pin: 'button' } }],
+};
+
+/** The button `isPressedCommand` reads. */
+export const readResources = [
+  ...pointResources,
+  { kind: 'gpio', name: 'button', gpio: 4, direction: 'input' },
+];
+
+/**
+ * The action that hands a read back to the model.
+ * @type {import('../../core/bodies.js').Action}
+ */
+export const PRESSED_ACTION = {
+  name: 'pressed',
+  label: { en: 'Is it pressed', zh: '按下了吗' },
+  say: 'Read whether the button is pressed right now. It returns 1 or 0.',
+  args: { type: 'object', properties: {} },
+  run: [{ command: 'is_pressed' }],
+  returns: true,
+};
+
+/**
  * The body a plugin manifest becomes, without touching disk. Mirrors the
  * loader on purpose: a plugin body is the voice-only body with its own id,
  * label, resources and commands.
