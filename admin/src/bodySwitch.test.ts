@@ -102,4 +102,28 @@ describe('adoptModule', () => {
     expect(out.body.actions?.map((x) => x.name)).toEqual(['light_up']);
     expect(out.dropped).toEqual(['move']);
   });
+
+  test('a trigger naming a dropped action is not written back', () => {
+    const patch = {
+      id: 'toy',
+      template: 'toy',
+      actions: [a('move'), a('play_sound')],
+      triggers: [
+        { on: 'shake' as const, action: 'move' },
+        { on: 'button' as const, action: 'play_sound' },
+      ],
+    };
+    const out = adoptModule(patch, 'led-module', patch.actions, [], only('toy'),
+      (actions) => (actions.some((action) => action.name === 'move') ? 'needs move' : null));
+    expect(out.dropped).toEqual(['move']);
+    // The actions editor reads raw triggers: leaving `move` here would refuse
+    // the next edit of a body that is otherwise valid.
+    expect(out.body.triggers).toEqual([{ on: 'button', action: 'play_sound' }]);
+  });
+
+  test('no trigger list is written when the character had none of its own', () => {
+    const out = adoptModule({ actions: [a('sit')], triggers: null }, 'led-module', [a('sit')], [], only(), () => null);
+    // `null` means "inherit"; writing `[]` would replace the template's list.
+    expect(out.body).not.toHaveProperty('triggers');
+  });
 });

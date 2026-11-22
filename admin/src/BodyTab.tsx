@@ -14,7 +14,7 @@
 // so it is installed and its example actions adopted in one step rather than
 // retyped — see `bodySwitch.ts` for the write that step makes.
 import { useEffect, useState } from 'react';
-import { TEMPLATES, bodyById, bodyProblem, labelOf, registerPlugins, resolveBody } from '../../core/bodies.js';
+import { TEMPLATES, bodyById, bodyProblem, labelOf, pluginBodies, registerPlugins, resolveBody } from '../../core/bodies.js';
 import { ActionsEditor } from './ActionsEditor';
 import { BodyDiagram } from './BodyDiagram';
 import { adoptModule } from './bodySwitch';
@@ -101,6 +101,7 @@ interface Module {
   note: { en: string; zh: string } | null;
   installed: boolean;
   examples: BodyAction[];
+  commands: string[];
 }
 
 /** The string entries of a list from the brain, and nothing else. */
@@ -129,6 +130,7 @@ function asModule(value: unknown): Module | null {
       : null,
     installed: row.installed === true,
     examples: row.examples as BodyAction[],
+    commands: strings(row.commands),
   };
 }
 
@@ -191,12 +193,13 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
   // The modules this repository ships, and whether each body is already here.
   // A brain without the endpoint simply offers none, like the plugin list.
   const [modules, setModules] = useState<Module[]>([]);
-  /** The module whose install request is in flight, so its card cannot be
-   * clicked twice. */
+  /** The module whose request is in flight, so its card cannot be clicked
+   * twice. */
   const [installing, setInstalling] = useState<string | null>(null);
-  /** The sentence an install refused with, or '' when the brain said nothing;
-   * `null` means no failure to show. */
-  const [installFailure, setInstallFailure] = useState<string | null>(null);
+  /** A failed step in the module panel: the sentence the brain sent, or '' when
+   * it sent none, plus whether the install itself worked but this page could not
+   * re-read the body. `null` means no failure to show. */
+  const [failure, setFailure] = useState<{ text: string; refresh: boolean } | null>(null);
   /** The module installed and waiting for the person to say yes to its
    * examples. A dialog the page draws itself, so it can be tested and read. */
   const [pendingExamples, setPendingExamples] = useState<{ id: string; examples: BodyAction[] } | null>(null);
@@ -213,15 +216,35 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
   }, []);
 
   /**
+   * Re-read `/api/bodies` and register it on this page. `null` means the answer
+   * was not a list: the install may have written a body, but adopting before
+   * this page knows its commands would refuse the module's own examples.
+   * @returns {Promise<PluginBody[] | null>}
+   */
+  const refreshBodies = async () => {
+    const listed = await fetch('/api/bodies')
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null);
+    const entries = takeBodies(listed);
+    if (entries) setPlugins(entries);
+    return entries;
+  };
+
+  /**
    * Install a module and then, in this order: re-read `/api/bodies` and
    * register it, replace the plugin cards, ask about the examples, write the
    * adoption. The refresh must come before the question: an example that calls
    * `led_on` is refused as "unknown command" if the page has not registered the
    * body yet, and the person would be told their own module is broken.
+   *
+   * The same call is the reinstall: the brain rewrites the body, and this page
+   * asks about the examples again. A failure to read it back is its own
+   * sentence: the install did happen, so telling the person it failed would be
+   * false.
    */
   const installModule = async (id: string) => {
     setInstalling(id);
-    setInstallFailure(null);
+    setFailure(null);
     setPendingExamples(null);
     try {
       const res = await fetch(`/api/modules/${encodeURIComponent(id)}/install`, {
@@ -231,22 +254,16 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
       // Every failure is a 404 with a sentence: the sentence is what the person
       // reads, so it is shown instead of a status code.
       if (!res.ok || typeof answer.error === 'string') {
-        setInstallFailure(typeof answer.error === 'string' ? answer.error : '');
+        setFailure({ text: typeof answer.error === 'string' ? answer.error : '', refresh: false });
         return;
       }
-      const listed = await fetch('/api/bodies')
-        .then((r) => (r.ok ? r.json() : null))
-        .catch(() => null);
-      const entries = takeBodies(listed);
-      // The install wrote a body, but this page could not read it back: without
-      // it registered, adopting would refuse the module's own examples as
-      // unknown commands, so nothing is offered and the failure is said.
-      if (!entries) {
-        setInstallFailure('');
-        return;
-      }
-      setPlugins(entries);
+      // The brain has the body now, even if this page cannot read it back.
       setModules((rows) => rows.map((row) => (row.id === id ? { ...row, installed: true } : row)));
+      const entries = await refreshBodies();
+      if (!entries) {
+        setFailure({ text: '', refresh: true });
+        return;
+      }
       setPendingExamples({
         id,
         examples: (Array.isArray(answer.examples) ? answer.examples : []) as BodyAction[],
@@ -254,10 +271,32 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
     } catch {
       // The brain is down or the answer was not JSON: the copy says the install
       // failed, and nothing has been written.
-      setInstallFailure('');
+      setFailure({ text: '', refresh: false });
     } finally {
       setInstalling(null);
     }
+  };
+
+  /**
+   * Offer an already installed module's examples to this character. Installation
+   * is body-level and global; adoption is per character, so a second character —
+   * or this page after a reload — must still get an entry. The plugin registry
+   * is per page, not per brain: when it lacks the id, re-read `/api/bodies`
+   * before asking, or the examples would read as unknown commands.
+   */
+  const addExamples = async (module: Module) => {
+    setFailure(null);
+    setPendingExamples(null);
+    if (!Object.hasOwn(pluginBodies(), module.id)) {
+      setInstalling(module.id);
+      const entries = await refreshBodies();
+      setInstalling(null);
+      if (!entries) {
+        setFailure({ text: '', refresh: true });
+        return;
+      }
+    }
+    setPendingExamples({ id: module.id, examples: module.examples });
   };
 
   /**
@@ -368,9 +407,29 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
               <strong>{lang === 'zh' ? m.label.zh : m.label.en}</strong>
               <span className="caps">{m.parts.join(' · ')}</span>
               <span className="hint">{t('moduleExamples').replace('{n}', String(m.examples.length))}</span>
+              {m.commands.length > 0 && (
+                <span className="hint">{t('moduleCommands').replace('{n}', String(m.commands.length))}</span>
+              )}
               {m.note && <p className="hint">{lang === 'zh' ? m.note.zh : m.note.en}</p>}
+              {/* Installed is body-level and global; adoption is per character.
+                  Both entries stay: a second character, or this page after a
+                  reload, still needs the examples. */}
               {m.installed ? (
-                <span className="badge ok">{t('installed')}</span>
+                <>
+                  <span className="badge ok">{t('installed')}</span>
+                  <div className="toggle">
+                    <button type="button" disabled={installing !== null} onClick={() => addExamples(m)}>
+                      {t('addExamples')}
+                    </button>
+                    <button
+                      type="button" className="secondary"
+                      disabled={installing !== null} onClick={() => installModule(m.id)}
+                    >
+                      {t('reinstall')}
+                    </button>
+                  </div>
+                  <p className="hint">{t('moduleReconnected')}</p>
+                </>
               ) : (
                 <button type="button" disabled={installing !== null} onClick={() => installModule(m.id)}>
                   {t('addToCharacter')}
@@ -388,11 +447,13 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
               )}
             </div>
           ))}
-          {installFailure !== null && (
+          {failure !== null && (
             <p className="error" role="alert">
-              {installFailure.trim() === ''
-                ? t('moduleInstallFailed')
-                : `${t('moduleInstallFailed')} ${installFailure}`}
+              {failure.refresh
+                ? t('moduleRefreshFailed')
+                : failure.text.trim() === ''
+                  ? t('moduleInstallFailed')
+                  : `${t('moduleInstallFailed')} ${failure.text}`}
             </p>
           )}
         </section>

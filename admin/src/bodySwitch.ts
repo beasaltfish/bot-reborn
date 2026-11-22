@@ -2,13 +2,14 @@
 // follows the module's body (`template`), and the actions the person confirmed
 // are merged in by name. It lives here, apart from the panel, so the rule can be
 // tested without a brain, a browser dialog or a rendered page.
-import type { BodyAction } from './types';
+import type { BodyAction, BodyTrigger } from './types';
 
 /** The part of `config.body` a switch writes; every other key is left as it is. */
 export interface BodyPatch {
   id?: string;
   template?: string;
   actions?: BodyAction[] | null;
+  triggers?: BodyTrigger[] | null;
 }
 
 /** The write, and the current actions the module body refused. */
@@ -34,6 +35,11 @@ export interface AdoptModuleResult {
  *
  * The result is always an array: `null` means "inherit", which would put the
  * old body's actions back on the next read.
+ *
+ * A character's own triggers are written back filtered to the actions that
+ * survived. The actions editor reads raw triggers, so a trigger naming a
+ * dropped action would make the next edit refuse the body. An absent or `null`
+ * trigger list is left out entirely: `null` means "inherit", not "none".
  * @param {BodyPatch} patch the body as it is now
  * @param {string} moduleId the body the module installs
  * @param {BodyAction[]} current the actions the character carries itself
@@ -72,5 +78,9 @@ export function adoptModule(
 
   const body: BodyPatch = { template: moduleId, actions: kept };
   if (typeof patch.id === 'string' && isTemplate(patch.id)) body.id = moduleId;
+  if (Array.isArray(patch.triggers)) {
+    const names = new Set(kept.map((action) => action.name));
+    body.triggers = patch.triggers.filter((trigger) => names.has(trigger.action));
+  }
   return { body, dropped };
 }
