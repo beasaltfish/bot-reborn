@@ -17,6 +17,14 @@ test('a write without a safe value is refused before the pin moves', async () =>
   assert.equal(io.level(5), 0);
 });
 
+test('a safe value that is not a level is refused, not rounded to one', async () => {
+  // `safe: 2` used to be read as 1 and restored as a drive on disconnect. The
+  // loader refuses it; this is the last line for an op sent by hand.
+  const io = createBenchIo({ pins: { 5: 0 } });
+  await assert.rejects(io.run({ op: 'pin.write', args: { pin: 5, level: 1 }, safe: 2 }), /safe must be 0 or 1/);
+  assert.equal(io.level(5), 0);
+});
+
 test('a read answers from the evaluated pin', async () => {
   const io = createBenchIo({ pins: { 4: 1 } });
   assert.equal(await io.run({ op: 'pin.read', args: { pin: 4 } }), 1);

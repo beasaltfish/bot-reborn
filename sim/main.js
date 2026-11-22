@@ -256,9 +256,12 @@ function refreshDeviceVisuals() {
 
 /** Restore every pin a plugin command drove, and stop admitting its LEDs. */
 function releaseBenchPins() {
+  // The pins are ours to drop either way: an adapter that is gone drove
+  // nothing, and a plugin's LEDs must not stay lit because its disconnect
+  // could not be called.
+  ioPins.clear();
   if (!benchIo) return;
   void benchIo.disconnect();
-  ioPins.clear();
   refreshDeviceVisuals();
 }
 
@@ -308,17 +311,7 @@ function setBench(b) {
   refreshDeviceVisuals();
   // The body normally uses a power-on snapshot; unsafe board power changes
   // instead stop the session and latch until USB is cycled.
-  if (bench.usb && powered) {
-    const evaluated = evaluateBench(bench, { firmware: firmwareFor(bench.board), ownership: ownershipOf(bench), gpioOutputs, ioPins });
-    const fault = powerInterlock.observe(bench, evaluated);
-    const hint = fault
-      ? diagnose(bench, { ...evaluated.legacy, faults: [fault], burns: evaluated.burns }, document.documentElement.lang).find(item => item.kind === 'fault') ?? null
-      : liveDiagnosis(bench, document.documentElement.lang, evaluated);
-    hands.highlightPoints(hint?.points ?? []);
-    const reconnect = powerInterlock.tripped() ? simText(document.documentElement.lang, 'power.reconnect') : '';
-    line.fault = [hint?.text, reconnect].filter(Boolean).join(' ') || null;
-    showLine();
-  }
+  refreshBenchDiagnosis();
   hands.refreshHighlights();
   panels.refreshProject();
   for (const id of result.burns) effects.smoke(id);
@@ -326,6 +319,25 @@ function setBench(b) {
   usb.refresh();
   effects.refresh();
   updateStudio();
+}
+
+/**
+ * The bench's fault/hint sentence, written from the live state. Called on every
+ * bench edit and after an IO write: a plugin can short a pin with a single
+ * `pin.write`, and waiting for the next edit to say so hides the one change the
+ * person just made.
+ */
+function refreshBenchDiagnosis() {
+  if (!(bench.usb && powered)) return;
+  const evaluated = evaluateBench(bench, { firmware: firmwareFor(bench.board), ownership: ownershipOf(bench), gpioOutputs, ioPins });
+  const fault = powerInterlock.observe(bench, evaluated);
+  const hint = fault
+    ? diagnose(bench, { ...evaluated.legacy, faults: [fault], burns: evaluated.burns }, document.documentElement.lang).find(item => item.kind === 'fault') ?? null
+    : liveDiagnosis(bench, document.documentElement.lang, evaluated);
+  hands.highlightPoints(hint?.points ?? []);
+  const reconnect = powerInterlock.tripped() ? simText(document.documentElement.lang, 'power.reconnect') : '';
+  line.fault = [hint?.text, reconnect].filter(Boolean).join(' ') || null;
+  showLine();
 }
 
 /**
@@ -1025,7 +1037,17 @@ async function plugIn(meta = {}) {
           .catch(() => {});
       }
     },
-    onIo: (op) => (benchIo ? benchIo.run(op) : Promise.reject(new Error('unavailable: the bench is not booted'))),
+    onIo: (op) => {
+      if (!benchIo) return Promise.reject(new Error('unavailable: the bench is not booted'));
+      const answer = benchIo.run(op);
+      // A write is a bench change. Report it the way an edit is reported, so a
+      // plugin short shows up in the fault sentence at once instead of at the
+      // next time somebody touches the bench.
+      if (op?.op === 'pin.write') {
+        void answer.then(() => refreshBenchDiagnosis(), () => {});
+      }
+      return answer;
+    },
     audio: bodyAudioLink ?? undefined,
     sketch: {
       ctx: () => {

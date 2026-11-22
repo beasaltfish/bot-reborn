@@ -68,14 +68,18 @@ export function createBenchIo(hooks = {}) {
 
   /**
    * A write without a `safe` cannot be undone on disconnect, so it is refused
-   * before the pin moves at all (design §6: every write carries one).
+   * before the pin moves at all (design §6: every write carries one). A `safe`
+   * that is not 0 or 1 is refused too, not rounded to a level: `2` used to drive
+   * the pin to 1 on disconnect. The loader and `commandProblem` refuse it
+   * first; this is the last line, for an op sent by hand.
    * @param {number} pin @param {0 | 1} level @param {number | undefined} safe
    */
   function remember(pin, level, safe) {
     if (typeof safe !== 'number' || !Number.isFinite(safe)) {
       throw new Error('bad-args: a write needs a safe value');
     }
-    if (!written.has(pin)) written.set(pin, safe ? 1 : 0);
+    if (safe !== 0 && safe !== 1) throw new Error('bad-args: safe must be 0 or 1');
+    if (!written.has(pin)) written.set(pin, /** @type {0 | 1} */ (safe));
     writePin(pin, level);
   }
 
