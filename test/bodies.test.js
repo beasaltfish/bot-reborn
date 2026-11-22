@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  TEMPLATES, TEMPLATE_IDS, bodyById, bodyProblem, labelOf, resolveBody,
+  TEMPLATES, TEMPLATE_IDS, bodyById, bodyProblem, labelOf, pluginBodies, registerPlugins, resolveBody,
 } from '../core/bodies.js';
+import { pluginBody, pointCommand } from './fixtures/plugin.js';
 
 /** Every template, in the admin's order. The table is the only list. */
 const BODIES = Object.values(TEMPLATES);
@@ -374,3 +375,22 @@ test('a resolved body owns its actions: editing one does not edit the template',
   steps.maxItems = 1;
   assert.equal(/** @type {any} */ (TEMPLATES.toy.actions[0].args).properties.steps.maxItems, 5);
 });
+
+test('a registered plugin resolves like any other body', (t) => {
+  t.after(() => registerPlugins({}));
+  registerPlugins({ 'my-servo': pluginBody({ id: 'my-servo', commands: [pointCommand] }) });
+
+  assert.deepEqual(Object.keys(pluginBodies()), ['my-servo']);
+  assert.equal(bodyById('my-servo')?.id, 'my-servo');
+
+  const b = resolveBody('my-servo', { template: 'my-servo' });
+  assert.equal(b.template, 'my-servo');
+  assert.equal(b.commands?.[0].name, 'point');
+  assert.deepEqual(b.capabilities, ['hear', 'speak']);
+
+  // Registering replaces the whole set: a plugin removed from disk is gone.
+  registerPlugins({});
+  assert.deepEqual(pluginBodies(), {});
+  assert.equal(resolveBody('my-servo').template, 'none');
+});
+

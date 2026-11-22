@@ -74,6 +74,8 @@ import { SOUNDS } from './audio/sfx.js';
  *   capabilities: Capability[],
  *   actions: Action[],
  *   fixedTools: string[],
+ *   commands?: import('./io-program.js').Command[],
+ *   parts?: string[],
  *   triggers?: Trigger[],
  *   prompts: Prompts,
  *   firmware: string | null,
@@ -414,8 +416,45 @@ export const TEMPLATES = {
 /** In the admin's order. @type {BodyId[]} */
 export const TEMPLATE_IDS = /** @type {BodyId[]} */ (Object.keys(TEMPLATES));
 
-/** @param {string} id @returns {Body | undefined} */
+/**
+ * Plugin bodies, by id, as the server loaded them from disk. A module-level
+ * registry rather than an argument because three callers (the brain, the admin
+ * API and the simulator) resolve bodies by id from config, not from a list
+ * handed down at startup.
+ * @type {Record<string, Body>}
+ */
+let PLUGINS = {};
+
+/**
+ * Replace the whole plugin set. Replacement rather than a merge is the point:
+ * the caller has just read a directory, so whatever it found is the truth, and
+ * a plugin deleted from disk must not linger in the registry. A failed load
+ * therefore leaves the previous set untouched instead of a half-built mix.
+ * @param {Record<string, Body>} plugins
+ * @returns {void}
+ */
+export function registerPlugins(plugins) {
+  PLUGINS = plugins && typeof plugins === 'object' && !Array.isArray(plugins) ? { ...plugins } : {};
+}
+
+/**
+ * The plugin bodies, by id. A copy, so a reader cannot edit the registry by
+ * accident; the bodies themselves are the loader's and are not shared with
+ * `resolveBody`, which clones what it hands out.
+ * @returns {Record<string, Body>}
+ */
+export function pluginBodies() {
+  return { ...PLUGINS };
+}
+
+/**
+ * One body, by id. Plugins win over templates: a plugin is installed locally
+ * on purpose, and the loader refuses to let one take a template's name, so
+ * there is never an honest collision here.
+ * @param {string} id @returns {Body | undefined}
+ */
 export function bodyById(id) {
+  if (Object.hasOwn(PLUGINS, id)) return PLUGINS[id];
   const table = /** @type {Record<string, Body>} */ (TEMPLATES);
   return Object.hasOwn(table, id) ? table[id] : undefined;
 }
@@ -433,9 +472,8 @@ export function bodyById(id) {
  * @returns {Body}
  */
 export function resolveBody(id, patch = {}) {
-  const table = /** @type {Record<string, Body>} */ (TEMPLATES);
   const wanted = patch.template ?? id;
-  const base = Object.hasOwn(table, wanted) ? table[wanted] : TEMPLATES.none;
+  const base = bodyById(wanted) ?? TEMPLATES.none;
 
   const actions = patch.actions ?? base.actions;
   const promptSource = patch.prompts ? { ...base.prompts, ...patch.prompts } : base.prompts;
