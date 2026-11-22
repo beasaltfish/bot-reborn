@@ -5,6 +5,7 @@ import { createBoardRuntime } from '../../sim/firmware/runtime.js';
 import { emptyBench, emptyBoard } from '../../sim/bench.js';
 import { createProvisioning } from '../../sim/provision.js';
 import { rejectCopy } from '../../sim/ui/reject-copy.js';
+import { createBenchIo } from '../../sim/bench-io.js';
 
 const bench = emptyBench();
 const board = { ...bench.board, settings: { ...bench.board.settings, token: 'a'.repeat(32) } };
@@ -69,6 +70,25 @@ test('a failing or unknown op becomes ok:false, and the runtime keeps running', 
   opts.onMessage({ type: 'cmd', id: 9, op: 'pin.write', args: { pin: 5, level: 0 } });
   await new Promise((r) => setImmediate(r));
   assert.equal(sent.at(-1).id, 9);
+  h.runtime.stop();
+});
+
+test('a pwm cmd answers ok:false through the bench and leaves the pin untouched', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  /** @type {any} */ let opts;
+  /** @type {any[]} */ const sent = [];
+  const io = createBenchIo({ pins: { 5: 0 } });
+  const h = harness({
+    connect: (/** @type {any} */ o) => { opts = o; return { close() {}, send: (/** @type {any} */ m) => sent.push(m), sendAudio() {} }; },
+    onIo: (/** @type {any} */ op) => io.run(op),
+  });
+  h.runtime.start();
+  t.mock.timers.tick(1000);
+  opts.onMessage({ type: 'cmd', id: 11, op: 'pwm', args: { pin: 5, us: 1450 }, safe: 0, timeoutMs: 500 });
+  await new Promise((r) => setImmediate(r));
+  assert.equal(sent.at(-1).ok, false);
+  assert.match(sent.at(-1).error, /unavailable/);
+  assert.equal(io.level(5), 0);
   h.runtime.stop();
 });
 

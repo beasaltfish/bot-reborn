@@ -175,10 +175,13 @@ export function applyLedDamage(bench) {
  * A bounded GPIO-driven LED: high-side (GPIO -> resistor -> LED -> GND) and
  * low-side (3V3 -> resistor -> LED -> GPIO sinking). Only one resistor and one
  * LED; anything else is unsupported, never assumed safe.
+ * `gpio` is the pin that drove the answer, so a caller that owns the pin (a
+ * plugin command, not this firmware) can decide whether the light counts.
  * @param {import('../bench.js').Bench} bench
  * @param {string} ledId
  * @param {Record<string, 'high'|'low'|'high-z'>} gpioOutputs
  * @param {{ gpioSourceMa?: number }} [profile]
+ * @returns {{ state: string, currentMa: number, gpio?: number }}
  */
 export function evaluateGpioLed(bench, ledId, gpioOutputs, profile = {}) {
   const n = nets(bench);
@@ -194,24 +197,29 @@ export function evaluateGpioLed(bench, ledId, gpioOutputs, profile = {}) {
     const level = gpioOutputs[name];
     if (!level || level === 'high-z') continue;
     const gpio = gpioPoint(name);
+    const gpioPin = Number(name.slice(4));
     for (const r of resistors) {
       const ohms = Number(r.properties.ohms);
       if (!Number.isFinite(ohms) || ohms <= 0) continue;
       const highSide = (same(`${r.id}:1`, gpio) && same(`${r.id}:2`, `${ledId}:A`) && same(`${ledId}:K`, 'esp:GND'))
         || (same(`${r.id}:2`, gpio) && same(`${r.id}:1`, `${ledId}:A`) && same(`${ledId}:K`, 'esp:GND'));
       if (highSide) {
-        if (level !== 'high') return { state: 'off', currentMa: 0 };
+        if (level !== 'high') return { state: 'off', currentMa: 0, gpio: gpioPin };
         const currentMa = Math.max(0, (3.3 - 1.8) / ohms * 1000);
         const limit = profile.gpioSourceMa ?? 20;
-        return currentMa > limit ? { state: 'overcurrent', currentMa } : { state: 'on', currentMa };
+        return currentMa > limit
+          ? { state: 'overcurrent', currentMa, gpio: gpioPin }
+          : { state: 'on', currentMa, gpio: gpioPin };
       }
       const lowSide = (same(`${r.id}:1`, 'esp:3V3') && same(`${r.id}:2`, `${ledId}:A`) && same(`${ledId}:K`, gpio))
         || (same(`${r.id}:2`, 'esp:3V3') && same(`${r.id}:1`, `${ledId}:A`) && same(`${ledId}:K`, gpio));
       if (lowSide) {
-        if (level !== 'low') return { state: 'off', currentMa: 0 };
+        if (level !== 'low') return { state: 'off', currentMa: 0, gpio: gpioPin };
         const currentMa = Math.max(0, (3.3 - 1.8) / ohms * 1000);
         const limit = profile.gpioSourceMa ?? 20;
-        return currentMa > limit ? { state: 'overcurrent', currentMa } : { state: 'on', currentMa };
+        return currentMa > limit
+          ? { state: 'overcurrent', currentMa, gpio: gpioPin }
+          : { state: 'on', currentMa, gpio: gpioPin };
       }
     }
   }

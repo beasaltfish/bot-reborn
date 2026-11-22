@@ -41,7 +41,7 @@ offerInstall(installButton);
 /** @type {Record<string, import('../core/strings.js').StringKey>} */
 const REJECT = {
   token: 'rejectToken', busy: 'rejectBusy', unconfigured: 'rejectUnconfigured',
-  protocol: 'rejectProtocol', origin: 'rejectOrigin',
+  protocol: 'rejectProtocol', origin: 'rejectOrigin', bridge: 'rejectBridge',
 };
 
 /** @type {AudioPipeline | null} */ let pipeline = null;

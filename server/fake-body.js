@@ -10,7 +10,7 @@
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import WebSocket from 'ws';
-import { PROTOCOL, WATCHDOG_MS, RATE, encode, parse } from '../core/protocol.js';
+import { WATCHDOG_MS, RATE, encode, parse } from '../core/protocol.js';
 import { toInt16 } from '../core/audio/pcm.js';
 import { int16ToBytes, parseWav, resample } from './audio/pcm.js';
 
@@ -58,7 +58,9 @@ export async function connectFakeBody(url, opts) {
   });
 
   await new Promise((resolve, reject) => { ws.once('open', resolve); ws.once('error', reject); });
-  ws.send(encode({ type: 'hello', protocol: PROTOCOL, token: opts.token }));
+  // It speaks 2: it has no `cmd` bridge, so a plugin character must refuse it
+  // at hello instead of waiting on every IO op until it times out.
+  ws.send(encode({ type: 'hello', protocol: 2, token: opts.token }));
 
   const reply = await first;
   if (!reply || reply.type !== 'welcome') {

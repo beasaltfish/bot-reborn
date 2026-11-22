@@ -16,7 +16,7 @@ import { DEVICES } from './catalog.js';
 import { PROFILES, checkResources } from './profiles.js';
 import { ownershipIssues } from '../firmware/ownership.js';
 
-/** @typedef {{ profile?: import('./profiles.js').Profile, mode?: import('../electrical/supply.js').OperatingMode, stimuli?: object, devices?: Record<string, any>, ownership?: Record<string, 'board'|'circuit'|'unknown'>, deviceStates?: Record<string, string>, gpioOutputs?: Record<string, 'high'|'low'|'high-z'>, initializing?: boolean, firmware?: any }} Options */
+/** @typedef {{ profile?: import('./profiles.js').Profile, mode?: import('../electrical/supply.js').OperatingMode, stimuli?: object, devices?: Record<string, any>, ownership?: Record<string, 'board'|'circuit'|'unknown'>, deviceStates?: Record<string, string>, gpioOutputs?: Record<string, 'high'|'low'|'high-z'>, ioPins?: Set<number>, initializing?: boolean, firmware?: any }} Options */
 
 /** Deduplicate global findings by code and affected instances. */
 /** @param {{code:string, instances:string[], points:string[], origin?:string}[]} faults */
@@ -38,7 +38,7 @@ export function uniqueFaults(faults) {
  * @param {import('../bench.js').Bench} bench
  * @param {Options} [options]
  */
-export function evaluateDevices(bench, { profile = PROFILES[0], mode = 'idle', stimuli, devices = DEVICES, ownership = {}, deviceStates = {}, gpioOutputs = {}, initializing = false, firmware } = {}) {
+export function evaluateDevices(bench, { profile = PROFILES[0], mode = 'idle', stimuli, devices = DEVICES, ownership = {}, deviceStates = {}, gpioOutputs = {}, ioPins = new Set(), initializing = false, firmware } = {}) {
   const electrical = evaluateElectrical(bench, { profile, mode, stimuli, devices });
   const resources = checkResources(bench, profile, devices, { ownership, drivers: firmware?.drivers, firmware }).filter(f => {
     if (f.code !== 'spi-chip-select-conflict' || f.instances.length !== 2) return true;
@@ -56,7 +56,7 @@ export function evaluateDevices(bench, { profile = PROFILES[0], mode = 'idle', s
     .map(p => {
       const driven = evaluateGpioLed(bench, p.id, gpioOutputs, profile);
       const fromGpio = driven.state !== 'off';
-      return { id: p.id, fromGpio, outcome: fromGpio ? driven : evaluateLedBench(bench, p.id) };
+      return { id: p.id, fromGpio, pin: driven.gpio, outcome: fromGpio ? driven : evaluateLedBench(bench, p.id) };
     }) : [];
   /** @type {Record<string, {code:string, severity:import('../electrical/supply.js').ElectricalFault['severity']}>} */
   const ledCodes = {
@@ -118,7 +118,18 @@ export function evaluateDevices(bench, { profile = PROFILES[0], mode = 'idle', s
     if (own === 'unknown') return false;
     return true;
   }));
-  const leds = gate(Object.fromEntries(ledResults.map(({ id, outcome, fromGpio }) => [id, { ...outcome, source: fromGpio ? 'gpio' : 'supply' }])));
+  const leds = Object.fromEntries(ledResults.flatMap(({ id, outcome, fromGpio, pin }) => {
+    if (!initializing) {
+      const own = ownership[id];
+      if (own === 'unknown') return [];
+      // A board-owned LED normally waits for the firmware to claim it. A plugin
+      // command owns its pins instead, so an LED it drives is admitted without
+      // pretending the firmware initialised it.
+      const byIo = fromGpio && Number.isInteger(pin) && ioPins.has(/** @type {number} */ (pin));
+      if (own === 'board' && deviceStates[id] !== 'active' && !byIo) return [];
+    }
+    return [[id, { ...outcome, source: fromGpio ? 'gpio' : 'supply' }]];
+  }));
   return {
     electrical, resources, parts, faults, burns, deviceStates, ownership, leds,
     bme280: gate(bme280),
