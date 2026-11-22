@@ -115,6 +115,10 @@ function asModule(value: unknown): Module | null {
   const label = row.label as { en?: unknown; zh?: unknown } | undefined;
   if (typeof row.id !== 'string' || row.id === '') return null;
   if (!label || typeof label.en !== 'string' || typeof label.zh !== 'string') return null;
+  // The examples are what adoption writes into a character, so a row without a
+  // list of them is not a row to offer: it would install a body and then have
+  // nothing to merge, which is a card the person cannot use.
+  if (!Array.isArray(row.examples)) return null;
   const note = row.note as { en?: unknown; zh?: unknown } | null | undefined;
   return {
     id: row.id,
@@ -124,7 +128,7 @@ function asModule(value: unknown): Module | null {
       ? { en: note.en, zh: note.zh }
       : null,
     installed: row.installed === true,
-    examples: (Array.isArray(row.examples) ? row.examples : []) as BodyAction[],
+    examples: row.examples as BodyAction[],
   };
 }
 
@@ -234,7 +238,14 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
         .then((r) => (r.ok ? r.json() : null))
         .catch(() => null);
       const entries = takeBodies(listed);
-      if (entries) setPlugins(entries);
+      // The install wrote a body, but this page could not read it back: without
+      // it registered, adopting would refuse the module's own examples as
+      // unknown commands, so nothing is offered and the failure is said.
+      if (!entries) {
+        setInstallFailure('');
+        return;
+      }
+      setPlugins(entries);
       setModules((rows) => rows.map((row) => (row.id === id ? { ...row, installed: true } : row)));
       setPendingExamples({
         id,
@@ -249,17 +260,39 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
     }
   };
 
-  /** The one write of an adoption: the body follows the module, with the
-   * actions already written plus the examples that were confirmed. */
+  /**
+   * The one write of an adoption: the body follows the module, with the
+   * actions the character already had plus the examples that were confirmed.
+   * An action the module body cannot run is left behind and named, because a
+   * written one would be offered to the model and then refused by the hardware.
+   */
   const adopt = (id: string, examples: BodyAction[]) => {
     // Only the character's own actions are carried: what it merely inherited
     // belongs to the template it is leaving, and a pose has no screen here.
     const current = Array.isArray(patch.actions) ? patch.actions : [];
-    update({
-      config: {
-        body: adoptModule(patch, id, current, examples, (name) => Object.hasOwn(TEMPLATES, name)).body,
-      },
-    });
+    const moduleBody = bodyById(id) ?? resolveBody(id, { template: id });
+    /** `bodyProblem` for the module body carrying these actions; triggers are
+     * judged against the actions that survived, as `resolveBody` reads them. */
+    const accepts = (actions: BodyAction[]) => {
+      const names = new Set(actions.map((action) => action.name));
+      const triggers = (moduleBody.triggers ?? []).filter((trigger) => names.has(trigger.action));
+      return bodyProblem({ ...moduleBody, actions, triggers });
+    };
+    const { body, dropped } = adoptModule(
+      patch, id, current, examples, (name) => Object.hasOwn(TEMPLATES, name), accepts,
+    );
+    // What the brain will read after this PATCH. A body still refused is not
+    // written: the sentence names the reason and the character keeps what it
+    // had, rather than saving tools nothing can run.
+    const problem = bodyProblem(resolveBody(body.id ?? patch.id ?? id, { ...patch, ...body }));
+    if (problem) {
+      setNotice({ text: problem, cleared: false });
+      return;
+    }
+    setNotice(dropped.length > 0
+      ? { text: `${t('moduleActionsDropped')}${dropped.join(', ')}`, cleared: false }
+      : null);
+    update({ config: { body } });
     setPendingExamples(null);
   };
   useEffect(() => {
@@ -337,9 +370,9 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
               <span className="hint">{t('moduleExamples').replace('{n}', String(m.examples.length))}</span>
               {m.note && <p className="hint">{lang === 'zh' ? m.note.zh : m.note.en}</p>}
               {m.installed ? (
-                <span className="badge">{t('installed')}</span>
+                <span className="badge ok">{t('installed')}</span>
               ) : (
-                <button type="button" disabled={installing === m.id} onClick={() => installModule(m.id)}>
+                <button type="button" disabled={installing !== null} onClick={() => installModule(m.id)}>
                   {t('addToCharacter')}
                 </button>
               )}
@@ -356,9 +389,21 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
             </div>
           ))}
           {installFailure !== null && (
-            <p className="hint error" role="alert">{t('moduleInstallFailed')}{installFailure}</p>
+            <p className="error" role="alert">
+              {installFailure.trim() === ''
+                ? t('moduleInstallFailed')
+                : `${t('moduleInstallFailed')} ${installFailure}`}
+            </p>
           )}
         </section>
+      )}
+      {/* Under both panels: a refusal or a dropped action is about the body as
+          a whole, whether it came from a card above or the module panel. */}
+      {notice && (
+        <p className="hint" role="status">
+          {notice.cleared && <>{t('bodySwitchCleared')} </>}
+          <span>{notice.text}</span>
+        </p>
       )}
       <div className="body-cards">
         {shown.map((b) => {
@@ -406,12 +451,6 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
             own is told apart by carrying them. Remounted on a switch, so the
             box starts from the newly chosen body. */}
         <ActionsEditor key={chosen} detail={detail} update={update} />
-        {notice && (
-          <p className="hint" role="status">
-            {notice.cleared && <>{t('bodySwitchCleared')} </>}
-            <span>{notice.text}</span>
-          </p>
-        )}
       </div>
         <div className="body-side">
           <div className="body-preview" data-testid="body-preview">

@@ -11,22 +11,37 @@ export interface BodyPatch {
   actions?: BodyAction[] | null;
 }
 
+/** The write, and the current actions the module body refused. */
+export interface AdoptModuleResult {
+  body: BodyPatch;
+  /** Names of the character's own actions that were not carried over. */
+  dropped: string[];
+}
+
 /**
  * The body a character has after adopting a module.
  *
  * `template` is always the module, so the brain resolves the module's body and
  * its commands. `id` is rewritten only when it names a template: a body of one's
- * own (`my-dog`) keeps its name, exactly as switching template does. Actions are
- * merged by name, with an example winning a collision, and the order is the
- * person's own actions first — what they wrote stays where they left it. The
- * result is always an array: `null` means "inherit", which would put the old
- * body's actions back on the next read.
+ * own (`my-dog`) keeps its name, exactly as switching template does.
+ *
+ * Actions are merged by name, with an example winning a collision, and the
+ * person's own actions stay in their order. An example is the module's own
+ * words and is always kept; a current action is kept only when `accepts` says
+ * the module body can still run it. Testing one action at a time means what
+ * survives does not depend on what was dropped before it. The names that did
+ * not survive come back in `dropped`, so the page can say which and why.
+ *
+ * The result is always an array: `null` means "inherit", which would put the
+ * old body's actions back on the next read.
  * @param {BodyPatch} patch the body as it is now
  * @param {string} moduleId the body the module installs
  * @param {BodyAction[]} current the actions the character carries itself
  * @param {BodyAction[]} examples the module's examples, as confirmed
  * @param {(id: string) => boolean} isTemplate whether an id is a template name
- * @returns {{ body: BodyPatch }}
+ * @param {(actions: BodyAction[]) => string | null} accepts `bodyProblem` for
+ *   the module's body carrying these actions, or null when it would take them
+ * @returns {AdoptModuleResult}
  */
 export function adoptModule(
   patch: BodyPatch,
@@ -34,14 +49,28 @@ export function adoptModule(
   current: BodyAction[],
   examples: BodyAction[],
   isTemplate: (id: string) => boolean,
-): { body: BodyPatch } {
+  accepts: (actions: BodyAction[]) => string | null,
+): AdoptModuleResult {
   const merged = [...current];
   for (const example of examples) {
     const at = merged.findIndex((action) => action.name === example.name);
     if (at === -1) merged.push(example);
     else merged[at] = example;
   }
-  const body: BodyPatch = { template: moduleId, actions: merged };
+
+  const fromModule = new Set(examples.map((example) => example.name));
+  const kept: BodyAction[] = [];
+  const dropped: string[] = [];
+  for (const action of merged) {
+    if (fromModule.has(action.name)) {
+      kept.push(action);
+      continue;
+    }
+    if (accepts([...kept, action]) === null) kept.push(action);
+    else dropped.push(action.name);
+  }
+
+  const body: BodyPatch = { template: moduleId, actions: kept };
   if (typeof patch.id === 'string' && isTemplate(patch.id)) body.id = moduleId;
-  return { body };
+  return { body, dropped };
 }

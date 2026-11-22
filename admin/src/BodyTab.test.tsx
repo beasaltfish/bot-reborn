@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { TEMPLATES, pluginBodies, registerPlugins } from '../../core/bodies.js';
 import { BodyTab } from './BodyTab';
 import { installFakeApi } from './test/fakeApi';
-import type { BodyAction, Detail } from './types';
+import type { BodyAction, Detail, Patch } from './types';
 
 const detail = (id: 'toy' | 'pet' | 'tarot' | 'dry-run' | 'none' = 'pet'): Detail => ({
   id: 'A', name: 'A', token: 'ab'.repeat(16), config: {
@@ -72,7 +72,15 @@ const LED_BODY = {
  * with the call log, so the order the page asks in can be checked. The board
  * does not exist before the install, as in a brain that just started.
  */
-const moduleFetch = ({ installError }: { installError?: string } = {}) => {
+const moduleFetch = ({ installError, refreshFails = false, examples, rows }: {
+  installError?: string;
+  /** The install wrote the body, but `/api/bodies` cannot be read back. */
+  refreshFails?: boolean;
+  /** The examples the install answers with, when not the module's own. */
+  examples?: unknown;
+  /** The `/api/modules` rows, when the test is about a malformed catalogue. */
+  rows?: unknown[];
+} = {}) => {
   const calls: string[] = [];
   let installed = false;
   const answer = (ok: boolean, body: unknown) => ({ ok, json: async () => body });
@@ -80,13 +88,16 @@ const moduleFetch = ({ installError }: { installError?: string } = {}) => {
     const path = String(input);
     const method = init?.method ?? 'GET';
     calls.push(`${method} ${path}`);
-    if (path === '/api/modules') return answer(true, [{ ...LED, installed }]);
+    if (path === '/api/modules') return answer(true, rows ?? [{ ...LED, installed }]);
     if (path === '/api/modules/led-module/install') {
       if (installError) return answer(false, { error: installError });
       installed = true;
-      return answer(true, { body: LED_BODY, examples: LED.examples });
+      return answer(true, { body: LED_BODY, examples: examples ?? LED.examples });
     }
-    if (path === '/api/bodies') return answer(true, installed ? [LED_BODY] : []);
+    if (path === '/api/bodies') {
+      if (!installed) return answer(true, []);
+      return refreshFails ? answer(false, {}) : answer(true, [LED_BODY]);
+    }
     return answer(false, {});
   }));
   return calls;
@@ -355,18 +366,52 @@ describe('BodyTab', () => {
 
   it('installs, refreshes the body list, then adopts with the confirmed examples', async () => {
     const calls = moduleFetch();
-    const update = vi.fn();
+    // Registration must already have happened when the PATCH is handed over:
+    // this assertion runs inside the mock, at write time.
+    const update = vi.fn((_patch: Patch) => {
+      expect(pluginBodies()).toHaveProperty('led-module');
+    });
     renderTab(detail(), update);
     await userEvent.click(await screen.findByRole('button', { name: /add to this character/i }));
     await userEvent.click(screen.getByRole('button', { name: /add 2 example actions/i }));
-    expect(update).toHaveBeenCalledWith({ config: { body: expect.objectContaining({ template: 'led-module' }) } });
-    // The examples call `led_on`/`led_off`: the body must be registered in this
-    // page before they can validate, so the refresh comes after the install.
-    expect(pluginBodies()).toHaveProperty('led-module');
+    const patch = update.mock.calls[0][0] as Patch;
+    expect(patch.config?.body).toEqual(expect.objectContaining({ template: 'led-module' }));
+    // The confirmed examples are the point of the step, not just the template.
+    expect(patch.config?.body?.actions?.map((action) => action.name)).toEqual(['light_up', 'light_down']);
     const installed = calls.indexOf('POST /api/modules/led-module/install');
     const refresh = calls.indexOf('GET /api/bodies', installed + 1);
     expect(installed).toBeGreaterThan(-1);
     expect(refresh).toBeGreaterThan(installed);
+  });
+
+  it('adopting keeps the actions the module can run and says what it left behind', async () => {
+    moduleFetch();
+    const d = detail('toy');
+    d.config.body.actions = structuredClone(TEMPLATES.toy.actions) as BodyAction[];
+    const update = vi.fn();
+    renderTab(d, update);
+    await userEvent.click(await screen.findByRole('button', { name: /add to this character/i }));
+    await userEvent.click(screen.getByRole('button', { name: /add 2 example actions/i }));
+    const patch = update.mock.calls[0][0] as Patch;
+    // The toy drives; a voice-only module body does not. A sound needs only the
+    // voice, so it is carried over with the module's own examples.
+    expect(patch.config?.body?.actions?.map((action) => action.name))
+      .toEqual(['play_sound', 'light_up', 'light_down']);
+    const status = screen.getByRole('status');
+    expect(status).toHaveTextContent(/cannot run these actions/i);
+    expect(status).toHaveTextContent(/move, cruise, stop/);
+  });
+
+  it('does not write an adoption the module body still refuses, and says why', async () => {
+    // An example that takes the tool-writing action's name: the merged body is
+    // refused, so nothing may be written — the sentence is the whole result.
+    moduleFetch({ examples: [{ name: 'set_reply_language', label: { en: 'x', zh: 'x' }, say: 'x', run: [] }] });
+    const update = vi.fn();
+    renderTab(detail(), update);
+    await userEvent.click(await screen.findByRole('button', { name: /add to this character/i }));
+    await userEvent.click(screen.getByRole('button', { name: /add 1 example action/i }));
+    expect(screen.getByRole('status')).toHaveTextContent(/set_reply_language is the tool that writes config/i);
+    expect(update).not.toHaveBeenCalled();
   });
 
   it('marks the module installed and drops the button once its body is here', async () => {
@@ -398,5 +443,28 @@ describe('BodyTab', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/refused by the plugin loader/);
     expect(update).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: /example actions/i })).toBeNull();
+  });
+
+  it('offers nothing to adopt when the installed body cannot be read back', async () => {
+    // The brain wrote the body but `/api/bodies` failed: without the registry
+    // entry the examples would read as unknown commands, so the card must not
+    // claim the install succeeded and swallow the error.
+    moduleFetch({ refreshFails: true });
+    const update = vi.fn();
+    renderTab(detail(), update);
+    await userEvent.click(await screen.findByRole('button', { name: /add to this character/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/could not install this module/i);
+    expect(screen.queryByRole('button', { name: /example actions/i })).toBeNull();
+    expect(screen.queryByText(/installed/i)).toBeNull();
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('skips a module row whose examples are not a list', async () => {
+    moduleFetch({ rows: [{ ...LED, examples: undefined }] });
+    renderTab(detail());
+    // The panel is empty, so the page keeps exactly the body cards it had.
+    await vi.waitFor(() => expect(pluginBodies()).toEqual({}));
+    expect(screen.queryByText('LED module')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Modules' })).toBeNull();
   });
 });
