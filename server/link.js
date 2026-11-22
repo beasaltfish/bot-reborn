@@ -13,6 +13,7 @@ import {
 /**
  * @typedef {{
  *   readonly open: boolean,
+ *   readonly protocol: number,
  *   send(msg: object): void,
  *   sendAudio(bytes: Uint8Array): void,
  *   onAudio(fn: (bytes: Uint8Array) => void): void,
@@ -24,7 +25,7 @@ import {
 
 /**
  * @param {{ server: import('node:http').Server,
- *           admit: (token: string, hello: any) => { id: string, name: string, bodyKind?: 'phone' } | string,
+ *           admit: (token: string, hello: any) => { id: string, name: string, bodyKind?: 'phone', plugin?: boolean } | string,
  *           onBody: (conn: BodyConn, who: { id: string, name: string, bodyKind?: 'phone' }) => void,
  *           heartbeatMs?: number, watchdogMs?: number, helloTimeoutMs?: number,
  *           allowedOrigins?: string[], log?: (line: string) => void }} opts
@@ -60,12 +61,15 @@ export function createLink(opts) {
     /** @type {(() => void)[]} */ const closes = [];
     let welcomed = false;
     let open = true;
+    /** The version the body said in its hello; 0 until then. */
+    let protocol = 0;
     let lastSeen = Date.now();
     /** @type {ReturnType<typeof setInterval> | null} */ let beat = null;
 
     /** @type {BodyConn} */
     const conn = {
       get open() { return open; },
+      get protocol() { return protocol; },
       // A closed socket is a no-op, not a throw: the session's emergency stop
       // runs AFTER the body is gone, and must not fail for that reason.
       send: (msg) => { if (open) ws.send(encode(msg)); },
@@ -95,7 +99,9 @@ export function createLink(opts) {
       if (!welcomed) {
         if (msg.type !== 'hello') return;
         clearTimeout(helloTimer);
-        if (msg.protocol !== PROTOCOL) return reject('protocol');
+        // 2 is the version every shipped body speaks. 3 is the bridge; a body
+        // that predates it keeps working with the built-in templates.
+        if (msg.protocol !== 2 && msg.protocol !== PROTOCOL) return reject('protocol');
         // Any web page the user opens may connect to localhost: browsers do
         // not apply same-origin rules to WebSockets. An ESP32 or a script
         // sends no Origin. A page does — and the phone's page comes from this
@@ -108,10 +114,14 @@ export function createLink(opts) {
         // nothing until the token (and origin, above) has been accepted.
         const who = opts.admit(msg.token, msg);
         if (typeof who === 'string') return reject(who);
+        // A plugin body's commands are `cmd`/`result`; a v2 body would ignore
+        // them, and every action that calls one would silently do nothing.
+        if (who.plugin && msg.protocol < 3) return reject('bridge');
         if (active.has(who.id)) return reject('busy');
         id = who.id;
         active.set(id, ws);
         welcomed = true;
+        protocol = msg.protocol;
         // Welcome first: a body may treat anything before it as a protocol
         // error, and the robot starts talking (its state) the moment it is
         // built. Building it in the same synchronous turn is still early

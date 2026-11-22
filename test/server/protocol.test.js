@@ -49,8 +49,9 @@ test('a hello without a token still parses, so the link can say why it is refuse
   assert.notEqual(parse(encode({ type: 'hello', protocol: PROTOCOL }), 'body'), null);
 });
 
-test('protocol 2: hello is a version and a token, nothing about the body', () => {
-  assert.equal(PROTOCOL, 2);
+test('protocol 3: hello is a version and a token, and 2 is still a hello', () => {
+  assert.equal(PROTOCOL, 3);
+  assert.ok(parse(JSON.stringify({ type: 'hello', protocol: 3, token: 't' }), 'body'));
   assert.ok(parse(JSON.stringify({ type: 'hello', protocol: 2, token: 't' }), 'body'));
   assert.equal(parse(JSON.stringify({ type: 'hello', token: 't' }), 'body'), null);
 });

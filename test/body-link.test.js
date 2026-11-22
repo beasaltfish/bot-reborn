@@ -72,6 +72,13 @@ test('it says hello first, with its token, and is welcomed by name', () => {
   r.link.close();
 });
 
+test('an explicit protocol is what the hello carries, so a bridge can say 3', () => {
+  const r = rig({ protocol: 3 });
+  r.socket().open();
+  assert.equal(r.socket().texts[0].protocol, 3);
+  r.link.close();
+});
+
 test('no audio goes up before the welcome (spec §3)', () => {
   const r = rig();
   r.socket().open();

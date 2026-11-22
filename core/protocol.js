@@ -9,8 +9,11 @@
 /**
  * 2 since 2026-10-17: a body no longer says what it has (caps) or reports its
  * motors — how a character moves is its config's to say (body motion spec §4).
+ * 3 since 2026-11-22: a body may answer one bounded IO op at a time (`cmd` /
+ * `result`, body plugins design §6). A brain accepts 2 as well, for the
+ * built-in bodies that predate the bridge; only a plugin body needs 3.
  */
-export const PROTOCOL = 2;
+export const PROTOCOL = 3;
 
 /** 16-bit little-endian mono, both directions. Not negotiated. */
 export const RATE = 16000;
@@ -63,6 +66,9 @@ const FROM_BODY = {
   pong: () => true,
   // The tarot wand was shaken and is still again (wand shake spec §Where each part lives).
   shake: () => true,
+  // The answer to one `cmd`, matched by its id. `ok: false` carries a phrase the
+  // brain traces; `value` is the read's raw number (body plugins design §6).
+  result: (m) => typeof m.id === 'number' && typeof m.ok === 'boolean',
 };
 
 /** @type {Record<string, (m: any) => boolean>} */
@@ -76,6 +82,9 @@ const FROM_BRAIN = {
   state: (m) => typeof m.state === 'string',
   ping: () => true,
   pong: () => true,
+  // One IO primitive, never a program: the brain expands a command and sends
+  // each op on its own (body plugins design §6).
+  cmd: (m) => typeof m.id === 'number' && typeof m.op === 'string',
   fault: (m) => ['stt', 'llm', 'tts'].includes(m.part)
     && (m.status === null || Number.isInteger(m.status))
     && ['http', 'timeout', 'network', 'other'].includes(m.kind),

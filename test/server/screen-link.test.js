@@ -115,6 +115,14 @@ test('a size with no frames stays connected, blank, and is logged once', async (
   r.close();
 });
 
+test('a protocol 2 board keeps its screen on a protocol 3 brain', async () => {
+  const r = await rig();
+  const old = await hello(r.url, 2, 'a', { w: 320, h: 240 });
+  assert.deepEqual(old.texts[0], { type: 'welcome', name: 'n-a' });
+  old.ws.close();
+  r.close();
+});
+
 test('a bad token, a wrong protocol and a stranger origin are refused', async () => {
   const r = await rig({ allowedOrigins: ['http://ok.test'] });
   const badToken = await hello(r.url, PROTOCOL, 'bad');
