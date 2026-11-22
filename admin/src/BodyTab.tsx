@@ -9,12 +9,17 @@
 // person can check against the box on their desk. What a body lacks is not
 // printed: five lines of "cannot" is a page that argues against itself, and
 // the badges above already say what it does.
+//
+// Above them sits the module panel: a module is a body this repository ships,
+// so it is installed and its example actions adopted in one step rather than
+// retyped — see `bodySwitch.ts` for the write that step makes.
 import { useEffect, useState } from 'react';
 import { TEMPLATES, bodyById, bodyProblem, labelOf, registerPlugins, resolveBody } from '../../core/bodies.js';
 import { ActionsEditor } from './ActionsEditor';
 import { BodyDiagram } from './BodyDiagram';
+import { adoptModule } from './bodySwitch';
 import { lang, t, type Key } from './i18n';
-import type { Detail, Patch } from './types';
+import type { BodyAction, Detail, Patch } from './types';
 
 type Body = import('../../core/bodies.js').Body;
 
@@ -88,6 +93,58 @@ function pluginBody(p: PluginBody): Body {
   };
 }
 
+/** One module as `/api/modules` lists it: enough for a card and the adopt step. */
+interface Module {
+  id: string;
+  label: { en: string; zh: string };
+  parts: string[];
+  note: { en: string; zh: string } | null;
+  installed: boolean;
+  examples: BodyAction[];
+}
+
+/** The string entries of a list from the brain, and nothing else. */
+const strings = (value: unknown): string[] => (
+  Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : []
+);
+
+/** One module, if it has what a card needs; a bad row is skipped, not fatal. */
+function asModule(value: unknown): Module | null {
+  if (!value || typeof value !== 'object') return null;
+  const row = value as Record<string, unknown>;
+  const label = row.label as { en?: unknown; zh?: unknown } | undefined;
+  if (typeof row.id !== 'string' || row.id === '') return null;
+  if (!label || typeof label.en !== 'string' || typeof label.zh !== 'string') return null;
+  const note = row.note as { en?: unknown; zh?: unknown } | null | undefined;
+  return {
+    id: row.id,
+    label: { en: label.en, zh: label.zh },
+    parts: strings(row.parts),
+    note: note && typeof note.en === 'string' && typeof note.zh === 'string'
+      ? { en: note.en, zh: note.zh }
+      : null,
+    installed: row.installed === true,
+    examples: (Array.isArray(row.examples) ? row.examples : []) as BodyAction[],
+  };
+}
+
+/**
+ * Parse a `/api/bodies` answer and register it here, so `resolveBody` and
+ * `bodyById` agree with the brain about a plugin id. Replacement, not a merge:
+ * an empty answer must clear what a previous fetch registered, and the cards
+ * and the actions box read the same registry.
+ * @param {unknown} value @returns {PluginBody[] | null} null when not a list
+ */
+function takeBodies(value: unknown): PluginBody[] | null {
+  if (!Array.isArray(value)) return null;
+  const entries = value.map(asPlugin).filter((p): p is PluginBody => p !== null);
+  /** @type {Record<string, Body>} */
+  const registry: Record<string, Body> = {};
+  for (const p of entries) registry[p.id] = pluginBody(p);
+  registerPlugins(registry);
+  return entries;
+}
+
 export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): void }) {
   const patch = detail.config.body;
   // A body of one's own keeps its own id (`my-dog`) and names the template it
@@ -120,19 +177,91 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
     fetch('/api/bodies')
       .then((r) => (r.ok ? r.json() : null))
       .then((j: unknown) => {
-        if (!live || !Array.isArray(j)) return;
-        const entries = j.map(asPlugin).filter((p): p is PluginBody => p !== null);
-        // Replacement, not a merge: an empty list must clear what a previous
-        // fetch (or a test) registered, and the cards below read the same list.
-        /** @type {Record<string, Body>} */
-        const registry: Record<string, Body> = {};
-        for (const p of entries) registry[p.id] = pluginBody(p);
-        registerPlugins(registry);
-        setPlugins(entries);
+        if (!live) return;
+        const entries = takeBodies(j);
+        if (entries) setPlugins(entries);
       })
       .catch(() => {});
     return () => { live = false; };
   }, []);
+  // The modules this repository ships, and whether each body is already here.
+  // A brain without the endpoint simply offers none, like the plugin list.
+  const [modules, setModules] = useState<Module[]>([]);
+  /** The module whose install request is in flight, so its card cannot be
+   * clicked twice. */
+  const [installing, setInstalling] = useState<string | null>(null);
+  /** The sentence an install refused with, or '' when the brain said nothing;
+   * `null` means no failure to show. */
+  const [installFailure, setInstallFailure] = useState<string | null>(null);
+  /** The module installed and waiting for the person to say yes to its
+   * examples. A dialog the page draws itself, so it can be tested and read. */
+  const [pendingExamples, setPendingExamples] = useState<{ id: string; examples: BodyAction[] } | null>(null);
+  useEffect(() => {
+    let live = true;
+    fetch('/api/modules')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: unknown) => {
+        if (!live || !Array.isArray(j)) return;
+        setModules(j.map(asModule).filter((m): m is Module => m !== null));
+      })
+      .catch(() => {});
+    return () => { live = false; };
+  }, []);
+
+  /**
+   * Install a module and then, in this order: re-read `/api/bodies` and
+   * register it, replace the plugin cards, ask about the examples, write the
+   * adoption. The refresh must come before the question: an example that calls
+   * `led_on` is refused as "unknown command" if the page has not registered the
+   * body yet, and the person would be told their own module is broken.
+   */
+  const installModule = async (id: string) => {
+    setInstalling(id);
+    setInstallFailure(null);
+    setPendingExamples(null);
+    try {
+      const res = await fetch(`/api/modules/${encodeURIComponent(id)}/install`, {
+        method: 'POST', headers: { 'X-Bot-Reborn': '1' },
+      });
+      const answer = await res.json().catch(() => ({})) as { error?: unknown; examples?: unknown };
+      // Every failure is a 404 with a sentence: the sentence is what the person
+      // reads, so it is shown instead of a status code.
+      if (!res.ok || typeof answer.error === 'string') {
+        setInstallFailure(typeof answer.error === 'string' ? answer.error : '');
+        return;
+      }
+      const listed = await fetch('/api/bodies')
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null);
+      const entries = takeBodies(listed);
+      if (entries) setPlugins(entries);
+      setModules((rows) => rows.map((row) => (row.id === id ? { ...row, installed: true } : row)));
+      setPendingExamples({
+        id,
+        examples: (Array.isArray(answer.examples) ? answer.examples : []) as BodyAction[],
+      });
+    } catch {
+      // The brain is down or the answer was not JSON: the copy says the install
+      // failed, and nothing has been written.
+      setInstallFailure('');
+    } finally {
+      setInstalling(null);
+    }
+  };
+
+  /** The one write of an adoption: the body follows the module, with the
+   * actions already written plus the examples that were confirmed. */
+  const adopt = (id: string, examples: BodyAction[]) => {
+    // Only the character's own actions are carried: what it merely inherited
+    // belongs to the template it is leaving, and a pose has no screen here.
+    const current = Array.isArray(patch.actions) ? patch.actions : [];
+    update({
+      config: {
+        body: adoptModule(patch, id, current, examples, (name) => Object.hasOwn(TEMPLATES, name)).body,
+      },
+    });
+    setPendingExamples(null);
+  };
   useEffect(() => {
     let live = true;
     fetch('/preview/list.json')
@@ -195,6 +324,42 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
   return (
     <div className="body-tab">
       <p className="hint">{t('bodyIntro')}</p>
+      {/* Above the cards: a module is not a body to pick, it is a body to
+          install and then adopt. Only the panel writes it, in one step. */}
+      {modules.length > 0 && (
+        <section className="body-modules">
+          <h3>{t('modules')}</h3>
+          <p className="hint">{t('addModule')}</p>
+          {modules.map((m) => (
+            <div key={m.id} className="module-card">
+              <strong>{lang === 'zh' ? m.label.zh : m.label.en}</strong>
+              <span className="caps">{m.parts.join(' · ')}</span>
+              <span className="hint">{t('moduleExamples').replace('{n}', String(m.examples.length))}</span>
+              {m.note && <p className="hint">{lang === 'zh' ? m.note.zh : m.note.en}</p>}
+              {m.installed ? (
+                <span className="badge">{t('installed')}</span>
+              ) : (
+                <button type="button" disabled={installing === m.id} onClick={() => installModule(m.id)}>
+                  {t('addToCharacter')}
+                </button>
+              )}
+              {pendingExamples?.id === m.id && (
+                <div className="toggle">
+                  <button type="button" onClick={() => adopt(m.id, pendingExamples.examples)}>
+                    {t('confirmExamples').replace('{n}', String(pendingExamples.examples.length))}
+                  </button>
+                  <button type="button" className="secondary" onClick={() => adopt(m.id, [])}>
+                    {t('cancel')}
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+          {installFailure !== null && (
+            <p className="hint error" role="alert">{t('moduleInstallFailed')}{installFailure}</p>
+          )}
+        </section>
+      )}
       <div className="body-cards">
         {shown.map((b) => {
           return (

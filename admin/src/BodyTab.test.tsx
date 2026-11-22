@@ -43,6 +43,55 @@ const servoDetail = (): Detail => {
   return d;
 };
 
+/** One module as `/api/modules` lists it, with the body the install answers. */
+const LED = {
+  id: 'led-module',
+  label: { en: 'LED module', zh: 'LED 模块' },
+  parts: ['esp32', 'led-5mm', 'resistor'],
+  note: { en: 'Works on the bench and on the board.', zh: '模拟器与真板都可用。' },
+  examples: [
+    { name: 'light_up', label: { en: 'Light up', zh: '点亮' }, say: 'Turn the desk LED on.', run: [{ command: 'led_on' }] },
+    { name: 'light_down', label: { en: 'Light down', zh: '熄灭' }, say: 'Turn the desk LED off.', run: [{ command: 'led_off' }] },
+  ],
+  commands: ['led_on', 'led_off'],
+};
+
+/** `/api/bodies`' answer once the module's body exists in the brain. */
+const LED_BODY = {
+  id: 'led-module',
+  label: LED.label,
+  commands: [
+    { name: 'led_on', run: [{ op: 'pin.write', args: { pin: 'led', level: 1 } }], timeoutMs: 500 },
+    { name: 'led_off', run: [{ op: 'pin.write', args: { pin: 'led', level: 0 } }], timeoutMs: 500 },
+  ],
+  resources: [{ kind: 'gpio', name: 'led', gpio: 5, direction: 'output', safe: 0 }],
+};
+
+/**
+ * A brain that lists one module, installs it, and only then lists its body —
+ * with the call log, so the order the page asks in can be checked. The board
+ * does not exist before the install, as in a brain that just started.
+ */
+const moduleFetch = ({ installError }: { installError?: string } = {}) => {
+  const calls: string[] = [];
+  let installed = false;
+  const answer = (ok: boolean, body: unknown) => ({ ok, json: async () => body });
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    const method = init?.method ?? 'GET';
+    calls.push(`${method} ${path}`);
+    if (path === '/api/modules') return answer(true, [{ ...LED, installed }]);
+    if (path === '/api/modules/led-module/install') {
+      if (installError) return answer(false, { error: installError });
+      installed = true;
+      return answer(true, { body: LED_BODY, examples: LED.examples });
+    }
+    if (path === '/api/bodies') return answer(true, installed ? [LED_BODY] : []);
+    return answer(false, {});
+  }));
+  return calls;
+};
+
 afterEach(() => {
   vi.unstubAllGlobals();
   // The registry is process-wide and BodyTab fills it from the brain: the next
@@ -291,5 +340,63 @@ describe('BodyTab', () => {
     expect(await screen.findByRole('img', { name: 'Tarot reader' })).toBeInTheDocument();
     expect(screen.getByTestId('body-preview').querySelector('image')).toBeNull();
     expect(screen.getByTestId('body-preview').querySelector('[data-part="screen"]')).not.toBeNull();
+  });
+
+  it('lists the modules with what they are made of and how many actions they bring', async () => {
+    moduleFetch();
+    renderTab(detail());
+    const name = await screen.findByText('LED module');
+    const card = within(name.closest('.module-card') as HTMLElement);
+    expect(card.getByText(/led-5mm/)).toBeVisible();
+    expect(card.getByText(/2 example actions/i)).toBeVisible();
+    expect(card.getByText(/works on the bench/i)).toBeVisible();
+    expect(card.getByRole('button', { name: /add to this character/i })).toBeVisible();
+  });
+
+  it('installs, refreshes the body list, then adopts with the confirmed examples', async () => {
+    const calls = moduleFetch();
+    const update = vi.fn();
+    renderTab(detail(), update);
+    await userEvent.click(await screen.findByRole('button', { name: /add to this character/i }));
+    await userEvent.click(screen.getByRole('button', { name: /add 2 example actions/i }));
+    expect(update).toHaveBeenCalledWith({ config: { body: expect.objectContaining({ template: 'led-module' }) } });
+    // The examples call `led_on`/`led_off`: the body must be registered in this
+    // page before they can validate, so the refresh comes after the install.
+    expect(pluginBodies()).toHaveProperty('led-module');
+    const installed = calls.indexOf('POST /api/modules/led-module/install');
+    const refresh = calls.indexOf('GET /api/bodies', installed + 1);
+    expect(installed).toBeGreaterThan(-1);
+    expect(refresh).toBeGreaterThan(installed);
+  });
+
+  it('marks the module installed and drops the button once its body is here', async () => {
+    moduleFetch();
+    renderTab(detail());
+    await userEvent.click(await screen.findByRole('button', { name: /add to this character/i }));
+    const section = (await screen.findByRole('heading', { name: 'Modules' })).closest('section') as HTMLElement;
+    const card = within(section).getAllByText('LED module')[0].closest('.module-card') as HTMLElement;
+    expect(within(card).getByText(/installed/i)).toBeVisible();
+    expect(within(card).queryByRole('button', { name: /add to this character/i })).toBeNull();
+  });
+
+  it('still switches the body when the examples are turned down', async () => {
+    moduleFetch();
+    const update = vi.fn();
+    renderTab(detail(), update);
+    await userEvent.click(await screen.findByRole('button', { name: /add to this character/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
+    expect(update).toHaveBeenCalledWith({
+      config: { body: { id: 'led-module', template: 'led-module', actions: [] } },
+    });
+  });
+
+  it('shows why an install failed, and writes nothing', async () => {
+    moduleFetch({ installError: 'led-module was refused by the plugin loader' });
+    const update = vi.fn();
+    renderTab(detail(), update);
+    await userEvent.click(await screen.findByRole('button', { name: /add to this character/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/refused by the plugin loader/);
+    expect(update).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /example actions/i })).toBeNull();
   });
 });
