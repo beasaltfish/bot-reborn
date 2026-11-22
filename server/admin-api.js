@@ -11,7 +11,7 @@ import {
 } from './characters.js';
 import { createCheckApi, LAYERS } from './check-api.js';
 import { listFirmwareSources, readFirmwareSource } from './firmware-sources.js';
-import { resolveBody } from '../core/bodies.js';
+import { pluginBodies, resolveBody } from '../core/bodies.js';
 import { verbsOf } from '../core/actions.js';
 
 const MAX_BODY = 64 * 1024;
@@ -74,6 +74,20 @@ export function createAdminApi(opts) {
       // What the QR code is made of: the address a phone on this Wi-Fi can
       // reach, and the port this request came in on.
       return send(200, { port: req.socket.localPort, addresses: (opts.addresses ?? lanAddresses)() });
+    }
+    // The plugin bodies this brain loaded, so the admin can draw them beside
+    // the templates. Everything a card needs to look like a template is here:
+    // the label in both languages and the commands it answers. `source` says
+    // where the card came from, because the page may not assume every plugin
+    // is visible from what `TEMPLATES` holds.
+    if (path === '/api/bodies') {
+      if (req.method !== 'GET') return send(405, { error: 'method not allowed' });
+      return send(200, Object.values(pluginBodies()).map((b) => ({
+        id: b.id,
+        label: { en: b.label.en, zh: b.label.zh },
+        commands: (b.commands ?? []).map((command) => command.name),
+        source: 'plugin',
+      })));
     }
     // A way to draw a card before the wand has a message of its own. Not a
     // feature: it is only there in dev mode, and without it this path is a 404.

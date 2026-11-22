@@ -62,7 +62,10 @@ export interface BodyTrigger { on: 'shake' | 'button'; action: string }
  * Absent keys inherit the template; `actions: null` is the wire form of
  * "remove the override" that the page sends before a reload drops the key. */
 export interface BodyConfig {
-  id: Motion;
+  /** A template id, or the id of a plugin body (`my-servo`), which is any
+   * string the loader accepted. `template` stays the template union below: a
+   * body of one's own follows one of the five. */
+  id: string;
   template?: Motion;
   label?: { en: string; zh: string };
   prompts?: { voice?: string; rules?: string[] };

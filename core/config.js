@@ -395,7 +395,7 @@ export function resetSticky(cfg) {
  * }} Config
  *
  * @typedef {import('./bodies.js').BodyPatch} BodyPatch
- * @typedef {BodyPatch & { id: import('./bodies.js').BodyId }} BodyConfig
+ * @typedef {BodyPatch & { id: string }} BodyConfig
  * @typedef {import('./bodies.js').BodyId} Motion
  *
  * @typedef {{

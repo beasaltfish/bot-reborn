@@ -994,7 +994,7 @@ export class Brain {
     if (speak && reply.text) await this.#say(reply.text, turn);
   }
 
-  /** @returns {import('./config.js').Motion} */
+  /** @returns {string} a template id, or a plugin body's id */
   #bodyId() { return this.#config.body?.id ?? 'toy'; }
 
   /**

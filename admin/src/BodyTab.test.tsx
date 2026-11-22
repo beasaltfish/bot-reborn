@@ -19,6 +19,16 @@ const detail = (id: 'toy' | 'pet' | 'tarot' | 'dry-run' | 'none' = 'pet'): Detai
 
 const renderTab = (d = detail(), update = vi.fn()) => render(<BodyTab detail={d} update={update} />);
 
+/** The brain's answers, by path; anything unlisted is a miss, as on a brain
+ * that predates the endpoint. */
+const fetchMock = (routes: Record<string, unknown>) => vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+  const path = String(input);
+  if (!(path in routes)) return { ok: false, json: async () => ({}) };
+  return { ok: true, json: async () => routes[path] };
+}));
+
+const SERVO = { id: 'my-servo', label: { en: 'Servo', zh: '舵机' }, commands: ['point'], source: 'plugin' };
+
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('BodyTab', () => {
@@ -171,6 +181,32 @@ describe('BodyTab', () => {
     await vi.waitFor(() => expect(screen.getByTestId('body-preview').querySelector('image')?.getAttribute('href'))
       .toBe('/preview/tarot/320x240/back.jpg'));
     expect(screen.getByText(/not a simulation/i)).toBeInTheDocument();
+  });
+
+  it('lists a plugin body from the brain beside the built-in cards', async () => {
+    fetchMock({ '/api/bodies': [SERVO] });
+    renderTab(detail());
+    expect(await screen.findByText('Servo')).toBeVisible();
+    expect(screen.getAllByRole('radio')).toHaveLength(5);
+    const radio = screen.getByRole('radio', { name: /servo/i });
+    const card = within(radio.closest('label') as HTMLElement);
+    expect(card.getByText(/voice only/i)).toBeVisible();
+    expect(card.getByText(/point/)).toBeVisible();
+  });
+
+  it('picking a plugin body writes its id and the template it follows', async () => {
+    fetchMock({ '/api/bodies': [SERVO] });
+    const update = vi.fn();
+    renderTab(detail('none'), update);
+    await userEvent.click(await screen.findByRole('radio', { name: /servo/i }));
+    expect(update).toHaveBeenCalledWith({ config: { body: { id: 'my-servo', template: 'my-servo' } } });
+  });
+
+  it('leaves the built-in cards exactly as they are when the plugin list fails', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
+    renderTab(detail());
+    expect(screen.getAllByRole('radio')).toHaveLength(4);
+    expect(screen.queryByText('Servo')).toBeNull();
   });
 
   it('offers the chosen body\'s actions under the cards, as the template has them', () => {
