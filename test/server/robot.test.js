@@ -2,8 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { startRobot, tarotLang } from '../../server/robot.js';
 import { renderEarcons } from '../../server/audio/render.js';
-import { TEMPLATES } from '../../core/bodies.js';
+import { TEMPLATES, registerPlugins } from '../../core/bodies.js';
 import { readyConfig, fakeFetch, until } from './helpers.js';
+import { pluginBody, pointCommand } from '../fixtures/plugin.js';
 
 function fakeConn() {
   /** @type {any[]} */ const sent = [];
@@ -522,5 +523,23 @@ test('a shake message to a car does nothing', async () => {
   r.message({ type: 'shake' });
   await new Promise((resolve) => setTimeout(resolve, 50));
   assert.equal(r.fetch.calls.filter((c) => c.url.endsWith('/chat/completions')).length, 0);
+  r.robot.stop();
+});
+
+test('a body’s result message answers an IO op and is not a turn', async (t) => {
+  registerPlugins({ 'my-servo': pluginBody({ id: 'my-servo', commands: [pointCommand] }) });
+  t.after(() => registerPlugins({}));
+  const r = rig({}, 'my-servo');
+  await until(() => states(r.sent).includes('LISTENING'));
+  const before = states(r.sent).length;
+
+  // Nothing was asked for, so this id is unknown: ignored in silence, and the
+  // session is not taken for a turn by it.
+  r.message({ type: 'result', id: 1, ok: true, value: 1 });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  assert.equal(states(r.sent).length, before, 'a result changed the state');
+  assert.equal(r.fetch.calls.filter((c) => c.url.endsWith('/chat/completions')).length, 0);
+  assert.ok(!r.sent.some((m) => m.type === 'cmd'), 'no op was ever called for');
   r.robot.stop();
 });

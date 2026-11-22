@@ -11,7 +11,7 @@ import { resolveBody } from '../core/bodies.js';
 import { verbsOf } from '../core/actions.js';
 import { OpenAiCompatLlm } from '../core/providers/llm-openai-compat.js';
 import { RemotePipeline } from './body/pipeline.js';
-import { RemoteExecutor } from './body/executor.js';
+import { RemoteExecutor, IoExecutor } from './body/executor.js';
 import { DryRunExecutor, NoMotionExecutor } from './body/still.js';
 import { PetExecutor } from './body/pet.js';
 import { Animator } from './pet/animator.js';
@@ -142,9 +142,14 @@ export function startRobot(conn, deps) {
   session.attach(brain);
 
   conn.onAudio((bytes) => pipeline.feed(bytes));
-  // The wand was shaken: only a body that draws answers, and drawCard refuses
-  // while busy.
-  conn.onMessage((msg) => { if (msg.type === 'shake') robot.drawCard(); });
+  // A result answers a `cmd` this robot sent, so it goes to the IO carrier
+  // first and stops there: it is not a trigger, and nothing else may take it
+  // for one. A shake is the wand, and only a body that draws answers it —
+  // drawCard refuses while busy.
+  conn.onMessage((msg) => {
+    if (msg.type === 'result') { executor.onResult(msg); return; }
+    if (msg.type === 'shake') robot.drawCard();
+  });
 
   // Session only reports changes, and SLEEPING is where it starts.
   conn.send({ type: 'state', state: session.state });
@@ -212,7 +217,12 @@ function makeExecutor(body, conn, log, animators) {
   const screen = verbs.has('pose') && animators.pet
     ? new PetExecutor(animators.pet)
     : verbs.has('draw') ? new TarotExecutor(animators.tarot) : null;
-  return new CompositeExecutor(motors, screen);
+  // A plugin body's commands are the one thing it can be asked for that is not
+  // a verb, so they get a carrier of their own — and only when there is
+  // something to carry: a body whose command table is empty is never asked for
+  // an op, and building the carrier would only be a promise nobody awaits.
+  const io = body.commands?.length ? new IoExecutor(conn) : null;
+  return new CompositeExecutor(motors, screen, io);
 }
 
 /**
@@ -237,6 +247,8 @@ class CompositeExecutor {
    *   reveal?(): Promise<void>,
    * } | null} */
   #screen;
+  /** @type {import('./body/executor.js').IoExecutor | null} */
+  #io;
 
   /**
    * @param {{
@@ -252,10 +264,12 @@ class CompositeExecutor {
    *   draw?(card: import('../core/tarot.js').Draw): Promise<void>,
    *   reveal?(): Promise<void>,
    * } | null} screen
+   * @param {import('./body/executor.js').IoExecutor | null} [io]
    */
-  constructor(motors, screen) {
+  constructor(motors, screen, io = null) {
     this.#motors = motors;
     this.#screen = screen;
+    this.#io = io;
   }
 
   get connected() { return this.#motors.connected; }
@@ -264,6 +278,7 @@ class CompositeExecutor {
   set connected(value) {
     this.#motors.connected = value;
     if (this.#screen) this.#screen.connected = value;
+    if (this.#io) this.#io.connected = value;
   }
 
   get generation() { return this.#motors.generation; }
@@ -274,7 +289,27 @@ class CompositeExecutor {
   /** @param {string} drive @param {string} steer */
   cruise(drive, steer) { return this.#motors.cruise(drive, steer); }
 
-  stop() { return this.#motors.stop(); }
+  /** A halt abandons any IO in flight as well as the motion. */
+  stop() {
+    this.#io?.abort();
+    return this.#motors.stop();
+  }
+
+  /**
+   * One IO op. No carrier means the body declared no commands — asking anyway
+   * is a refusal, not a silent success: the brain traces the failure.
+   * @param {import('../core/io-program.js').Op} op
+   * @returns {Promise<unknown>}
+   */
+  io(op) {
+    return this.#io ? this.#io.io(op) : Promise.reject(new Error('unavailable'));
+  }
+
+  /**
+   * The body's answer to a `cmd`.
+   * @param {{ id?: unknown, ok?: unknown, value?: unknown, error?: unknown }} msg
+   */
+  onResult(msg) { this.#io?.onResult(msg); }
 
   /** @param {import('../core/poses.js').Pose} name */
   pose(name) { return this.#screen?.pose?.(name) ?? Promise.resolve(); }
