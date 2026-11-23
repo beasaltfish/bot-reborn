@@ -123,13 +123,20 @@ export function loadPlugins(dir) {
  * The write is one file, `bodies/<id>/body.json`, and it goes through the same
  * `manifestProblem` as the loader: a saved body cannot be one that will not load.
  * @param {any} manifest
- * @param {{ bodiesDir: string }} options
+ * @param {{ bodiesDir: string, modulesDir?: string }} options
  * @returns {{ id: string } | { error: string }}
  */
-export function saveBody(manifest, { bodiesDir }) {
+export function saveBody(manifest, { bodiesDir, modulesDir = join(bodiesDir, '..', 'modules') }) {
   const id = manifest?.id;
   if (Object.hasOwn(TEMPLATES, id)) {
     return { error: `${String(id)} is a built-in body; save under a new id` };
+  }
+  // The repository's copy is the truth for a shipped module: a save that took
+  // its id would be overwritten by the next install, and the person's edit would
+  // vanish with no message.
+  if (typeof id === 'string' && /^[a-z][a-z0-9_-]*$/.test(id)
+    && existsSync(join(modulesDir, id, 'module.json'))) {
+    return { error: `${id} ships in the repository; save under a new id` };
   }
   const problem = manifestProblem(manifest);
   if (problem) return { error: problem };
@@ -143,8 +150,14 @@ export function saveBody(manifest, { bodiesDir }) {
   if (existsSync(join(dir, 'body.json'))) {
     return { error: `a body called ${id} already exists; save under a new id` };
   }
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, 'body.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+  try {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'body.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+  } catch {
+    // A full disk or a path that is a file is the person's problem to fix, not
+    // the brain's to die of: the caller turns this into a sentence.
+    return { error: `could not write ${id}; check that ${bodiesDir} is writable` };
+  }
   registerPlugins(loadPlugins(bodiesDir).bodies);
   return { id };
 }

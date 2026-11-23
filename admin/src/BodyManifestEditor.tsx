@@ -50,6 +50,31 @@ export function BodyManifestEditor({ body, resources, commands, actions, wiring,
     setPins((rows) => rows.map((row, at) => (at === index ? { ...row, gpio } : row)));
   };
 
+  /**
+   * The wiring with this pin moved. A bench wire names `esp:GPIO<n>` on one end,
+   * so a pin change that left the link alone would be a body the loader refuses
+   * — the pin is declared and the wire points at the old one. Only a link that
+   * names the old number moves; everything else is the person's to keep.
+   */
+  const wiringFor = () => {
+    if (!wiring || !Array.isArray(wiring.links)) return wiring;
+    /** @type {Map<number, number>} */
+    const moved = new Map();
+    resources.forEach((resource, index) => {
+      const was = resource.gpio;
+      const next = pins[index]?.gpio;
+      if (typeof was === 'number' && typeof next === 'number' && was !== next) moved.set(was, next);
+    });
+    return {
+      ...wiring,
+      links: wiring.links.map((/** @type {any} */ link: any) => ({
+        ...link,
+        a: String(link.a).replace(/^esp:GPIO(\d+)$/, (whole: string, n: string) => (moved.has(Number(n)) ? `esp:GPIO${moved.get(Number(n))}` : whole)),
+        b: String(link.b).replace(/^esp:GPIO(\d+)$/, (whole: string, n: string) => (moved.has(Number(n)) ? `esp:GPIO${moved.get(Number(n))}` : whole)),
+      })),
+    };
+  };
+
   const save = async () => {
     setFailure(null);
     setSaved(null);
@@ -62,7 +87,7 @@ export function BodyManifestEditor({ body, resources, commands, actions, wiring,
       resources: pins,
       commands,
       examples,
-      ...(wiring ? { wiring } : {}),
+      ...(wiring ? { wiring: wiringFor() } : {}),
     };
     setBusy(true);
     try {

@@ -3,7 +3,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { saveBody } from '../../server/plugin-bodies.js';
@@ -50,4 +50,24 @@ test('an existing body is not overwritten by a save', (t) => {
   assert.equal(/** @type {any} */ (saveBody(manifest(), { bodiesDir: dir })).id, 'bench-led');
   const again = /** @type {any} */ (saveBody(manifest(), { bodiesDir: dir }));
   assert.match(again.error ?? '', /already exists/);
+});
+
+test('a shipped module id is not a name a save may take', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'save-'));
+  const modules = mkdtempSync(join(tmpdir(), 'mods-'));
+  t.after(() => { rmSync(dir, { recursive: true, force: true }); rmSync(modules, { recursive: true, force: true }); });
+  mkdirSync(join(modules, 'led-module'), { recursive: true });
+  writeFileSync(join(modules, 'led-module', 'module.json'), '{}');
+  const out = /** @type {any} */ (saveBody(manifest({ id: 'led-module' }), { bodiesDir: dir, modulesDir: modules }));
+  assert.match(out.error ?? '', /ships in the repository/);
+});
+
+test('a body that cannot be written answers with a sentence, not a throw', (t) => {
+  // A path that is a file, so the directory cannot be made.
+  const root = mkdtempSync(join(tmpdir(), 'save-'));
+  const blocked = join(root, 'not-a-dir');
+  writeFileSync(blocked, 'x');
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const out = /** @type {any} */ (saveBody(manifest(), { bodiesDir: blocked }));
+  assert.equal(typeof out.error, 'string');
 });

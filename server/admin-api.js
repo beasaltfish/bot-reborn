@@ -113,6 +113,9 @@ export function createAdminApi(opts) {
         label: { en: b.label.en, zh: b.label.zh },
         commands: b.commands ?? [],
         resources: b.resources ?? [],
+        // A project needs the parts as well as the pins: without them the
+        // workbench has a body it cannot draw.
+        parts: b.parts ?? [],
         ...(b.wiring ? { wiring: structuredClone(b.wiring) } : {}),
       })));
     }

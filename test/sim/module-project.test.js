@@ -33,6 +33,8 @@ test('the module project builds on the audio bench and wires the module', () => 
   const project = /** @type {import('../../sim/projects.js').Project} */ (projectById('module-led-module'));
   assert.equal(project.firmware, 'body');
   assert.equal(project.connection, 'body');
+  // The plan the bench actually runs keeps the body: pairing waits on it.
+  assert.equal(/** @type {any} */ (planById('module-led-module')).body, 'led-module');
   assert.deepEqual(project.links.map((l) => l.a).slice(-3), ['esp:GPIO5', 'r:2', 'led:K']);
   const steps = planSteps(/** @type {any} */ (planById('module-led-module')));
   assert.ok(steps.some((s) => s.kind === 'flash' && s.firmware === 'body'));

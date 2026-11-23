@@ -49,6 +49,16 @@ test('a body the person saved is a project too', async () => {
   assert.deepEqual(modules.map((m) => m.id), ['led-module', 'bench-led']);
 });
 
+test('a missing module list is said, even when bodies answered', async () => {
+  const byPath = async (/** @type {string} */ path) => {
+    if (path === '/api/modules') throw new Error('down');
+    return { ok: true, json: async () => [] };
+  };
+  const { modules, failed } = await loadModuleCatalogue(byPath);
+  assert.deepEqual(modules, []);
+  assert.equal(failed, true);
+});
+
 test('one unreachable half is still a catalogue', async () => {
   const byPath = async (/** @type {string} */ path) => {
     if (path === '/api/bodies') throw new Error('down');

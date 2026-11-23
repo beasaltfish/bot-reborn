@@ -98,6 +98,7 @@ export function planFromProject(project) {
     connection: project.connection,
     firmware: project.firmware,
     ending: project.ending,
+    body: project.body,
     parts,
     links: project.links,
     ignoredFaultCodes: project.ignoredFaultCodes,

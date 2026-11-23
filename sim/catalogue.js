@@ -41,5 +41,7 @@ export async function loadModuleCatalogue(fetchImpl = /** @type {any} */ (fetch)
   const modules = [...(shipped ?? []).filter(isModule)];
   const seen = new Set(modules.map((m) => m.id));
   for (const row of (saved ?? []).filter(isModule)) if (!seen.has(row.id)) modules.push(row);
-  return { modules, failed: shipped === null && saved === null };
+  // A missing module list is the one the page can say something useful about;
+  // a missing list of saved bodies is silent, because most brains have none.
+  return { modules, failed: shipped === null };
 }

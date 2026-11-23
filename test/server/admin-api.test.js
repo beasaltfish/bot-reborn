@@ -81,6 +81,7 @@ test('the plugin bodies the server loaded are offered to the admin', async (t) =
       ...structuredClone(TEMPLATES.none),
       id: 'my-servo',
       label: { en: 'Servo', zh: '舵机' },
+      parts: ['esp32', 'sg90'],
       commands: [{ name: 'point', run: [{ op: 'pin.write', args: { pin: 'sig', value: 1 } }], timeoutMs: 100 }],
       resources: [{ kind: 'gpio', name: 'sig', gpio: 5, direction: 'output', safe: 0 }],
     },
@@ -93,6 +94,7 @@ test('the plugin bodies the server loaded are offered to the admin', async (t) =
   assert.deepEqual(body, [{
     id: 'my-servo',
     label: { en: 'Servo', zh: '舵机' },
+    parts: ['esp32', 'sg90'],
     commands: [{ name: 'point', run: [{ op: 'pin.write', args: { pin: 'sig', value: 1 } }], timeoutMs: 100 }],
     resources: [{ kind: 'gpio', name: 'sig', gpio: 5, direction: 'output', safe: 0 }],
   }]);
@@ -141,6 +143,9 @@ test('modules and bodies both carry the wiring', async (t) => {
   await r.call('/api/modules/led-module/install', { method: 'POST', headers: W });
   const bodies = (await r.call('/api/bodies')).body;
   assert.deepEqual(bodies[0].wiring.links.map((/** @type {any} */ l) => l.a), ['esp:GPIO5', 'r:2', 'led:K']);
+  // Parts travel too: a body with no parts is a body the workbench cannot draw
+  // a project for, and a save that copies it would be refused as empty.
+  assert.deepEqual(bodies[0].parts, ['esp32', 'led-5mm', 'resistor']);
 });
 
 test('the module list is read-only and an install needs the page header', async (t) => {

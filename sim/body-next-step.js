@@ -12,28 +12,34 @@
  *   body?: string | null,
  *   character?: { name: string, bodyId?: string, actionNames?: string[] } | null,
  *   installed?: boolean,
- *   examples?: number,
+ *   examples?: number | string[],
  * }} input
  * @returns {{ key: string, params: Record<string, string | number>, action: 'install' | 'adopt' | null } | null}
  *   null for an empty bench: no body is being built, so nothing is being said.
  */
 export function nextStep({ body, character, installed = false, examples = 0 }) {
+  const exampleList = Array.isArray(examples) ? examples : null;
   if (!body) return null;
   const name = character?.name ?? '';
   if (!character) return { key: 'bodyNext.pair', params: {}, action: null };
 
   const hasBody = character.bodyId === body;
   const actions = Array.isArray(character.actionNames) ? character.actionNames : [];
-  // The body's own examples are what tell the model when to use it; a body with
-  // no actions on this character is a body the model cannot use.
-  if (hasBody && actions.length > 0) {
+  // The body's own examples are what tell the model when to use it. A body whose
+  // character carries some other body's actions is a body the model cannot use,
+  // so the question is which actions, not how many.
+  const count = typeof examples === 'number' ? examples : examples.length;
+  const hasTheirs = exampleList
+    ? actions.some((name) => exampleList.includes(name))
+    : actions.length > 0;
+  if (hasBody && hasTheirs) {
     return { key: 'bodyNext.isBody', params: { name }, action: null };
   }
   if (hasBody) {
-    return { key: 'bodyNext.needsActions', params: { name, n: examples }, action: 'adopt' };
+    return { key: 'bodyNext.needsActions', params: { name, n: count }, action: 'adopt' };
   }
   if (!installed) {
-    return { key: 'bodyNext.notInstalled', params: { name, n: examples }, action: 'install' };
+    return { key: 'bodyNext.notInstalled', params: { name, n: count }, action: 'install' };
   }
-  return { key: 'bodyNext.otherBody', params: { name, n: examples }, action: 'adopt' };
+  return { key: 'bodyNext.otherBody', params: { name, n: count }, action: 'adopt' };
 }

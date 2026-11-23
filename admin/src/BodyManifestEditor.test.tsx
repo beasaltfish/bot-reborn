@@ -69,3 +69,17 @@ describe('BodyManifestEditor', () => {
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 });
+
+describe('a moved pin', () => {
+  it('moves the wire that named it, or the loader refuses the body', async () => {
+    renderEditor();
+    await userEvent.click(screen.getByText(/Pins and examples of led-module/));
+    await userEvent.type(screen.getByLabelText(/Save as/), 'bench-led');
+    await userEvent.clear(screen.getByLabelText(/gpio \(led\)/));
+    await userEvent.type(screen.getByLabelText(/gpio \(led\)/), '6');
+    await userEvent.click(screen.getByRole('button', { name: 'Save as a new body' }));
+    const sent = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
+    expect(sent.wiring.links[0].a).toBe('esp:GPIO6');
+    expect(sent.resources[0].gpio).toBe(6);
+  });
+});

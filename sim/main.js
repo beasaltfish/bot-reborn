@@ -139,6 +139,10 @@ if (!catalogue.failed) setModuleProjects(catalogue.modules);
 const installedBodies = new Set(await loadBodyIds());
 /** The characters this brain offers; the paired one is found by name. */
 let characters = await loadCharacters();
+/** The character the board was paired with, as the brain named it. Never guessed
+ * from the list: writing a body into the wrong character is silent and costly. */
+/** @type {string | null} */
+let pairedCharacterId = null;
 
 /**
  * The bodies the brain holds. A brain that does not answer is an empty set:
@@ -166,12 +170,9 @@ async function loadCharacters() {
  * @returns {{ id: string, name: string, bodyId?: string, actionNames?: string[] } | null}
  */
 function pairedCharacter() {
-  const token = bench.board.settings?.token;
   const list = Array.isArray(characters) ? characters : [];
-  const mine = token ? list.find((c) => c.token === token) : null;
-  if (mine) return mine;
-  const ready = list.filter((c) => c.ready);
-  return ready.length === 1 ? ready[0] : null;
+  if (!pairedCharacterId) return null;
+  return list.find((c) => c.id === pairedCharacterId) ?? null;
 }
 const panels = createPanels({
   catalogueFailed: catalogue.failed,
@@ -211,11 +212,18 @@ const panels = createPanels({
         headers: { 'X-Bot-Reborn': '1', 'Content-Type': 'application/json' },
         body: JSON.stringify({ characterId: character.id }),
       });
+      const answer = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error('adopt');
       bodyDecided = true;
+      pairedCharacterId = character.id;
       characters = await loadCharacters();
       panels.refreshProject();
-      panels.status(simText(lang, 'bodyNext.done').replace('{name}', character.name));
+      // What the switch left behind, named: an action the old body could run and
+      // this one cannot is gone, and the person is told which.
+      const dropped = Array.isArray(answer?.dropped) && answer.dropped.length > 0
+        ? ` ${simText(lang, 'bodyNext.dropped').replace('{list}', answer.dropped.join(', '))}`
+        : '';
+      panels.status(simText(lang, 'bodyNext.done').replace('{name}', character.name) + dropped);
     } catch {
       panels.status(simText(lang, 'bodyNext.failed'));
     }
@@ -1291,6 +1299,9 @@ async function tokenCandidate() {
     const ready = tokenCandidates(await (await fetch('/api/characters')).json());
     if (ready.length !== 1) return { list: ready };
     const detail = await (await fetch(`/api/characters/${encodeURIComponent(ready[0].id)}`)).json();
+    // The one character that could be meant: remember which, so a body write
+    // can only ever land on it.
+    if (detail?.token) pairedCharacterId = ready[0].id;
     return detail?.token ? { token: detail.token, list: ready } : { list: ready };
   } catch {
     return { failed: true };
