@@ -16,6 +16,7 @@ import { adoptModule } from '../core/body-switch.js';
 import { verbsOf } from '../core/actions.js';
 import { installModule } from './modules.js';
 import { BODIES_DIR } from './plugin-startup.js';
+import { saveBody } from './plugin-bodies.js';
 
 const MAX_BODY = 64 * 1024;
 
@@ -135,6 +136,17 @@ export function createAdminApi(opts) {
       });
       if ('error' in result) return send(404, { error: result.error });
       return send(200, result);
+    }
+    // A body a person edited on the bench, saved under their own id. The write
+    // is the same one the loader will read on the next start; this only saves a
+    // restart.
+    if (path === '/api/bodies/save') {
+      if (req.method !== 'POST') return send(405, { error: 'method not allowed' });
+      let manifest;
+      try { manifest = await readJson(req); } catch { return send(400, { error: 'the body must be JSON' }); }
+      const saved = saveBody(manifest, { bodiesDir: opts.bodiesDir ?? BODIES_DIR });
+      if ('error' in saved) return send(400, { error: saved.error });
+      return send(200, saved);
     }
     // Adopting a body into a character, for the workbench: installing writes the
     // body, and this is the one write that follows it. The rule is `core/`'s, so
