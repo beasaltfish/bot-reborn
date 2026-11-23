@@ -307,7 +307,8 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
    */
   const adopt = (id: string, examples: BodyAction[]) => {
     // Only the character's own actions are carried: what it merely inherited
-    // belongs to the template it is leaving, and a pose has no screen here.
+    // belongs to the template it is leaving. The panel says so in words, because
+    // a dropped `draw_card` would otherwise leave no trace in this list.
     const current = Array.isArray(patch.actions) ? patch.actions : [];
     const moduleBody = bodyById(id) ?? resolveBody(id, { template: id });
     /** `bodyProblem` for the module body carrying these actions; triggers are

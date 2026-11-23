@@ -253,7 +253,11 @@ export function createAdminApi(opts) {
               // `template` is the body it follows; `id` is only a name of its
               // own. Two characters with the same template share a body.
               bodyId: resolved.template ?? resolved.id,
-              actionNames: (resolved.actions ?? []).map((action) => action.name),
+              // A config is a person's file, not a value to trust: a body whose
+              // actions were saved as something else has none to name, and must
+              // not take the whole list down with it.
+              actionNames: (Array.isArray(resolved.actions) ? resolved.actions : [])
+                .map((action) => action.name),
               ...(bodyKind ? { bodyKind } : {}),
               ...(opts.presence?.of(c.id, setupId) ?? {}),
             };

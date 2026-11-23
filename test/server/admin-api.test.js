@@ -67,6 +67,9 @@ test('the list has names, readiness and presence — never keys or tokens', asyn
   assert.deepEqual(body, [{
     id: 'a', name: 'a', ready: true, online: false,
     motion: 'toy', verbs: ['drive', 'halt', 'voice'], setupId: setupIdFor(a.token),
+    // The workbench asks which body this is and which tools it has; names and a
+    // template are not enough to answer either.
+    bodyId: 'toy', actionNames: ['move', 'cruise', 'stop', 'play_sound'],
   }]);
   await r.server.close();
 });
