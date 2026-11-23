@@ -3,10 +3,16 @@ import assert from 'node:assert/strict';
 // @ts-expect-error jsdom does not include type declarations
 import { JSDOM } from 'jsdom';
 import { createProjectPanel } from '../../sim/ui/project-panel.js';
-import { projectById } from '../../sim/projects.js';
+import { projectById, setModuleProjects } from '../../sim/projects.js';
+import { readFileSync } from 'node:fs';
 import { connectionProgress } from '../../sim/project-progress.js';
 import { emptyBench, addWire } from '../../sim/bench.js';
 import { describeSelection } from '../../sim/selection.js';
+
+// The bench reads the brain's catalogue at boot; the test hands it the manifest
+// the brain would serve.
+setModuleProjects([JSON.parse(readFileSync(
+  new URL('../../modules/led-module/module.json', import.meta.url), 'utf8'))]);
 
 test('a module project shows its localised title and the module note', () => {
   const dom = new JSDOM('<!doctype html><body></body>');

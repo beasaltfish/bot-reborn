@@ -15,7 +15,7 @@ import { createShoppingPanel } from './ui/shopping-panel.js';
 import { simText } from './ui/strings.js';
 import { createLanguageControl } from './ui/language-control.js';
 import { RECIPES, DEFAULT_SCREEN } from './recipes.js';
-import { PROJECTS, PROJECT_GROUPS } from './projects.js';
+import { PROJECTS, projectGroups } from './projects.js';
 import { WIRE_PALETTE } from './wire-color.js';
 import { createPropertyEditor } from './ui/property-editor.js';
 import { createBme280Panel } from './ui/bme280-panel.js';
@@ -195,7 +195,7 @@ export function createPanels(opts) {
     const label = simText(lang, `project.${project.id}`);
     return el('option', { value: project.id }, [label === `project.${project.id}` ? project.name : label]);
   };
-  for (const group of PROJECT_GROUPS) {
+  for (const group of projectGroups()) {
     const optgroup = el('optgroup', { label: simText(lang, group.key) });
     for (const id of group.ids) {
       const project = byId.get(id);
