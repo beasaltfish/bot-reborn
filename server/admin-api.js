@@ -238,14 +238,22 @@ export function createAdminApi(opts) {
           return send(200, listCharacters(opts.dir).characters.map((c) => {
             const setupId = setupIdFor(c.token);
             const bodyKind = opts.bodyKind?.(setupId);
+            // The body as the brain resolves it, and the tools it would offer the
+            // model: the workbench asks "is this character the body this demo
+            // builds", and a name alone cannot answer that.
+            const resolved = resolveBody(c.config.body?.id ?? 'toy', c.config.body);
             return {
               id: c.id, name: c.name, ready: ready(c.config), online: online.has(c.id),
               // `motion` stays for tabs that predate `verbs`: the bench asks
               // what the body can do, not which template it was copied from.
               // Resolved the same way the brain does, so a config with an id
               // and no template answers `none`, not its own name.
-              motion: resolveBody(c.config.body?.id ?? 'toy', c.config.body).template ?? null,
+              motion: resolved.template ?? null,
               verbs: verbsOfBody(c.config), setupId,
+              // `template` is the body it follows; `id` is only a name of its
+              // own. Two characters with the same template share a body.
+              bodyId: resolved.template ?? resolved.id,
+              actionNames: (resolved.actions ?? []).map((action) => action.name),
               ...(bodyKind ? { bodyKind } : {}),
               ...(opts.presence?.of(c.id, setupId) ?? {}),
             };

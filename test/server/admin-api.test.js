@@ -650,3 +650,20 @@ test('adopting needs an installed body and a real character', async (t) => {
   const bare = await r.call('/api/bodies/led-module/adopt', { method: 'POST', body: '{}' });
   assert.equal(bare.status, 403);
 });
+
+test('the character list says which body and which tools a character has', async (t) => {
+  registerPlugins({});
+  t.after(() => registerPlugins({}));
+  const r = await rig(tempCharacters(), moduleDirs());
+  t.after(() => r.server.close());
+  await r.call('/api/modules/led-module/install', { method: 'POST', headers: W });
+  r.chars.add('lamp', (cfg) => {
+    cfg.body = {
+      template: 'led-module',
+      actions: [{ name: 'light_up', label: { en: 'Light up', zh: '点亮' }, say: 'On.', run: [{ command: 'led_on' }] }],
+    };
+  });
+  const row = (await r.call('/api/characters')).body.find((/** @type {any} */ c) => c.id === 'lamp');
+  assert.equal(row.bodyId, 'led-module');
+  assert.deepEqual(row.actionNames, ['light_up']);
+});
