@@ -73,6 +73,8 @@ export function createAdminApi(opts) {
     label: { en: m.label.en, zh: m.label.zh },
     parts: [...m.parts],
     note: m.note ? { en: m.note.en, zh: m.note.zh } : null,
+    // The bench's half of the manifest: without it a module has no project.
+    ...(m.wiring ? { wiring: structuredClone(m.wiring) } : {}),
     installed: Object.hasOwn(pluginBodies(), m.id),
     examples: structuredClone(m.examples ?? []),
     commands: (m.commands ?? []).map((command) => command.name),
@@ -109,6 +111,7 @@ export function createAdminApi(opts) {
         label: { en: b.label.en, zh: b.label.zh },
         commands: b.commands ?? [],
         resources: b.resources ?? [],
+        ...(b.wiring ? { wiring: structuredClone(b.wiring) } : {}),
       })));
     }
     // The modules the repository ships, and a way to install one into this
