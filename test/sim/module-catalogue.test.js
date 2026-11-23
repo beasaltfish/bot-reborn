@@ -37,3 +37,24 @@ test('a malformed row is dropped, not fatal', async () => {
   ]));
   assert.deepEqual(modules.map((m) => m.id), ['led-module']);
 });
+
+test('a body the person saved is a project too', async () => {
+  const saved = { id: 'bench-led', label: { en: 'Bench LED', zh: '台面 LED' },
+    parts: ['esp32', 'led-5mm'], wiring: { links: [{ a: 'esp:GPIO5', b: 'led:A' }] } };
+  const byPath = async (/** @type {string} */ path) => ({
+    ok: true, json: async () => (path === '/api/bodies' ? [saved] : [ledJson()]),
+  });
+  const { modules, failed } = await loadModuleCatalogue(byPath);
+  assert.equal(failed, false);
+  assert.deepEqual(modules.map((m) => m.id), ['led-module', 'bench-led']);
+});
+
+test('one unreachable half is still a catalogue', async () => {
+  const byPath = async (/** @type {string} */ path) => {
+    if (path === '/api/bodies') throw new Error('down');
+    return { ok: true, json: async () => [ledJson()] };
+  };
+  const { modules, failed } = await loadModuleCatalogue(byPath);
+  assert.deepEqual(modules.map((m) => m.id), ['led-module']);
+  assert.equal(failed, false);
+});

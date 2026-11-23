@@ -25,14 +25,21 @@ function isModule(row) {
  * @returns {Promise<{ modules: any[], failed: boolean }>}
  */
 export async function loadModuleCatalogue(fetchImpl = /** @type {any} */ (fetch)) {
-  let rows;
-  try {
-    const res = await fetchImpl('/api/modules');
-    if (!res.ok) return { modules: [], failed: true };
-    rows = await res.json();
-  } catch {
-    return { modules: [], failed: true };
-  }
-  if (!Array.isArray(rows)) return { modules: [], failed: true };
-  return { modules: rows.filter(isModule), failed: false };
+  /** @param {string} path @returns {Promise<any[] | null>} */
+  const rowsAt = async (path) => {
+    try {
+      const res = await fetchImpl(path);
+      if (!res.ok) return null;
+      const rows = await res.json();
+      return Array.isArray(rows) ? rows : null;
+    } catch { return null; }
+  };
+  // Two sources, one list: the modules the repository ships and the bodies a
+  // person saved here. The repository wins a shared id, and either half being
+  // unreachable is not the whole catalogue being gone.
+  const [shipped, saved] = await Promise.all([rowsAt('/api/modules'), rowsAt('/api/bodies')]);
+  const modules = [...(shipped ?? []).filter(isModule)];
+  const seen = new Set(modules.map((m) => m.id));
+  for (const row of (saved ?? []).filter(isModule)) if (!seen.has(row.id)) modules.push(row);
+  return { modules, failed: shipped === null && saved === null };
 }
