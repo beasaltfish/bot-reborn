@@ -12,12 +12,12 @@
 //
 // Above them sits the module panel: a module is a body this repository ships,
 // so it is installed and its example actions adopted in one step rather than
-// retyped — see `bodySwitch.ts` for the write that step makes.
+// retyped — see `core/body-switch.js` for the write that step makes.
 import { useEffect, useState } from 'react';
 import { TEMPLATES, bodyById, bodyProblem, labelOf, pluginBodies, registerPlugins, resolveBody } from '../../core/bodies.js';
 import { ActionsEditor } from './ActionsEditor';
 import { BodyDiagram } from './BodyDiagram';
-import { adoptModule } from './bodySwitch';
+import { adoptModule } from '../../core/body-switch.js';
 import { lang, t, type Key } from './i18n';
 import type { BodyAction, Detail, Patch } from './types';
 

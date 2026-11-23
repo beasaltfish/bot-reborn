@@ -1,23 +1,12 @@
-// Adopting a module is one write, not a crawl through the editor: the body
-// follows the module's body (`template`), and the actions the person confirmed
-// are merged in by name. It lives here, apart from the panel, so the rule can be
-// tested without a brain, a browser dialog or a rendered page.
-import type { BodyAction, BodyTrigger } from './types';
+// The body a character has after adopting a module — one write, in `core/`,
+// because two callers must give the same answer: the admin page beside the
+// module card, and the brain behind `POST /api/bodies/:id/adopt`, which the
+// workbench calls. No DOM, no dialog, no brain: just the rule.
 
-/** The part of `config.body` a switch writes; every other key is left as it is. */
-export interface BodyPatch {
-  id?: string;
-  template?: string;
-  actions?: BodyAction[] | null;
-  triggers?: BodyTrigger[] | null;
-}
-
-/** The write, and the current actions the module body refused. */
-export interface AdoptModuleResult {
-  body: BodyPatch;
-  /** Names of the character's own actions that were not carried over. */
-  dropped: string[];
-}
+/**
+ * The part of `config.body` a switch writes; every other key is left as it is.
+ * @typedef {{ id?: string, template?: string, actions?: any[] | null, triggers?: any[] | null }} BodyPatch
+ */
 
 /**
  * The body a character has after adopting a module.
@@ -31,32 +20,26 @@ export interface AdoptModuleResult {
  * words and is always kept; a current action is kept only when `accepts` says
  * the module body can still run it. Testing one action at a time means what
  * survives does not depend on what was dropped before it. The names that did
- * not survive come back in `dropped`, so the page can say which and why.
+ * not survive come back in `dropped`, so the caller can say which and why.
  *
- * The result is always an array: `null` means "inherit", which would put the
- * old body's actions back on the next read.
+ * The result always carries an actions array: `null` means "inherit", which
+ * would put the old body's actions back on the next read.
  *
  * A character's own triggers are written back filtered to the actions that
  * survived. The actions editor reads raw triggers, so a trigger naming a
  * dropped action would make the next edit refuse the body. An absent or `null`
  * trigger list is left out entirely: `null` means "inherit", not "none".
+ *
  * @param {BodyPatch} patch the body as it is now
  * @param {string} moduleId the body the module installs
- * @param {BodyAction[]} current the actions the character carries itself
- * @param {BodyAction[]} examples the module's examples, as confirmed
+ * @param {any[]} current the actions the character carries itself
+ * @param {any[]} examples the module's examples, as confirmed
  * @param {(id: string) => boolean} isTemplate whether an id is a template name
- * @param {(actions: BodyAction[]) => string | null} accepts `bodyProblem` for
- *   the module's body carrying these actions, or null when it would take them
- * @returns {AdoptModuleResult}
+ * @param {(actions: any[]) => string | null} accepts `bodyProblem` for the
+ *   module's body carrying these actions, or null when it would take them
+ * @returns {{ body: BodyPatch, dropped: string[] }}
  */
-export function adoptModule(
-  patch: BodyPatch,
-  moduleId: string,
-  current: BodyAction[],
-  examples: BodyAction[],
-  isTemplate: (id: string) => boolean,
-  accepts: (actions: BodyAction[]) => string | null,
-): AdoptModuleResult {
+export function adoptModule(patch, moduleId, current, examples, isTemplate, accepts) {
   const merged = [...current];
   for (const example of examples) {
     const at = merged.findIndex((action) => action.name === example.name);
@@ -65,8 +48,10 @@ export function adoptModule(
   }
 
   const fromModule = new Set(examples.map((example) => example.name));
-  const kept: BodyAction[] = [];
-  const dropped: string[] = [];
+  /** @type {any[]} */
+  const kept = [];
+  /** @type {string[]} */
+  const dropped = [];
   for (const action of merged) {
     if (fromModule.has(action.name)) {
       kept.push(action);
@@ -76,7 +61,8 @@ export function adoptModule(
     else dropped.push(action.name);
   }
 
-  const body: BodyPatch = { template: moduleId, actions: kept };
+  /** @type {BodyPatch} */
+  const body = { template: moduleId, actions: kept };
   if (typeof patch.id === 'string' && isTemplate(patch.id)) body.id = moduleId;
   if (Array.isArray(patch.triggers)) {
     const names = new Set(kept.map((action) => action.name));
