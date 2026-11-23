@@ -87,6 +87,7 @@ function pointName(point) {
  *   rememberSpeed(x: number): void,
  *   firmwareDrivers?(): string[] | null,
  *   bench?(): import('./bench.js').Bench,
+ *   catalogueFailed?: boolean,
  * }} opts
  */
 export function createPanels(opts) {
@@ -174,7 +175,7 @@ export function createPanels(opts) {
     shoppingPanel.hidden = !on;
     if (on) shoppingView.render();
   };
-  const projectView = createProjectPanel({ lang, focus: points => {
+  const projectView = createProjectPanel({ lang, note: opts.catalogueFailed ? simText(lang, 'project.catalogueFailed') : null, focus: points => {
     // On a phone the sidebar leaves too little bench visible to frame two pins.
     if (window.innerWidth < 600) showProject(false);
     opts.focusProject?.(points);

@@ -56,6 +56,8 @@ import { blockingBoardPowerFault, initialDriveActions } from './board-power-gate
 import { createPowerInterlock, createStartLock } from './power-interlock.js';
 import { runRecipe, speedFactor } from './scene/autowire.js';
 import { createPanels } from './panels.js';
+import { loadModuleCatalogue } from './catalogue.js';
+import { setModuleProjects } from './projects.js';
 import { createContextPanel } from './ui/context-panel.js';
 import { SIM_LANGUAGE_KEY, simulatorLanguage, requestLanguageChange } from './ui/language.js';
 import { simText } from './ui/strings.js';
@@ -122,7 +124,14 @@ let benchIo = null;
 /** @type {import('./projects.js').Project | null} */
 /** @type {import('./plan.js').Plan|import('./projects.js').Project|null} */
 let activeProject = null;
+// The catalogue is read once, before any panel exists: `projectById` and
+// `planById` are synchronous and the dropdown is built from them. A brain that
+// does not answer costs the modules, never the bench, and the project panel
+// says which of the two happened.
+const catalogue = await loadModuleCatalogue();
+if (!catalogue.failed) setModuleProjects(catalogue.modules);
 const panels = createPanels({
+  catalogueFailed: catalogue.failed,
   hint: (projectId, options) => (bench.placed.some((p) => p.burnt)
     ? document.documentElement.lang === 'zh' ? simText('zh', 'hint.burnt') : 'A part burnt out; drag it to the bin and take a new one from Parts.'
     : projectId

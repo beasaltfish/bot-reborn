@@ -7,7 +7,7 @@ import { projectReason } from './project-copy.js';
 /** @typedef {{mode:'guided'|'free', evaluated?:boolean, project:ProjectView|null, progress:Progress[], selection:SelectionInfo, diagnoses:import('../diagnose.js').Hint[]}} State */
 /** @typedef {'project'|'diagnostics'} Tab */
 
-/** @param {{lang:string, focus(points:string[]):void, leave?():void, build?(id:string):void, demo?(id:string):void, step?(id:string):void}} opts */
+/** @param {{lang:string, focus(points:string[]):void, leave?():void, build?(id:string):void, demo?(id:string):void, step?(id:string):void, note?:string|null}} opts */
 export function createProjectPanel(opts) {
   const element = document.createElement('section');
   element.className = 'project-panel';
@@ -144,6 +144,12 @@ export function createProjectPanel(opts) {
     const focusLabel = active?.tagName === 'BUTTON' && element.contains(active) ? active.getAttribute('aria-label') : null;
     element.replaceChildren();
     renderTabs();
+    // Something the page could not read, said once, above whatever it did read.
+    if (opts.note) {
+      const note = child('p', opts.note);
+      note.className = 'hint project-note';
+      element.append(note);
+    }
     if (tab === 'diagnostics') renderDiagnostics(diagnostics ?? state);
     else renderProject(state);
     if (focusLabel) [...element.querySelectorAll('button')].find(button => button.getAttribute('aria-label') === focusLabel)?.focus();
