@@ -70,13 +70,17 @@ test('the shipped LED module is the catalogue', () => {
   assert.deepEqual(modules['led-module'], LED);
 });
 
-test('install writes only the plugin fields and registers the body', (t) => {
+test('install writes the whole manifest and registers the body', (t) => {
   const dir = tempBodies(t);
   const out = installModule('led-module', { modules: loadModules(REPO_MODULES).modules, bodiesDir: dir });
   if ('error' in out) assert.fail(out.error);
   const written = JSON.parse(readFileSync(join(dir, 'led-module', 'body.json'), 'utf8'));
-  assert.deepEqual(Object.keys(written).sort(), ['commands', 'id', 'label', 'parts', 'resources']);
-  assert.equal(written.examples, undefined);
+  // An installed body with no wiring is a body the workbench cannot draw.
+  assert.deepEqual(Object.keys(written).sort(),
+    ['commands', 'examples', 'id', 'label', 'note', 'parts', 'resources', 'wiring']);
+  assert.equal(written.wiring.links.length, 3);
+  assert.equal(written.examples.length, 2);
+  assert.equal(written.note.en, LED.note.en);
   assert.equal(written.id, 'led-module');
   assert.equal(out.body.id, 'led-module');
   assert.equal(out.examples.length, 2);
