@@ -66,6 +66,9 @@ test('the list has names, readiness and presence — never keys or tokens', asyn
   assert.deepEqual(body, [{
     id: 'a', name: 'a', ready: true, online: false,
     motion: 'toy', verbs: ['drive', 'halt', 'voice'], setupId: setupIdFor(a.token),
+    // The workbench asks which body this is and which tools it has; names and a
+    // template are not enough to answer either.
+    bodyId: 'toy', actionNames: ['move', 'cruise', 'stop', 'play_sound'],
   }]);
   await r.server.close();
 });
@@ -78,6 +81,7 @@ test('the plugin bodies the server loaded are offered to the admin', async (t) =
       ...structuredClone(TEMPLATES.none),
       id: 'my-servo',
       label: { en: 'Servo', zh: '舵机' },
+      parts: ['esp32', 'sg90'],
       commands: [{ name: 'point', run: [{ op: 'pin.write', args: { pin: 'sig', value: 1 } }], timeoutMs: 100 }],
       resources: [{ kind: 'gpio', name: 'sig', gpio: 5, direction: 'output', safe: 0 }],
     },
@@ -90,6 +94,7 @@ test('the plugin bodies the server loaded are offered to the admin', async (t) =
   assert.deepEqual(body, [{
     id: 'my-servo',
     label: { en: 'Servo', zh: '舵机' },
+    parts: ['esp32', 'sg90'],
     commands: [{ name: 'point', run: [{ op: 'pin.write', args: { pin: 'sig', value: 1 } }], timeoutMs: 100 }],
     resources: [{ kind: 'gpio', name: 'sig', gpio: 5, direction: 'output', safe: 0 }],
   }]);
@@ -123,6 +128,24 @@ test('modules are listed with their examples, then installed', async (t) => {
   assert.equal(after[0].installed, true);
   const bodies = (await r.call('/api/bodies')).body;
   assert.deepEqual(bodies.map((/** @type {any} */ b) => b.id), ['led-module']);
+});
+
+test('modules and bodies both carry the wiring', async (t) => {
+  registerPlugins({});
+  t.after(() => registerPlugins({}));
+  const r = await rig(tempCharacters(), moduleDirs());
+  t.after(() => r.server.close());
+  const listed = (await r.call('/api/modules')).body;
+  assert.deepEqual(listed[0].wiring.links.map((/** @type {any} */ l) => l.a), ['esp:GPIO5', 'r:2', 'led:K']);
+
+  // The other half of the catalogue: the body an install wrote, read back. Its
+  // wiring travels with it, or the workbench cannot draw its project.
+  await r.call('/api/modules/led-module/install', { method: 'POST', headers: W });
+  const bodies = (await r.call('/api/bodies')).body;
+  assert.deepEqual(bodies[0].wiring.links.map((/** @type {any} */ l) => l.a), ['esp:GPIO5', 'r:2', 'led:K']);
+  // Parts travel too: a body with no parts is a body the workbench cannot draw
+  // a project for, and a save that copies it would be refused as empty.
+  assert.deepEqual(bodies[0].parts, ['esp32', 'led-5mm', 'resistor']);
 });
 
 test('the module list is read-only and an install needs the page header', async (t) => {
@@ -580,4 +603,70 @@ test('endpoints are kept per character, and checked before they are written', as
   const tooMany = await r.call('/api/characters/rex', { method: 'PATCH', headers: W, body: JSON.stringify({ endpoints: many }) });
   assert.equal(tooMany.status, 400);
   await r.server.close();
+});
+
+test('a body is adopted into a character over HTTP, and says what it dropped', async (t) => {
+  registerPlugins({});
+  t.after(() => registerPlugins({}));
+  const r = await rig(tempCharacters(), moduleDirs());
+  t.after(() => r.server.close());
+  await r.call('/api/modules/led-module/install', { method: 'POST', headers: W });
+
+  // A tarot character: its draw_card is not something the LED module can run.
+  const tarot = r.chars.add('reader', (cfg) => {
+    cfg.body = { template: 'tarot', actions: [{ name: 'draw_card', label: { en: 'Draw', zh: '抽牌' }, say: 'Draw.', run: [{ verb: 'draw' }] }] };
+  });
+  const before = JSON.parse(readFileSync(tarot.path, 'utf8'));
+  assert.equal(before.config.body.template, 'tarot');
+
+  const adopted = await r.call('/api/bodies/led-module/adopt', {
+    method: 'POST', headers: W, body: JSON.stringify({ characterId: 'reader' }),
+  });
+  assert.equal(adopted.status, 200);
+  assert.equal(adopted.body.body.template, 'led-module');
+  assert.deepEqual(adopted.body.dropped, ['draw_card']);
+  assert.deepEqual(adopted.body.body.actions.map((/** @type {any} */ a) => a.name), ['light_up', 'light_down']);
+
+  const after = JSON.parse(readFileSync(tarot.path, 'utf8'));
+  assert.equal(after.config.body.template, 'led-module');
+  assert.equal(after.config.body.actions.length, 2);
+});
+
+test('adopting needs an installed body and a real character', async (t) => {
+  registerPlugins({});
+  t.after(() => registerPlugins({}));
+  const r = await rig(tempCharacters(), moduleDirs());
+  t.after(() => r.server.close());
+  r.chars.add('reader', () => {});
+
+  // Not installed yet: the examples would read as unknown commands.
+  const missing = await r.call('/api/bodies/led-module/adopt', {
+    method: 'POST', headers: W, body: JSON.stringify({ characterId: 'reader' }),
+  });
+  assert.equal(missing.status, 404);
+
+  await r.call('/api/modules/led-module/install', { method: 'POST', headers: W });
+  const nobody = await r.call('/api/bodies/led-module/adopt', {
+    method: 'POST', headers: W, body: JSON.stringify({ characterId: 'nobody' }),
+  });
+  assert.equal(nobody.status, 404);
+  const bare = await r.call('/api/bodies/led-module/adopt', { method: 'POST', body: '{}' });
+  assert.equal(bare.status, 403);
+});
+
+test('the character list says which body and which tools a character has', async (t) => {
+  registerPlugins({});
+  t.after(() => registerPlugins({}));
+  const r = await rig(tempCharacters(), moduleDirs());
+  t.after(() => r.server.close());
+  await r.call('/api/modules/led-module/install', { method: 'POST', headers: W });
+  r.chars.add('lamp', (cfg) => {
+    cfg.body = {
+      template: 'led-module',
+      actions: [{ name: 'light_up', label: { en: 'Light up', zh: '点亮' }, say: 'On.', run: [{ command: 'led_on' }] }],
+    };
+  });
+  const row = (await r.call('/api/characters')).body.find((/** @type {any} */ c) => c.id === 'lamp');
+  assert.equal(row.bodyId, 'led-module');
+  assert.deepEqual(row.actionNames, ['light_up']);
 });

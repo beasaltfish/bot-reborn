@@ -145,7 +145,10 @@ A refused plugin is one line in the brain's log at startup:
 ## Modules
 
 The repository also ships modules: a plugin manifest plus the parts and links
-that make its pins true, in `modules/<id>/module.json`. Install one from the
+that make its pins true, in `modules/<id>/module.json`. `examples`, `wiring` and
+`note` are optional fields of any manifest: an install copies them into
+`bodies/<id>/body.json`, so an installed body still knows the bench it came
+from, and the workbench lists it as a project. Install one from the
 admin under **Advanced → Body → Modules** — no restart, the body is registered
 as it installs. Then open `/sim/`, pick the module's project (the LED module is
 in the **Demo builds** group), and wire it as the steps say; the project starts

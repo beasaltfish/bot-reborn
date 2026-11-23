@@ -3,10 +3,16 @@ import assert from 'node:assert/strict';
 // @ts-expect-error jsdom does not include type declarations
 import { JSDOM } from 'jsdom';
 import { createProjectPanel } from '../../sim/ui/project-panel.js';
-import { projectById } from '../../sim/projects.js';
+import { projectById, setModuleProjects } from '../../sim/projects.js';
+import { readFileSync } from 'node:fs';
 import { connectionProgress } from '../../sim/project-progress.js';
 import { emptyBench, addWire } from '../../sim/bench.js';
 import { describeSelection } from '../../sim/selection.js';
+
+// The bench reads the brain's catalogue at boot; the test hands it the manifest
+// the brain would serve.
+setModuleProjects([JSON.parse(readFileSync(
+  new URL('../../modules/led-module/module.json', import.meta.url), 'utf8'))]);
 
 test('a module project shows its localised title and the module note', () => {
   const dom = new JSDOM('<!doctype html><body></body>');
@@ -155,5 +161,25 @@ test('project and diagnostics are separate tabs and leaving clears the plan', ()
     panel.render({ ...guided, project: null, mode: 'free' }, { ...free, evaluated: false, diagnoses: [] });
     panel.element.querySelector('[data-tab="diagnostics"]')?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     assert.match(panel.element.textContent ?? '', /Plug in USB/);
+  } finally { globalThis.document = previous; dom.window.close(); }
+});
+
+test('the panel says which body the demo is and offers the one button', () => {
+  const dom = new JSDOM('<!doctype html><body></body>');
+  const previous = globalThis.document;
+  globalThis.document = dom.window.document;
+  try {
+    const project = projectById('module-led-module');
+    assert.ok(project);
+    const panel = createProjectPanel({ lang: 'en', focus() {}, bodyAction() {} });
+    panel.render({
+      mode: 'guided', project, progress: connectionProgress(emptyBench(), project),
+      selection: null, diagnoses: [],
+      body: { text: 'Asten is not this body yet.', button: 'Switch to this body', action: 'adopt' },
+    });
+    assert.match(panel.element.textContent ?? '', /Asten is not this body yet/);
+    const button = panel.element.querySelector('button.body-next');
+    assert.equal(button?.textContent, 'Switch to this body');
+    assert.equal(/** @type {HTMLElement} */ (button).dataset.action, 'adopt');
   } finally { globalThis.document = previous; dom.window.close(); }
 });

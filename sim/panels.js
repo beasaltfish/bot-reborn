@@ -15,7 +15,7 @@ import { createShoppingPanel } from './ui/shopping-panel.js';
 import { simText } from './ui/strings.js';
 import { createLanguageControl } from './ui/language-control.js';
 import { RECIPES, DEFAULT_SCREEN } from './recipes.js';
-import { PROJECTS, PROJECT_GROUPS } from './projects.js';
+import { PROJECTS, projectGroups } from './projects.js';
 import { WIRE_PALETTE } from './wire-color.js';
 import { createPropertyEditor } from './ui/property-editor.js';
 import { createBme280Panel } from './ui/bme280-panel.js';
@@ -87,6 +87,9 @@ function pointName(point) {
  *   rememberSpeed(x: number): void,
  *   firmwareDrivers?(): string[] | null,
  *   bench?(): import('./bench.js').Bench,
+ *   catalogueFailed?: boolean,
+ *   bodyState?(id: string): { text: string, button: string | null, action: 'install' | 'adopt' | null } | null,
+ *   bodyAction?(action: 'install' | 'adopt' | null, projectId: string): void,
  * }} opts
  */
 export function createPanels(opts) {
@@ -174,7 +177,7 @@ export function createPanels(opts) {
     shoppingPanel.hidden = !on;
     if (on) shoppingView.render();
   };
-  const projectView = createProjectPanel({ lang, focus: points => {
+  const projectView = createProjectPanel({ lang, note: opts.catalogueFailed ? simText(lang, 'project.catalogueFailed') : null, bodyAction: (action, id) => opts.bodyAction?.(action, id), focus: points => {
     // On a phone the sidebar leaves too little bench visible to frame two pins.
     if (window.innerWidth < 600) showProject(false);
     opts.focusProject?.(points);
@@ -195,7 +198,7 @@ export function createPanels(opts) {
     const label = simText(lang, `project.${project.id}`);
     return el('option', { value: project.id }, [label === `project.${project.id}` ? project.name : label]);
   };
-  for (const group of PROJECT_GROUPS) {
+  for (const group of projectGroups()) {
     const optgroup = el('optgroup', { label: simText(lang, group.key) });
     for (const id of group.ids) {
       const project = byId.get(id);
@@ -215,6 +218,7 @@ export function createPanels(opts) {
   function refreshProject() {
     if (projectPanel.hidden) return;
     const state = opts.projectState?.(projectSelect.value, planChoice());
+    if (state && state.project && opts.bodyState) state.body = opts.bodyState(state.project.id);
     const free = opts.projectState?.('');
     if (state) projectView.render(state, free ?? state);
   }

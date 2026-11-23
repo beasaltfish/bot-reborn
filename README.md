@@ -238,10 +238,13 @@ a plugin body is turned away from it.
 whole format.
 
 Some bodies also ship in the repository as **modules** — a plugin manifest plus
-the wiring that makes its pins true. Install one from the admin
-(**Advanced → Body → Modules**) and confirm its example actions; they are what
-tells the model when to use it. Then open the workbench, pick its project (the
-LED module's is in **Demo builds**) and wire it as the steps say. Plug in USB to
+the wiring that makes its pins true. The workbench reads that catalogue from the
+brain, so a module's project is in **Demo builds** whether or not it is
+installed: pick it and the project panel says which character wears that body and
+offers the one step that settles it (install it, or switch the character to it).
+The same is true of a body you saved yourself. Installing can also be done from
+the admin (**Advanced → Body → Modules**), where you confirm its example
+actions; they are what tells the model when to use it. Plug in USB to
 pair, say "turn on the light", and the bench LED lights. Only the LED module
 ships today. Installing again rewrites the commands, so a body that is already
 connected must pair again afterwards.

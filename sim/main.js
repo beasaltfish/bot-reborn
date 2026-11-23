@@ -32,7 +32,7 @@ import { createBodyAudio } from './body.js';
 import { createBenchIo } from './bench-io.js';
 import { createBodyAudioLink } from './firmware/audio-link.js';
 import { demoSkips, lookupCharacter } from './capabilities.js';
-import { isRemote, provisionSteps, screenMismatch, createProvisioning, tokenCandidates, paintManualPairing, bootManualPairing, showBootloader, offerTokenRepair } from './provision.js';
+import { isRemote, provisionSteps, screenMismatch, createProvisioning, tokenCandidates, autoPairAllowed, paintManualPairing, bootManualPairing, showBootloader, offerTokenRepair } from './provision.js';
 import { firmwareById, firmwareFor, FIRMWARES } from './firmware/index.js';
 import { ledPattern } from './firmware/led.js';
 import { createSerialPanel } from './ui/serial-panel.js';
@@ -56,6 +56,9 @@ import { blockingBoardPowerFault, initialDriveActions } from './board-power-gate
 import { createPowerInterlock, createStartLock } from './power-interlock.js';
 import { runRecipe, speedFactor } from './scene/autowire.js';
 import { createPanels } from './panels.js';
+import { loadModuleCatalogue } from './catalogue.js';
+import { nextStep } from './body-next-step.js';
+import { setModuleProjects } from './projects.js';
 import { createContextPanel } from './ui/context-panel.js';
 import { SIM_LANGUAGE_KEY, simulatorLanguage, requestLanguageChange } from './ui/language.js';
 import { simText } from './ui/strings.js';
@@ -122,7 +125,109 @@ let benchIo = null;
 /** @type {import('./projects.js').Project | null} */
 /** @type {import('./plan.js').Plan|import('./projects.js').Project|null} */
 let activeProject = null;
+/** Whether the person has answered "which character wears this body" for the
+ * demo on the bench. A body demo does not pair until they have. */
+let bodyDecided = false;
+// The catalogue is read once, before any panel exists: `projectById` and
+// `planById` are synchronous and the dropdown is built from them. A brain that
+// does not answer costs the modules, never the bench, and the project panel
+// says which of the two happened.
+const catalogue = await loadModuleCatalogue();
+if (!catalogue.failed) setModuleProjects(catalogue.modules);
+
+/** The bodies the brain already holds, by id. */
+const installedBodies = new Set(await loadBodyIds());
+/** The characters this brain offers; the paired one is found by name. */
+let characters = await loadCharacters();
+/** The character the board was paired with, as the brain named it. Never guessed
+ * from the list: writing a body into the wrong character is silent and costly. */
+/** @type {string | null} */
+let pairedCharacterId = null;
+
+/**
+ * The bodies the brain holds. A brain that does not answer is an empty set:
+ * the panel then offers the install, which is the honest guess.
+ * @returns {Promise<string[]>}
+ */
+async function loadBodyIds() {
+  try {
+    const rows = await (await fetch('/api/bodies')).json();
+    return Array.isArray(rows) ? rows.map((b) => b.id) : [];
+  } catch { return []; }
+}
+
+/** @returns {Promise<any[]>} */
+async function loadCharacters() {
+  try {
+    const rows = await (await fetch('/api/characters')).json();
+    return Array.isArray(rows) ? rows : [];
+  } catch { return []; }
+}
+
+/**
+ * The character the bench is talking to: the one whose token the board holds,
+ * else the only ready one. Never a name guess across brains.
+ * @returns {{ id: string, name: string, bodyId?: string, actionNames?: string[] } | null}
+ */
+function pairedCharacter() {
+  const list = Array.isArray(characters) ? characters : [];
+  if (!pairedCharacterId) return null;
+  return list.find((c) => c.id === pairedCharacterId) ?? null;
+}
 const panels = createPanels({
+  catalogueFailed: catalogue.failed,
+  // Which body this demo is, in the person's words, and the one button that
+  // would settle it. Read from the brain, never guessed.
+  bodyState: (id) => {
+    const project = projectById(id);
+    const body = /** @type {any} */ (project)?.body;
+    if (!body) return null;
+    const step = nextStep({
+      body,
+      character: pairedCharacter(),
+      installed: installedBodies.has(body),
+      examples: (catalogue.modules.find((m) => m.id === body)?.examples ?? []).length,
+    });
+    if (!step) return null;
+    const lang = document.documentElement.lang === 'zh' ? 'zh' : 'en';
+    const text = simText(lang, step.key).replace('{name}', String(step.params.name ?? '')).replace('{n}', String(step.params.n ?? 0));
+    if (!step.action) return { text, button: null, action: null };
+    const button = simText(lang, `bodyNext.${step.action}`).replace('{name}', String(step.params.name ?? ''));
+    return { text, button, action: step.action };
+  },
+  bodyAction: async (action, projectId) => {
+    const project = /** @type {any} */ (projectById(projectId));
+    const body = project?.body;
+    const character = pairedCharacter();
+    if (!body || !character || !action) return;
+    const lang = document.documentElement.lang === 'zh' ? 'zh' : 'en';
+    try {
+      if (action === 'install') {
+        const res = await fetch(`/api/modules/${encodeURIComponent(body)}/install`, { method: 'POST', headers: { 'X-Bot-Reborn': '1' } });
+        if (!res.ok) throw new Error('install');
+        installedBodies.add(body);
+      }
+      const res = await fetch(`/api/bodies/${encodeURIComponent(body)}/adopt`, {
+        method: 'POST',
+        headers: { 'X-Bot-Reborn': '1', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ characterId: character.id }),
+      });
+      const answer = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error('adopt');
+      bodyDecided = true;
+      pairedCharacterId = character.id;
+      characters = await loadCharacters();
+      panels.refreshProject();
+      // What the switch left behind, named: an action the old body could run and
+      // this one cannot is gone, and the person is told which.
+      const dropped = Array.isArray(answer?.dropped) && answer.dropped.length > 0
+        ? ` ${simText(lang, 'bodyNext.dropped').replace('{list}', answer.dropped.join(', '))}`
+        : '';
+      panels.status(simText(lang, 'bodyNext.done').replace('{name}', character.name) + dropped);
+    } catch {
+      panels.status(simText(lang, 'bodyNext.failed'));
+    }
+  },
   hint: (projectId, options) => (bench.placed.some((p) => p.burnt)
     ? document.documentElement.lang === 'zh' ? simText('zh', 'hint.burnt') : 'A part burnt out; drag it to the bin and take a new one from Parts.'
     : projectId
@@ -169,7 +274,7 @@ const panels = createPanels({
   start: (id, mode, hooks, speed) => { unlockAudio(); return startPlan(id, planOptionsFor(bench), mode, hooks, speed); },
   build: (id, options) => { unlockAudio(); return startPlan(id, options); },
   planOptions: options => planOptionsFor(bench, options),
-  leaveProject: () => { activeProject = null; },
+  leaveProject: () => { activeProject = null; bodyDecided = false; },
   speed: speedFactor(Number(read(SPEED_KEY))),
   firmwareDrivers: () => firmwareFor(bench.board)?.drivers ?? null,
   bench: () => bench,
@@ -1149,7 +1254,9 @@ async function plugIn(meta = {}) {
     void loadStudioSource(studioSelection);
   }
   updateStudio();
-  if (firmware.link) void maybeProvision(mine);
+  // A demo that names its body asks a question before pairing; the panel's
+  // button is the answer, and pairing before it would lock in the wrong body.
+  if (firmware.link && autoPairAllowed(activeProject, bodyDecided)) void maybeProvision(mine);
   // The firmware's own IMU check is the gate: no MPU-6050 awake, no shake sent.
   const imu = bench.placed.find((part) => part.part === 'mpu6050');
   if (firmware.link && imu && /** @type {any} */ (outcome.parts)?.[imu.id]?.awake === true) {
@@ -1192,6 +1299,9 @@ async function tokenCandidate() {
     const ready = tokenCandidates(await (await fetch('/api/characters')).json());
     if (ready.length !== 1) return { list: ready };
     const detail = await (await fetch(`/api/characters/${encodeURIComponent(ready[0].id)}`)).json();
+    // The one character that could be meant: remember which, so a body write
+    // can only ever land on it.
+    if (detail?.token) pairedCharacterId = ready[0].id;
     return detail?.token ? { token: detail.token, list: ready } : { list: ready };
   } catch {
     return { failed: true };

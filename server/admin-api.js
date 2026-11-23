@@ -11,10 +11,12 @@ import {
 } from './characters.js';
 import { createCheckApi, LAYERS } from './check-api.js';
 import { listFirmwareSources, readFirmwareSource } from './firmware-sources.js';
-import { pluginBodies, resolveBody } from '../core/bodies.js';
+import { TEMPLATES, bodyById, bodyProblem, pluginBodies, resolveBody } from '../core/bodies.js';
+import { adoptModule } from '../core/body-switch.js';
 import { verbsOf } from '../core/actions.js';
 import { installModule } from './modules.js';
 import { BODIES_DIR } from './plugin-startup.js';
+import { saveBody } from './plugin-bodies.js';
 
 const MAX_BODY = 64 * 1024;
 
@@ -73,6 +75,8 @@ export function createAdminApi(opts) {
     label: { en: m.label.en, zh: m.label.zh },
     parts: [...m.parts],
     note: m.note ? { en: m.note.en, zh: m.note.zh } : null,
+    // The bench's half of the manifest: without it a module has no project.
+    ...(m.wiring ? { wiring: structuredClone(m.wiring) } : {}),
     installed: Object.hasOwn(pluginBodies(), m.id),
     examples: structuredClone(m.examples ?? []),
     commands: (m.commands ?? []).map((command) => command.name),
@@ -109,6 +113,10 @@ export function createAdminApi(opts) {
         label: { en: b.label.en, zh: b.label.zh },
         commands: b.commands ?? [],
         resources: b.resources ?? [],
+        // A project needs the parts as well as the pins: without them the
+        // workbench has a body it cannot draw.
+        parts: b.parts ?? [],
+        ...(b.wiring ? { wiring: structuredClone(b.wiring) } : {}),
       })));
     }
     // The modules the repository ships, and a way to install one into this
@@ -131,6 +139,60 @@ export function createAdminApi(opts) {
       });
       if ('error' in result) return send(404, { error: result.error });
       return send(200, result);
+    }
+    // A body a person edited on the bench, saved under their own id. The write
+    // is the same one the loader will read on the next start; this only saves a
+    // restart.
+    if (path === '/api/bodies/save') {
+      if (req.method !== 'POST') return send(405, { error: 'method not allowed' });
+      let manifest;
+      try { manifest = await readJson(req); } catch { return send(400, { error: 'the body must be JSON' }); }
+      const saved = saveBody(manifest, { bodiesDir: opts.bodiesDir ?? BODIES_DIR });
+      if ('error' in saved) return send(400, { error: saved.error });
+      return send(200, saved);
+    }
+    // Adopting a body into a character, for the workbench: installing writes the
+    // body, and this is the one write that follows it. The rule is `core/`'s, so
+    // the page and the brain cannot answer the same question differently.
+    const adopt = path.match(/^\/api\/bodies\/([^/]+)\/adopt\/?$/);
+    if (adopt) {
+      if (req.method !== 'POST') return send(405, { error: 'method not allowed' });
+      let id;
+      try { id = decodeURIComponent(adopt[1]); } catch { return send(404, { error: 'no such body' }); }
+      let input;
+      try { input = await readJson(req); } catch { return send(400, { error: 'the body must be JSON' }); }
+      const characterId = /** @type {any} */ (input)?.characterId;
+      if (typeof characterId !== 'string' || characterId === '') {
+        return send(400, { error: 'characterId must be a string' });
+      }
+      // Not registered: its examples would name commands nothing can run yet.
+      const moduleBody = bodyById(id);
+      if (!moduleBody) return send(404, { error: `no body called ${id}; install it first` });
+      const character = characterById(characterId, opts.dir);
+      if (!character) return send(404, { error: `no character called ${characterId}` });
+
+      const manifest = /** @type {any} */ (opts.modules ?? {})[id];
+      const examples = Array.isArray(manifest?.examples) ? manifest.examples : [];
+      const patch = /** @type {any} */ (character.config?.body ?? {});
+      // The character's own actions, as the page carries them: what it merely
+      // inherited belongs to the template it is leaving, and `core/` is the one
+      // rule for both callers. The panel's copy has to say that in words.
+      const current = Array.isArray(patch.actions) ? patch.actions : [];
+      /** @type {(actions: any[]) => string | null} */
+      const accepts = (actions) => {
+        const names = new Set(actions.map((action) => action.name));
+        const triggers = (moduleBody.triggers ?? []).filter((trigger) => names.has(trigger.action));
+        return bodyProblem({ ...moduleBody, actions, triggers });
+      };
+      const { body, dropped } = adoptModule(
+        patch, id, current, examples, (name) => Object.hasOwn(TEMPLATES, name), accepts,
+      );
+      const refused = bodyProblem(resolveBody(body.id ?? patch.id ?? id, { ...patch, ...body }));
+      if (refused) return send(400, { error: refused });
+      try { patchCharacter(character.path, { config: { body } }); } catch (error) {
+        return send(400, { error: String(/** @type {Error} */ (error).message ?? error) });
+      }
+      return send(200, { body, dropped });
     }
     // A way to draw a card before the wand has a message of its own. Not a
     // feature: it is only there in dev mode, and without it this path is a 404.
@@ -191,14 +253,26 @@ export function createAdminApi(opts) {
           return send(200, listCharacters(opts.dir).characters.map((c) => {
             const setupId = setupIdFor(c.token);
             const bodyKind = opts.bodyKind?.(setupId);
+            // The body as the brain resolves it, and the tools it would offer the
+            // model: the workbench asks "is this character the body this demo
+            // builds", and a name alone cannot answer that.
+            const resolved = resolveBody(c.config.body?.id ?? 'toy', c.config.body);
             return {
               id: c.id, name: c.name, ready: ready(c.config), online: online.has(c.id),
               // `motion` stays for tabs that predate `verbs`: the bench asks
               // what the body can do, not which template it was copied from.
               // Resolved the same way the brain does, so a config with an id
               // and no template answers `none`, not its own name.
-              motion: resolveBody(c.config.body?.id ?? 'toy', c.config.body).template ?? null,
+              motion: resolved.template ?? null,
               verbs: verbsOfBody(c.config), setupId,
+              // `template` is the body it follows; `id` is only a name of its
+              // own. Two characters with the same template share a body.
+              bodyId: resolved.template ?? resolved.id,
+              // A config is a person's file, not a value to trust: a body whose
+              // actions were saved as something else has none to name, and must
+              // not take the whole list down with it.
+              actionNames: (Array.isArray(resolved.actions) ? resolved.actions : [])
+                .map((action) => action.name),
               ...(bodyKind ? { bodyKind } : {}),
               ...(opts.presence?.of(c.id, setupId) ?? {}),
             };

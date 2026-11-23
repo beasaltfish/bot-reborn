@@ -12,12 +12,13 @@
 //
 // Above them sits the module panel: a module is a body this repository ships,
 // so it is installed and its example actions adopted in one step rather than
-// retyped — see `bodySwitch.ts` for the write that step makes.
+// retyped — see `core/body-switch.js` for the write that step makes.
 import { useEffect, useState } from 'react';
 import { TEMPLATES, bodyById, bodyProblem, labelOf, pluginBodies, registerPlugins, resolveBody } from '../../core/bodies.js';
 import { ActionsEditor } from './ActionsEditor';
 import { BodyDiagram } from './BodyDiagram';
-import { adoptModule } from './bodySwitch';
+import { BodyManifestEditor } from './BodyManifestEditor';
+import { adoptModule } from '../../core/body-switch.js';
 import { lang, t, type Key } from './i18n';
 import type { BodyAction, Detail, Patch } from './types';
 
@@ -307,7 +308,8 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
    */
   const adopt = (id: string, examples: BodyAction[]) => {
     // Only the character's own actions are carried: what it merely inherited
-    // belongs to the template it is leaving, and a pose has no screen here.
+    // belongs to the template it is leaving. The panel says so in words, because
+    // a dropped `draw_card` would otherwise leave no trace in this list.
     const current = Array.isArray(patch.actions) ? patch.actions : [];
     const moduleBody = bodyById(id) ?? resolveBody(id, { template: id });
     /** `bodyProblem` for the module body carrying these actions; triggers are
@@ -512,6 +514,20 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
             own is told apart by carrying them. Remounted on a switch, so the
             box starts from the newly chosen body. */}
         <ActionsEditor key={chosen} detail={detail} update={update} />
+        {/* The bench half, made editable: a pin number and the examples the
+            model reads. Only for a body that carries commands — a template has
+            no pins of its own to save. */}
+        {Array.isArray(body.resources) && body.resources.length > 0 && (
+          <BodyManifestEditor
+            key={`manifest-${chosen}`}
+            body={body}
+            resources={body.resources}
+            commands={body.commands ?? []}
+            actions={body.actions}
+            wiring={body.wiring}
+            parts={body.parts ?? []}
+          />
+        )}
       </div>
         <div className="body-side">
           <div className="body-preview" data-testid="body-preview">

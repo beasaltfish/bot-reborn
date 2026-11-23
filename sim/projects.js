@@ -4,10 +4,9 @@ import { RECIPES, recipeSteps, startBench, applyStep } from './recipes.js';
 import { targetFor } from './target.js';
 import { PARTS } from './parts.js';
 import { DEFAULT_SCREEN } from './recipes.js';
-import { LED_MODULE } from './modules/led-module.js';
 import { projectFromModule } from './project-module.js';
 
-/** @typedef {Omit<import('./recipes.js').Recipe, 'id'> & {id:string, steps: import('./recipes.js').Step[], links: import('./target.js').Link[], ignoredFaultCodes?:string[]}} Project */
+/** @typedef {Omit<import('./recipes.js').Recipe, 'id'> & {id:string, steps: import('./recipes.js').Step[], links: import('./target.js').Link[], ignoredFaultCodes?:string[], body?:string}} Project */
 
 /** @param {import('./recipes.js').Recipe} recipe @param {string} [screenId] @param {boolean} [wand] @returns {Project} */
 function adapt(recipe, screenId, wand) {
@@ -222,7 +221,7 @@ const GUIDED = [LED_PROJECT, BME280_PROJECT, POWER_PROJECT, BUTTON_PROJECT, SONA
 
 /** Dropdown groups; a project not listed falls through to the end. */
 export const PROJECT_GROUPS = [
-  { id: 'demo', key: 'project.group.demo', ids: ['audio', 'screen', 'toy', 'tarot', 'module-led-module'] },
+  { id: 'demo', key: 'project.group.demo', ids: ['audio', 'screen', 'toy', 'tarot'] },
   { id: 'basics', key: 'project.group.basics', ids: ['led-basics', 'power-a-rail', 'button-led'] },
   { id: 'sensing', key: 'project.group.sensing', ids: ['bme280-readings', 'distance-reader', 'environment-display'] },
   { id: 'actuator', key: 'project.group.actuator', ids: ['proximity-servo', 'motor-driver-basics', 'status-light-strip'] },
@@ -231,17 +230,43 @@ export const PROJECT_GROUPS = [
 /** @type {Project[]} */
 const ADAPTED = [...RECIPES.map(recipe => adapt(recipe)), ...GUIDED];
 
-/**
- * The LED module's project: the Audio only bench plus the module's own wiring.
- * @type {Project}
- */
-export const LED_MODULE_PROJECT = projectFromModule(
-  LED_MODULE,
-  /** @type {Project} */ (ADAPTED.find(project => project.id === 'audio')),
-);
+const AUDIO_BENCH = /** @type {Project} */ (ADAPTED.find(project => project.id === 'audio'));
 
+/** The module projects, as the brain's catalogue last said. Empty until boot. */
 /** @type {Project[]} */
-export const PROJECTS = [...ADAPTED, LED_MODULE_PROJECT];
+let MODULE_PROJECTS = [];
+
+/**
+ * The project list the dropdown draws. Written once at boot, before any panel
+ * exists, from the catalogue the brain served: `projectById` and `planById` are
+ * synchronous and stay that way.
+ * @type {Project[]}
+ */
+export let PROJECTS = [...ADAPTED];
+
+/**
+ * Replace the module projects with the ones this catalogue describes. A module
+ * is a body with a wiring, and its project is the audio bench plus that wiring.
+ * @param {any[]} manifests
+ * @returns {void}
+ */
+export function setModuleProjects(manifests) {
+  MODULE_PROJECTS = (Array.isArray(manifests) ? manifests : [])
+    .filter(manifest => manifest && Array.isArray(manifest.parts) && manifest.wiring)
+    .map(manifest => projectFromModule(manifest, AUDIO_BENCH));
+  PROJECTS = [...ADAPTED, ...MODULE_PROJECTS];
+}
+
+/**
+ * The dropdown's groups, with the demo group extended by whatever modules the
+ * catalogue brought: a module is a demo, and it belongs where the demos are.
+ * @returns {typeof PROJECT_GROUPS} a new list; the constant is never edited
+ */
+export function projectGroups() {
+  return PROJECT_GROUPS.map(group => (group.id === 'demo'
+    ? { ...group, ids: [...group.ids, ...MODULE_PROJECTS.map(project => project.id)] }
+    : group));
+}
 
 /** @param {string} id @param {{screenId?:string, wand?:boolean}} [options] */
 export function projectById(id, options) {

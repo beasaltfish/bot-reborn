@@ -4,10 +4,10 @@ import { projectReason } from './project-copy.js';
 /** @typedef {ReturnType<typeof import('../project-progress.js').connectionProgress>[number]} Progress */
 /** @typedef {ReturnType<typeof import('../selection.js').describeSelection>} SelectionInfo */
 /** @typedef {{id:string,name:string,goalKey?:string,legacy?:{recipeId?:string},links:import('../target.js').Link[],ignoredFaultCodes?:string[]}} ProjectView */
-/** @typedef {{mode:'guided'|'free', evaluated?:boolean, project:ProjectView|null, progress:Progress[], selection:SelectionInfo, diagnoses:import('../diagnose.js').Hint[]}} State */
+/** @typedef {{mode:'guided'|'free', evaluated?:boolean, project:ProjectView|null, progress:Progress[], selection:SelectionInfo, diagnoses:import('../diagnose.js').Hint[], body?:{text:string, button:string|null, action:'install'|'adopt'|null}|null}} State */
 /** @typedef {'project'|'diagnostics'} Tab */
 
-/** @param {{lang:string, focus(points:string[]):void, leave?():void, build?(id:string):void, demo?(id:string):void, step?(id:string):void}} opts */
+/** @param {{lang:string, focus(points:string[]):void, leave?():void, build?(id:string):void, demo?(id:string):void, step?(id:string):void, note?:string|null, bodyAction?(action:'install'|'adopt'|null, projectId:string):void}} opts */
 export function createProjectPanel(opts) {
   const element = document.createElement('section');
   element.className = 'project-panel';
@@ -56,6 +56,24 @@ export function createProjectPanel(opts) {
       heading.append(child('h2', title === `project.${project.id}` ? project.name : title));
       heading.append(child('span', text('progress').replace('{done}', String(completed)).replace('{total}', String(current.progress.length))));
       element.append(heading);
+      // Which body this demo is, and what would make the character that body.
+      // Said before the steps: it is the answer to "what do I do next".
+      if (current.body) {
+        const block = document.createElement('div');
+        block.className = 'project-body-next';
+        const line = child('p', current.body.text);
+        line.className = 'hint';
+        block.append(line);
+        if (current.body.button && current.body.action) {
+          const button = /** @type {HTMLButtonElement} */ (child('button', current.body.button));
+          button.type = 'button';
+          button.className = 'body-next';
+          button.dataset.action = current.body.action;
+          button.addEventListener('click', () => opts.bodyAction?.(current.body?.action ?? null, project.id));
+          block.append(button);
+        }
+        element.append(block);
+      }
       const goalKey = project.goalKey ?? `goal.${project.id}`;
       const goal = simText(opts.lang, goalKey);
       if (goal !== goalKey) element.append(child('p', goal));
@@ -144,6 +162,12 @@ export function createProjectPanel(opts) {
     const focusLabel = active?.tagName === 'BUTTON' && element.contains(active) ? active.getAttribute('aria-label') : null;
     element.replaceChildren();
     renderTabs();
+    // Something the page could not read, said once, above whatever it did read.
+    if (opts.note) {
+      const note = child('p', opts.note);
+      note.className = 'hint project-note';
+      element.append(note);
+    }
     if (tab === 'diagnostics') renderDiagnostics(diagnostics ?? state);
     else renderProject(state);
     if (focusLabel) [...element.querySelectorAll('button')].find(button => button.getAttribute('aria-label') === focusLabel)?.focus();

@@ -7,10 +7,13 @@
 // trusted, and answers with a phrase or null. Nothing throws.
 
 import { commandProblem } from './io-program.js';
-import { TEMPLATES } from './bodies.js';
+import { TEMPLATES, bodyProblem } from './bodies.js';
 
 /** A plugin id names a directory and reaches `config.body.template`. */
 export const ID = /^[a-z][a-z0-9_-]*$/;
+
+/** The one wiring end this checker reads: the board's own pin. */
+const ESP_PIN = /^esp:GPIO(\d+)$/;
 
 /** A command name is how an action calls it: no spaces, no caps. */
 const COMMAND_NAME = /^[a-z][a-z0-9_]*$/;
@@ -18,7 +21,7 @@ const COMMAND_NAME = /^[a-z][a-z0-9_]*$/;
 /** The two directions a gpio pin may have. */
 const DIRECTIONS = new Set(['input', 'output']);
 
-/** @param {unknown} value @returns {boolean} */
+/** @param {unknown} value @returns {value is Record<string, any>} */
 function isObject(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -88,6 +91,54 @@ export function commandsProblem(commands, resources) {
 }
 
 /**
+ * Every `esp:GPIO<n>` a link names has to be a gpio the manifest declared. The
+ * other end of a link is a part pin, and resolving it is the simulator's work;
+ * a `esp:GND` or `esp:3V3` names no permission and is left alone.
+ *
+ * It lives here, not in `core/module-manifest.js`, because a plugin a person
+ * saved and a module the repository ships are held to the same rule.
+ * @param {unknown} wiring
+ * @param {unknown} resources
+ * @returns {string | null}
+ */
+export function wiringProblem(wiring, resources) {
+  if (wiring === undefined) return null;
+  if (!isObject(wiring)) return 'wiring must be an object';
+  if (!Array.isArray(wiring.links)) return 'wiring.links must be a list of links';
+
+  /** @type {Set<number>} */
+  const declared = new Set(
+    (Array.isArray(resources) ? resources : [])
+      .filter((resource) => isObject(resource)
+        && resource.kind === 'gpio'
+        && Number.isInteger(resource.gpio))
+      .map((resource) => /** @type {number} */ (resource.gpio)),
+  );
+
+  for (const [i, link] of wiring.links.entries()) {
+    if (!isObject(link)) return `wiring.links[${i}] is not a link`;
+    for (const end of /** @type {const} */ (['a', 'b'])) {
+      const point = link[end];
+      if (typeof point !== 'string') return `wiring.links[${i}].${end} is not a point`;
+      const pin = ESP_PIN.exec(point);
+      if (!pin) {
+        // `esp:GPIO5x` almost passes for a board pin; left alone it would be
+        // resolved by the simulator as a part name and fail there, far from the
+        // typo. Anything else (`esp:GND`, `led:A`) is not ours to judge.
+        if (point.startsWith('esp:GPIO')) {
+          return `wiring.links[${i}].${end} is ${point}, which is not an esp:GPIO<n> pin`;
+        }
+        continue;
+      }
+      if (!declared.has(Number(pin[1]))) {
+        return `wiring.links[${i}].${end} is ${point}, which is not declared by a gpio resource`;
+      }
+    }
+  }
+  return null;
+}
+
+/**
  * The manifest's own claims, before the body is built. Each phrase is one line
  * and names the field, because the caller prefixes it with the directory.
  * @param {any} manifest
@@ -110,7 +161,20 @@ export function manifestProblem(manifest) {
 
   const badResources = resourcesProblem(manifest.resources);
   if (badResources) return badResources;
-  return commandsProblem(manifest.commands, manifest.resources);
+  const badCommands = commandsProblem(manifest.commands, manifest.resources);
+  if (badCommands) return badCommands;
+
+  // An example is an action the character may end up owning, so it is judged by
+  // the same checker as a hand-written one, on the body this manifest builds.
+  // The prefix says where the fault is: `commands` are checked above, and these
+  // are the manifest's own suggestion of what a person can say.
+  if (manifest.examples !== undefined && !Array.isArray(manifest.examples)) {
+    return 'examples must be a list of actions';
+  }
+  const badExample = bodyProblem({ ...bodyFrom(manifest), actions: manifest.examples ?? [] });
+  if (badExample) return `examples: ${badExample}`;
+
+  return wiringProblem(manifest.wiring, manifest.resources);
 }
 
 /**
@@ -131,5 +195,9 @@ export function bodyFrom(manifest) {
     parts: [...manifest.parts],
     commands: structuredClone(manifest.commands),
     resources: structuredClone(manifest.resources),
+    // What a person reads and what the bench draws travel with the body: a body
+    // the page cannot see the wiring of is a body with no project.
+    ...(manifest.wiring ? { wiring: structuredClone(manifest.wiring) } : {}),
+    ...(manifest.note ? { note: { ...manifest.note } } : {}),
   };
 }

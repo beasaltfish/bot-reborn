@@ -1,24 +1,40 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { LED_MODULE } from '../../sim/modules/led-module.js';
 import { projectFromModule } from '../../sim/project-module.js';
-import { projectById } from '../../sim/projects.js';
+import { projectById, setModuleProjects } from '../../sim/projects.js';
 import { planById, planSteps } from '../../sim/plan.js';
 import { emptyBench, pinPoints } from '../../sim/bench.js';
 import { PARTS, holeStrip } from '../../sim/parts.js';
 import { startBench, applyStep } from '../../sim/recipes.js';
 import { nets } from '../../sim/netlist.js';
 
-test('the sim literal and the repo module are the same data', () => {
-  const json = JSON.parse(readFileSync(new URL('../../modules/led-module/module.json', import.meta.url), 'utf8'));
-  assert.deepEqual(LED_MODULE, json);
+const LED_MODULE = JSON.parse(readFileSync(new URL('../../modules/led-module/module.json', import.meta.url), 'utf8'));
+// The bench reads the brain's catalogue at boot; the tests hand it the same
+// manifest the brain would serve.
+setModuleProjects([LED_MODULE]);
+
+test('a part the bench already wired is not seated or wired twice', (t) => {
+  t.after(() => setModuleProjects([LED_MODULE]));
+  setModuleProjects([{
+    id: 'mic-tap', label: { en: 'Mic tap', zh: '麦克风抽头' }, parts: ['esp32', 'inmp441'],
+    resources: [{ kind: 'gpio', name: 'sig', gpio: 8, direction: 'input' }],
+    wiring: {
+      parts: [{ id: 'mic', part: 'inmp441' }],
+      links: [{ a: 'mic:SCK', b: 'esp:GPIO12' }],
+    },
+  }]);
+  const project = /** @type {any} */ (projectById('module-mic-tap'));
+  const mics = project.steps.filter((/** @type {any} */ step) => step.kind === 'part' && step.part === 'inmp441');
+  assert.equal(mics.length, 1, 'the audio bench already seated a mic');
 });
 
 test('the module project builds on the audio bench and wires the module', () => {
   const project = /** @type {import('../../sim/projects.js').Project} */ (projectById('module-led-module'));
   assert.equal(project.firmware, 'body');
   assert.equal(project.connection, 'body');
+  // The plan the bench actually runs keeps the body: pairing waits on it.
+  assert.equal(/** @type {any} */ (planById('module-led-module')).body, 'led-module');
   assert.deepEqual(project.links.map((l) => l.a).slice(-3), ['esp:GPIO5', 'r:2', 'led:K']);
   const steps = planSteps(/** @type {any} */ (planById('module-led-module')));
   assert.ok(steps.some((s) => s.kind === 'flash' && s.firmware === 'body'));

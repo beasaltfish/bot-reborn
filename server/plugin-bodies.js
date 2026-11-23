@@ -9,8 +9,9 @@
 // in the log, not a crash. That is why every step is wrapped and why a missing
 // plugin directory reads the same as an empty one — most installs have none.
 
-import { readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { registerPlugins } from '../core/bodies.js';
 import { TEMPLATES, bodyProblem } from '../core/bodies.js';
 import { bodyFrom, manifestProblem } from '../core/plugin-manifest.js';
 
@@ -110,4 +111,53 @@ export function loadPlugins(dir) {
   }
 
   return { bodies, problems };
+}
+
+/**
+ * Write a body a person made on the bench: their manifest, under an id of their
+ * choosing, registered at once. A template's name is not theirs to take (it
+ * would change what every character following that template means), and a body
+ * with no example action is a body the model has no tool for — both refused with
+ * the sentence the page shows.
+ *
+ * The write is one file, `bodies/<id>/body.json`, and it goes through the same
+ * `manifestProblem` as the loader: a saved body cannot be one that will not load.
+ * @param {any} manifest
+ * @param {{ bodiesDir: string, modulesDir?: string }} options
+ * @returns {{ id: string } | { error: string }}
+ */
+export function saveBody(manifest, { bodiesDir, modulesDir = join(bodiesDir, '..', 'modules') }) {
+  const id = manifest?.id;
+  if (Object.hasOwn(TEMPLATES, id)) {
+    return { error: `${String(id)} is a built-in body; save under a new id` };
+  }
+  // The repository's copy is the truth for a shipped module: a save that took
+  // its id would be overwritten by the next install, and the person's edit would
+  // vanish with no message.
+  if (typeof id === 'string' && /^[a-z][a-z0-9_-]*$/.test(id)
+    && existsSync(join(modulesDir, id, 'module.json'))) {
+    return { error: `${id} ships in the repository; save under a new id` };
+  }
+  const problem = manifestProblem(manifest);
+  if (problem) return { error: problem };
+  const examples = Array.isArray(manifest.examples) ? manifest.examples : [];
+  if (examples.length === 0) {
+    return { error: 'a body needs at least one example action, or the model has no tool for it' };
+  }
+  // Never over a body that is already there: an installed module is the
+  // repository's copy of the truth, and an edit of it belongs under a new name.
+  const dir = join(bodiesDir, id);
+  if (existsSync(join(dir, 'body.json'))) {
+    return { error: `a body called ${id} already exists; save under a new id` };
+  }
+  try {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'body.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+  } catch {
+    // A full disk or a path that is a file is the person's problem to fix, not
+    // the brain's to die of: the caller turns this into a sentence.
+    return { error: `could not write ${id}; check that ${bodiesDir} is writable` };
+  }
+  registerPlugins(loadPlugins(bodiesDir).bodies);
+  return { id };
 }

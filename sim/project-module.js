@@ -18,9 +18,18 @@ const MODULE_ROW = { x: 2, z: -6 };
  */
 export function projectFromModule(module, base) {
   const wiring = module.wiring ?? { parts: [], links: [] };
+  // The bench the person already has is the foundation: a part it seated is not
+  // seated again, and a link it already draws is not drawn twice. A manifest
+  // that names the microphone it taps adds only what is missing.
+  const seated = new Set(
+    (base.steps ?? []).filter((step) => step.kind === 'part').map((step) => /** @type {any} */ (step).part),
+  );
+  const drawn = new Set(
+    (base.links ?? []).flatMap((link) => [`${link.a}|${link.b}`, `${link.b}|${link.a}`]),
+  );
   let x = MODULE_ROW.x;
   /** @type {import('./recipes.js').Step[]} */
-  const moduleParts = (wiring.parts ?? []).map((part) => {
+  const moduleParts = (wiring.parts ?? []).filter((part) => !seated.has(part.part)).map((part) => {
     const def = PARTS[part.part];
     const say = `Place the ${def?.label ?? part.part}.`;
     /** @type {import('./recipes.js').Step} */
@@ -45,11 +54,17 @@ export function projectFromModule(module, base) {
     ignoredFaultCodes: [],
     firmware: 'body',
     connection: 'body',
+    // The body this bench is building. The pair panel reads it: selecting a
+    // demo is selecting a body, and the person should not have to go to the
+    // admin to find out which one.
+    body: module.id,
     ending: 'Turn the light on',
     // A manifest's `why` is optional; every project link carries a sentence.
     links: [
       ...base.links,
-      ...wiring.links.map(link => ({ a: link.a, b: link.b, why: link.why ?? 'Connect the module.' })),
+      ...wiring.links
+        .filter(link => !drawn.has(`${link.a}|${link.b}`) && !drawn.has(`${link.b}|${link.a}`))
+        .map(link => ({ a: link.a, b: link.b, why: link.why ?? 'Connect the module.' })),
     ],
     steps: [...base.steps, ...moduleParts],
   };

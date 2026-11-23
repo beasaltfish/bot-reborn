@@ -103,8 +103,12 @@ export function loadModules(dir = join(ROOT, 'modules')) {
 }
 
 /**
- * The five fields a module shares with a plugin. Examples, wiring and the note
- * are what the module says to a person, not what the body runs.
+ * The body a module becomes on disk. Examples, wiring and the note are what the
+ * module says to a person rather than what the brain runs, but they travel with
+ * it: a body whose wiring was dropped at install is a body the workbench cannot
+ * draw, and the next catalogue read could not tell where its project went.
+ * Each is written only when the manifest has it, so a body from a hand-written
+ * plugin keeps the shape it was written in.
  * @param {ModuleManifest} manifest
  * @returns {Record<string, unknown>}
  */
@@ -115,6 +119,9 @@ function pluginFields(manifest) {
     parts: [...manifest.parts],
     resources: structuredClone(manifest.resources),
     commands: structuredClone(manifest.commands),
+    ...(manifest.examples ? { examples: structuredClone(manifest.examples) } : {}),
+    ...(manifest.wiring ? { wiring: structuredClone(manifest.wiring) } : {}),
+    ...(manifest.note ? { note: { ...manifest.note } } : {}),
   };
 }
 
