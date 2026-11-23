@@ -12,7 +12,6 @@ import { renderEarcons } from '../../server/audio/render.js';
 import { connectFakeBody } from '../../server/fake-body.js';
 import { PROTOCOL } from '../../core/protocol.js';
 import { TEMPLATES, registerPlugins } from '../../core/bodies.js';
-import { bodyFrom } from '../../core/plugin-manifest.js';
 import { tempCharacters, fakeFetch, until } from './helpers.js';
 
 const W = { 'X-Bot-Reborn': '1', 'Content-Type': 'application/json' };
@@ -137,15 +136,11 @@ test('modules and bodies both carry the wiring', async (t) => {
   const listed = (await r.call('/api/modules')).body;
   assert.deepEqual(listed[0].wiring.links.map((/** @type {any} */ l) => l.a), ['esp:GPIO5', 'r:2', 'led:K']);
 
-  // A body the brain holds with a wiring of its own: `/api/bodies` is the other
-  // half of the catalogue, and an install only copies the manifest later.
-  registerPlugins({ wired: bodyFrom({
-    id: 'wired', label: { en: 'Wired', zh: '接线' }, parts: ['esp32'],
-    resources: [{ kind: 'gpio', name: 'led', gpio: 5, direction: 'output', safe: 0 }],
-    commands: [], wiring: { links: [{ a: 'esp:GPIO5', b: 'led:A' }] },
-  }) });
+  // The other half of the catalogue: the body an install wrote, read back. Its
+  // wiring travels with it, or the workbench cannot draw its project.
+  await r.call('/api/modules/led-module/install', { method: 'POST', headers: W });
   const bodies = (await r.call('/api/bodies')).body;
-  assert.deepEqual(bodies[0].wiring.links.map((/** @type {any} */ l) => l.a), ['esp:GPIO5']);
+  assert.deepEqual(bodies[0].wiring.links.map((/** @type {any} */ l) => l.a), ['esp:GPIO5', 'r:2', 'led:K']);
 });
 
 test('the module list is read-only and an install needs the page header', async (t) => {
