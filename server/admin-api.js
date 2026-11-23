@@ -11,7 +11,8 @@ import {
 } from './characters.js';
 import { createCheckApi, LAYERS } from './check-api.js';
 import { listFirmwareSources, readFirmwareSource } from './firmware-sources.js';
-import { pluginBodies, resolveBody } from '../core/bodies.js';
+import { TEMPLATES, bodyById, bodyProblem, pluginBodies, resolveBody } from '../core/bodies.js';
+import { adoptModule } from '../core/body-switch.js';
 import { verbsOf } from '../core/actions.js';
 import { installModule } from './modules.js';
 import { BODIES_DIR } from './plugin-startup.js';
@@ -134,6 +135,49 @@ export function createAdminApi(opts) {
       });
       if ('error' in result) return send(404, { error: result.error });
       return send(200, result);
+    }
+    // Adopting a body into a character, for the workbench: installing writes the
+    // body, and this is the one write that follows it. The rule is `core/`'s, so
+    // the page and the brain cannot answer the same question differently.
+    const adopt = path.match(/^\/api\/bodies\/([^/]+)\/adopt\/?$/);
+    if (adopt) {
+      if (req.method !== 'POST') return send(405, { error: 'method not allowed' });
+      let id;
+      try { id = decodeURIComponent(adopt[1]); } catch { return send(404, { error: 'no such body' }); }
+      let input;
+      try { input = await readJson(req); } catch { return send(400, { error: 'the body must be JSON' }); }
+      const characterId = /** @type {any} */ (input)?.characterId;
+      if (typeof characterId !== 'string' || characterId === '') {
+        return send(400, { error: 'characterId must be a string' });
+      }
+      // Not registered: its examples would name commands nothing can run yet.
+      const moduleBody = bodyById(id);
+      if (!moduleBody) return send(404, { error: `no body called ${id}; install it first` });
+      const character = characterById(characterId, opts.dir);
+      if (!character) return send(404, { error: `no character called ${characterId}` });
+
+      const manifest = /** @type {any} */ (opts.modules ?? {})[id];
+      const examples = Array.isArray(manifest?.examples) ? manifest.examples : [];
+      const patch = /** @type {any} */ (character.config?.body ?? {});
+      // The character's own actions, as the page carries them: what it merely
+      // inherited belongs to the template it is leaving, and `core/` is the one
+      // rule for both callers. The panel's copy has to say that in words.
+      const current = Array.isArray(patch.actions) ? patch.actions : [];
+      /** @type {(actions: any[]) => string | null} */
+      const accepts = (actions) => {
+        const names = new Set(actions.map((action) => action.name));
+        const triggers = (moduleBody.triggers ?? []).filter((trigger) => names.has(trigger.action));
+        return bodyProblem({ ...moduleBody, actions, triggers });
+      };
+      const { body, dropped } = adoptModule(
+        patch, id, current, examples, (name) => Object.hasOwn(TEMPLATES, name), accepts,
+      );
+      const refused = bodyProblem(resolveBody(body.id ?? patch.id ?? id, { ...patch, ...body }));
+      if (refused) return send(400, { error: refused });
+      try { patchCharacter(character.path, { config: { body } }); } catch (error) {
+        return send(400, { error: String(/** @type {Error} */ (error).message ?? error) });
+      }
+      return send(200, { body, dropped });
     }
     // A way to draw a card before the wand has a message of its own. Not a
     // feature: it is only there in dev mode, and without it this path is a 404.

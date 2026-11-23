@@ -601,3 +601,52 @@ test('endpoints are kept per character, and checked before they are written', as
   assert.equal(tooMany.status, 400);
   await r.server.close();
 });
+
+test('a body is adopted into a character over HTTP, and says what it dropped', async (t) => {
+  registerPlugins({});
+  t.after(() => registerPlugins({}));
+  const r = await rig(tempCharacters(), moduleDirs());
+  t.after(() => r.server.close());
+  await r.call('/api/modules/led-module/install', { method: 'POST', headers: W });
+
+  // A tarot character: its draw_card is not something the LED module can run.
+  const tarot = r.chars.add('reader', (cfg) => {
+    cfg.body = { template: 'tarot', actions: [{ name: 'draw_card', label: { en: 'Draw', zh: '抽牌' }, say: 'Draw.', run: [{ verb: 'draw' }] }] };
+  });
+  const before = JSON.parse(readFileSync(tarot.path, 'utf8'));
+  assert.equal(before.config.body.template, 'tarot');
+
+  const adopted = await r.call('/api/bodies/led-module/adopt', {
+    method: 'POST', headers: W, body: JSON.stringify({ characterId: 'reader' }),
+  });
+  assert.equal(adopted.status, 200);
+  assert.equal(adopted.body.body.template, 'led-module');
+  assert.deepEqual(adopted.body.dropped, ['draw_card']);
+  assert.deepEqual(adopted.body.body.actions.map((/** @type {any} */ a) => a.name), ['light_up', 'light_down']);
+
+  const after = JSON.parse(readFileSync(tarot.path, 'utf8'));
+  assert.equal(after.config.body.template, 'led-module');
+  assert.equal(after.config.body.actions.length, 2);
+});
+
+test('adopting needs an installed body and a real character', async (t) => {
+  registerPlugins({});
+  t.after(() => registerPlugins({}));
+  const r = await rig(tempCharacters(), moduleDirs());
+  t.after(() => r.server.close());
+  r.chars.add('reader', () => {});
+
+  // Not installed yet: the examples would read as unknown commands.
+  const missing = await r.call('/api/bodies/led-module/adopt', {
+    method: 'POST', headers: W, body: JSON.stringify({ characterId: 'reader' }),
+  });
+  assert.equal(missing.status, 404);
+
+  await r.call('/api/modules/led-module/install', { method: 'POST', headers: W });
+  const nobody = await r.call('/api/bodies/led-module/adopt', {
+    method: 'POST', headers: W, body: JSON.stringify({ characterId: 'nobody' }),
+  });
+  assert.equal(nobody.status, 404);
+  const bare = await r.call('/api/bodies/led-module/adopt', { method: 'POST', body: '{}' });
+  assert.equal(bare.status, 403);
+});
