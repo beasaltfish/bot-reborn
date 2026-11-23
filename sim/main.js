@@ -32,7 +32,7 @@ import { createBodyAudio } from './body.js';
 import { createBenchIo } from './bench-io.js';
 import { createBodyAudioLink } from './firmware/audio-link.js';
 import { demoSkips, lookupCharacter } from './capabilities.js';
-import { isRemote, provisionSteps, screenMismatch, createProvisioning, tokenCandidates, paintManualPairing, bootManualPairing, showBootloader, offerTokenRepair } from './provision.js';
+import { isRemote, provisionSteps, screenMismatch, createProvisioning, tokenCandidates, autoPairAllowed, paintManualPairing, bootManualPairing, showBootloader, offerTokenRepair } from './provision.js';
 import { firmwareById, firmwareFor, FIRMWARES } from './firmware/index.js';
 import { ledPattern } from './firmware/led.js';
 import { createSerialPanel } from './ui/serial-panel.js';
@@ -125,6 +125,9 @@ let benchIo = null;
 /** @type {import('./projects.js').Project | null} */
 /** @type {import('./plan.js').Plan|import('./projects.js').Project|null} */
 let activeProject = null;
+/** Whether the person has answered "which character wears this body" for the
+ * demo on the bench. A body demo does not pair until they have. */
+let bodyDecided = false;
 // The catalogue is read once, before any panel exists: `projectById` and
 // `planById` are synchronous and the dropdown is built from them. A brain that
 // does not answer costs the modules, never the bench, and the project panel
@@ -209,6 +212,7 @@ const panels = createPanels({
         body: JSON.stringify({ characterId: character.id }),
       });
       if (!res.ok) throw new Error('adopt');
+      bodyDecided = true;
       characters = await loadCharacters();
       panels.refreshProject();
       panels.status(simText(lang, 'bodyNext.done').replace('{name}', character.name));
@@ -262,7 +266,7 @@ const panels = createPanels({
   start: (id, mode, hooks, speed) => { unlockAudio(); return startPlan(id, planOptionsFor(bench), mode, hooks, speed); },
   build: (id, options) => { unlockAudio(); return startPlan(id, options); },
   planOptions: options => planOptionsFor(bench, options),
-  leaveProject: () => { activeProject = null; },
+  leaveProject: () => { activeProject = null; bodyDecided = false; },
   speed: speedFactor(Number(read(SPEED_KEY))),
   firmwareDrivers: () => firmwareFor(bench.board)?.drivers ?? null,
   bench: () => bench,
@@ -1242,7 +1246,9 @@ async function plugIn(meta = {}) {
     void loadStudioSource(studioSelection);
   }
   updateStudio();
-  if (firmware.link) void maybeProvision(mine);
+  // A demo that names its body asks a question before pairing; the panel's
+  // button is the answer, and pairing before it would lock in the wrong body.
+  if (firmware.link && autoPairAllowed(activeProject, bodyDecided)) void maybeProvision(mine);
   // The firmware's own IMU check is the gate: no MPU-6050 awake, no shake sent.
   const imu = bench.placed.find((part) => part.part === 'mpu6050');
   if (firmware.link && imu && /** @type {any} */ (outcome.parts)?.[imu.id]?.awake === true) {
