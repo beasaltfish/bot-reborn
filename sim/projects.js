@@ -6,7 +6,7 @@ import { PARTS } from './parts.js';
 import { DEFAULT_SCREEN } from './recipes.js';
 import { projectFromModule } from './project-module.js';
 
-/** @typedef {Omit<import('./recipes.js').Recipe, 'id'> & {id:string, steps: import('./recipes.js').Step[], links: import('./target.js').Link[], ignoredFaultCodes?:string[]}} Project */
+/** @typedef {Omit<import('./recipes.js').Recipe, 'id'> & {id:string, steps: import('./recipes.js').Step[], links: import('./target.js').Link[], ignoredFaultCodes?:string[], body?:string}} Project */
 
 /** @param {import('./recipes.js').Recipe} recipe @param {string} [screenId] @param {boolean} [wand] @returns {Project} */
 function adapt(recipe, screenId, wand) {

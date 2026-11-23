@@ -57,6 +57,7 @@ import { createPowerInterlock, createStartLock } from './power-interlock.js';
 import { runRecipe, speedFactor } from './scene/autowire.js';
 import { createPanels } from './panels.js';
 import { loadModuleCatalogue } from './catalogue.js';
+import { nextStep } from './body-next-step.js';
 import { setModuleProjects } from './projects.js';
 import { createContextPanel } from './ui/context-panel.js';
 import { SIM_LANGUAGE_KEY, simulatorLanguage, requestLanguageChange } from './ui/language.js';
@@ -130,8 +131,91 @@ let activeProject = null;
 // says which of the two happened.
 const catalogue = await loadModuleCatalogue();
 if (!catalogue.failed) setModuleProjects(catalogue.modules);
+
+/** The bodies the brain already holds, by id. */
+const installedBodies = new Set(await loadBodyIds());
+/** The characters this brain offers; the paired one is found by name. */
+let characters = await loadCharacters();
+
+/**
+ * The bodies the brain holds. A brain that does not answer is an empty set:
+ * the panel then offers the install, which is the honest guess.
+ * @returns {Promise<string[]>}
+ */
+async function loadBodyIds() {
+  try {
+    const rows = await (await fetch('/api/bodies')).json();
+    return Array.isArray(rows) ? rows.map((b) => b.id) : [];
+  } catch { return []; }
+}
+
+/** @returns {Promise<any[]>} */
+async function loadCharacters() {
+  try {
+    const rows = await (await fetch('/api/characters')).json();
+    return Array.isArray(rows) ? rows : [];
+  } catch { return []; }
+}
+
+/**
+ * The character the bench is talking to: the one whose token the board holds,
+ * else the only ready one. Never a name guess across brains.
+ * @returns {{ id: string, name: string, bodyId?: string, actionNames?: string[] } | null}
+ */
+function pairedCharacter() {
+  const token = bench.board.settings?.token;
+  const list = Array.isArray(characters) ? characters : [];
+  const mine = token ? list.find((c) => c.token === token) : null;
+  if (mine) return mine;
+  const ready = list.filter((c) => c.ready);
+  return ready.length === 1 ? ready[0] : null;
+}
 const panels = createPanels({
   catalogueFailed: catalogue.failed,
+  // Which body this demo is, in the person's words, and the one button that
+  // would settle it. Read from the brain, never guessed.
+  bodyState: (id) => {
+    const project = projectById(id);
+    const body = /** @type {any} */ (project)?.body;
+    if (!body) return null;
+    const step = nextStep({
+      body,
+      character: pairedCharacter(),
+      installed: installedBodies.has(body),
+      examples: (catalogue.modules.find((m) => m.id === body)?.examples ?? []).length,
+    });
+    if (!step) return null;
+    const lang = document.documentElement.lang === 'zh' ? 'zh' : 'en';
+    const text = simText(lang, step.key).replace('{name}', String(step.params.name ?? '')).replace('{n}', String(step.params.n ?? 0));
+    if (!step.action) return { text, button: null, action: null };
+    const button = simText(lang, `bodyNext.${step.action}`).replace('{name}', String(step.params.name ?? ''));
+    return { text, button, action: step.action };
+  },
+  bodyAction: async (action, projectId) => {
+    const project = /** @type {any} */ (projectById(projectId));
+    const body = project?.body;
+    const character = pairedCharacter();
+    if (!body || !character || !action) return;
+    const lang = document.documentElement.lang === 'zh' ? 'zh' : 'en';
+    try {
+      if (action === 'install') {
+        const res = await fetch(`/api/modules/${encodeURIComponent(body)}/install`, { method: 'POST', headers: { 'X-Bot-Reborn': '1' } });
+        if (!res.ok) throw new Error('install');
+        installedBodies.add(body);
+      }
+      const res = await fetch(`/api/bodies/${encodeURIComponent(body)}/adopt`, {
+        method: 'POST',
+        headers: { 'X-Bot-Reborn': '1', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ characterId: character.id }),
+      });
+      if (!res.ok) throw new Error('adopt');
+      characters = await loadCharacters();
+      panels.refreshProject();
+      panels.status(simText(lang, 'bodyNext.done').replace('{name}', character.name));
+    } catch {
+      panels.status(simText(lang, 'bodyNext.failed'));
+    }
+  },
   hint: (projectId, options) => (bench.placed.some((p) => p.burnt)
     ? document.documentElement.lang === 'zh' ? simText('zh', 'hint.burnt') : 'A part burnt out; drag it to the bin and take a new one from Parts.'
     : projectId

@@ -54,6 +54,10 @@ export function projectFromModule(module, base) {
     ignoredFaultCodes: [],
     firmware: 'body',
     connection: 'body',
+    // The body this bench is building. The pair panel reads it: selecting a
+    // demo is selecting a body, and the person should not have to go to the
+    // admin to find out which one.
+    body: module.id,
     ending: 'Turn the light on',
     // A manifest's `why` is optional; every project link carries a sentence.
     links: [

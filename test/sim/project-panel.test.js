@@ -163,3 +163,23 @@ test('project and diagnostics are separate tabs and leaving clears the plan', ()
     assert.match(panel.element.textContent ?? '', /Plug in USB/);
   } finally { globalThis.document = previous; dom.window.close(); }
 });
+
+test('the panel says which body the demo is and offers the one button', () => {
+  const dom = new JSDOM('<!doctype html><body></body>');
+  const previous = globalThis.document;
+  globalThis.document = dom.window.document;
+  try {
+    const project = projectById('module-led-module');
+    assert.ok(project);
+    const panel = createProjectPanel({ lang: 'en', focus() {}, bodyAction() {} });
+    panel.render({
+      mode: 'guided', project, progress: connectionProgress(emptyBench(), project),
+      selection: null, diagnoses: [],
+      body: { text: 'Asten is not this body yet.', button: 'Switch to this body', action: 'adopt' },
+    });
+    assert.match(panel.element.textContent ?? '', /Asten is not this body yet/);
+    const button = panel.element.querySelector('button.body-next');
+    assert.equal(button?.textContent, 'Switch to this body');
+    assert.equal(/** @type {HTMLElement} */ (button).dataset.action, 'adopt');
+  } finally { globalThis.document = previous; dom.window.close(); }
+});

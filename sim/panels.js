@@ -88,6 +88,8 @@ function pointName(point) {
  *   firmwareDrivers?(): string[] | null,
  *   bench?(): import('./bench.js').Bench,
  *   catalogueFailed?: boolean,
+ *   bodyState?(id: string): { text: string, button: string | null, action: 'install' | 'adopt' | null } | null,
+ *   bodyAction?(action: 'install' | 'adopt' | null, projectId: string): void,
  * }} opts
  */
 export function createPanels(opts) {
@@ -175,7 +177,7 @@ export function createPanels(opts) {
     shoppingPanel.hidden = !on;
     if (on) shoppingView.render();
   };
-  const projectView = createProjectPanel({ lang, note: opts.catalogueFailed ? simText(lang, 'project.catalogueFailed') : null, focus: points => {
+  const projectView = createProjectPanel({ lang, note: opts.catalogueFailed ? simText(lang, 'project.catalogueFailed') : null, bodyAction: (action, id) => opts.bodyAction?.(action, id), focus: points => {
     // On a phone the sidebar leaves too little bench visible to frame two pins.
     if (window.innerWidth < 600) showProject(false);
     opts.focusProject?.(points);
@@ -216,6 +218,7 @@ export function createPanels(opts) {
   function refreshProject() {
     if (projectPanel.hidden) return;
     const state = opts.projectState?.(projectSelect.value, planChoice());
+    if (state && state.project && opts.bodyState) state.body = opts.bodyState(state.project.id);
     const free = opts.projectState?.('');
     if (state) projectView.render(state, free ?? state);
   }
