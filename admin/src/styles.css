@@ -112,6 +112,24 @@ table.criteria td:nth-child(2) input { width: 100%; box-sizing: border-box; }
 /* The body tab: a card per body, and what it looks like beside them. */
 .body-tab { display: grid; grid-template-columns: minmax(0, 2fr) minmax(220px, 1fr); gap: 20px; align-items: start; }
 .body-tab .hint { grid-column: 1 / -1; max-width: 62ch; }
+/* The module panel is not a card to pick beside the bodies: it is a row above
+   both columns. Without the span it becomes a grid child in the narrow column
+   and squeezes the cards the page is actually about. */
+.body-modules { grid-column: 1 / -1; display: grid; gap: 10px; }
+.body-modules h3 { margin: 0; font-family: var(--display); font-size: 20px; }
+.module-card { display: grid; gap: 4px; padding: 12px 14px; border: 2px dashed var(--line);
+  border-radius: 16px; background: var(--panel); }
+.module-card > strong { font-family: var(--display); font-size: 16px; }
+.module-card .caps { font-size: 12px; color: var(--muted); }
+.module-card .toggle { grid-column: 1 / -1; }
+/* The generic `.badge` is the red "not ready" marker; here it says the body is
+   already installed, which is not a problem to colour. */
+.module-card .badge { color: var(--muted); font-size: 12px; }
+.module-card button { justify-self: start; margin-top: 2px; padding: 7px 16px; border-radius: 12px;
+  border: 2px solid var(--line); background: var(--fill); color: var(--fg); font-weight: 600;
+  cursor: pointer; box-shadow: 2px 2px 0 var(--line); }
+.module-card button.secondary { background: var(--panel); box-shadow: none; }
+.module-card button:disabled { opacity: 0.55; cursor: progress; box-shadow: none; }
 .body-cards { display: grid; gap: 12px; }
 .body-card { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 10px; align-items: center; padding: 12px 14px;
   border: 2px solid var(--line); border-radius: 16px; background: var(--panel); cursor: pointer; }

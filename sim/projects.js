@@ -4,6 +4,8 @@ import { RECIPES, recipeSteps, startBench, applyStep } from './recipes.js';
 import { targetFor } from './target.js';
 import { PARTS } from './parts.js';
 import { DEFAULT_SCREEN } from './recipes.js';
+import { LED_MODULE } from './modules/led-module.js';
+import { projectFromModule } from './project-module.js';
 
 /** @typedef {Omit<import('./recipes.js').Recipe, 'id'> & {id:string, steps: import('./recipes.js').Step[], links: import('./target.js').Link[], ignoredFaultCodes?:string[]}} Project */
 
@@ -220,14 +222,26 @@ const GUIDED = [LED_PROJECT, BME280_PROJECT, POWER_PROJECT, BUTTON_PROJECT, SONA
 
 /** Dropdown groups; a project not listed falls through to the end. */
 export const PROJECT_GROUPS = [
-  { id: 'demo', key: 'project.group.demo', ids: ['audio', 'screen', 'toy', 'tarot'] },
+  { id: 'demo', key: 'project.group.demo', ids: ['audio', 'screen', 'toy', 'tarot', 'module-led-module'] },
   { id: 'basics', key: 'project.group.basics', ids: ['led-basics', 'power-a-rail', 'button-led'] },
   { id: 'sensing', key: 'project.group.sensing', ids: ['bme280-readings', 'distance-reader', 'environment-display'] },
   { id: 'actuator', key: 'project.group.actuator', ids: ['proximity-servo', 'motor-driver-basics', 'status-light-strip'] },
 ];
 
 /** @type {Project[]} */
-export const PROJECTS = [...RECIPES.map(recipe => adapt(recipe)), ...GUIDED];
+const ADAPTED = [...RECIPES.map(recipe => adapt(recipe)), ...GUIDED];
+
+/**
+ * The LED module's project: the Audio only bench plus the module's own wiring.
+ * @type {Project}
+ */
+export const LED_MODULE_PROJECT = projectFromModule(
+  LED_MODULE,
+  /** @type {Project} */ (ADAPTED.find(project => project.id === 'audio')),
+);
+
+/** @type {Project[]} */
+export const PROJECTS = [...ADAPTED, LED_MODULE_PROJECT];
 
 /** @param {string} id @param {{screenId?:string, wand?:boolean}} [options] */
 export function projectById(id, options) {
@@ -242,7 +256,7 @@ export function projectById(id, options) {
   if (id === STRIP_PROJECT.id) return STRIP_PROJECT;
   if (id === TAROT_PROJECT.id) return TAROT_PROJECT;
   const recipe = RECIPES.find(candidate => candidate.id === id);
-  if (!recipe) return null;
+  if (!recipe) return PROJECTS.find(project => project.id === id) ?? null;
   if (options?.screenId || options?.wand) return adapt(recipe, options.screenId, options.wand);
   return PROJECTS.find(project => project.id === id) ?? null;
 }

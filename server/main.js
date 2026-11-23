@@ -22,7 +22,7 @@ import { keepPublished, BRAIN_HOST, SERVICE_TYPE } from './discovery.js';
 import { hostname } from 'node:os';
 import { loadPetFrames } from './pet/frames.js';
 import { loadTarotFrames } from './tarot/frames.js';
-import { loadBodyPlugins } from './plugin-startup.js';
+import { loadBodyPlugins, BODIES_DIR } from './plugin-startup.js';
 import { fileURLToPath } from 'node:url';
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -55,6 +55,10 @@ const server = createBrainServer({
   // Likewise the cards: the same deck for every tarot character.
   tarotFrames: loadTarotFrames(fileURLToPath(new URL('./tarot/cards', import.meta.url))),
   dev: DEV,
+  // What this repository ships, and where an install writes: the same bodies
+  // directory `loadBodyPlugins()` just read, or a reload would clear it.
+  modulesDir: fileURLToPath(new URL('../modules', import.meta.url)),
+  bodiesDir: BODIES_DIR,
   ...(DEV ? { pages: (/** @type {import('node:http').Server} */ http) => createDevPages(http) } : {}),
 });
 const port = await server.listen(PORT);

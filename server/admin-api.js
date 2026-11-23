@@ -13,6 +13,8 @@ import { createCheckApi, LAYERS } from './check-api.js';
 import { listFirmwareSources, readFirmwareSource } from './firmware-sources.js';
 import { pluginBodies, resolveBody } from '../core/bodies.js';
 import { verbsOf } from '../core/actions.js';
+import { installModule } from './modules.js';
+import { BODIES_DIR } from './plugin-startup.js';
 
 const MAX_BODY = 64 * 1024;
 
@@ -43,10 +45,14 @@ function verbsOfBody(config) {
  *           addresses?: () => string[], fetch?: typeof fetch, checkTimeoutMs?: number,
  *           dev?: { draw(id: string): boolean },
  *           presence?: { of(id: string, setupId?: string): { lastSeenAt?: number, lastSpokeAt?: number } },
- *           bodyKind?: (setupId: string) => 'phone' | undefined }} opts
+ *           bodyKind?: (setupId: string) => 'phone' | undefined,
+ *           modules?: Record<string, import('./modules.js').ModuleManifest>,
+ *           bodiesDir?: string, log?: (line: string) => void }} opts
  *   `dev` exists only when the brain was started with --dev (tarot mode spec §5).
  *   `presence` is this process's memory; with none, the summary omits both times.
  *   `bodyKind` is this process's last admitted body kind for a pairing.
+ *   `modules` is the catalogue the brain read at startup, and `bodiesDir` is
+ *   where an install writes it; with neither, nothing can be installed.
  */
 export function createAdminApi(opts) {
   const check = createCheckApi({ fetch: opts.fetch, timeoutMs: opts.checkTimeoutMs });
@@ -55,6 +61,22 @@ export function createAdminApi(opts) {
     id: c.id, name: c.name, token: c.token, setupId: setupIdFor(c.token), config: c.config,
     endpoints: c.endpoints ?? [], savedReflexes: c.savedReflexes ?? [], online: online.has(c.id),
   });
+
+  /**
+   * What the admin page needs to offer a module: the manifest's own words, the
+   * examples it may adopt, and whether its body is already installed. Read from
+   * `pluginBodies()` at request time so an install shows up without a restart.
+   * @returns {Array<Record<string, unknown>>}
+   */
+  const moduleList = () => Object.values(opts.modules ?? {}).map((m) => ({
+    id: m.id,
+    label: { en: m.label.en, zh: m.label.zh },
+    parts: [...m.parts],
+    note: m.note ? { en: m.note.en, zh: m.note.zh } : null,
+    installed: Object.hasOwn(pluginBodies(), m.id),
+    examples: structuredClone(m.examples ?? []),
+    commands: (m.commands ?? []).map((command) => command.name),
+  }));
 
   /**
    * @param {import('node:http').IncomingMessage} req
@@ -88,6 +110,27 @@ export function createAdminApi(opts) {
         commands: b.commands ?? [],
         resources: b.resources ?? [],
       })));
+    }
+    // The modules the repository ships, and a way to install one into this
+    // brain. The id in the path is looked up in the catalogue `installModule`
+    // was handed, never joined to a directory as given: a traversal is a name
+    // that is not there, and answers 404 like any other unknown module.
+    if (path === '/api/modules') {
+      if (req.method !== 'GET') return send(405, { error: 'method not allowed' });
+      return send(200, moduleList());
+    }
+    const mod = path.match(/^\/api\/modules\/([^/]+)\/install\/?$/);
+    if (mod) {
+      if (req.method !== 'POST') return send(405, { error: 'method not allowed' });
+      let id;
+      try { id = decodeURIComponent(mod[1]); } catch { return send(404, { error: 'no such module' }); }
+      const result = installModule(id, {
+        modules: opts.modules ?? {},
+        bodiesDir: opts.bodiesDir ?? BODIES_DIR,
+        log: opts.log ?? console.error,
+      });
+      if ('error' in result) return send(404, { error: result.error });
+      return send(200, result);
     }
     // A way to draw a card before the wand has a message of its own. Not a
     // feature: it is only there in dev mode, and without it this path is a 404.

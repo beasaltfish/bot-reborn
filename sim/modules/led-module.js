@@ -1,0 +1,49 @@
+// The LED module as the simulator ships it: the same manifest as
+// `modules/led-module/module.json`, kept in step by a test so the bench and the
+// installer never disagree about what the module is or which pin it drives.
+/** @type {import('../../core/module-manifest.js').ModuleManifest} */
+export const LED_MODULE = {
+  id: 'led-module',
+  label: { en: 'LED module', zh: 'LED 模块' },
+  parts: ['esp32', 'led-5mm', 'resistor'],
+  resources: [{ kind: 'gpio', name: 'led', gpio: 5, direction: 'output', safe: 0 }],
+  commands: [
+    {
+      name: 'led_on',
+      args: { type: 'object', properties: {} },
+      timeoutMs: 500,
+      run: [{ op: 'pin.write', args: { pin: 'led', level: 1 } }],
+    },
+    {
+      name: 'led_off',
+      args: { type: 'object', properties: {} },
+      timeoutMs: 500,
+      run: [{ op: 'pin.write', args: { pin: 'led', level: 0 } }],
+    },
+  ],
+  examples: [
+    {
+      name: 'light_up',
+      label: { en: 'Light up', zh: '点亮' },
+      say: 'Turn the desk LED on. Use it when the person asks you to turn the light on.',
+      args: { type: 'object', properties: {} },
+      run: [{ command: 'led_on' }],
+    },
+    {
+      name: 'light_down',
+      label: { en: 'Light down', zh: '熄灭' },
+      say: 'Turn the desk LED off. Use it when the person asks you to turn the light off.',
+      args: { type: 'object', properties: {} },
+      run: [{ command: 'led_off' }],
+    },
+  ],
+  wiring: {
+    parts: [{ id: 'r', part: 'resistor' }, { id: 'led', part: 'led-5mm' }],
+    links: [
+      { a: 'esp:GPIO5', b: 'r:1', why: 'Drive the LED from a GPIO.' },
+      { a: 'r:2', b: 'led:A', why: 'The resistor limits the current.' },
+      { a: 'led:K', b: 'esp:GND', why: 'Return to ground.' },
+    ],
+  },
+  note: { en: 'Works on the bench; the board needs the bridge firmware.', zh: '模拟器里可用；真板需要 bridge 固件。' },
+};
