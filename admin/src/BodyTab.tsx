@@ -17,6 +17,7 @@ import { useEffect, useState } from 'react';
 import { TEMPLATES, bodyById, bodyProblem, labelOf, pluginBodies, registerPlugins, resolveBody } from '../../core/bodies.js';
 import { ActionsEditor } from './ActionsEditor';
 import { BodyDiagram } from './BodyDiagram';
+import { BodyManifestEditor } from './BodyManifestEditor';
 import { adoptModule } from '../../core/body-switch.js';
 import { lang, t, type Key } from './i18n';
 import type { BodyAction, Detail, Patch } from './types';
@@ -513,6 +514,20 @@ export function BodyTab({ detail, update }: { detail: Detail; update(p: Patch): 
             own is told apart by carrying them. Remounted on a switch, so the
             box starts from the newly chosen body. */}
         <ActionsEditor key={chosen} detail={detail} update={update} />
+        {/* The bench half, made editable: a pin number and the examples the
+            model reads. Only for a body that carries commands — a template has
+            no pins of its own to save. */}
+        {Array.isArray(body.resources) && body.resources.length > 0 && (
+          <BodyManifestEditor
+            key={`manifest-${chosen}`}
+            body={body}
+            resources={body.resources}
+            commands={body.commands ?? []}
+            actions={body.actions}
+            wiring={body.wiring}
+            parts={body.parts ?? []}
+          />
+        )}
       </div>
         <div className="body-side">
           <div className="body-preview" data-testid="body-preview">

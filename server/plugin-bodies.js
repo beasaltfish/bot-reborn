@@ -9,7 +9,7 @@
 // in the log, not a crash. That is why every step is wrapped and why a missing
 // plugin directory reads the same as an empty one — most installs have none.
 
-import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { registerPlugins } from '../core/bodies.js';
 import { TEMPLATES, bodyProblem } from '../core/bodies.js';
@@ -137,7 +137,12 @@ export function saveBody(manifest, { bodiesDir }) {
   if (examples.length === 0) {
     return { error: 'a body needs at least one example action, or the model has no tool for it' };
   }
+  // Never over a body that is already there: an installed module is the
+  // repository's copy of the truth, and an edit of it belongs under a new name.
   const dir = join(bodiesDir, id);
+  if (existsSync(join(dir, 'body.json'))) {
+    return { error: `a body called ${id} already exists; save under a new id` };
+  }
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, 'body.json'), `${JSON.stringify(manifest, null, 2)}\n`);
   registerPlugins(loadPlugins(bodiesDir).bodies);

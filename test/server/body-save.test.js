@@ -43,3 +43,11 @@ test('a template name is not a body a person can save over', (t) => {
   const out = saveBody(manifest({ id: 'toy' }), { bodiesDir: dir });
   assert.match(/** @type {any} */ (out).error ?? '', /template|built-in/);
 });
+
+test('an existing body is not overwritten by a save', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'save-'));
+  t.after(() => { rmSync(dir, { recursive: true, force: true }); registerPlugins({}); });
+  assert.equal(/** @type {any} */ (saveBody(manifest(), { bodiesDir: dir })).id, 'bench-led');
+  const again = /** @type {any} */ (saveBody(manifest(), { bodiesDir: dir }));
+  assert.match(again.error ?? '', /already exists/);
+});
