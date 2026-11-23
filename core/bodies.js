@@ -64,6 +64,9 @@ import { SOUNDS } from './audio/sfx.js';
  * @typedef {{ voice: string, rules: string[] }} Prompts
  */
 /**
+ * A body also carries what a person reads and what the bench draws: `wiring` is
+ * the manifest's pins made into a project, `note` is the sentence the workbench
+ * shows about it. Both are optional — a template has no manifest to carry them.
  * @typedef {{
  *   id: string,
  *   template?: string,
@@ -78,6 +81,8 @@ import { SOUNDS } from './audio/sfx.js';
  *   resources?: import('./io-program.js').Resource[],
  *   parts?: string[],
  *   triggers?: Trigger[],
+ *   wiring?: { parts?: { id: string, part: string }[], links: { a: string, b: string, why?: string }[] },
+ *   note?: Text,
  *   prompts: Prompts,
  *   firmware: string | null,
  *   preview: string,
