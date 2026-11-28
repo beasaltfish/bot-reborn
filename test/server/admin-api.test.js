@@ -632,6 +632,53 @@ test('a body is adopted into a character over HTTP, and says what it dropped', a
   assert.equal(after.config.body.actions.length, 2);
 });
 
+test('a built-in body is adopted, and the template keeps its own actions', async (t) => {
+  registerPlugins({});
+  const r = await rig();
+  t.after(() => r.server.close());
+  const pet = r.chars.add('pet', (cfg) => { cfg.body = { id: 'none', template: 'none' }; });
+
+  const adopted = await r.call('/api/bodies/pet/adopt', {
+    method: 'POST', headers: W, body: JSON.stringify({ characterId: 'pet' }),
+  });
+  assert.equal(adopted.status, 200);
+  // No actions of its own: null inherits the pet's pose and sound.
+  assert.deepEqual(adopted.body.body, { id: 'pet', template: 'pet', actions: null });
+  assert.deepEqual(adopted.body.dropped, []);
+
+  const after = JSON.parse(readFileSync(pet.path, 'utf8'));
+  assert.equal(after.config.body.template, 'pet');
+  assert.equal(after.config.body.actions, null);
+
+  const row = (await r.call('/api/characters')).body.find((/** @type {any} */ c) => c.id === 'pet');
+  assert.equal(row.bodyId, 'pet');
+  assert.deepEqual(row.actionNames, ['pose', 'play_sound']);
+});
+
+test('adopting a built-in body keeps the actions it can run and names the rest', async (t) => {
+  registerPlugins({});
+  const r = await rig();
+  t.after(() => r.server.close());
+  const pose = { name: 'pose', label: { en: 'Pose', zh: '摆姿势' }, say: 'Pose.', run: [{ verb: 'pose', args: { pose: 'sit' } }] };
+  const move = { name: 'move', label: { en: 'Move', zh: '移动' }, say: 'Move.', run: [{ verb: 'drive', args: { drive: 'forward', steer: 'straight', ms: 500 } }] };
+  const reader = r.chars.add('reader', (cfg) => { cfg.body = { template: 'tarot', actions: [pose, move] }; });
+
+  const adopted = await r.call('/api/bodies/pet/adopt', {
+    method: 'POST', headers: W, body: JSON.stringify({ characterId: 'reader' }),
+  });
+  assert.equal(adopted.status, 200);
+  // A pet shows but does not drive: the pose survives, the move is named.
+  assert.deepEqual(adopted.body.dropped, ['move']);
+  assert.deepEqual(adopted.body.body.actions.map((/** @type {any} */ a) => a.name), ['pose']);
+
+  const after = JSON.parse(readFileSync(reader.path, 'utf8'));
+  assert.equal(after.config.body.template, 'pet');
+  assert.deepEqual(after.config.body.actions.map((/** @type {any} */ a) => a.name), ['pose']);
+
+  const row = (await r.call('/api/characters')).body.find((/** @type {any} */ c) => c.id === 'reader');
+  assert.deepEqual(row.actionNames, ['pose']);
+});
+
 test('adopting needs an installed body and a real character', async (t) => {
   registerPlugins({});
   t.after(() => registerPlugins({}));

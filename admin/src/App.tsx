@@ -18,13 +18,21 @@ function remember(id: string) {
   try { localStorage.setItem(REMEMBER, id); } catch { /* nothing to keep it in */ }
 }
 
-// A #character=<id> link (the simulator makes them) opens that character. It
-// is read on load and whenever the address changes; an id nobody has is
-// ignored, and the page opens as it would have.
-function linked(): string | null {
-  const m = location.hash.match(/^#character=(.+)$/);
+// The tabs a link may name: the provider layers plus the body. Reflex is not
+// one, because it lives under Advanced.
+const LINK_TABS: TabName[] = ['basic', 'stt', 'llm', 'tts', 'body'];
+
+// A #character=<id> link (the simulator makes them) opens that character, and
+// an optional &tab=<name> opens one of its tabs. It is read on load and
+// whenever the address changes; an id nobody has is ignored, and the page
+// opens as it would have. An unknown tab falls back to Basic.
+function linked(): { id: string, tab?: TabName } | null {
+  const m = location.hash.match(/^#character=([^&]+)(?:&tab=([a-z]+))?$/);
   if (!m) return null;
-  try { return decodeURIComponent(m[1]); } catch { return null; }
+  let id;
+  try { id = decodeURIComponent(m[1]); } catch { return null; }
+  const tab = m[2];
+  return tab && (LINK_TABS as string[]).includes(tab) ? { id, tab: tab as TabName } : { id };
 }
 
 export function App({ pollMs = 2000, renderEditor }: {
@@ -33,12 +41,18 @@ export function App({ pollMs = 2000, renderEditor }: {
 }) {
   const { list, down, refresh } = useCharacters(pollMs);
   const [selected, setSelected] = useState<string | null>(null);
-  const [link, setLink] = useState<string | null>(linked);
+  const [link, setLink] = useState<{ id: string, tab?: TabName } | null>(linked);
   const [creating, setCreating] = useState(false);
   const [board, setBoard] = useState(false);
-  const [initialTab, setInitialTab] = useState<TabName>('basic');
+  const [initialTab, setInitialTab] = useState<TabName>(() => linked()?.tab ?? 'basic');
   useEffect(() => {
-    const onHash = () => { setLink(linked()); setCreating(false); setBoard(false); };
+    const onHash = () => {
+      const next = linked();
+      setLink(next);
+      setInitialTab(next?.tab ?? 'basic');
+      setCreating(false);
+      setBoard(false);
+    };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
@@ -73,7 +87,7 @@ export function App({ pollMs = 2000, renderEditor }: {
 
   // A link wins, then the pick; with neither (or one that is gone) the one
   // open last time, else the first.
-  const current = list.find((c) => c.id === link)
+  const current = list.find((c) => c.id === link?.id)
     ?? list.find((c) => c.id === selected)
     ?? list.find((c) => c.id === remembered())
     ?? list[0] ?? null;

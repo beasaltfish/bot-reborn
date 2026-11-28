@@ -443,7 +443,9 @@ export function load(text) {
     if (new Set(wires.map((w) => w.id)).size !== wires.length) return emptyBench();
     // A part and a board sharing an id would make "bb1:a6" mean two things.
     if (placed.some((p) => boards.some((bd) => bd.id === p.id))) return emptyBench();
-    if (placed.filter((p) => p.part === 'esp32').length !== 1) return emptyBench();
+    // A circuit lesson has no controller; a bench with one has exactly one.
+    // Two ESP32s would make the board state mean two things.
+    if (placed.filter((p) => p.part === 'esp32').length > 1) return emptyBench();
 
     const board = isBoardState(raw.board)
       ? { ...raw.board, custom: isCustomFirmware(raw.board.custom) ? raw.board.custom : null }

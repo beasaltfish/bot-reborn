@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { planFromProject, planFromRecipe, planById, planSteps, planId, planOptionsFor } from '../../sim/plan.js';
+import { planFromProject, planFromRecipe, planById, planSteps, planId, planOptionsFor, planUsesBoard } from '../../sim/plan.js';
 import { addPart, pinPoints } from '../../sim/bench.js';
 import { PROJECTS } from '../../sim/projects.js';
 import { PARTS } from '../../sim/parts.js';
@@ -9,7 +9,7 @@ import { emptyBench } from '../../sim/bench.js';
 import { startBench, applyStep } from '../../sim/recipes.js';
 import { targetFor } from '../../sim/target.js';
 
-test('a project becomes a plan with implicit ESP32 and its own links', () => {
+test('a project becomes a plan with its own parts and links', () => {
   const project = projectById('power-a-rail');
   assert.ok(project);
   const plan = planFromProject(project);
@@ -17,6 +17,8 @@ test('a project becomes a plan with implicit ESP32 and its own links', () => {
   assert.equal(plan.goalKey, 'goal.power-a-rail');
   assert.equal(plan.lessonId, 'power-basics-v1');
   assert.ok(!plan.parts.some(part => part.part === 'esp32'));
+  // Nothing in this lesson names the board, so the plan does not need one.
+  assert.equal(planUsesBoard(plan), false);
   assert.deepEqual(plan.links.map(link => [link.a, link.b]), [
     ['bat:+', 'reg:VIN'], ['bat:-', 'reg:GND'], ['reg:VOUT', 'r:1'], ['r:2', 'led:A'], ['led:K', 'reg:GND'],
   ]);
@@ -49,8 +51,9 @@ test('plan steps for a new project place parts and wire links but stay unplugged
   assert.ok(steps.some(step => step.kind === 'part' && step.part === 'button-module'));
   assert.equal(steps.filter(step => step.kind === 'wire').length, plan.links.length);
   assert.ok(steps.filter(step => step.kind === 'wire').some(step => step.a.startsWith('bb') || step.b.startsWith('bb')));
-  assert.equal(steps.at(-1)?.kind, 'flash');
-  assert.equal(steps.at(-2)?.kind, 'wire');
+  // A body manifest runs on the bench: no sketch, no flash step.
+  assert.equal(steps.at(-1)?.kind, 'wire');
+  assert.ok(!steps.some(step => step.kind === 'flash'));
   assert.ok(!steps.some(step => step.kind === 'usb'));
 });
 

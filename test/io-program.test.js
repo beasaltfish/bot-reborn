@@ -12,9 +12,9 @@ const point = {
   run: [{ op: 'pwm', args: { pin: 'sig', value: '$angle', map: { from: [0, 180], to: [500, 2400] } } }],
 };
 
-test('the six ops are the closed set', () => {
+test('the nine ops are the closed set', () => {
   assert.deepEqual([...IO_OPS].sort(),
-    ['adc.read','i2c.read','i2c.write','pin.read','pin.write','pwm']);
+    ['adc.read','device.measure','device.sample','device.write','i2c.read','i2c.write','pin.read','pin.write','pwm']);
 });
 
 test('a command expands to bounded ops with a safe value', () => {

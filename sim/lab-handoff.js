@@ -4,6 +4,7 @@ import { PARTS } from './parts.js';
 import { spotForNew } from './snap.js';
 import { BME280_PROJECT, LED_PROJECT, projectById } from './projects.js';
 import { applyStep, startBench } from './recipes.js';
+import { planUsesBoard } from './plan.js';
 
 export const LAB_HANDOFF_KEY = 'botreborn.sim.lab-handoff';
 const BENCH_KEY = 'botreborn.sim.bench';
@@ -54,7 +55,10 @@ export function consumeLabHandoff(store, bench, confirmReplace) {
     }
     let next = request.kind === 'add'
       ? (() => { const part = /** @type {import('./parts.js').PartDef['id']} */ (request.part); return addPart(bench, part, spotForNew(bench, part)).bench; })()
-      : /** @type {import('./projects.js').Project} */ (projectById(request.projectId)).steps.reduce(applyStep, startBench(bench));
+      : (() => {
+        const project = /** @type {import('./projects.js').Project} */ (projectById(request.projectId));
+        return project.steps.reduce(applyStep, startBench(bench, { board: planUsesBoard(project) }));
+      })();
     if (request.kind === 'project' && request.projectId === BME280_PROJECT.id && request.address) next = setPartProperty(next, 'env', 'address', request.address);
     store.removeItem(LAB_HANDOFF_KEY);
     store.setItem(BENCH_KEY, serialize(next));

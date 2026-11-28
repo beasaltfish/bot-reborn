@@ -4,9 +4,17 @@ import { RECIPES, recipeSteps, startBench, applyStep } from './recipes.js';
 import { targetFor } from './target.js';
 import { PARTS } from './parts.js';
 import { DEFAULT_SCREEN } from './recipes.js';
-import { projectFromModule } from './project-module.js';
+import { projectFromBody, projectFromModule } from './project-module.js';
+import { bodyFrom } from '../core/plugin-manifest.js';
+import buttonLed from './bodies/button-led/body.json' with { type: 'json' };
+import bme280 from './bodies/bme280-readings/body.json' with { type: 'json' };
+import sonar from './bodies/distance-reader/body.json' with { type: 'json' };
+import motor from './bodies/motor-driver-basics/body.json' with { type: 'json' };
+import strip from './bodies/status-light-strip/body.json' with { type: 'json' };
+import servo from './bodies/proximity-servo/body.json' with { type: 'json' };
+import display from './bodies/environment-display/body.json' with { type: 'json' };
 
-/** @typedef {Omit<import('./recipes.js').Recipe, 'id'> & {id:string, steps: import('./recipes.js').Step[], links: import('./target.js').Link[], ignoredFaultCodes?:string[], body?:string}} Project */
+/** @typedef {Omit<import('./recipes.js').Recipe, 'id' | 'connection'> & {id:string, connection: 'body' | 'bench' | null, steps: import('./recipes.js').Step[], links: import('./target.js').Link[], ignoredFaultCodes?:string[], body?:string, adoptable?:boolean, simulation?:string}} Project */
 
 /** @param {import('./recipes.js').Recipe} recipe @param {string} [screenId] @param {boolean} [wand] @returns {Project} */
 function adapt(recipe, screenId, wand) {
@@ -34,22 +42,12 @@ export const LED_PROJECT = {
   ],
 };
 
-/** @type {import('./target.js').Link[]} */
-const BME_LINKS = [
-  { a: 'env:VIN', b: 'esp:3V3', why: 'Power the breakout at 3.3 V so its I2C pull-ups match the ESP32 logic.' },
-  { a: 'env:GND', b: 'esp:GND', why: 'Share ground between the sensor and controller.' },
-  { a: 'env:SDI', b: 'esp:GPIO1', why: 'Connect SDI to the configured I2C data line.' },
-  { a: 'env:SCK', b: 'esp:GPIO2', why: 'Connect SCK to the configured I2C clock line.' },
-];
-/** @type {Project} */
-export const BME280_PROJECT = {
-  id: 'bme280-readings', firmware: 'sketch-bme280', name: 'BME280 readings', needs: [], connection: null, ending: 'Inspect simulated readings',
-  links: BME_LINKS,
-  steps: [
-    { kind: 'part', id: 'env', part: 'bme280-i2c', at: { x: 25, z: 40 }, rot: 0, seated: false, say: 'Place the BME280 breakout.' },
-    ...BME_LINKS.map(link => /** @type {import('./recipes.js').Step} */ ({ kind: 'wire', a: link.a, b: link.b, named: [link.a, link.b], say: link.why })),
-  ],
-};
+/**
+ * The sensor lesson is a bench body too: its device resource, command and
+ * wiring are the manifest. No sketch and no firmware.
+ * @type {Project}
+ */
+export const BME280_PROJECT = projectFromBody(bodyFrom(bme280));
 
 /** @type {import('./target.js').Link[]} */
 const POWER_LINKS = [
@@ -73,143 +71,53 @@ export const POWER_PROJECT = {
   ],
 };
 
-/** @type {import('./target.js').Link[]} */
-const BUTTON_LINKS = [
-  { a: 'btn:VCC', b: 'esp:3V3', why: 'Power the KY-004 from 3.3 V so its signal matches the ESP32 logic.' },
-  { a: 'btn:GND', b: 'esp:GND', why: 'Share ground between the button module and controller.' },
-  { a: 'btn:S', b: 'esp:GPIO4', why: 'Connect the button signal to a GPIO input.' },
-  { a: 'esp:GPIO5', b: 'r:1', why: 'Drive the LED through a current-limiting resistor.' },
-  { a: 'r:2', b: 'led:A', why: 'The resistor feeds the LED anode.' },
-  { a: 'led:K', b: 'esp:GND', why: 'Return the LED cathode to ground.' },
-];
-/** @type {Project} */
-export const BUTTON_PROJECT = {
-  id: 'button-led', firmware: 'sketch-button-led', name: 'Button and LED', needs: [], connection: null, ending: 'Press the button',
-  ignoredFaultCodes: ['device-unpowered', 'unsupported-electrical-network', 'led-reversed', 'led-overcurrent', 'led-burnt', 'led-current-limited'],
-  links: BUTTON_LINKS,
-  steps: [
-    { kind: 'part', id: 'btn', part: 'button-module', at: { x: -25, z: 32 }, rot: 0, seated: false, say: 'Place the KY-004 button module.' },
-    { kind: 'part', id: 'r', part: 'resistor', at: { x: 0, z: 32 }, rot: 0, seated: false, say: 'Place the 220 Ω resistor.' },
-    { kind: 'part', id: 'led', part: 'led-5mm', at: { x: 15, z: 32 }, rot: 0, seated: false, say: 'Place the LED.' },
-    ...BUTTON_LINKS.map(link => /** @type {import('./recipes.js').Step} */ ({ kind: 'wire', a: link.a, b: link.b, named: [link.a, link.b], say: link.why })),
-    { kind: 'usb', say: 'Plug in USB and press the button.' },
-  ],
-};
+/**
+ * The button demo is the first body whose wiring is its manifest: the parts,
+ * the links and the behavior all come from `sim/bodies/button-led/body.json`.
+ * There is no sketch and no firmware field; the workbench runs the behavior.
+ * @type {Project}
+ */
+export const BUTTON_PROJECT = projectFromBody(bodyFrom(buttonLed));
 
-/** @type {import('./target.js').Link[]} */
-const SONAR_LINKS = [
-  { a: 'sonar:VCC', b: 'esp:5V', why: 'The HC-SR04 needs a 5 V supply.' },
-  { a: 'sonar:GND', b: 'esp:GND', why: 'Share ground with the controller.' },
-  { a: 'sonar:TRIG', b: 'esp:GPIO4', why: 'TRIG is a controller output that starts a measurement.' },
-  { a: 'sonar:ECHO', b: 'esp:GPIO5', why: 'ECHO returns a 5 V pulse; a 3.3 V GPIO needs level shifting.' },
-];
-/** @type {Project} */
-export const SONAR_PROJECT = {
-  id: 'distance-reader', firmware: 'sketch-sonar', name: 'Distance reader', needs: [], connection: null, ending: 'Trigger a measurement',
-  ignoredFaultCodes: ['device-unpowered'],
-  links: SONAR_LINKS,
-  steps: [
-    { kind: 'part', id: 'sonar', part: 'hc-sr04', at: { x: -15, z: 40 }, rot: 0, seated: false, say: 'Place the HC-SR04.' },
-    ...SONAR_LINKS.map(link => /** @type {import('./recipes.js').Step} */ ({ kind: 'wire', a: link.a, b: link.b, named: [link.a, link.b], say: link.why })),
-    { kind: 'usb', say: 'Plug in USB, then trigger a measurement.' },
-  ],
-};
+/**
+ * The HC-SR04 lesson: the device resource triggers a measurement on a timer;
+ * the part panel reads the resulting distance. No sketch.
+ * @type {Project}
+ */
+export const SONAR_PROJECT = projectFromBody(bodyFrom(sonar));
 
-/** @type {import('./target.js').Link[]} */
-const DISPLAY_LINKS = [
-  { a: 'env:VIN', b: 'esp:3V3', why: 'Power the BME280 from 3.3 V so its pull-ups match the controller.' },
-  { a: 'env:GND', b: 'esp:GND', why: 'Share ground between the sensor and controller.' },
-  { a: 'env:SDI', b: 'esp:GPIO1', why: 'Connect the sensor data line to the I2C bus.' },
-  { a: 'env:SCK', b: 'esp:GPIO2', why: 'Connect the sensor clock line to the I2C bus.' },
-  { a: 'oled:VCC', b: 'esp:3V3', why: 'Power the display from 3.3 V.' },
-  { a: 'oled:GND', b: 'esp:GND', why: 'Share ground with the display.' },
-  { a: 'oled:SDA', b: 'esp:GPIO1', why: 'Put the display data line on the shared I2C bus.' },
-  { a: 'oled:SCL', b: 'esp:GPIO2', why: 'Put the display clock line on the shared I2C bus.' },
-];
-/** @type {Project} */
-export const DISPLAY_PROJECT = {
-  id: 'environment-display', firmware: 'sketch-env-display', name: 'Environment display', needs: [], connection: null, ending: 'Draw the readings',
-  ignoredFaultCodes: [],
-  links: DISPLAY_LINKS,
-  steps: [
-    { kind: 'part', id: 'env', part: 'bme280-i2c', at: { x: -25, z: 40 }, rot: 0, seated: false, say: 'Place the BME280 breakout.' },
-    { kind: 'part', id: 'oled', part: 'ssd1306', at: { x: 15, z: 40 }, rot: 0, seated: false, say: 'Place the SSD1306 display.' },
-    ...DISPLAY_LINKS.map(link => /** @type {import('./recipes.js').Step} */ ({ kind: 'wire', a: link.a, b: link.b, named: [link.a, link.b], say: link.why })),
-    { kind: 'usb', say: 'Plug in USB and draw the simulated readings.' },
-  ],
-};
+/**
+ * The display lesson: the composed driver samples the BME280 and writes the
+ * SSD1306. No sketch.
+ * @type {Project}
+ */
+export const DISPLAY_PROJECT = projectFromBody(bodyFrom(display));
 
-/** @type {import('./target.js').Link[]} */
-const SERVO_LINKS = [
-  { a: 'sonar:VCC', b: 'esp:5V', why: 'The HC-SR04 needs a 5 V supply.' },
-  { a: 'sonar:GND', b: 'esp:GND', why: 'Share the sensor ground.' },
-  { a: 'sonar:TRIG', b: 'esp:GPIO4', why: 'TRIG starts a measurement.' },
-  { a: 'sonar:ECHO', b: 'esp:GPIO5', why: 'ECHO needs level shifting before this 3.3 V input.' },
-  { a: 'servo:VCC', b: 'esp:5V', why: 'Power the servo from a current-capable 5 V rail.' },
-  { a: 'servo:GND', b: 'esp:GND', why: 'The servo and controller must share ground.' },
-  { a: 'servo:SIG', b: 'esp:GPIO6', why: 'Drive the servo signal from a PWM-capable GPIO.' },
-];
-/** @type {Project} */
-export const SERVO_PROJECT = {
-  id: 'proximity-servo', firmware: 'sketch-sonar-servo', name: 'Proximity servo', needs: [], connection: null, ending: 'Move the servo with distance',
-  ignoredFaultCodes: ['device-unpowered'],
-  links: SERVO_LINKS,
-  steps: [
-    { kind: 'part', id: 'sonar', part: 'hc-sr04', at: { x: -30, z: 40 }, rot: 0, seated: false, say: 'Place the HC-SR04.' },
-    { kind: 'part', id: 'servo', part: 'sg90', at: { x: 10, z: 40 }, rot: 0, seated: false, say: 'Place the SG90 servo.' },
-    ...SERVO_LINKS.map(link => /** @type {import('./recipes.js').Step} */ ({ kind: 'wire', a: link.a, b: link.b, named: [link.a, link.b], say: link.why })),
-    { kind: 'usb', say: 'Plug in USB and move the target.' },
-  ],
-};
+/**
+ * The proximity servo: the composed driver reads the sonar and sets the
+ * servo angle. No sketch.
+ * @type {Project}
+ */
+export const SERVO_PROJECT = projectFromBody(bodyFrom(servo));
 
-/** @type {import('./target.js').Link[]} */
-const MOTOR_LINKS = [
-  { a: 'drv:VM', b: 'esp:5V', why: 'VM is the motor supply.' },
-  { a: 'drv:VCC', b: 'esp:3V3', why: 'VCC is the logic supply.' },
-  { a: 'drv:GND2', b: 'esp:GND', why: 'The driver and controller need a common ground.' },
-  { a: 'drv:STBY', b: 'esp:3V3', why: 'STBY must be high for the bridge to operate.' },
-  { a: 'drv:AIN1', b: 'esp:GPIO4', why: 'AIN1 sets one direction input.' },
-  { a: 'drv:AIN2', b: 'esp:GPIO5', why: 'AIN2 sets the other direction input.' },
-  { a: 'drv:PWMA', b: 'esp:GPIO6', why: 'PWMA sets the motor speed.' },
-  { a: 'motor:+', b: 'drv:AO1', why: 'Connect one motor terminal to AO1.' },
-  { a: 'motor:-', b: 'drv:AO2', why: 'Connect the other motor terminal to AO2.' },
-];
-/** @type {Project} */
-export const MOTOR_PROJECT = {
-  id: 'motor-driver-basics', firmware: 'sketch-motor', name: 'Motor driver basics', needs: [], connection: null, ending: 'Spin the motor',
-  ignoredFaultCodes: ['device-unpowered'],
-  links: MOTOR_LINKS,
-  steps: [
-    { kind: 'part', id: 'drv', part: 'tb6612fng', at: { x: -20, z: 40 }, rot: 0, seated: false, say: 'Place the TB6612FNG driver.' },
-    { kind: 'part', id: 'motor', part: 'dc-motor-small', at: { x: 15, z: 40 }, rot: 0, seated: false, say: 'Place the small DC motor.' },
-    ...MOTOR_LINKS.map(link => /** @type {import('./recipes.js').Step} */ ({ kind: 'wire', a: link.a, b: link.b, named: [link.a, link.b], say: link.why })),
-    { kind: 'usb', say: 'Plug in USB and drive the motor.' },
-  ],
-};
+/**
+ * The motor lesson: the driver resource writes a direction and speed; the
+ * behavior repeats it so the motor keeps turning. No sketch.
+ * @type {Project}
+ */
+export const MOTOR_PROJECT = projectFromBody(bodyFrom(motor));
 
-/** @type {import('./target.js').Link[]} */
-const STRIP_LINKS = [
-  { a: 'strip:5V', b: 'esp:5V', why: 'The strip needs a 5 V supply sized for its pixels.' },
-  { a: 'strip:GND', b: 'esp:GND', why: 'Share ground with the controller.' },
-  { a: 'strip:DIN', b: 'esp:GPIO6', why: 'DIN carries the one-wire data; 3.3 V logic may need shifting for a 5 V strip.' },
-];
-/** @type {Project} */
-export const STRIP_PROJECT = {
-  id: 'status-light-strip', firmware: 'sketch-strip', name: 'Status light strip', needs: [], connection: null, ending: 'Light the strip',
-  ignoredFaultCodes: ['device-unpowered'],
-  links: STRIP_LINKS,
-  steps: [
-    { kind: 'part', id: 'strip', part: 'ws2812-strip', at: { x: -10, z: 40 }, rot: 0, seated: false, say: 'Place the WS2812 strip.' },
-    ...STRIP_LINKS.map(link => /** @type {import('./recipes.js').Step} */ ({ kind: 'wire', a: link.a, b: link.b, named: [link.a, link.b], say: link.why })),
-    { kind: 'usb', say: 'Plug in USB and light the strip.' },
-  ],
-};
+/**
+ * The strip lesson: the driver writes one frame on a timer. No sketch.
+ * @type {Project}
+ */
+export const STRIP_PROJECT = projectFromBody(bodyFrom(strip));
 
 const tarotSource = adapt(/** @type {import('./recipes.js').Recipe} */ (RECIPES.find(recipe => recipe.id === 'screen')), DEFAULT_SCREEN, true);
 /** @type {Project} */
 export const TAROT_PROJECT = {
   ...tarotSource,
-  id: 'tarot', name: 'Tarot wand', needs: ['draw'], connection: 'body', firmware: 'body',
+  id: 'tarot', name: 'Tarot wand', needs: ['draw'], connection: 'body', firmware: 'body', body: 'tarot',
   // Keep the wand beside the screen, not a further row down, so its jumpers
   // do not cross the whole bench.
   steps: tarotSource.steps.map(step => step.kind === 'part' && step.id === 'imu'

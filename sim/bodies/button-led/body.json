@@ -1,0 +1,42 @@
+{
+  "id": "button-led",
+  "adoptable": false,
+  "label": { "en": "Button and LED", "zh": "按钮与 LED" },
+  "ending": "Press the button",
+  "parts": ["esp32", "button-module", "led-5mm", "resistor"],
+  "resources": [
+    { "kind": "gpio", "name": "button", "gpio": 4, "direction": "input" },
+    { "kind": "gpio", "name": "led", "gpio": 5, "direction": "output", "safe": 0 }
+  ],
+  "commands": [
+    {
+      "name": "led_on",
+      "timeoutMs": 500,
+      "run": [{ "op": "pin.write", "args": { "pin": "led", "level": 1 } }]
+    },
+    {
+      "name": "led_off",
+      "timeoutMs": 500,
+      "run": [{ "op": "pin.write", "args": { "pin": "led", "level": 0 } }]
+    }
+  ],
+  "behaviors": [
+    { "on": { "resource": "button", "level": "low" }, "run": [{ "command": "led_on" }] },
+    { "on": { "resource": "button", "level": "high" }, "run": [{ "command": "led_off" }] }
+  ],
+  "wiring": {
+    "parts": [
+      { "id": "btn", "part": "button-module", "at": { "x": -25, "z": 32 }, "seated": false },
+      { "id": "r", "part": "resistor", "at": { "x": 0, "z": 32 }, "seated": false },
+      { "id": "led", "part": "led-5mm", "at": { "x": 15, "z": 32 }, "seated": false }
+    ],
+    "links": [
+      { "a": "btn:VCC", "b": "esp:3V3", "why": "Power the KY-004 from 3.3 V so its signal matches the ESP32 logic." },
+      { "a": "btn:GND", "b": "esp:GND", "why": "Share ground between the button module and the controller." },
+      { "a": "btn:S", "b": "esp:GPIO4", "why": "Connect the button signal to a GPIO input." },
+      { "a": "esp:GPIO5", "b": "r:1", "why": "Drive the LED through a current-limiting resistor." },
+      { "a": "r:2", "b": "led:A", "why": "The resistor feeds the LED anode." },
+      { "a": "led:K", "b": "esp:GND", "why": "Return the LED cathode to ground." }
+    ]
+  }
+}

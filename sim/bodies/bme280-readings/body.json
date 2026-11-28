@@ -1,0 +1,37 @@
+{
+  "id": "bme280-readings",
+  "adoptable": false,
+  "label": { "en": "BME280 readings", "zh": "BME280 读数" },
+  "ending": "Inspect simulated readings",
+  "parts": ["esp32", "bme280-i2c"],
+  "resources": [
+    {
+      "kind": "device",
+      "name": "env",
+      "driver": "bme280",
+      "part": "bme280-i2c",
+      "sda": 1,
+      "scl": 2,
+      "address": 119
+    }
+  ],
+  "commands": [
+    {
+      "name": "sample",
+      "timeoutMs": 1000,
+      "returns": true,
+      "run": [{ "op": "device.sample", "args": { "device": "env" } }]
+    }
+  ],
+  "wiring": {
+    "parts": [
+      { "id": "env", "part": "bme280-i2c", "at": { "x": 25, "z": 40 }, "seated": false }
+    ],
+    "links": [
+      { "a": "env:VIN", "b": "esp:3V3", "why": "Power the breakout at 3.3 V so its I2C pull-ups match the ESP32 logic." },
+      { "a": "env:GND", "b": "esp:GND", "why": "Share ground between the sensor and controller." },
+      { "a": "env:SDI", "b": "esp:GPIO1", "why": "Connect SDI to the configured I2C data line." },
+      { "a": "env:SCK", "b": "esp:GPIO2", "why": "Connect SCK to the configured I2C clock line." }
+    ]
+  }
+}

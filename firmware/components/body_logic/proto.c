@@ -39,6 +39,40 @@ static bool read_move(const cJSON *j, brain_msg_t *m) {
   return true;
 }
 
+/* One bounded IO op from the brain (core/protocol.js: cmd). The op names a
+   gpio number, not a resource name; the bridge's allowlist decides whether
+   that number is a pin it may touch. */
+static bool read_cmd(const cJSON *j, brain_msg_t *m) {
+  const cJSON *id = cJSON_GetObjectItemCaseSensitive(j, "id");
+  const char *op = string_of(j, "op");
+  const cJSON *args = cJSON_GetObjectItemCaseSensitive(j, "args");
+  const cJSON *pin = cJSON_IsObject(args) ? cJSON_GetObjectItemCaseSensitive(args, "pin") : NULL;
+  if (!cJSON_IsNumber(id) || id->valuedouble != (double)id->valueint
+      || id->valueint < 1 || id->valueint > 255) return false;
+  if (!op || !cJSON_IsObject(args) || !cJSON_IsNumber(pin)
+      || pin->valuedouble != (double)pin->valueint
+      || pin->valueint < 0 || pin->valueint > PROTO_MAX_GPIO) return false;
+
+  m->cmd_id = id->valueint;
+  m->cmd_pin = pin->valueint;
+  if (strcmp(op, "pin.write") == 0) {
+    const cJSON *level = cJSON_GetObjectItemCaseSensitive(args, "level");
+    const cJSON *safe = cJSON_GetObjectItemCaseSensitive(j, "safe");
+    if (!cJSON_IsNumber(level) || level->valuedouble != (double)level->valueint
+        || (level->valueint != 0 && level->valueint != 1)) return false;
+    if (!cJSON_IsNumber(safe) || safe->valuedouble != (double)safe->valueint
+        || (safe->valueint != 0 && safe->valueint != 1)) return false;
+    m->cmd_write = true;
+    m->cmd_level = level->valueint;
+    m->cmd_safe = safe->valueint;
+  } else if (strcmp(op, "pin.read") == 0) {
+    m->cmd_write = false;
+  } else {
+    return false;
+  }
+  return true;
+}
+
 brain_msg_t proto_parse(const char *json, size_t len) {
   brain_msg_t m = {0};
   cJSON *j = cJSON_ParseWithLength(json, len);
@@ -55,6 +89,8 @@ brain_msg_t proto_parse(const char *json, size_t len) {
     if (reason) { copy_text(&m, reason); m.type = MSG_REJECT; }
   } else if (strcmp(type, "move") == 0) {
     if (read_move(j, &m)) m.type = MSG_MOVE;
+  } else if (strcmp(type, "cmd") == 0) {
+    if (read_cmd(j, &m)) m.type = MSG_CMD;
   } else if (strcmp(type, "state") == 0) {
     const char *state = string_of(j, "state");
     if (state) { copy_text(&m, state); m.type = MSG_STATE; }
@@ -72,8 +108,22 @@ done:
   return m;
 }
 
+int proto_hello_version(char *buf, size_t cap, const char *token, int version) {
+  int n = snprintf(buf, cap, "{\"type\":\"hello\",\"protocol\":%d,\"token\":\"%s\"}", version, token);
+  return n < 0 || (size_t)n >= cap ? -1 : n;
+}
+
 int proto_hello(char *buf, size_t cap, const char *token) {
-  int n = snprintf(buf, cap, "{\"type\":\"hello\",\"protocol\":%d,\"token\":\"%s\"}", PROTO_VERSION, token);
+  return proto_hello_version(buf, cap, token, PROTO_VERSION);
+}
+
+int proto_result_value(char *buf, size_t cap, int id, int value) {
+  int n = snprintf(buf, cap, "{\"type\":\"result\",\"id\":%d,\"ok\":true,\"value\":%d}", id, value);
+  return n < 0 || (size_t)n >= cap ? -1 : n;
+}
+
+int proto_result_error(char *buf, size_t cap, int id, const char *error) {
+  int n = snprintf(buf, cap, "{\"type\":\"result\",\"id\":%d,\"ok\":false,\"error\":\"%s\"}", id, error);
   return n < 0 || (size_t)n >= cap ? -1 : n;
 }
 

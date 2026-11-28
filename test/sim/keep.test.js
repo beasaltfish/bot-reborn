@@ -65,11 +65,11 @@ test('returning keeps the current firmware, token and board damage', () => {
   const saved = sample();
   let current = {
     ...saved,
-    board: { ...saved.board, firmware: 'sketch-bme280', settings: { ...saved.board.settings, token: 'a'.repeat(32) } },
+    board: { ...saved.board, firmware: 'sketch-env-display', settings: { ...saved.board.settings, token: 'a'.repeat(32) } },
   };
   current = { ...current, placed: current.placed.map((p) => (p.part === 'esp32' ? { ...p, burnt: true } : p)) };
   const merged = mergeKeptBench(saved, current);
-  assert.equal(merged.board.firmware, 'sketch-bme280');
+  assert.equal(merged.board.firmware, 'sketch-env-display');
   assert.equal(merged.board.settings.token, 'a'.repeat(32));
   assert.equal(merged.placed.find((p) => p.part === 'esp32')?.burnt, true);
   assert.deepEqual(merged.wires, saved.wires);

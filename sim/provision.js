@@ -20,22 +20,6 @@ export function provisionPlan(plan, settings) {
  * The characters that could be paired right now: ready and not already online.
  * Capability is deliberately not a filter here; it only affects the last step
  * of a demo, never pairing.
- * @param {{ id: string, name: string, ready?: boolean, online?: boolean, motion?: string }[]} list
- */
-/**
- * Whether a plan may pair by itself. A demo that names its body is asking a
- * question the person has to answer first — which character wears it — and
- * pairing before that answer would lock in the wrong body. An empty bench has
- * no such question, and a decided one has been answered.
- * @param {{ body?: string } | null | undefined} plan
- * @param {boolean} decided
- * @returns {boolean}
- */
-export function autoPairAllowed(plan, decided) {
-  return !plan?.body || decided;
-}
-
-/**
  * @param {any[]} list
  */
 export function tokenCandidates(list) {

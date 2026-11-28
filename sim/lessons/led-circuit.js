@@ -7,7 +7,7 @@ import { evaluateLedBench } from '../electrical/led-bench.js';
 
 /** @returns {import('../bench.js').Bench} */
 function labParts() {
-  return LED_PROJECT.steps.filter(step => step.kind !== 'wire').reduce(applyStep, startBench(emptyBench()));
+  return LED_PROJECT.steps.filter(step => step.kind !== 'wire').reduce(applyStep, startBench(emptyBench(), { board: false }));
 }
 
 /** Build the experiment as a real isolated bench, using the shared evaluator.

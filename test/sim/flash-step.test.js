@@ -8,7 +8,7 @@ import {
 } from '../../sim/firmware/flash.js';
 
 const BOARD = () => ({
-  firmware: 'sketch-bme280',
+  firmware: 'sketch-env-display',
   settings: { ssid: 'bench', pass: '', token: 'a'.repeat(32), url: '', screen: 'ili9341-ips', calib: { driveSwapped: false, steerSwapped: true } },
   custom: null,
 });
@@ -80,13 +80,13 @@ test('an external-source sonar signal path does not block flashing', () => {
 test('a missing manifest leaves firmware unchanged', async () => {
   const r = await runFlash(BOARD(), 'body', { fetchImpl: /** @type {any} */ (async () => ({ ok: false, status: 404 })), isCurrent: () => true });
   assert.equal(r.ok, false);
-  assert.equal(r.board.firmware, 'sketch-bme280');
+  assert.equal(r.board.firmware, 'sketch-env-display');
 });
 
 test('an aborted or stale flash does not commit', async () => {
   const r = await runFlash(BOARD(), 'body', { fetchImpl: /** @type {any} */ (okFetch), isCurrent: () => false });
   assert.equal(r.ok, false);
-  assert.equal(r.board.firmware, 'sketch-bme280');
+  assert.equal(r.board.firmware, 'sketch-env-display');
 });
 
 test('flashing keeps NVS settings and changes firmware', async () => {
@@ -104,7 +104,7 @@ import { FIRMWARES } from '../../sim/firmware/index.js';
 test('a release flash event writes the image own filename, not a hardcoded one', () => {
   const event = flashEvent(FIRMWARES.body);
   assert.ok(event.lines.includes(`esptool: writing ${FIRMWARES.body.image.label}`));
-  const sketch = flashEvent(FIRMWARES['sketch-bme280']);
+  const sketch = flashEvent(FIRMWARES['sketch-env-display']);
   assert.match(sketch.lines[0], /simulated image/);
 });
 

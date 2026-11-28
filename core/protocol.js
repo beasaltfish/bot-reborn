@@ -83,8 +83,15 @@ const FROM_BRAIN = {
   ping: () => true,
   pong: () => true,
   // One IO primitive, never a program: the brain expands a command and sends
-  // each op on its own (body plugins design §6).
-  cmd: (m) => typeof m.id === 'number' && typeof m.op === 'string',
+  // each op on its own (body plugins design §6). The shape is the C bridge's
+  // too, so the shared vectors exercise one contract, not two.
+  cmd: (m) => Number.isInteger(m.id) && m.id >= 1 && m.id <= 255
+    && (m.op === 'pin.write' || m.op === 'pin.read')
+    && m.args !== null && typeof m.args === 'object'
+    && Number.isInteger(m.args.pin) && m.args.pin >= 0 && m.args.pin <= 48
+    && (m.op === 'pin.read'
+      || (Number.isInteger(m.args.level) && (m.args.level === 0 || m.args.level === 1)
+        && Number.isInteger(m.safe) && (m.safe === 0 || m.safe === 1))),
   fault: (m) => ['stt', 'llm', 'tts'].includes(m.part)
     && (m.status === null || Number.isInteger(m.status))
     && ['http', 'timeout', 'network', 'other'].includes(m.kind),

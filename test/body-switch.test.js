@@ -3,9 +3,9 @@
 // brain's adopt route must answer the same question the same way.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { adoptModule } from '../core/body-switch.js';
+import { adoptModule, switchBody } from '../core/body-switch.js';
 
-import { TEMPLATES, bodyById, bodyProblem, registerPlugins } from '../core/bodies.js';
+import { TEMPLATES, bodyById, bodyProblem, registerPlugins, resolveBody } from '../core/bodies.js';
 
 /** One action, as `core/bodies.js` requires it. */
 const a = (/** @type {string} */ name) => ({ name, label: { en: name, zh: name }, say: `${name}.`, run: [] });
@@ -120,5 +120,55 @@ test('a trigger naming a dropped action is not written back', () => {
 test('no trigger list is written when the character had none of its own', () => {
   const out = adoptModule({ actions: [a('sit')], triggers: null }, 'led-module', [a('sit')], [], only(), () => null);
   // `null` means "inherit"; writing `[]` would replace the template's list.
+  assert.equal(Object.hasOwn(out.body, 'triggers'), false);
+});
+
+/** `bodyProblem` for a template carrying `actions`, as the adopt route asks it. */
+const accepts = (/** @type {any} */ body) => (/** @type {any[]} */ actions) => {
+  const names = new Set(actions.map((action) => action.name));
+  const triggers = (body.triggers ?? []).filter((/** @type {any} */ trigger) => names.has(trigger.action));
+  return bodyProblem({ ...body, actions, triggers });
+};
+
+test('switching to a template writes null actions, so its own actions apply', () => {
+  const out = switchBody({ id: 'none', template: 'none' }, 'pet', [], only('none', 'pet'), accepts(TEMPLATES.pet));
+  assert.deepEqual(out.body, { id: 'pet', template: 'pet', actions: null });
+  assert.deepEqual(out.dropped, []);
+  // Null inherits; an empty list would give the pet no pose to make.
+  assert.deepEqual(resolveBody('pet', out.body).actions.map((x) => x.name), ['pose', 'play_sound']);
+});
+
+test('a body of one’s own keeps its name when switching to a template', () => {
+  const out = switchBody({ id: 'my-dog', template: 'pet' }, 'toy', [], only('pet', 'toy'), accepts(TEMPLATES.toy));
+  assert.deepEqual(out.body, { template: 'toy', actions: null });
+});
+
+test('own actions the new body can run survive, in their order', () => {
+  const current = structuredClone(TEMPLATES.pet.actions);
+  const out = switchBody({ id: 'none', template: 'none', actions: current }, 'toy', current,
+    only('none', 'pet', 'toy'), accepts(TEMPLATES.toy));
+  // A toy has no screen: the pose goes, the sound stays.
+  assert.deepEqual(out.dropped, ['pose']);
+  assert.deepEqual(out.body.actions?.map((x) => x.name), ['play_sound']);
+});
+
+test('a trigger naming a dropped action is not written back on a switch', () => {
+  const patch = {
+    id: 'pet',
+    template: 'pet',
+    actions: structuredClone(TEMPLATES.pet.actions),
+    triggers: [
+      { on: 'button', action: 'pose' },
+      { on: 'shake', action: 'play_sound' },
+    ],
+  };
+  const out = switchBody(patch, 'toy', patch.actions, only('pet', 'toy'), accepts(TEMPLATES.toy));
+  assert.deepEqual(out.dropped, ['pose']);
+  assert.deepEqual(out.body.triggers, [{ on: 'shake', action: 'play_sound' }]);
+});
+
+test('a switch with no own actions leaves the template’s triggers alone', () => {
+  const out = switchBody({ id: 'none', template: 'none', triggers: [] }, 'tarot', [], only('none', 'tarot'), accepts(TEMPLATES.tarot));
+  // Writing [] here would replace tarot’s shake trigger with none.
   assert.equal(Object.hasOwn(out.body, 'triggers'), false);
 });

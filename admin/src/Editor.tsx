@@ -4,6 +4,7 @@ import { deepMerge } from './merge';
 import { useAutoSave } from './useAutoSave';
 import { AdvancedPanels } from './AdvancedPanels';
 import { BasicTab } from './BasicTab';
+import { BodyTab } from './BodyTab';
 import { LayerTab } from './LayerTab';
 import { Dot } from './CharacterList';
 import { runCheck, runTry, type CheckFn, type TryFn } from './checks';
@@ -15,9 +16,11 @@ import type { Detail, EditorSlot, LayerName, Patch, TabName } from './types';
 const LAYERS: LayerName[] = ['stt', 'llm', 'tts', 'reflex'];
 const isLayer = (name: TabName): name is LayerName => LAYERS.includes(name as LayerName);
 
-// Body and Reflex are under Advanced in Basic; these four are the top tabs.
+// Body is what the character is, so it sits beside the layers that decide how
+// it hears, thinks and speaks. Reflex stays under Advanced in Basic: it is the
+// one optional layer, and it carries a provider of its own.
 const TABS: Array<[TabName, Key]> = [
-  ['basic', 'tabBasic'], ['stt', 'tabStt'], ['llm', 'tabLlm'], ['tts', 'tabTts'],
+  ['basic', 'tabBasic'], ['stt', 'tabStt'], ['llm', 'tabLlm'], ['tts', 'tabTts'], ['body', 'tabBody'],
 ];
 
 export function Editor(props: EditorSlot & { check?: CheckFn; tryReflex?: TryFn }) {
@@ -33,6 +36,13 @@ export function Editor(props: EditorSlot & { check?: CheckFn; tryReflex?: TryFn 
     api.get(id).then((d) => live && setDetail(d), (err: Error) => live && setLoadError(err.message));
     return () => { live = false; };
   }, [id]);
+
+  // A link that names a tab (`#character=Asten&tab=body`) is a request for
+  // where to open, including when the page is already on its feet. Clicks
+  // afterwards are the person's: nothing else changes `initialTab`.
+  useEffect(() => {
+    setTab(TABS.some(([name]) => name === props.initialTab) ? props.initialTab : 'basic');
+  }, [props.initialTab]);
 
   // The server's copy is not put back into the form: it would undo whatever
   // was typed while the save was in flight. Only the list needs to hear.
@@ -91,6 +101,7 @@ export function Editor(props: EditorSlot & { check?: CheckFn; tryReflex?: TryFn 
             )}
           />
         )}
+        {tab === 'body' && <BodyTab detail={detail} update={update} />}
         {isLayer(tab) && tab !== 'reflex' && (
           <LayerTab key={tab} id={id} layer={tab} config={detail.config} endpoints={detail.endpoints} update={update} check={props.check ?? runCheck} />
         )}

@@ -7,6 +7,7 @@
 // trusted, and answers with a phrase or null. Nothing throws.
 
 import { commandProblem } from './io-program.js';
+import { behaviorsProblem } from './behaviors.js';
 import { TEMPLATES, bodyProblem } from './bodies.js';
 
 /** A plugin id names a directory and reaches `config.body.template`. */
@@ -20,6 +21,9 @@ const COMMAND_NAME = /^[a-z][a-z0-9_]*$/;
 
 /** The two directions a gpio pin may have. */
 const DIRECTIONS = new Set(['input', 'output']);
+
+/** Device drivers the runtime can answer today. A new driver is data here. */
+export const DEVICE_DRIVERS = /** @type {const} */ (['bme280', 'hc-sr04', 'tb6612fng', 'ws2812', 'sonar-servo', 'bme280-display']);
 
 /** @param {unknown} value @returns {value is Record<string, any>} */
 function isObject(value) {
@@ -47,7 +51,64 @@ export function resourcesProblem(resources) {
     if (!isText(resource.name)) return 'a resource has no name';
     if (names.has(resource.name)) return `two resources are called ${resource.name}`;
     names.add(resource.name);
-    if (resource.kind !== 'gpio') return `resource "${resource.name}" is not a gpio pin`;
+    if (resource.kind === 'device') {
+      if (!isText(resource.driver) || !DEVICE_DRIVERS.includes(resource.driver)) {
+        return `device "${resource.name}" has no known driver`;
+      }
+      if (resource.part !== undefined && !isText(resource.part)) {
+        return `device "${resource.name}" part must be a name`;
+      }
+      if (resource.driver === 'bme280') {
+        for (const key of /** @type {const} */ (['sda', 'scl'])) {
+          const pin = resource[key];
+          if (!Number.isInteger(pin) || pin < 0 || pin > 48) {
+            return `device "${resource.name}" needs an ${key} gpio number`;
+          }
+        }
+        if (!Number.isInteger(resource.address) || resource.address < 0 || resource.address > 127) {
+          return `device "${resource.name}" needs an i2c address`;
+        }
+      } else if (resource.driver === 'hc-sr04') {
+        for (const key of /** @type {const} */ (['trig', 'echo'])) {
+          const pin = resource[key];
+          if (!Number.isInteger(pin) || pin < 0 || pin > 48) {
+            return `device "${resource.name}" needs a ${key} gpio number`;
+          }
+        }
+      } else if (resource.driver === 'tb6612fng') {
+        for (const key of /** @type {const} */ (['ain1', 'ain2', 'pwma'])) {
+          const pin = resource[key];
+          if (!Number.isInteger(pin) || pin < 0 || pin > 48) {
+            return `device "${resource.name}" needs a ${key} gpio number`;
+          }
+        }
+      } else if (resource.driver === 'ws2812') {
+        if (!Number.isInteger(resource.din) || resource.din < 0 || resource.din > 48) {
+          return `device "${resource.name}" needs a din gpio number`;
+        }
+      } else if (resource.driver === 'sonar-servo') {
+        for (const key of /** @type {const} */ (['trig', 'echo', 'sig'])) {
+          const pin = resource[key];
+          if (!Number.isInteger(pin) || pin < 0 || pin > 48) {
+            return `device "${resource.name}" needs a ${key} gpio number`;
+          }
+        }
+      } else if (resource.driver === 'bme280-display') {
+        for (const key of /** @type {const} */ (['sda', 'scl'])) {
+          const pin = resource[key];
+          if (!Number.isInteger(pin) || pin < 0 || pin > 48) {
+            return `device "${resource.name}" needs an ${key} gpio number`;
+          }
+        }
+        if (!Number.isInteger(resource.address) || resource.address < 0 || resource.address > 127) {
+          return `device "${resource.name}" needs an i2c address`;
+        }
+      }
+      continue;
+    }
+    if (resource.kind !== 'gpio') {
+      return `resource "${resource.name}" is not a gpio pin or a device`;
+    }
     if (!Number.isInteger(resource.gpio)) return `resource "${resource.name}" has no gpio number`;
     if (!DIRECTIONS.has(resource.direction)) {
       return `resource "${resource.name}" is not an input or an output`;
@@ -107,13 +168,16 @@ export function wiringProblem(wiring, resources) {
   if (!Array.isArray(wiring.links)) return 'wiring.links must be a list of links';
 
   /** @type {Set<number>} */
-  const declared = new Set(
-    (Array.isArray(resources) ? resources : [])
-      .filter((resource) => isObject(resource)
-        && resource.kind === 'gpio'
-        && Number.isInteger(resource.gpio))
-      .map((resource) => /** @type {number} */ (resource.gpio)),
-  );
+  const declared = new Set();
+  for (const resource of Array.isArray(resources) ? resources : []) {
+    if (!isObject(resource)) continue;
+    if (resource.kind === 'gpio' && Number.isInteger(resource.gpio)) declared.add(resource.gpio);
+    if (resource.kind === 'device') {
+      for (const key of /** @type {const} */ (['sda', 'scl', 'trig', 'echo', 'ain1', 'ain2', 'pwma', 'din', 'sig'])) {
+        if (Number.isInteger(resource[key])) declared.add(resource[key]);
+      }
+    }
+  }
 
   for (const [i, link] of wiring.links.entries()) {
     if (!isObject(link)) return `wiring.links[${i}] is not a link`;
@@ -163,6 +227,11 @@ export function manifestProblem(manifest) {
   if (badResources) return badResources;
   const badCommands = commandsProblem(manifest.commands, manifest.resources);
   if (badCommands) return badCommands;
+  const badBehaviors = behaviorsProblem(manifest.behaviors, {
+    resources: manifest.resources,
+    commands: manifest.commands,
+  });
+  if (badBehaviors) return badBehaviors;
 
   // An example is an action the character may end up owning, so it is judged by
   // the same checker as a hand-written one, on the body this manifest builds.
@@ -188,6 +257,7 @@ export function manifestProblem(manifest) {
  * @returns {import('./bodies.js').Body}
  */
 export function bodyFrom(manifest) {
+  const adoptable = manifest.adoptable !== false;
   return {
     ...structuredClone(TEMPLATES.none),
     id: manifest.id,
@@ -195,6 +265,11 @@ export function bodyFrom(manifest) {
     parts: [...manifest.parts],
     commands: structuredClone(manifest.commands),
     resources: structuredClone(manifest.resources),
+    ...(manifest.behaviors ? { behaviors: structuredClone(manifest.behaviors) } : {}),
+    ...(typeof manifest.ending === 'string' ? { ending: manifest.ending } : {}),
+    // A bench body is wired and simulated, not worn by a character: it is
+    // reached by no source, and it carries no firmware of its own.
+    ...(adoptable ? {} : { ways: [{ source: 'none', needs: [] }], firmware: null, adoptable: false }),
     // What a person reads and what the bench draws travel with the body: a body
     // the page cannot see the wiring of is a body with no project.
     ...(manifest.wiring ? { wiring: structuredClone(manifest.wiring) } : {}),

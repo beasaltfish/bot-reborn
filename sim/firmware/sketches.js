@@ -24,13 +24,9 @@ const sketch = (/** @type {string} */ id, /** @type {string[]} */ drivers, /** @
 });
 
 export const SKETCHES = [
-  // Reading only: the part panel shows the gated telemetry it sampled.
-  sketch('sketch-bme280', ['bme280-i2c']),
-  sketch('sketch-button-led', ['button-module', 'led-5mm'], (ctx) => {
-    const button = first(ctx, 'button');
-    ctx.pin('GPIO5', button?.[1].level === 'low' ? 'high' : 'low');
-  }),
-  sketch('sketch-sonar', ['hc-sr04'], (ctx) => { ctx.measure('sonar'); }),
+  // The two device models that are still composed of two parts: the display
+  // reads the BME280, and the servo follows the sonar. Single-device lessons
+  // are bodies now (see sim/bodies).
   sketch('sketch-env-display', ['bme280-i2c', 'ssd1306'], (ctx) => {
     const env = first(ctx, 'bme280');
     const display = first(ctx, 'display');
@@ -53,16 +49,5 @@ export const SKETCHES = [
     const distance = sonar?.[1].distanceCm;
     if (!servo || typeof distance !== 'number') return;
     ctx.device('servo', servo[0], { angle: distance < 20 ? 90 : 0 });
-  }),
-  sketch('sketch-motor', ['tb6612fng', 'dc-motor-small'], (ctx) => {
-    // The driver owns the command; the motor follows it electrically.
-    const driver = first(ctx, 'motor', (record) => record.pwmPin !== undefined);
-    if (!driver) return;
-    ctx.device('motor', driver[0], { direction: 'forward', speed: 0.6, load: 'idle' });
-  }),
-  sketch('sketch-strip', ['ws2812-strip'], (ctx) => {
-    const strip = first(ctx, 'strip');
-    if (!strip) return;
-    ctx.device('strip', strip[0], { pixels: Array.from({ length: 8 }, () => [0, 160, 40]) });
   }),
 ];

@@ -59,11 +59,14 @@ Four layers; only the last two are a person's to write.
 
 - **Capabilities** are what the body has: `hear`, `speak`, `show`, `move`
   (`CAPABILITIES` in `core/bodies.js`). They describe hardware, not behaviour.
-- **IO ops** are the closed set of six electrical primitives the hardware can be
-  told to perform: `pin.write`, `pin.read`, `pwm`, `i2c.read`, `i2c.write`,
-  `adc.read` (`IO_OPS` in `core/io-program.js`). One op is one wire message,
-  never a sequence, and only a `gpio` resource is addressable today — the
-  `i2c`/`adc` contract is refused at load rather than guessed at.
+- **IO ops** are the closed set of nine primitives the hardware can be told to
+  perform: `pin.write`, `pin.read`, `pwm`, `i2c.read`, `i2c.write`, `adc.read`,
+  `device.sample`, `device.measure`, `device.write` (`IO_OPS` in
+  `core/io-program.js`). One op is one wire message, never a sequence. A
+  `device` op names a resource with a known driver (`bme280`, `hc-sr04`,
+  `tb6612fng`, `ws2812` today): `sample` returns telemetry, `measure` triggers a
+  reading, `write` sends an actuator payload. Raw `i2c`/`adc` resources are
+  still refused at load rather than guessed at.
 - **Verbs** are the closed set of five things a body can be told to do as a
   whole: `drive`, `halt`, `voice`, `pose`, `draw` (`core/verbs.js`). Each one
   names the capability it needs (`needs`), the arguments it takes, and the
@@ -110,6 +113,51 @@ The dry run is in the table but not in the picker (`?bench` shows it). As far
 as the model can tell it is the toy — the same prompt and the same four actions
 — but every verb is only written to the brain's log, and no frame reaches the
 screen. It is how the orders are read back with nothing to drive.
+
+### Demos are bodies
+
+Every demo that builds a robot names the body it builds: `sim/recipes.js` says
+Audio only is `none`, Audio + screen is `pet`, and Audio + toy robot is `toy`;
+`sim/projects.js` gives the tarot build its own `tarot`. The project panel reads
+that id and offers the one step that settles the paired character
+(`sim/body-next-step.js`). A built-in template counts as installed; only a
+module can be missing. A demo that never names the ESP32 — the LED loop and the
+power rail — is built without one (`planUsesBoard` in `sim/plan.js`), so the
+controller only sits on a bench that actually wires it. Switching to a template
+is `switchBody` in
+`core/body-switch.js`: it writes `actions: null` so the template's own actions
+apply, keeps a person's own actions that the new body can run, and names the
+rest. Pairing is not gated on that answer — pairing chooses the character, and
+the body question follows it.
+
+Some demos are not character bodies at all. A **bench body** lives in
+`sim/bodies/<id>/body.json` with the same manifest shape plus `behaviors`, and
+the workbench runs it with no firmware and no character. `button-led` is the
+first: its behavior says the button reading low runs `led_on`, and its project
+is generated from the same `wiring` (`projectFromBody`), so moving the LED is
+one resource and one link. Behaviors are bounded — at most 16, level/edge or
+`everyMs >= 50`, commands only, no returned values — and validated by
+`core/behaviors.js`; `sim/behavior-runtime.js` executes them. A bench body has
+`adoptable: false`, so it never appears as a character to switch to.
+
+The device lessons are bench bodies too: `bme280-readings`,
+`distance-reader`, `proximity-servo`, `environment-display`,
+`motor-driver-basics` and `status-light-strip`. Their manifests use `device`
+resources and the `device.sample`/`measure`/`write` ops (`bme280`, `hc-sr04`,
+`sonar-servo`, `bme280-display`, `tb6612fng`, `ws2812`); `projectFromBody`
+generates their wiring. No project names a `sketch-*` any more. The two
+composite sketches that remain in `sim/firmware/sketches.js` are reading
+examples for the firmware studio, not a project's program.
+
+The UI keeps the three apart: the firmware drawer lists only flashable
+programs (`body` and `my firmware`); a project that runs a `sketch-*` shows a
+read-only **Simulation model** view with no Flash/Download/Copy; a bench body
+or a circuit with no controller has no firmware drawer at all. `sim/main.js`
+decides the drawer's visibility from `planUsesBoard`/`activeProject`, and
+`sim/ui/firmware-studio.js` renders the read-only simulation state. In the
+data, a sketch is `simulation: 'sketch-*'` with `firmware: null`; `planSteps`
+therefore has no flash step, and `startPlan` sets the board's model state
+without flashing anything.
 
 A character file has no version number. An older brain reading a file written by
 a newer one silently drops the keys it does not know — a body's `actions`, for

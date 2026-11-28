@@ -29,9 +29,11 @@ export function nextStep({ body, character, installed = false, examples = 0 }) {
   // character carries some other body's actions is a body the model cannot use,
   // so the question is which actions, not how many.
   const count = typeof examples === 'number' ? examples : examples.length;
-  const hasTheirs = exampleList
+  // A body with nothing to add needs nothing added: voice only is complete as
+  // soon as it is the character's body, not stuck asking for its 0 actions.
+  const hasTheirs = count === 0 || (exampleList
     ? actions.some((name) => exampleList.includes(name))
-    : actions.length > 0;
+    : actions.length > 0);
   if (hasBody && hasTheirs) {
     return { key: 'bodyNext.isBody', params: { name }, action: null };
   }

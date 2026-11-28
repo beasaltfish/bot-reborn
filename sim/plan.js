@@ -12,7 +12,7 @@ import { wireEnd } from './snap.js';
  * @typedef {{ id: string, part: string, at: { x: number, z: number }, rot: number, seated: boolean }} PlanPart
  * @typedef {{ recipeId: string, screenId?: string, wand?: boolean, steps?: import('./recipes.js').Step[] }} PlanLegacy
  * @typedef {{
- *   id: string, name: string, goalKey: string, needs?: string[], connection?: 'body' | null, firmware?: string | null, ending?: string, body?: string,
+ *   id: string, name: string, goalKey: string, needs?: string[], connection?: 'body' | 'bench' | null, firmware?: string | null, simulation?: string, ending?: string, body?: string,
  *   parts: PlanPart[], links: import('./target.js').Link[],
  *   ignoredFaultCodes?: string[], lessonId?: string, legacy?: PlanLegacy, steps?: import('./recipes.js').Step[],
  * }} Plan
@@ -72,11 +72,33 @@ function seatSteps(steps) {
   });
 }
 
-/** @param {PlanPart[]} parts @param {import('./target.js').Link[]} links @returns {import('./recipes.js').Step[]} */
-function derivedSteps(parts, links) {
+/**
+ * Whether a plan needs the ESP32 on the bench: it is a body, it runs a
+ * firmware, it names the board as a part, or one of its wires reaches an
+ * `esp:` pin. The LED loop and the power rail name none of those; they are
+ * circuits, and a controller on the table would only look like one of their
+ * parts.
+ * @param {any} plan
+ * @returns {boolean}
+ */
+export function planUsesBoard(plan) {
+  if (!plan) return false;
+  if (plan.connection === 'body' || plan.firmware || plan.simulation || plan.body) return true;
+  if (plan.parts?.some((/** @type {any} */ part) => part.part === 'esp32')) return true;
+  if (plan.steps?.some((/** @type {any} */ step) => step.kind === 'part' && step.part === 'esp32')) return true;
+  return (plan.links ?? []).some((/** @type {any} */ link) => String(link.a).startsWith('esp:') || String(link.b).startsWith('esp:'));
+}
+
+/**
+ * @param {PlanPart[]} parts
+ * @param {import('./target.js').Link[]} links
+ * @param {boolean} [board] include the ESP32 (default)
+ * @returns {import('./recipes.js').Step[]}
+ */
+function derivedSteps(parts, links, board = true) {
   /** @type {import('./recipes.js').Step[]} */
   const steps = [
-    ...benchSetupSteps(),
+    ...benchSetupSteps(board),
     ...parts.map(part => /** @type {import('./recipes.js').Step} */ ({ kind: 'part', id: part.id, part: /** @type {any} */ (part.part), at: part.at, rot: /** @type {any} */ (part.rot), seated: part.seated, say: `Place ${part.part}.` })),
   ];
   for (const link of links) steps.push({ kind: 'wire', a: link.a, b: link.b, named: [link.a, link.b], say: link.why });
@@ -97,6 +119,7 @@ export function planFromProject(project) {
     needs: project.needs,
     connection: project.connection,
     firmware: project.firmware,
+    simulation: project.simulation,
     ending: project.ending,
     body: project.body,
     parts,
@@ -157,9 +180,10 @@ export function planSteps(plan) {
   const withFlash = (steps) => plan.firmware ? [...steps, /** @type {import('./recipes.js').Step} */ ({ kind: 'flash', firmware: plan.firmware })] : steps;
   if (plan.legacy?.steps) return withFlash(plan.legacy.steps);
   if (plan.steps) {
-    const setup = plan.steps.some(step => step.kind === 'board') ? plan.steps : [...benchSetupSteps(), ...plan.steps];
+    const board = planUsesBoard(plan);
+    const setup = plan.steps.some(step => step.kind === 'board') ? plan.steps : [...benchSetupSteps(board), ...plan.steps];
     const parts = seatSteps(setup).filter(step => step.kind === 'board' || step.kind === 'part');
-    const bench = parts.reduce(applyStep, startBench(emptyBench()));
+    const bench = parts.reduce(applyStep, startBench(emptyBench(), { board }));
     const taken = new Set();
     const wires = plan.links.map(link => {
       // A pin seated in the board is under its part, so the jumper goes into a
@@ -172,5 +196,5 @@ export function planSteps(plan) {
     });
     return withFlash([...parts, ...wires]);
   }
-  return withFlash(derivedSteps(plan.parts, plan.links));
+  return withFlash(derivedSteps(plan.parts, plan.links, planUsesBoard(plan)));
 }

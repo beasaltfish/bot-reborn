@@ -18,6 +18,7 @@
 import { MIN_DURATION_MS } from './motion.js';
 import { VERBS, DRIVE_VALUES, STEER_VALUES } from './verbs.js';
 import { actionProblem } from './actions.js';
+import { behaviorsProblem } from './behaviors.js';
 import { POSES } from './poses.js';
 import { SOUNDS } from './audio/sfx.js';
 
@@ -79,9 +80,12 @@ import { SOUNDS } from './audio/sfx.js';
  *   fixedTools: string[],
  *   commands?: import('./io-program.js').Command[],
  *   resources?: import('./io-program.js').Resource[],
+ *   behaviors?: import('./behaviors.js').Behavior[],
+ *   adoptable?: boolean,
+ *   ending?: string,
  *   parts?: string[],
  *   triggers?: Trigger[],
- *   wiring?: { parts?: { id: string, part: string }[], links: { a: string, b: string, why?: string }[] },
+ *   wiring?: { parts?: { id: string, part: string, at?: { x: number, z: number }, rot?: number, seated?: boolean }[], links: { a: string, b: string, why?: string }[] },
  *   note?: Text,
  *   prompts: Prompts,
  *   firmware: string | null,
@@ -566,6 +570,14 @@ export function bodyProblem(body) {
     if (!CAPABILITIES.includes(capability)) return `${id}: unknown capability ${capability}`;
   }
   if (!Array.isArray(row?.actions)) return `${id}: no actions list`;
+
+  // Local behaviors are part of the body contract; validate them here so a
+  // manifest that loads is one the runtime can execute.
+  const behaviorProblem = behaviorsProblem(row.behaviors, {
+    resources: row.resources,
+    commands: row.commands,
+  });
+  if (behaviorProblem) return `${id}: ${behaviorProblem}`;
 
   /** @type {Set<string>} */
   const names = new Set();

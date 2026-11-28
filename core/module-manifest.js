@@ -29,7 +29,7 @@ export const MODULE_ID = new RegExp(
 
 /**
  * @typedef {{ en: string, zh: string }} Text
- * @typedef {{ id: string, part: string }} WiredPart
+ * @typedef {{ id: string, part: string, at?: { x: number, z: number }, rot?: number, seated?: boolean }} WiredPart
  * @typedef {{ a: string, b: string, why?: string }} Wire
  * @typedef {{ parts?: WiredPart[], links: Wire[] }} Wiring
  * @typedef {{

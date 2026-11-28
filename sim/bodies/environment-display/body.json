@@ -1,0 +1,44 @@
+{
+  "id": "environment-display",
+  "adoptable": false,
+  "label": { "en": "Environment display", "zh": "环境显示" },
+  "ending": "Draw the readings",
+  "parts": ["esp32", "bme280-i2c", "ssd1306"],
+  "resources": [
+    {
+      "kind": "device",
+      "name": "panel",
+      "driver": "bme280-display",
+      "part": "bme280-i2c",
+      "sda": 1,
+      "scl": 2,
+      "address": 119
+    }
+  ],
+  "commands": [
+    {
+      "name": "refresh",
+      "timeoutMs": 1000,
+      "run": [{ "op": "device.measure", "args": { "device": "panel" } }]
+    }
+  ],
+  "behaviors": [
+    { "on": { "everyMs": 1000 }, "run": [{ "command": "refresh" }] }
+  ],
+  "wiring": {
+    "parts": [
+      { "id": "env", "part": "bme280-i2c", "at": { "x": -25, "z": 40 }, "seated": false },
+      { "id": "oled", "part": "ssd1306", "at": { "x": 15, "z": 40 }, "seated": false }
+    ],
+    "links": [
+      { "a": "env:VIN", "b": "esp:3V3", "why": "Power the BME280 from 3.3 V so its pull-ups match the controller." },
+      { "a": "env:GND", "b": "esp:GND", "why": "Share ground between the sensor and controller." },
+      { "a": "env:SDI", "b": "esp:GPIO1", "why": "Connect the sensor data line to the I2C bus." },
+      { "a": "env:SCK", "b": "esp:GPIO2", "why": "Connect the sensor clock line to the I2C bus." },
+      { "a": "oled:VCC", "b": "esp:3V3", "why": "Power the display from 3.3 V." },
+      { "a": "oled:GND", "b": "esp:GND", "why": "Share ground with the display." },
+      { "a": "oled:SDA", "b": "esp:GPIO1", "why": "Put the display data line on the shared I2C bus." },
+      { "a": "oled:SCL", "b": "esp:GPIO2", "why": "Put the display clock line on the shared I2C bus." }
+    ]
+  }
+}

@@ -224,6 +224,26 @@ actually had (speaker crackle with the screen wired, stripes on the panel,
 "Invalid head of packet" while flashing, the board dialling an old address)
 as symptom, cause and fix.
 
+## Bridge (protocol 3)
+
+`components/body_logic` carries the C half of the bridge contract:
+`proto_parse` reads one `cmd` and `proto_result_value`/`proto_result_error`
+write the answer; `bridge_io` keeps the small pin allowlist and restores each
+output's `safe` on disconnect. It is host-tested in `test_proto`,
+`test_bridge_io` and `test_bridge_loop`, and `test/brain-messages.json` is
+judged by `core/protocol.js` too.
+
+The C half implements the pin ops only. The simulator's `device.sample`,
+`device.measure` and `device.write` are not in `bridge_io`; a real bridge would
+need a driver table for `bme280`, `hc-sr04`, `tb6612fng` and `ws2812`.
+
+What is not written is the ESP-IDF app that connects those calls to
+`driver/gpio.h`, Wi-Fi and the WebSocket link. The shipped body firmware still
+says protocol 2 and has no `cmd`, so a plugin body is still rejected with
+`bridge` on a real board. A bridge app must not initialise the body's motors,
+audio or screen: its GPIO allowlist is the permission slip, and a pin it does
+not name is refused.
+
 ## Tests
 
 `npm run firmware:test` builds `components/body_logic` (everything that does

@@ -12,7 +12,7 @@ import {
 import { createCheckApi, LAYERS } from './check-api.js';
 import { listFirmwareSources, readFirmwareSource } from './firmware-sources.js';
 import { TEMPLATES, bodyById, bodyProblem, pluginBodies, resolveBody } from '../core/bodies.js';
-import { adoptModule } from '../core/body-switch.js';
+import { adoptModule, switchBody } from '../core/body-switch.js';
 import { verbsOf } from '../core/actions.js';
 import { installModule } from './modules.js';
 import { BODIES_DIR } from './plugin-startup.js';
@@ -165,9 +165,11 @@ export function createAdminApi(opts) {
       if (typeof characterId !== 'string' || characterId === '') {
         return send(400, { error: 'characterId must be a string' });
       }
-      // Not registered: its examples would name commands nothing can run yet.
-      const moduleBody = bodyById(id);
-      if (!moduleBody) return send(404, { error: `no body called ${id}; install it first` });
+      // A built-in template is always here; a plugin or a module only after
+      // it was installed. Either way, the body must exist before anything is
+      // written to a character.
+      const targetBody = bodyById(id);
+      if (!targetBody) return send(404, { error: `no body called ${id}; install it first` });
       const character = characterById(characterId, opts.dir);
       if (!character) return send(404, { error: `no character called ${characterId}` });
 
@@ -178,15 +180,18 @@ export function createAdminApi(opts) {
       // inherited belongs to the template it is leaving, and `core/` is the one
       // rule for both callers. The panel's copy has to say that in words.
       const current = Array.isArray(patch.actions) ? patch.actions : [];
+      const isTemplate = (/** @type {string} */ name) => Object.hasOwn(TEMPLATES, name);
       /** @type {(actions: any[]) => string | null} */
       const accepts = (actions) => {
         const names = new Set(actions.map((action) => action.name));
-        const triggers = (moduleBody.triggers ?? []).filter((trigger) => names.has(trigger.action));
-        return bodyProblem({ ...moduleBody, actions, triggers });
+        const triggers = (targetBody.triggers ?? []).filter((trigger) => names.has(trigger.action));
+        return bodyProblem({ ...targetBody, actions, triggers });
       };
-      const { body, dropped } = adoptModule(
-        patch, id, current, examples, (name) => Object.hasOwn(TEMPLATES, name), accepts,
-      );
+      // A module brings example actions and writes them; a template or a body
+      // installed by hand has only its own actions to inherit.
+      const { body, dropped } = manifest
+        ? adoptModule(patch, id, current, examples, isTemplate, accepts)
+        : switchBody(patch, id, current, isTemplate, accepts);
       const refused = bodyProblem(resolveBody(body.id ?? patch.id ?? id, { ...patch, ...body }));
       if (refused) return send(400, { error: refused });
       try { patchCharacter(character.path, { config: { body } }); } catch (error) {

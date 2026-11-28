@@ -89,6 +89,6 @@ test('the OLED lesson and environment-display project validate', () => {
   const project = projectById('environment-display');
   assert.ok(project);
   assert.equal(project.links.length, 8);
-  const bench = project.steps.reduce(applyStep, startBench(emptyBench()));
+  const bench = { ...project.steps.reduce(applyStep, startBench(emptyBench())), usb: true };
   assert.deepEqual(connectionProgress(bench, project).map(link => link.status), Array(8).fill('complete'));
 });

@@ -38,7 +38,7 @@ export function demoSkips(needs, verbs, lang = 'en') {
  * or a missing name gives null, never a same-name guess. `verbs` is what the
  * bench asks about; `motion` stays because a brain that predates the field
  * still sends it.
- * @param {{ name: string, motion: string, verbs?: string[] }[]} list @param {string} name @param {boolean} remote
+ * @param {{ id?: string, name: string, motion: string, verbs?: string[] }[]} list @param {string} name @param {boolean} remote
  */
 export function lookupCharacter(list, name, remote) {
   if (remote) return null;

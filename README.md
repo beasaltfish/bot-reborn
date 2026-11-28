@@ -157,16 +157,16 @@ runs timed moves on a car's motor driver inputs (GPIO 4–7).
   board finds the brain on its own.
 - Turn **Barge-in off** for this character. The body has no echo cancellation,
   so it would hear itself and interrupt itself.
-- Driving a toy, open the character's **Basic → Advanced** and set **Body: Toy
-  on wheels**, wire the four motor inputs, and calibrate: `cal drive` if it goes
+- Driving a toy, open the character's **Body** tab and set **Toy on wheels**,
+  wire the four motor inputs, and calibrate: `cal drive` if it goes
   backwards, `cal steer` if it turns the wrong way. The board stops the car
   within a second of losing the brain.
 
 The phone body — an Android phone plus an FT232H, which is what drove the car
 in the demos above — still works, but it is not the direction here and the
 README does not teach it: [`docs/hardware.md`](docs/hardware.md) does. Without
-wheels, open the admin with `?bench`, open the character's **Basic →
-Advanced** and set **Body: Dry run**: the moves only reach the brain's log.
+wheels, open the admin with `?bench`, open the character's **Body** tab and set
+**Dry run**: the moves only reach the brain's log.
 **Voice only** is a robot that just talks.
 
 ## What runs where
@@ -198,8 +198,8 @@ something the workbench can teach and the board cannot run yet.
 A body is a template, not a firmware and not the character. There are five, in
 [`core/bodies.js`](core/bodies.js): voice only, a pet on a screen, a tarot
 reader, a toy on wheels, and a dry run kept out of the picker (open the admin
-with `?bench` to see it). The admin's **Basic → Advanced → Body** draws one card
-per template: the capabilities it has — hear, speak, show, move — the parts each
+with `?bench` to see it). The admin's **Body** tab draws one card per template:
+the capabilities it has — hear, speak, show, move — the parts each
 body costs, and the actions the model may call.
 
 | Template | Capabilities | Actions the model may call | Parts |
@@ -210,7 +210,7 @@ body costs, and the actions the model may call.
 | Toy on wheels (`toy`) | hear, speak, move | `move`, `cruise`, `stop`, `play_sound` | toy, ESP32 board, mic, amp |
 | Dry run (`dry-run`) | hear, speak, move | the toy's four | nothing: every verb is logged, never sent |
 
-A body's actions are yours to edit. **Basic → Advanced → Body** holds them as
+A body's actions are yours to edit. The **Body** tab holds them as
 JSON, and once you write your own the body keeps them instead of following the
 template; the model is then offered those actions, plus the fixed tools its
 template names (the language setting, for a body that speaks words), and the
@@ -237,17 +237,21 @@ a plugin body is turned away from it.
 [`docs/hardware/plugin-example.md`](docs/hardware/plugin-example.md) has the
 whole format.
 
-Some bodies also ship in the repository as **modules** — a plugin manifest plus
-the wiring that makes its pins true. The workbench reads that catalogue from the
-brain, so a module's project is in **Demo builds** whether or not it is
-installed: pick it and the project panel says which character wears that body and
-offers the one step that settles it (install it, or switch the character to it).
-The same is true of a body you saved yourself. Installing can also be done from
-the admin (**Advanced → Body → Modules**), where you confirm its example
-actions; they are what tells the model when to use it. Plug in USB to
-pair, say "turn on the light", and the bench LED lights. Only the LED module
-ships today. Installing again rewrites the commands, so a body that is already
-connected must pair again afterwards.
+Every build in **Demo builds** is a body. The four handwritten ones say which
+one they build — **Audio only** is Voice only, **Audio + screen** is Pet,
+**Audio + toy robot** is Toy, and **Tarot wand** is Tarot. The workbench reads
+the repository's modules from the brain too, so a module's project is in the
+same group whether or not it is installed. Pick a demo and the project panel
+says which character wears that body and offers the one step that settles it:
+install it, or switch the character to it. Pairing from a demo is part of the
+flow, not a prerequisite — the body question comes after the character is known.
+The same is true of a body you saved yourself.
+
+Installing a module can also be done from the admin (**Body → Modules**), where
+you confirm its example actions; they are what tells the model when to use it.
+Plug in USB to pair, say "turn on the light", and the bench LED lights. Only the
+LED module ships today. Installing again rewrites the commands, so a body that
+is already connected must pair again afterwards.
 
 A character file has no version number. An older brain reading a file written by
 a newer one silently drops the keys it does not know: a body's `actions`, for

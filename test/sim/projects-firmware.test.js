@@ -11,17 +11,27 @@ import { DEVICES } from '../../sim/devices/catalog.js';
 import { ownershipOf } from '../../sim/firmware/ownership.js';
 import { applyStep, startBench } from '../../sim/recipes.js';
 
-test('every project declares a firmware that exists, or null', () => {
+test('every project declares a flashable firmware or a simulation, and it exists', () => {
   for (const project of PROJECTS) {
-    if (project.firmware === null) continue;
-    assert.ok(FIRMWARES[project.firmware], `${project.id}: ${project.firmware}`);
+    if (project.firmware) assert.ok(FIRMWARES[project.firmware], `${project.id}: ${project.firmware}`);
+    if (project.simulation) assert.ok(FIRMWARES[project.simulation], `${project.id}: ${project.simulation}`);
+    // A project is one or the other; a simulation is not a flash target.
+    assert.ok(!(project.firmware && project.simulation), project.id);
   }
 });
 
-test('a firmware project has a flash step after its wiring', () => {
-  const steps = planSteps(/** @type {any} */ (planById('button-led')));
-  assert.equal(steps.at(-1)?.kind, 'flash');
-  assert.equal(/** @type {any} */ (steps.at(-1)).firmware, 'sketch-button-led');
+test('no project is a simulation after the device bodies landed', () => {
+  assert.deepEqual(PROJECTS.filter((entry) => entry.simulation).map((entry) => entry.id), []);
+  for (const entry of PROJECTS) {
+    assert.ok(!planSteps(/** @type {any} */ (planById(entry.id))).some((step) => step.kind === 'flash') || entry.firmware);
+  }
+});
+
+test('a bench body has no firmware and no flash step', () => {
+  const plan = /** @type {any} */ (planById('button-led'));
+  const steps = planSteps(plan);
+  assert.equal(plan.firmware, null);
+  assert.ok(!steps.some((step) => step.kind === 'flash'));
 });
 
 test('an independent LED is not firmware-unsupported', () => {
@@ -39,36 +49,69 @@ test('an independent LED is not firmware-unsupported', () => {
 test('the body firmware has no BME280 driver and says so', () => {
   let b = emptyBench();
   b = addPart(b, 'bme280-i2c', { x: 10, z: 30 }).bench;
-  const issues = checkResources(b, PROFILES[0], DEVICES, { ownership: ownershipOf(b), drivers: FIRMWARES['sketch-bme280'].drivers });
+  const issues = checkResources(b, PROFILES[0], DEVICES, { ownership: ownershipOf(b), drivers: FIRMWARES['sketch-env-display'].drivers });
   assert.ok(!issues.some((i) => i.code === 'firmware-unsupported' && i.instances.includes('env')));
   const body = checkResources(b, PROFILES[0], DEVICES, { ownership: ownershipOf(b), drivers: FIRMWARES.body.drivers });
   assert.ok(body.some((i) => i.code === 'firmware-unsupported' && i.instances.includes('env')));
 });
 
 import { evaluateBench } from '../../sim/devices/evaluate.js';
-import { partsView } from '../../sim/firmware/parts-view.js';
-import { SKETCHES } from '../../sim/firmware/sketches.js';
+import { createBenchIo } from '../../sim/bench-io.js';
+import { createBehaviorRuntime } from '../../sim/behavior-runtime.js';
+import { loadBenchBodies } from '../../sim/bench-bodies.js';
+import { expandCommand } from '../../core/io-program.js';
+import { gpioInputLevel } from '../../sim/firmware/sketch-context.js';
 
-test('button-led: a pressed button drives GPIO5 and the LED lights through the circuit', () => {
+test('button-led: its body behavior drives GPIO5 and the LED lights', async () => {
+  const body = loadBenchBodies().bodies['button-led'];
+  assert.ok(body);
   const bench = { ...planSteps(/** @type {any} */ (planById('button-led'))).reduce(applyStep, startBench(emptyBench())), usb: true };
-  const pressed = {
+  const withPressed = (/** @type {boolean} */ pressed) => ({
     ...bench,
-    placed: bench.placed.map((p) => (p.part === 'button-module' ? { ...p, properties: { ...p.properties, pressed: true } } : p)),
-  };
-  const ownership = ownershipOf(pressed);
-  const states = Object.fromEntries(Object.entries(ownership).filter(([, own]) => own === 'board').map(([id]) => [id, 'active']));
-  const evaluation = evaluateBench(pressed, { ownership, deviceStates: states }).engineering;
-  const gpio = /** @type {Record<string, string>} */ ({});
-  const sketch = SKETCHES.find((s) => s.id === 'sketch-button-led');
-  assert.ok(sketch);
-  /** @type {any} */ (sketch).tick({
-    parts: partsView(pressed, evaluation),
-    pin: (/** @type {string} */ name, /** @type {string} */ level) => { gpio[name] = level; },
-    measure() {}, device() {},
+    placed: bench.placed.map((p) => (p.part === 'button-module' ? { ...p, properties: { ...p.properties, pressed } } : p)),
   });
+  const ownership = ownershipOf(bench);
+  const states = Object.fromEntries(Object.entries(ownership).filter(([, own]) => own === 'board').map(([id]) => [id, 'active']));
+  /** @type {Record<string, 'high'|'low'>} */
+  const gpio = {};
+  let pressed = false;
+  const io = createBenchIo({
+    writePin: (pin, level) => { gpio[`GPIO${pin}`] = level ? 'high' : 'low'; },
+    readPin: () => 'LOW',
+  });
+  const read = (/** @type {string} */ name) => {
+    const resource = (body.resources ?? []).find((entry) => entry.name === name);
+    if (!resource || !Number.isInteger(resource.gpio)) return null;
+    const evaluation = evaluateBench(withPressed(pressed), { ownership, deviceStates: states, gpioOutputs: gpio }).engineering;
+    const level = gpioInputLevel(evaluation, /** @type {number} */ (resource.gpio));
+    return level === 'HIGH' ? 'high' : level === 'LOW' ? 'low' : null;
+  };
+  const runtime = createBehaviorRuntime({
+    body,
+    read,
+    run: async (/** @type {string} */ name) => {
+      const command = (body.commands ?? []).find((entry) => entry.name === name);
+      assert.ok(command);
+      const { ops, drop } = expandCommand(command, {}, body.resources ?? []);
+      assert.equal(drop, undefined);
+      for (const op of ops) await io.run(op);
+    },
+  });
+  runtime.start();
+  pressed = true;
+  runtime.tick();
+  await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(gpio.GPIO5, 'high');
-  const lit = evaluateBench(pressed, { ownership, deviceStates: states, gpioOutputs: /** @type {any} */ (gpio) }).engineering;
+  const lit = evaluateBench(withPressed(true), { ownership, deviceStates: states, gpioOutputs: gpio }).engineering;
   assert.equal(lit.leds.led.state, 'on');
+
+  pressed = false;
+  runtime.tick();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(gpio.GPIO5, 'low');
+  const dark = evaluateBench(withPressed(false), { ownership, deviceStates: states, gpioOutputs: gpio }).engineering;
+  assert.equal(dark.leds.led.state, 'off');
+  runtime.stop();
 });
 
 import { compile, createMachine } from '../../sim/firmware/lang/index.js';

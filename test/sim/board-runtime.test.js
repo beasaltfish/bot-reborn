@@ -120,8 +120,8 @@ test('stop closes the link and ignores a late welcome', (t) => {
 
 test('a flash session is a bootloader, not a boot', () => {
   const h = harness();
-  assert.equal(h.runtime.mode({ pendingFlash: 'sketch-bme280' }), 'bootloader');
-  assert.equal(h.runtime.mode({ blocked: true, pendingFlash: 'sketch-bme280' }), 'blocked');
+  assert.equal(h.runtime.mode({ pendingFlash: 'sketch-env-display' }), 'bootloader');
+  assert.equal(h.runtime.mode({ blocked: true, pendingFlash: 'sketch-env-display' }), 'blocked');
   assert.equal(h.runtime.mode({}), 'boot');
 });
 
@@ -218,12 +218,12 @@ test('a sketch firmware prints its own line, never the body boot', (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const lines = /** @type {string[]} */ ([]);
   const h = harness({
-    board: { ...board, firmware: 'sketch-button-led' },
+    board: { ...board, firmware: 'sketch-env-display' },
     onLine: (/** @type {string} */ l) => lines.push(l),
   });
   h.runtime.start();
   t.mock.timers.tick(2000);
-  assert.ok(lines.some((l) => l.startsWith('sketch-button-led:')));
+  assert.ok(lines.some((l) => l.startsWith('sketch-env-display:')));
   assert.ok(!lines.some((l) => l.startsWith('body: protocol')));
   assert.ok(!lines.some((l) => l.startsWith('not set up')));
   assert.deepEqual(h.links, []);

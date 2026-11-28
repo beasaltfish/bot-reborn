@@ -9,6 +9,7 @@ static const char *type_name(msg_type_t t) {
     case MSG_MOVE: return "move";       case MSG_STOP: return "stop";
     case MSG_HUSH: return "hush";       case MSG_STATE: return "state";
     case MSG_PING: return "ping";       case MSG_PONG: return "pong";
+    case MSG_CMD: return "cmd";
     default: return "null";
   }
 }
@@ -132,6 +133,52 @@ static void textasm_drops_an_overlong_frame(void) {
   CHECK_EQ_STR(t.buf, "{\"type\":\"stop\"}");
 }
 
+/* The bridge's one IO op: a pin number, a level and its safe (core/protocol.js). */
+static void reads_a_cmd(void) {
+  const char *write = "{\"type\":\"cmd\",\"id\":7,\"op\":\"pin.write\",\"args\":{\"pin\":5,\"level\":1},\"safe\":0,\"timeoutMs\":500}";
+  brain_msg_t m = proto_parse(write, strlen(write));
+  CHECK_EQ_INT(m.type, MSG_CMD);
+  CHECK_EQ_INT(m.cmd_id, 7);
+  CHECK_EQ_INT(m.cmd_pin, 5);
+  CHECK(m.cmd_write);
+  CHECK_EQ_INT(m.cmd_level, 1);
+  CHECK_EQ_INT(m.cmd_safe, 0);
+
+  const char *read = "{\"type\":\"cmd\",\"id\":8,\"op\":\"pin.read\",\"args\":{\"pin\":4}}";
+  brain_msg_t r = proto_parse(read, strlen(read));
+  CHECK_EQ_INT(r.type, MSG_CMD);
+  CHECK(!r.cmd_write);
+  CHECK_EQ_INT(r.cmd_pin, 4);
+
+  const char *bad[] = {
+    "{\"type\":\"cmd\",\"id\":0,\"op\":\"pin.read\",\"args\":{\"pin\":4}}",
+    "{\"type\":\"cmd\",\"id\":7,\"op\":\"pin.read\",\"args\":{\"pin\":49}}",
+    "{\"type\":\"cmd\",\"id\":7,\"op\":\"pin.write\",\"args\":{\"pin\":5,\"level\":2},\"safe\":0}",
+    "{\"type\":\"cmd\",\"id\":7,\"op\":\"pin.write\",\"args\":{\"pin\":5,\"level\":1},\"safe\":2}",
+    "{\"type\":\"cmd\",\"id\":7,\"op\":\"pwm\",\"args\":{\"pin\":5}}",
+  };
+  for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {
+    CHECK_EQ_INT(proto_parse(bad[i], strlen(bad[i])).type, MSG_NONE);
+  }
+}
+
+static void writes_a_result(void) {
+  char buf[128];
+  CHECK_EQ_INT(proto_result_value(buf, sizeof buf, 7, 1), (int)strlen("{\"type\":\"result\",\"id\":7,\"ok\":true,\"value\":1}"));
+  CHECK_EQ_STR(buf, "{\"type\":\"result\",\"id\":7,\"ok\":true,\"value\":1}");
+  CHECK_EQ_INT(proto_result_error(buf, sizeof buf, 8, "pin is not an output"),
+               (int)strlen("{\"type\":\"result\",\"id\":8,\"ok\":false,\"error\":\"pin is not an output\"}"));
+  CHECK_EQ_STR(buf, "{\"type\":\"result\",\"id\":8,\"ok\":false,\"error\":\"pin is not an output\"}");
+  CHECK_EQ_INT(proto_result_value(buf, 10, 7, 1), -1);
+}
+
+static void the_bridge_hello_is_protocol_three(void) {
+  char buf[96];
+  int n = proto_hello_version(buf, sizeof buf, "tok", PROTO_BRIDGE_VERSION);
+  CHECK_EQ_INT(n, (int)strlen("{\"type\":\"hello\",\"protocol\":3,\"token\":\"tok\"}"));
+  CHECK_EQ_STR(buf, "{\"type\":\"hello\",\"protocol\":3,\"token\":\"tok\"}");
+}
+
 /* The screen's hello is the body's, plus the size of the panel (server/screen-link.js). */
 static void the_screen_hello_carries_the_panel_size(void) {
   char buf[256];
@@ -143,6 +190,9 @@ static void the_screen_hello_carries_the_panel_size(void) {
 }
 
 int main(void) {
+  reads_a_cmd();
+  writes_a_result();
+  the_bridge_hello_is_protocol_three();
   the_screen_hello_carries_the_panel_size();
   agrees_with_the_shared_vectors();
   reads_a_moves_fields();

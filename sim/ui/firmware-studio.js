@@ -206,18 +206,28 @@ export function createFirmwareStudio(o) {
     const selection = state.selection ?? { kind: 'body' };
     const selectionId = selection.kind === 'sketch' ? selection.id : selection.kind;
     const isCustom = selection.kind === 'custom';
+    // A sketch is a bench-only behavior model, not firmware: no selector, no
+    // flash, no download. The drawer becomes a read-only view of the model.
+    const isSimulation = selection.kind === 'sketch';
     const custom = state.custom;
     const draft = custom?.draft ?? '';
     const flashed = custom?.flashed ?? '';
     const isDirty = Boolean(custom) && draft !== flashed;
 
-    boardLabel.textContent = `${simText(lang, 'studio.board')}: ${boardName}`;
+    title.textContent = isSimulation ? simText(lang, 'studio.simulation') : simText(lang, 'studio.title');
+    selector.hidden = isSimulation;
+    download.hidden = isSimulation;
+    copy.hidden = isSimulation;
+    flash.hidden = isSimulation;
+    boardLabel.textContent = isSimulation
+      ? `${simText(lang, 'studio.simulationModel')}: ${selectionId}`
+      : `${simText(lang, 'studio.board')}: ${boardName}`;
     boardMark.textContent = simText(lang, 'studio.onBoard');
-    boardMark.hidden = !boardFirmware || selectionId !== boardFirmware;
+    boardMark.hidden = isSimulation || !boardFirmware || selectionId !== boardFirmware;
     dirty.textContent = simText(lang, 'studio.notFlashed');
-    dirty.hidden = !(isCustom && isDirty);
+    dirty.hidden = isSimulation || !(isCustom && isDirty);
 
-    if ([...selector.options].some((option) => option.value === selectionId)) selector.value = selectionId;
+    if (!isSimulation && [...selector.options].some((option) => option.value === selectionId)) selector.value = selectionId;
 
     // The code area follows the selection; the timeline below stays on the
     // firmware the board actually runs (spec §11, selection ≠ board).
@@ -237,21 +247,23 @@ export function createFirmwareStudio(o) {
     seg.hidden = !isCustom;
     runTab.setAttribute('aria-pressed', String(state.view === 'run'));
     draftTab.setAttribute('aria-pressed', String(state.view === 'draft'));
-    runLabel.textContent = !isCustom
-      ? (selection.kind === 'sketch' ? simText(lang, 'studio.illustrative') : simText(lang, 'studio.realC'))
-      : simText(lang, 'studio.run');
+    runLabel.textContent = isSimulation
+      ? simText(lang, 'studio.simulationModel')
+      : !isCustom ? simText(lang, 'studio.realC') : simText(lang, 'studio.run');
 
     const boardKind = boardFirmware === 'custom' ? 'custom'
       : boardFirmware === 'body' ? 'body'
         : boardFirmware.startsWith('sketch-') ? 'sketch' : '';
-    note.textContent = boardKind === 'body' ? simText(lang, 'studio.bodyRun')
-      : boardKind === 'sketch' ? simText(lang, 'studio.sketchRun')
-        : boardKind === 'custom'
-          ? (flashed ? simText(lang, 'studio.timelineSource') : simText(lang, 'studio.customEmpty'))
-          : simText(lang, 'studio.emptyRun');
+    note.textContent = isSimulation
+      ? simText(lang, 'studio.simulationNote')
+      : boardKind === 'body' ? simText(lang, 'studio.bodyRun')
+        : boardKind === 'sketch' ? simText(lang, 'studio.sketchRun')
+          : boardKind === 'custom'
+            ? (flashed ? simText(lang, 'studio.timelineSource') : simText(lang, 'studio.customEmpty'))
+            : simText(lang, 'studio.emptyRun');
 
-    copy.disabled = !state.exampleV1;
-    flash.disabled = Boolean(state.errors?.length);
+    copy.disabled = isSimulation || !state.exampleV1;
+    flash.disabled = isSimulation || Boolean(state.errors?.length);
     flash.textContent = state.usb
       ? simText(lang, 'studio.flash')
       : `${simText(lang, 'studio.insertFlash')} ${selectionId}`;

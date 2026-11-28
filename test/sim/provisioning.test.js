@@ -50,7 +50,7 @@ test('an empty token is typed as a token command; a set token is not', () => {
 test('a device plan never types a token', () => {
   const device = planById('bme280-readings');
   assert.ok(device);
-  assert.equal(device.connection, null);
+  assert.equal(device.connection, 'bench');
   assert.deepEqual(provisionSteps(device, settings(), { token: TOKEN }).commands, []);
 });
 
@@ -141,7 +141,7 @@ test('a paired body, a remote brain, or another firmware gets nothing', () => {
   const list = [{ id: 'a', name: 'Asten', ready: true, online: false }];
   assert.equal(manualPairing({ firmware: 'body', settings: { token: 't' }, remote: false, characters: list }).show, false);
   assert.equal(manualPairing({ firmware: 'body', settings: {}, remote: true, characters: list }).show, false);
-  assert.equal(manualPairing({ firmware: 'sketch-sonar', settings: {}, remote: false, characters: list }).show, false);
+  assert.equal(manualPairing({ firmware: 'sketch-env-display', settings: {}, remote: false, characters: list }).show, false);
 });
 
 /** A serial panel whose picker state the tests can read back. */

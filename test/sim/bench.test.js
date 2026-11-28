@@ -246,8 +246,10 @@ test('a saved bench that is not a whole bench loads as an empty one', () => {
   const empty = emptyBench();
   /** @param {(b: Bench) => unknown} edit */
   const bad = (edit) => load(JSON.stringify(edit(structuredClone(empty))));
-  // No ESP32 to build the bench around, or two of them.
-  assert.deepEqual(bad((b) => ({ ...b, placed: b.placed.filter((p) => p.id !== 'esp') })), empty);
+  // A circuit lesson has no controller, and that is a whole bench: the LED
+  // loop and the power rail are built without one. Two controllers are not.
+  const circuit = { ...structuredClone(empty), placed: empty.placed.filter((p) => p.id !== 'esp') };
+  assert.deepEqual(load(JSON.stringify(circuit)), circuit);
   assert.deepEqual(bad((b) => ({ ...b, placed: [...b.placed, { ...b.placed[0], id: 'esp2' }] })), empty);
   // Duplicate ids, a part that does not exist, a floating pin.
   assert.deepEqual(bad((b) => ({ ...b, placed: [...b.placed, { ...b.placed[1] }] })), empty);

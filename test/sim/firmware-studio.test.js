@@ -59,7 +59,7 @@ test('the run note names the firmware the board actually runs', () => {
   try {
     studio.update(state({ board: { firmware: 'body' } }));
     assert.match(/** @type {any} */ (studio.element.querySelector('[data-role=run-note]')).textContent, /serial console/);
-    studio.update(state({ board: { firmware: 'sketch-sonar' } }));
+    studio.update(state({ board: { firmware: 'sketch-env-display' } }));
     assert.match(/** @type {any} */ (studio.element.querySelector('[data-role=run-note]')).textContent, /line-by-line/);
     studio.update(state({ board: { firmware: 'custom' }, custom: custom() }));
     assert.match(/** @type {any} */ (studio.element.querySelector('[data-role=run-note]')).textContent, /No flashed source/);
@@ -95,8 +95,6 @@ test('an unplugged flash button says it will insert the cable for the target', (
   try {
     studio.update(state({ selection: { kind: 'custom' }, usb: false }));
     assert.match(/** @type {any} */ (studio.element.querySelector('[data-role=flash]')).textContent, /Insert USB.*custom/);
-    studio.update(state({ selection: { kind: 'sketch', id: 'sketch-sonar' }, usb: false }));
-    assert.match(/** @type {any} */ (studio.element.querySelector('[data-role=flash]')).textContent, /sketch-sonar/);
     studio.update(state({ usb: true }));
     assert.equal(/** @type {any} */ (studio.element.querySelector('[data-role=flash]')).textContent, 'Flash');
   } finally { restore(); }
@@ -143,17 +141,28 @@ test('flash asks for the selected target, not a hardcoded custom', () => {
   } finally { restore(); }
 });
 
-test('copying a v1 example is enabled only for v1', () => {
-  /** @type {any[]} */ const copied = [];
-  const { studio, restore } = setup({ onCopyExample: (/** @type {any} */ s) => copied.push(s) });
+test('a simulation model is read-only: no selector, flash, download or copy', () => {
+  const { studio, restore } = setup();
   try {
-    studio.update(state({ selection: { kind: 'sketch', id: 'sketch-button-led' }, exampleV1: false }));
-    const copy = /** @type {HTMLButtonElement} */ (studio.element.querySelector('[data-role=copy]'));
-    assert.equal(copy.disabled, true);
-    studio.update(state({ exampleV1: true }));
-    assert.equal(copy.disabled, false);
-    copy.click();
-    assert.equal(copied.length, 1);
+    studio.update(state({
+      board: { firmware: 'sketch-env-display' },
+      selection: { kind: 'sketch', id: 'sketch-env-display' },
+      source: 'void loop() {}',
+      exampleV1: true,
+    }));
+    const selector = /** @type {HTMLSelectElement} */ (studio.element.querySelector('[data-role=selector]'));
+    assert.equal(selector.hidden, true);
+    for (const role of ['flash', 'download', 'copy']) {
+      assert.equal(/** @type {HTMLElement} */ (studio.element.querySelector(`[data-role=${role}]`)).hidden, true, role);
+    }
+    assert.match(studio.element.querySelector('h2')?.textContent ?? '', /Simulation/);
+    assert.match(/** @type {any} */ (studio.element.querySelector('[data-role=run-note]')).textContent, /not firmware/);
+    assert.equal(/** @type {any} */ (studio.element.querySelector('[data-role=board-mark]')).hidden, true);
+    assert.equal(/** @type {any} */ (studio.element.querySelector('[data-role=copy]')).disabled, true);
+
+    studio.update(state({ selection: { kind: 'body' }, board: { firmware: 'body' } }));
+    assert.equal(selector.hidden, false);
+    assert.equal(/** @type {HTMLElement} */ (studio.element.querySelector('[data-role=flash]')).hidden, false);
   } finally { restore(); }
 });
 

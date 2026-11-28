@@ -1,4 +1,4 @@
-// A command is a bounded program of IO primitives — six of them, closed. A
+// A command is a bounded program of IO primitives — seven of them, closed. A
 // plugin writes one as data; the brain checks it once at load and expands it on
 // every call; the simulator expands it the same way. The bridge never sees the
 // program, only single ops, so this module is the one place command semantics
@@ -38,19 +38,32 @@ import { expectationOf, fitsSchema } from './schema.js';
  *   gpio?: number,
  *   direction?: string,
  *   safe?: number,
+ *   driver?: string,
+ *   part?: string,
+ *   sda?: number,
+ *   scl?: number,
+ *   address?: number,
+ *   trig?: number,
+ *   echo?: number,
+ *   ain1?: number,
+ *   ain2?: number,
+ *   pwma?: number,
+ *   din?: number,
+ *   sig?: number,
  * }} Resource
  */
 
-/** The closed set. No plugin can add a seventh; the bridge implements these six. */
+/** The closed set. No plugin can add another; the bridge implements these. */
 export const IO_OPS = /** @type {const} */ ([
   'pin.write', 'pin.read', 'pwm', 'i2c.read', 'i2c.write', 'adc.read',
+  'device.sample', 'device.measure', 'device.write',
 ]);
 
 /** Ops that put a value on hardware, and so must be revocable with a `safe`. */
 const WRITES = new Set(['pin.write', 'pwm', 'i2c.write']);
 
 /** Ops that read a value back. Only the last step of a `returns` command may. */
-const READS = new Set(['pin.read', 'i2c.read', 'adc.read']);
+const READS = new Set(['pin.read', 'i2c.read', 'adc.read', 'device.sample']);
 
 /** The bound on how long one command may hold the body. */
 const TIMEOUT_MS = { min: 1, max: 5000 };
@@ -168,6 +181,14 @@ function checkStep(step, resources) {
   }
 
   const args = step.args ?? {};
+  // A device op names a semantic resource, not a pin: the driver decides what
+  // the sample means. The loader has already checked its driver and bus.
+  if (op === 'device.sample' || op === 'device.measure' || op === 'device.write') {
+    const device = resourceNamed(resources, args.device);
+    if (!device) return { problem: `device "${String(args.device)}" is not declared` };
+    if (device.kind !== 'device') return { problem: `resource "${device.name}" is not a device` };
+    return { resource: device };
+  }
   const target = targetOf(step, resources, WRITES.has(op));
   if ('problem' in target) return target;
 
@@ -385,6 +406,21 @@ export function expandCommand(command, given, resources) {
     const checked = checkStep(step, resources);
     if ('problem' in checked) return { ops: [], drop: checked.problem };
     const { resource } = checked;
+
+    // A device op has no pin and no substituted data in v1: it names the
+    // driver's resource. A sample's result is the command's value; a measure
+    // only asks the driver to take a reading.
+    if (op === 'device.sample' || op === 'device.measure') {
+      ops.push({ op, args: { device: resource.name }, timeoutMs: command.timeoutMs });
+      continue;
+    }
+    if (op === 'device.write') {
+      const { value: data, missing } = dataArgs(step.args ?? {}, values);
+      if (missing) return { ops: [], drop: `argument "${missing}" is missing` };
+      const { device: _device, ...payload } = data;
+      ops.push({ op, args: { device: resource.name, ...payload }, timeoutMs: command.timeoutMs });
+      continue;
+    }
 
     const { value: data, missing } = dataArgs(step.args ?? {}, values);
     if (missing) return { ops: [], drop: `argument "${missing}" is missing` };

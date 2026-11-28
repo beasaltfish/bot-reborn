@@ -1,0 +1,44 @@
+{
+  "id": "status-light-strip",
+  "adoptable": false,
+  "label": { "en": "Status light strip", "zh": "状态灯带" },
+  "ending": "Light the strip",
+  "parts": ["esp32", "ws2812-strip"],
+  "resources": [
+    {
+      "kind": "device",
+      "name": "strip",
+      "driver": "ws2812",
+      "part": "ws2812-strip",
+      "din": 6
+    }
+  ],
+  "commands": [
+    {
+      "name": "show",
+      "timeoutMs": 1000,
+      "run": [
+        {
+          "op": "device.write",
+          "args": {
+            "device": "strip",
+            "pixels": [[0, 160, 40], [0, 160, 40], [0, 160, 40], [0, 160, 40]]
+          }
+        }
+      ]
+    }
+  ],
+  "behaviors": [
+    { "on": { "everyMs": 1000 }, "run": [{ "command": "show" }] }
+  ],
+  "wiring": {
+    "parts": [
+      { "id": "strip", "part": "ws2812-strip", "at": { "x": -10, "z": 40 }, "seated": false }
+    ],
+    "links": [
+      { "a": "strip:5V", "b": "esp:5V", "why": "The strip needs a 5 V supply sized for its pixels." },
+      { "a": "strip:GND", "b": "esp:GND", "why": "Share ground with the controller." },
+      { "a": "strip:DIN", "b": "esp:GPIO6", "why": "DIN carries the one-wire data; 3.3 V logic may need shifting for a 5 V strip." }
+    ]
+  }
+}

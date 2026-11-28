@@ -5,11 +5,14 @@ A body plugin is a body the brain reads from disk: one directory per body under
 `body.json`. Only that file is read today; anything else in the directory is
 ignored.
 
-**A plugin is simulator-only.** The workbench answers `pin.write` and `pin.read`;
-`pwm` is expanded by the brain but has no pulse model on the bench yet, and a
-real board cannot run any of it: the ESP32 firmware speaks protocol 2 and has no
-`cmd`/`result`, so the brain turns a plugin body away from it with `bridge`. The
-bridge firmware (protocol 3) is not written yet.
+**A plugin is simulator-only for now.** The workbench answers `pin.write` and
+`pin.read`; `pwm` is expanded by the brain but has no pulse model on the bench
+yet. On the firmware side the protocol 3 contract exists and is host-tested:
+`body_logic` parses `cmd` and writes `result`, and `bridge_io` keeps the pin
+allowlist and restores each output's `safe` (`test_proto`, `test_bridge_io`,
+`test_bridge_loop`). What is missing is the ESP-IDF bridge app that carries
+those calls to `driver/gpio.h`, so the shipped body firmware still speaks
+protocol 2 and the brain turns a plugin body away from it with `bridge`.
 
 ## Install
 
@@ -42,7 +45,7 @@ Create `~/.bot-reborn/bodies/my-servo/body.json`:
 ```
 
 Then restart the brain: plugins are read once, at startup. The `my-servo` card
-appears under **Basic → Advanced → Body**, and its `point` command can be called
+appears in the **Body** tab, and its `point` command can be called
 from an action of your own.
 
 ## The fields
@@ -69,16 +72,19 @@ from an action of your own.
   command that ends in a read must also say `"returns": true`, and then it has
   exactly one read, last — that value is what the model reads back.
 
-### The six ops
+### The nine ops
 
 | op | args | on | notes |
 | --- | --- | --- | --- |
 | `pin.write` | `pin`, `level` | a gpio output | `level` is `0`, `1`, or `$argument` resolving to one of those. The op carries the output's `safe`. |
-| `pin.read` | `pin` | a gpio input | one level, `0` or `1`; the only kind of read that returns today. |
+| `pin.read` | `pin` | a gpio input | one level, `0` or `1`. |
 | `pwm` | `pin`, `value`, optional `map: { from: [a, b], to: [c, d] }` | a gpio output | `value` is a finite number or `$argument`; with a map the result is `us`, clamped to the `to` range. The bench answers `unavailable` — no pulse model yet. |
 | `i2c.write` | — | an `i2c` resource | refused at load: the i2c contract is not settled. |
 | `i2c.read` | — | an `i2c` resource | refused at load, same reason. |
 | `adc.read` | — | an `adc` resource | refused at load, same reason. |
+| `device.sample` | `device` | a `device` resource with a known driver | returns the driver's telemetry; `bme280`, `hc-sr04` and `sonar-servo` today. A real board needs the bridge's driver. |
+| `device.measure` | `device` | an input or composed device | triggers a reading; the sonar, and the composed `sonar-servo`/`bme280-display` refresh. A behavior can call it on a timer. |
+| `device.write` | `device`, driver payload | an output device | writes a motor command or a strip frame; `tb6612fng` and `ws2812` today. |
 
 A `pin` is the resource's `name`, never a `$argument`: the target is a static
 reference, checked once at load, not a value the model chooses.
@@ -136,8 +142,10 @@ that refuses the op) is text the model reads, not a failed turn.
   `unavailable`; this example loads and appears, and `point` does not move the
   servo. `i2c.*` and `adc.read` never get that far: a manifest that declares an
   `i2c`/`adc` resource is refused at load.
-- No real board runs plugins. The ESP32 firmware speaks protocol 2 and has no
-  `cmd`/`result`; the brain rejects a plugin body over it with `bridge`.
+- No shipped board runs plugins. The C side of protocol 3 (parse `cmd`, write
+  `result`, the pin allowlist and `safe`) is host-tested, but the ESP-IDF bridge
+  app that uses it is not built; the body firmware still speaks protocol 2 and
+  the brain rejects a plugin body over it with `bridge`.
 
 A refused plugin is one line in the brain's log at startup:
 `plugin <directory>: <what is wrong>`.
@@ -149,7 +157,7 @@ that make its pins true, in `modules/<id>/module.json`. `examples`, `wiring` and
 `note` are optional fields of any manifest: an install copies them into
 `bodies/<id>/body.json`, so an installed body still knows the bench it came
 from, and the workbench lists it as a project. Install one from the
-admin under **Advanced → Body → Modules** — no restart, the body is registered
+admin under **Body → Modules** — no restart, the body is registered
 as it installs. Then open `/sim/`, pick the module's project (the LED module is
 in the **Demo builds** group), and wire it as the steps say; the project starts
 from the Audio only bench and adds only the module's own parts. Plug in USB to

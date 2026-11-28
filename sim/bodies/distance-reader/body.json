@@ -1,0 +1,44 @@
+{
+  "id": "distance-reader",
+  "adoptable": false,
+  "label": { "en": "Distance reader", "zh": "测距" },
+  "ending": "Trigger a measurement",
+  "parts": ["esp32", "hc-sr04"],
+  "resources": [
+    {
+      "kind": "device",
+      "name": "sonar",
+      "driver": "hc-sr04",
+      "part": "hc-sr04",
+      "trig": 4,
+      "echo": 5
+    }
+  ],
+  "commands": [
+    {
+      "name": "measure",
+      "timeoutMs": 1000,
+      "run": [{ "op": "device.measure", "args": { "device": "sonar" } }]
+    },
+    {
+      "name": "distance",
+      "timeoutMs": 1000,
+      "returns": true,
+      "run": [{ "op": "device.sample", "args": { "device": "sonar" } }]
+    }
+  ],
+  "behaviors": [
+    { "on": { "everyMs": 1000 }, "run": [{ "command": "measure" }] }
+  ],
+  "wiring": {
+    "parts": [
+      { "id": "sonar", "part": "hc-sr04", "at": { "x": -15, "z": 40 }, "seated": false }
+    ],
+    "links": [
+      { "a": "sonar:VCC", "b": "esp:5V", "why": "The HC-SR04 needs a 5 V supply." },
+      { "a": "sonar:GND", "b": "esp:GND", "why": "Share ground with the controller." },
+      { "a": "sonar:TRIG", "b": "esp:GPIO4", "why": "TRIG is a controller output that starts a measurement." },
+      { "a": "sonar:ECHO", "b": "esp:GPIO5", "why": "ECHO returns a 5 V pulse; a 3.3 V GPIO needs level shifting." }
+    ]
+  }
+}

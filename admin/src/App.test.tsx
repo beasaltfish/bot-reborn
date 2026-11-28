@@ -90,6 +90,23 @@ describe('App', () => {
     location.hash = '';
   });
 
+  it('opens the tab a #character=...&tab= link names', async () => {
+    localStorage.setItem('admin.character', 'A');
+    location.hash = '#character=Petty&tab=body';
+    installFakeApi([{ name: 'A' }, { name: 'Petty' }]);
+    render(<App pollMs={50} renderEditor={slot} />);
+    expect(await screen.findByTestId('editor')).toHaveTextContent('Petty:body');
+    location.hash = '';
+  });
+
+  it('opens Basic when a link names a tab that does not exist', async () => {
+    location.hash = '#character=Petty&tab=nope';
+    installFakeApi([{ name: 'Petty' }]);
+    render(<App pollMs={50} renderEditor={slot} />);
+    expect(await screen.findByTestId('editor')).toHaveTextContent('Petty:basic');
+    location.hash = '';
+  });
+
   it('follows the link when the hash changes, and ignores an id that is not listed', async () => {
     localStorage.clear();
     location.hash = '';

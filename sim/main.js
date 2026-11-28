@@ -13,7 +13,7 @@ import { applyLedDamage, evaluateLedBench } from './electrical/led-bench.js';
 import { evaluateBench } from './devices/evaluate.js';
 import { ownershipOf } from './firmware/ownership.js';
 import { createRuntimePanel } from './ui/device-runtime-panel.js';
-import { planById, planOptionsFor, planSteps } from './plan.js';
+import { planById, planOptionsFor, planSteps, planUsesBoard } from './plan.js';
 import { previewText } from './project-preview.js';
 import { nextPlanHint } from './guidance.js';
 import { defaultStimuli, setStimulus } from './stimuli.js';
@@ -23,6 +23,7 @@ import { createShakeDetector } from '../core/shake-detector.js';
 import { PARTS } from './parts.js';
 import { spotForNew } from './snap.js';
 import { screenById } from '../core/screens.js';
+import { TEMPLATES } from '../core/bodies.js';
 import { diagnose } from './diagnose.js';
 import { liveDiagnosis } from './live-diagnosis.js';
 import { isViewPeekShortcut } from './view-shortcut.js';
@@ -30,10 +31,13 @@ import { faultText, adminLink, keepsFault } from './body.js';
 import { createBoardRuntime, bootMode } from './firmware/runtime.js';
 import { createBodyAudio } from './body.js';
 import { createBenchIo } from './bench-io.js';
+import { benchBodyById } from './bench-bodies.js';
+import { createBehaviorRuntime } from './behavior-runtime.js';
+import { expandCommand } from '../core/io-program.js';
 import { createBodyAudioLink } from './firmware/audio-link.js';
 import { demoSkips, lookupCharacter } from './capabilities.js';
-import { isRemote, provisionSteps, screenMismatch, createProvisioning, tokenCandidates, autoPairAllowed, paintManualPairing, bootManualPairing, showBootloader, offerTokenRepair } from './provision.js';
-import { firmwareById, firmwareFor, FIRMWARES } from './firmware/index.js';
+import { isRemote, provisionSteps, screenMismatch, createProvisioning, tokenCandidates, paintManualPairing, bootManualPairing, showBootloader, offerTokenRepair } from './provision.js';
+import { firmwareById, firmwareFor } from './firmware/index.js';
 import { ledPattern } from './firmware/led.js';
 import { createSerialPanel } from './ui/serial-panel.js';
 import { runFlash, canFlash } from './firmware/flash.js';
@@ -122,12 +126,13 @@ let boardRuntime = null;
 /** The bench's answer to `cmd` for the body on the link this boot. */
 /** @type {ReturnType<typeof createBenchIo> | null} */
 let benchIo = null;
+/** The bench body's local rules, when the active project is a body manifest. */
+/** @type {ReturnType<typeof createBehaviorRuntime> | null} */ let benchBehavior = null;
+/** @type {ReturnType<typeof setInterval> | null} */ let benchBehaviorTimer = null;
+/** @type {ReturnType<typeof createBenchIo> | null} */ let benchBehaviorIo = null;
 /** @type {import('./projects.js').Project | null} */
 /** @type {import('./plan.js').Plan|import('./projects.js').Project|null} */
 let activeProject = null;
-/** Whether the person has answered "which character wears this body" for the
- * demo on the bench. A body demo does not pair until they have. */
-let bodyDecided = false;
 // The catalogue is read once, before any panel exists: `projectById` and
 // `planById` are synchronous and the dropdown is built from them. A brain that
 // does not answer costs the modules, never the bench, and the project panel
@@ -135,8 +140,9 @@ let bodyDecided = false;
 const catalogue = await loadModuleCatalogue();
 if (!catalogue.failed) setModuleProjects(catalogue.modules);
 
-/** The bodies the brain already holds, by id. */
-const installedBodies = new Set(await loadBodyIds());
+/** The bodies the brain already holds, by id: the templates every brain has,
+ * plus the plugins and modules installed on this one. */
+const installedBodies = new Set([...Object.keys(TEMPLATES), ...(await loadBodyIds())]);
 /** The characters this brain offers; the paired one is found by name. */
 let characters = await loadCharacters();
 /** The character the board was paired with, as the brain named it. Never guessed
@@ -180,16 +186,40 @@ const panels = createPanels({
   // would settle it. Read from the brain, never guessed.
   bodyState: (id) => {
     const project = projectById(id);
+    const lang = document.documentElement.lang === 'zh' ? 'zh' : 'en';
+    const simulation = /** @type {any} */ (project)?.simulation;
+    if (typeof simulation === 'string') {
+      return {
+        text: simText(lang, 'bodyNext.simulationModel').replace('{name}', simulation),
+        button: null,
+        action: null,
+      };
+    }
     const body = /** @type {any} */ (project)?.body;
     if (!body) return null;
+    // A bench body runs its own rules; it is not a character to switch to.
+    if (/** @type {any} */ (project)?.connection === 'bench') {
+      const benchBody = benchBodyById(body);
+      if (!benchBody) return null;
+      return {
+        text: simText(lang, 'bodyNext.simulation').replace('{body}', benchBody.label[lang]),
+        button: null,
+        action: null,
+      };
+    }
+    // A module names its examples in the catalogue; a template's actions are
+    // its examples. Passing the names, not a count, lets the panel ask whether
+    // this character already carries *these* actions.
+    const listed = catalogue.modules.find((m) => m.id === body)?.examples;
+    const template = /** @type {Record<string, any>} */ (TEMPLATES)[body];
+    const examples = Array.isArray(listed) ? listed : (template?.actions ?? []);
     const step = nextStep({
       body,
       character: pairedCharacter(),
       installed: installedBodies.has(body),
-      examples: (catalogue.modules.find((m) => m.id === body)?.examples ?? []).length,
+      examples: examples.map((/** @type {any} */ action) => action.name),
     });
     if (!step) return null;
-    const lang = document.documentElement.lang === 'zh' ? 'zh' : 'en';
     const text = simText(lang, step.key).replace('{name}', String(step.params.name ?? '')).replace('{n}', String(step.params.n ?? 0));
     if (!step.action) return { text, button: null, action: null };
     const button = simText(lang, `bodyNext.${step.action}`).replace('{name}', String(step.params.name ?? ''));
@@ -214,7 +244,6 @@ const panels = createPanels({
       });
       const answer = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error('adopt');
-      bodyDecided = true;
       pairedCharacterId = character.id;
       characters = await loadCharacters();
       panels.refreshProject();
@@ -274,7 +303,7 @@ const panels = createPanels({
   start: (id, mode, hooks, speed) => { unlockAudio(); return startPlan(id, planOptionsFor(bench), mode, hooks, speed); },
   build: (id, options) => { unlockAudio(); return startPlan(id, options); },
   planOptions: options => planOptionsFor(bench, options),
-  leaveProject: () => { activeProject = null; bodyDecided = false; },
+  leaveProject: () => { stopBenchBehavior(); activeProject = null; },
   speed: speedFactor(Number(read(SPEED_KEY))),
   firmwareDrivers: () => firmwareFor(bench.board)?.drivers ?? null,
   bench: () => bench,
@@ -351,7 +380,7 @@ function refreshDeviceVisuals() {
   const engineering = evaluateBench(bench, {
     stimuli,
     ownership: ownershipOf(bench),
-    deviceStates: boardRuntime?.deviceStates() ?? {},
+    deviceStates: deviceStatesFor(),
     gpioOutputs,
     ioPins,
     firmware: firmwareFor(bench.board),
@@ -405,7 +434,7 @@ function setBench(b) {
   if (openPart) {
     const selected = bench.placed.find(p => p.id === openPart);
     const sensor = selected?.part === 'bme280-i2c'
-      ? evaluateBench(bench, { stimuli: environment, firmware: firmwareFor(bench.board), ownership: ownershipOf(bench), deviceStates: boardRuntime?.deviceStates() ?? {}, gpioOutputs, ioPins }).engineering.bme280[openPart]
+      ? evaluateBench(bench, { stimuli: environment, firmware: firmwareFor(bench.board), ownership: ownershipOf(bench), deviceStates: deviceStatesFor(), gpioOutputs, ioPins }).engineering.bme280[openPart]
       : undefined;
     panels.refreshPart(openPart, selected?.properties ?? null, sensor, environment);
   }
@@ -485,7 +514,7 @@ const hands = attachInteraction(world, () => bench, setBench, {
         stimuli: environment,
         firmware: firmwareFor(bench.board),
         ownership: ownershipOf(bench),
-        deviceStates: boardRuntime?.deviceStates() ?? {},
+        deviceStates: deviceStatesFor(),
         gpioOutputs,
         ioPins,
       }).engineering.bme280[id], environment,
@@ -496,7 +525,7 @@ const hands = attachInteraction(world, () => bench, setBench, {
           stimuli: environment,
           firmware: firmwareFor(bench.board),
           ownership: ownershipOf(bench),
-          deviceStates: boardRuntime?.deviceStates() ?? {},
+          deviceStates: deviceStatesFor(),
           gpioOutputs,
           ioPins,
         }).engineering.bme280[id];
@@ -533,9 +562,10 @@ let studioDraftTimer;
 
 const studio = createFirmwareStudio({
   lang: document.documentElement.lang === 'zh' ? 'zh' : 'en',
+  // Only flashable programs are firmware. A sketch is a bench model; the
+  // studio shows it read-only when the board's state is one.
   firmwares: [
     { id: 'body', name: 'body' },
-    ...Object.keys(FIRMWARES).filter((id) => id.startsWith('sketch-')).map((id) => ({ id, name: id })),
     { id: 'custom', name: simText(document.documentElement.lang, 'studio.mine') },
   ],
   onSelect: (selection) => { studioSelection = selection; studioErrors = []; void loadStudioSource(selection); updateStudio(); },
@@ -563,6 +593,18 @@ studioTab.addEventListener('click', () => {
 document.body.append(studioTab);
 
 function updateStudio() {
+  // No controller means no firmware drawer. A bench body runs its own rules,
+  // and a sketch project is a simulation model, not a flashable program.
+  const hasBoard = bench.placed.some((part) => part.part === 'esp32');
+  const benchProject = activeProject?.connection === 'bench';
+  const sketchProject = Boolean(activeProject?.simulation);
+  const sketchBoard = String(bench.board.firmware ?? '').startsWith('sketch-');
+  studioTab.hidden = !hasBoard || benchProject;
+  studioTab.textContent = simText(
+    document.documentElement.lang,
+    sketchProject || sketchBoard ? 'studio.simulation' : 'studio.title',
+  );
+  if (studioTab.hidden && !studio.element.hidden) studio.close();
   // The runtime panel keeps its corner; the drawer stops above it rather than
   // covering it (spec §11).
   const runtimeElement = /** @type {HTMLElement} */ (runtimePanel.element);
@@ -991,6 +1033,201 @@ function unlockAudio() {
  *   firmware that is already there. `keepSelection` leaves the studio choice
  *   alone across a reboot.
  */
+/**
+ * Stop the bench body's rule engine. The IO adapter restores every pin it
+ * wrote to its `safe` value; a body that goes away must not leave an output on.
+ */
+function stopBenchBehavior() {
+  if (benchBehaviorTimer) clearInterval(benchBehaviorTimer);
+  benchBehaviorTimer = null;
+  benchBehavior?.stop();
+  benchBehavior = null;
+  void benchBehaviorIo?.disconnect();
+  benchBehaviorIo = null;
+}
+
+/**
+ * Which devices the active page treats as initialised. A firmware body says so
+ * through its board runtime; a bench body has no firmware, so every device its
+ * manifest placed is ready (the body's resources are its permission slip).
+ * @returns {Record<string, string>}
+ */
+function deviceStatesFor() {
+  if (boardRuntime) return boardRuntime.deviceStates();
+  if (activeProject?.connection === 'bench') {
+    return Object.fromEntries(
+      bench.placed
+        .filter((part) => part.part !== 'esp32')
+        .map((part) => [part.id, 'active']),
+    );
+  }
+  return {};
+}
+
+/**
+ * The bench's device drivers, for a `device.sample` op. The resource name is
+ * the part id the lesson placed; a name with no model is a refusal, not a
+ * silent zero.
+ * @param {string} device
+ * @param {import('../core/bodies.js').Body | null} [body]
+ */
+function sampleBenchDevice(device, body = null) {
+  const resource = body?.resources?.find((entry) => entry.name === device);
+  if (resource?.driver === 'sonar-servo' || resource?.driver === 'hc-sr04') {
+    const part = bench.placed.find((entry) => entry.part === 'hc-sr04');
+    if (!part) throw new Error(`no device model for ${device}`);
+    const evaluation = evaluateBench(bench, {
+      deviceStates: deviceStatesFor(),
+      gpioOutputs,
+      ioPins,
+      stimuli: simulationStimuli(),
+    }).engineering;
+    return /** @type {any} */ (evaluation).digital?.[part.id];
+  }
+  const evaluation = evaluateBench(bench, {
+    ownership: ownershipOf(bench),
+    deviceStates: deviceStatesFor(),
+    gpioOutputs,
+    ioPins,
+    stimuli: simulationStimuli(),
+  }).engineering;
+  const engineering = /** @type {any} */ (evaluation);
+  const part = engineering.bme280?.[device] ?? engineering.digital?.[device] ?? engineering.parts?.[device];
+  if (!part) throw new Error(`no device model for ${device}`);
+  return part;
+}
+
+/**
+ * A driver's measure op. The plain sonar triggers; the composed drivers also
+ * write what they read: the servo follows the distance, the display shows the
+ * environment. The part ids come from the wiring the lesson placed.
+ * @param {string} device
+ * @param {import('../core/bodies.js').Body | null} [body]
+ */
+function measureBenchDevice(device, body = null) {
+  const resource = body?.resources?.find((entry) => entry.name === device);
+  const engineering = () => evaluateBench(bench, {
+    deviceStates: deviceStatesFor(),
+    gpioOutputs,
+    ioPins,
+    stimuli: simulationStimuli(),
+  }).engineering;
+  if (resource?.driver === 'sonar-servo') {
+    const sonarPart = bench.placed.find((entry) => entry.part === 'hc-sr04');
+    const servoPart = bench.placed.find((entry) => entry.part === 'sg90');
+    if (sonarPart) sonar = { measure: true, distanceCm: sonar?.distanceCm ?? 100 };
+    if (servoPart) {
+      const distance = sonarPart
+        ? (/** @type {any} */ (engineering()).digital?.[sonarPart.id]?.distanceCm ?? 100)
+        : 100;
+      runtime.servo[servoPart.id] = { angle: distance < 20 ? 90 : 0 };
+      refreshDeviceVisuals();
+    }
+    return;
+  }
+  if (resource?.driver === 'bme280-display') {
+    const display = bench.placed.find((entry) => entry.part === 'ssd1306');
+    const env = Object.values(/** @type {any} */ (engineering()).bme280 ?? {})[0];
+    if (display && env) {
+      runtime.display[display.id] = {
+        lines: [
+          `T ${Number(env.temperatureC).toFixed(1)} C`,
+          `H ${Math.round(Number(env.humidityPct))} %`,
+          `P ${Math.round(Number(env.pressureHpa))} HPA`,
+        ],
+      };
+      refreshDeviceVisuals();
+    }
+    return;
+  }
+  const part = bench.placed.find((entry) => entry.id === device);
+  if (!part) throw new Error(`no device model for ${device}`);
+  if (part.part === 'hc-sr04') sonar = { measure: true, distanceCm: sonar?.distanceCm ?? 100 };
+}
+
+/**
+ * A driver's write op: a motor command or a strip frame. The device name is
+ * the part id the lesson placed; an actuator with no model is a refusal.
+ * @param {string} device
+ * @param {Record<string, unknown>} payload
+ * @param {import('../core/bodies.js').Body | null} [body]
+ */
+function writeBenchDevice(device, payload, body = null) {
+  const part = bench.placed.find((entry) => entry.id === device);
+  if (!part) throw new Error(`no device model for ${device}`);
+  if (part.part === 'tb6612fng') {
+    runtime.motor[device] = {
+      direction: payload.direction,
+      speed: Number(payload.speed ?? 0),
+      load: payload.load,
+    };
+  } else if (part.part === 'ws2812-strip') {
+    runtime.strip[device] = { pixels: payload.pixels };
+  } else {
+    throw new Error(`no write model for ${device}`);
+  }
+  refreshDeviceVisuals();
+}
+
+/**
+ * Run a bench body's `behaviors` against the live bench. No brain, no token,
+ * no firmware: the manifest's commands are the whole program.
+ * @param {import('../core/bodies.js').Body} body
+ */
+function startBenchBehavior(body) {
+  stopBenchBehavior();
+  const resources = new Map((body.resources ?? []).map((resource) => [resource.name, resource]));
+  const io = createBenchIo({
+    writePin: (pin, level) => {
+      gpioOutputs[`GPIO${pin}`] = level ? 'high' : 'low';
+      ioPins.add(pin);
+      refreshDeviceVisuals();
+    },
+    readPin: (pin) => {
+      const evaluation = evaluateBench(bench, {
+        ownership: ownershipOf(bench),
+        gpioOutputs,
+        ioPins,
+        stimuli: simulationStimuli(),
+      }).engineering;
+      return gpioInputLevel(evaluation, pin) ?? 'LOW';
+    },
+    sampleDevice: (device) => sampleBenchDevice(device, body),
+    measureDevice: (device) => measureBenchDevice(device, body),
+    writeDevice: (device, payload) => writeBenchDevice(device, payload, body),
+  });
+  benchBehaviorIo = io;
+  benchBehavior = createBehaviorRuntime({
+    body,
+    read: (name) => {
+      const gpio = resources.get(name)?.gpio;
+      if (!Number.isInteger(gpio)) return null;
+      const evaluation = evaluateBench(bench, {
+        ownership: ownershipOf(bench),
+        gpioOutputs,
+        ioPins,
+        stimuli: simulationStimuli(),
+      }).engineering;
+      const level = gpioInputLevel(evaluation, /** @type {number} */ (gpio));
+      return level === 'HIGH' ? 'high' : level === 'LOW' ? 'low' : null;
+    },
+    run: async (name) => {
+      const command = (body.commands ?? []).find((entry) => entry.name === name);
+      if (!command) throw new Error(`no command called ${name}`);
+      const { ops, drop } = expandCommand(command, {}, body.resources ?? []);
+      if (drop) throw new Error(drop);
+      for (const op of ops) await io.run(op);
+      refreshDeviceVisuals();
+    },
+    onError: (error) => serial.append(`behavior: ${error instanceof Error ? error.message : String(error)}`),
+  });
+  benchBehavior.start();
+  benchBehaviorTimer = setInterval(() => benchBehavior?.tick(), 20);
+}
+
+/**
+ * @param {{ ending?: string | null, pendingFlash?: string | null, keepSelection?: boolean }} [meta]
+ */
 async function plugIn(meta = {}) {
   stopBoard();
   recipeOn = null;
@@ -1057,6 +1294,21 @@ async function plugIn(meta = {}) {
     return;
   }
 
+  // A bench body is not a firmware body: its manifest's behaviors run here,
+  // with no brain link and no token. It still needs the board's 3.3 V, so this
+  // branch is reached only after USB made `outcome.esp === 'ok'`.
+  const benchBody = activeProject?.connection === 'bench' && activeProject.body
+    ? benchBodyById(activeProject.body)
+    : null;
+  if (benchBody) {
+    startBenchBehavior(benchBody);
+    line.ending = meta.ending ?? benchBody.ending ?? null;
+    serial.show(false);
+    showLine();
+    updateStudio();
+    return;
+  }
+
   const firmware = firmwareFor(bench.board);
   if (!firmware) {
     panels.status(simText(document.documentElement.lang, 'board.noFirmware'));
@@ -1098,13 +1350,16 @@ async function plugIn(meta = {}) {
       const evaluation = evaluateBench(bench, {
         firmware: firmwareFor(bench.board),
         ownership: ownershipOf(bench),
-        deviceStates: boardRuntime?.deviceStates() ?? {},
+        deviceStates: deviceStatesFor(),
         gpioOutputs,
         ioPins,
         stimuli: simulationStimuli(),
       }).engineering;
       return gpioInputLevel(evaluation, pin) ?? 'LOW';
     },
+    sampleDevice: sampleBenchDevice,
+    measureDevice: measureBenchDevice,
+    writeDevice: writeBenchDevice,
   });
   boardRuntime = createBoardRuntime({
     board: bench.board,
@@ -1156,7 +1411,7 @@ async function plugIn(meta = {}) {
     audio: bodyAudioLink ?? undefined,
     sketch: {
       ctx: () => {
-        const deviceStates = boardRuntime?.deviceStates() ?? {};
+        const deviceStates = deviceStatesFor();
         const evaluation = evaluateBench(bench, { firmware: firmwareFor(bench.board), ownership: ownershipOf(bench), deviceStates, gpioOutputs, ioPins, stimuli: simulationStimuli() }).engineering;
         return createSketchContext({
           bench, evaluation, deviceStates, runtime,
@@ -1215,9 +1470,18 @@ async function plugIn(meta = {}) {
         const name = text.slice('welcomed as '.length);
         line.who = name;
         const needs = activeProject?.needs ?? [];
-        if (needs.length) void fetch('/api/characters').then((r) => r.json()).then((list) => {
+        // Remember which character the board became. The manual picker types a
+        // token and never tells this page the id, and a body demo needs the id
+        // to ask its body question. The list is re-read rather than guessed.
+        void fetch('/api/characters').then((r) => r.json()).then((list) => {
+          if (!Array.isArray(list)) return;
           const remote = isRemote(bench.board.settings.url, location.origin);
           const character = lookupCharacter(list, name, remote);
+          if (character?.id) {
+            pairedCharacterId = character.id;
+            characters = list;
+            panels.refreshProject();
+          }
           const zh = document.documentElement.lang === 'zh';
           for (const skip of demoSkips(needs, character?.verbs ?? [], zh ? 'zh' : 'en')) serial.append(skip.text);
         }).catch(() => {});
@@ -1254,9 +1518,10 @@ async function plugIn(meta = {}) {
     void loadStudioSource(studioSelection);
   }
   updateStudio();
-  // A demo that names its body asks a question before pairing; the panel's
-  // button is the answer, and pairing before it would lock in the wrong body.
-  if (firmware.link && autoPairAllowed(activeProject, bodyDecided)) void maybeProvision(mine);
+  // Pairing chooses the character; it never writes the body. A demo that names
+  // its body asks the body question afterwards, once there is a name to ask
+  // about, so pairing first is what makes that question answerable at all.
+  if (firmware.link) void maybeProvision(mine);
   // The firmware's own IMU check is the gate: no MPU-6050 awake, no shake sent.
   const imu = bench.placed.find((part) => part.part === 'mpu6050');
   if (firmware.link && imu && /** @type {any} */ (outcome.parts)?.[imu.id]?.awake === true) {
@@ -1467,6 +1732,7 @@ async function maybeProvision(mine) {
 }
 
 function unplug() {
+  stopBenchBehavior();
   hands.highlightPoints([]);
   gpioOutputs = {};
   warnedGpioReads = new Set();
@@ -1509,6 +1775,7 @@ function reset() {
     ? '重置工作台会换一块新板：接线、固件、ssid/pass/token/url/屏幕、校准和损坏都会被清除。继续？'
     : 'Reset bench replaces the board: wiring, firmware, ssid/pass/token/url/screen, calibration and any damage are cleared. Continue?');
   if (!ok) return;
+  stopBenchBehavior();
   activeProject = null;
   panels.selectProject('');
   hands.highlightGuidance([]);
@@ -1594,6 +1861,8 @@ export function startRun(recipeId, screenId, mode, hooks = {}, wand = false, spe
 export function startPlan(planId, options = {}, mode = 'build', hooks = {}, speed = 1) {
   const plan = planById(planId, options);
   if (!plan || running) return null;
+  stopBenchBehavior();
+  const board = planUsesBoard(plan);
   running = true;
   planMode = mode === 'build' ? 'build' : mode === 'step' ? 'step' : 'watch';
   provisionedFor = null;
@@ -1607,19 +1876,26 @@ export function startPlan(planId, options = {}, mode = 'build', hooks = {}, spee
   const hasWork = bench.boards.length > 0 || bench.wires.length > 0 || bench.placed.length > 1;
   if (hasWork && !keptBench(store())) keepBench(store(), bench);
   const steps = planSteps(plan);
-  const demoSteps = plan.id === 'tarot'
-    ? [...steps, /** @type {import('./recipes.js').Step} */ ({ kind: 'usb', say: 'Plug in USB and shake the wand.' })]
-    : steps;
+  const demoSteps = plan.connection === 'bench' || plan.simulation
+    ? [...steps, /** @type {import('./recipes.js').Step} */ ({ kind: 'usb', say: 'Plug in USB.' })]
+    : plan.id === 'tarot'
+      ? [...steps, /** @type {import('./recipes.js').Step} */ ({ kind: 'usb', say: 'Plug in USB and shake the wand.' })]
+      : steps;
   recipeOn = plan.legacy
     ? { need: /** @type {any} */ (plan.needs), ending: /** @type {any} */ (plan.ending) }
     : plan.id === 'tarot' ? { need: 'tarot', ending: 'Shake the wand' } : null;
   activeProject = plan;
   panels.selectProject(plan.id);
-  setBench(startBench(bench));
+  const reset = startBench(bench, { board });
+  // A simulation model is set on the board state, not flashed: the runner
+  // still needs to know which model to tick.
+  if (plan.simulation) reset.board = { ...reset.board, firmware: plan.simulation };
+  setBench(reset);
   world.view(view, steps.reduce(applyStep, bench));
   if (mode === 'build') {
-    let built = startBench(bench);
+    let built = startBench(bench, { board });
     for (const step of steps) if (step.kind !== 'usb' && step.kind !== 'flash') built = applyStep(built, step);
+    if (plan.simulation) built = { ...built, board: { ...built.board, firmware: plan.simulation } };
     setBench(built);
     world.view(view, built);
     const firmwareId = plan.firmware;
@@ -1627,6 +1903,11 @@ export function startPlan(planId, options = {}, mode = 'build', hooks = {}, spee
       await usb.insert({ instant: true, pendingFlash: firmwareId });
       await flashFirmwareNow(firmwareId);
     })();
+    else if (board && (plan.connection === 'bench' || plan.simulation)) {
+      // No flash, but the board still needs power: insert USB so `plugIn`
+      // starts the simulation model or the bench body's behavior engine.
+      void usb.insert({ instant: true });
+    }
     running = false;
     runner = null;
     const lang = document.documentElement.lang === 'zh' ? 'zh' : 'en';

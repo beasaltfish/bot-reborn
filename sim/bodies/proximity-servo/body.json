@@ -1,0 +1,43 @@
+{
+  "id": "proximity-servo",
+  "adoptable": false,
+  "label": { "en": "Proximity servo", "zh": "接近舵机" },
+  "ending": "Move the servo with distance",
+  "parts": ["esp32", "hc-sr04", "sg90"],
+  "resources": [
+    {
+      "kind": "device",
+      "name": "probe",
+      "driver": "sonar-servo",
+      "part": "hc-sr04",
+      "trig": 4,
+      "echo": 5,
+      "sig": 6
+    }
+  ],
+  "commands": [
+    {
+      "name": "sweep",
+      "timeoutMs": 1000,
+      "run": [{ "op": "device.measure", "args": { "device": "probe" } }]
+    }
+  ],
+  "behaviors": [
+    { "on": { "everyMs": 500 }, "run": [{ "command": "sweep" }] }
+  ],
+  "wiring": {
+    "parts": [
+      { "id": "sonar", "part": "hc-sr04", "at": { "x": -30, "z": 40 }, "seated": false },
+      { "id": "servo", "part": "sg90", "at": { "x": 10, "z": 40 }, "seated": false }
+    ],
+    "links": [
+      { "a": "sonar:VCC", "b": "esp:5V", "why": "The HC-SR04 needs a 5 V supply." },
+      { "a": "sonar:GND", "b": "esp:GND", "why": "Share the sensor ground." },
+      { "a": "sonar:TRIG", "b": "esp:GPIO4", "why": "TRIG starts a measurement." },
+      { "a": "sonar:ECHO", "b": "esp:GPIO5", "why": "ECHO needs level shifting before this 3.3 V input." },
+      { "a": "servo:VCC", "b": "esp:5V", "why": "Power the servo from a current-capable 5 V rail." },
+      { "a": "servo:GND", "b": "esp:GND", "why": "The servo and controller must share ground." },
+      { "a": "servo:SIG", "b": "esp:GPIO6", "why": "Drive the servo signal from a PWM-capable GPIO." }
+    ]
+  }
+}

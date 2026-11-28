@@ -123,10 +123,11 @@ test('the button and sonar lessons and projects validate', () => {
   const button = projectById('button-led');
   assert.ok(button);
   assert.equal(button.links.length, 6);
-  const buttonBenchDone = button.steps.reduce(applyStep, startBench(emptyBench()));
+  const buttonBenchDone = { ...button.steps.reduce(applyStep, startBench(emptyBench())), usb: true };
   assert.deepEqual(connectionProgress(buttonBenchDone, button).map(link => link.status), Array(6).fill('complete'));
   const sonar = projectById('distance-reader');
   assert.ok(sonar);
   assert.equal(sonar.links.length, 4);
-  assert.ok(sonar.steps.some(step => step.kind === 'usb'));
+  // USB is the runner's step, not the project's.
+  assert.ok(!sonar.steps.some(step => step.kind === 'usb'));
 });

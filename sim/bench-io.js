@@ -16,6 +16,9 @@
  *   pins?: Record<string, number>,
  *   writePin?: (pin: number, level: 0 | 1) => void,
  *   readPin?: (pin: number) => unknown,
+ *   sampleDevice?: (device: string) => unknown,
+ *   measureDevice?: (device: string) => void,
+ *   writeDevice?: (device: string, payload: Record<string, unknown>) => void,
  * }} BenchIoHooks
  */
 
@@ -97,6 +100,33 @@ export function createBenchIo(hooks = {}) {
       case 'pin.read': {
         const pin = integerArg(Number(op.args?.pin), 'pin');
         return bit(readPin(pin));
+      }
+      case 'device.sample': {
+        const device = op.args?.device;
+        if (typeof device !== 'string' || device === '') {
+          throw new Error('bad-args: device must be a name');
+        }
+        if (!hooks.sampleDevice) throw new Error('unavailable: no device model on this bench');
+        return hooks.sampleDevice(device);
+      }
+      case 'device.measure': {
+        const device = op.args?.device;
+        if (typeof device !== 'string' || device === '') {
+          throw new Error('bad-args: device must be a name');
+        }
+        if (!hooks.measureDevice) throw new Error('unavailable: no device model on this bench');
+        hooks.measureDevice(device);
+        return null;
+      }
+      case 'device.write': {
+        const device = op.args?.device;
+        if (typeof device !== 'string' || device === '') {
+          throw new Error('bad-args: device must be a name');
+        }
+        if (!hooks.writeDevice) throw new Error('unavailable: no device model on this bench');
+        const { device: _device, ...payload } = op.args ?? {};
+        hooks.writeDevice(device, /** @type {Record<string, unknown>} */ (payload));
+        return null;
       }
       default:
         throw new Error(`unavailable: op "${String(op?.op)}" is not on this bench`);

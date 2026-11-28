@@ -28,15 +28,17 @@ import { wireEnd } from './snap.js';
 /**
  * What a recipe is: `needs` says what the character has to be able to do
  * ('pose' = it has a screen to show, 'move' = it drives), `ending` is what to say
- * to try the finished bench.
- * @typedef {{ id: 'audio' | 'screen' | 'toy', name: string, needs: string[], connection: 'body' | null, firmware: string | null, ending: string }} Recipe
+ * to try the finished bench, and `body` is the body this bench is. It is not a
+ * second kind of demo: a demo that builds a robot names the body it builds, so
+ * the panel can settle the character instead of leaving it to a guess.
+ * @typedef {{ id: 'audio' | 'screen' | 'toy', name: string, needs: string[], connection: 'body' | null, firmware: string | null, ending: string, body?: string }} Recipe
  */
 
 /** @type {Recipe[]} */
 export const RECIPES = [
-  { id: 'audio', name: 'Audio only', needs: [], connection: 'body', firmware: 'body', ending: 'Say hello' },
-  { id: 'screen', name: 'Audio + screen', needs: ['pose'], connection: 'body', firmware: 'body', ending: 'Say "Sit"' },
-  { id: 'toy', name: 'Audio + toy robot', needs: ['move'], connection: 'body', firmware: 'body', ending: 'Say "go forward"' },
+  { id: 'audio', name: 'Audio only', needs: [], connection: 'body', firmware: 'body', ending: 'Say hello', body: 'none' },
+  { id: 'screen', name: 'Audio + screen', needs: ['pose'], connection: 'body', firmware: 'body', ending: 'Say "Sit"', body: 'pet' },
+  { id: 'toy', name: 'Audio + toy robot', needs: ['move'], connection: 'body', firmware: 'body', ending: 'Say "go forward"', body: 'toy' },
 ];
 
 /** The screen a recipe wires when the character has not named a model. */
@@ -78,32 +80,45 @@ const LOOSE = {
 };
 
 /**
- * The bench a recipe starts from: only the ESP32 remains, lying where it
- * opened, nothing wired, USB out. No boards either: the recipe's first steps
- * lay down its own, so they land where its coordinates expect.
+ * The bench a recipe starts from: the ESP32 remains, lying where it opened,
+ * nothing wired, USB out. No boards either: the recipe's first steps lay down
+ * its own, so they land where its coordinates expect.
+ *
+ * A lesson that never names the ESP32 — an LED loop, a battery and a regulator —
+ * is built without one. `board: false` leaves it off, and the caller still gets
+ * a bench to place the lesson's own parts on.
  * @param {Bench} b
+ * @param {{ board?: boolean }} [opts] keep the ESP32 (default) or leave it off
  * @returns {Bench}
  */
-export function startBench(b) {
-  const esp = b.placed.find((p) => p.id === 'esp');
-  if (!esp) throw new Error('the bench has no ESP32');
+export function startBench(b, { board = true } = {}) {
+  const esp = board ? b.placed.find((p) => p.id === 'esp') : null;
+  if (board && !esp) throw new Error('the bench has no ESP32');
   return {
     ...b,
     boards: [],
-    placed: [{ ...esp, at: { ...ESP_HOME }, rot: 0, seated: false, burnt: esp.burnt }],
+    placed: esp ? [{ ...esp, at: { ...ESP_HOME }, rot: 0, seated: false, burnt: esp.burnt }] : [],
     wires: [],
     usb: false,
   };
 }
 
-/** The two joined boards and the ESP32 across the seam, for any build. */
-export function benchSetupSteps() {
+/**
+ * The two joined boards and, when the build needs it, the ESP32 across the
+ * seam. A lesson with no controller gets the boards its parts sit on and no
+ * board part it never uses.
+ * @param {boolean} [board] include the ESP32 (default)
+ * @returns {Step[]}
+ */
+export function benchSetupSteps(board = true) {
   /** @type {Step[]} */
   const steps = [
     { kind: 'board', id: 'bb1', at: BB1, rot: 0, say: 'A breadboard to build on' },
     { kind: 'board', id: 'bb2', at: BB2, rot: 0, say: 'A second board: the ESP32 is too wide for one, so it sits across the seam' },
-    { kind: 'part', id: 'esp', part: 'esp32', at: ESP_SEAT, rot: 0, seated: true, say: 'The ESP32 goes in across the seam, a row of pins on each board' },
   ];
+  if (board) {
+    steps.push({ kind: 'part', id: 'esp', part: 'esp32', at: ESP_SEAT, rot: 0, seated: true, say: 'The ESP32 goes in across the seam, a row of pins on each board' });
+  }
   return steps;
 }
 

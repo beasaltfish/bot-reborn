@@ -11,7 +11,12 @@ import type { EditorSlot } from './types';
 const props = (over: Partial<EditorSlot> = {}): EditorSlot =>
   ({ id: 'A', online: false, initialTab: 'basic', onChanged: vi.fn(), onDeleted: vi.fn(), ...over });
 
-// Body and Reflex live under Advanced, at the bottom of Basic.
+// The body is its own tab; Reflex still lives under Advanced, at the bottom of
+// Basic.
+async function openBody() {
+  await userEvent.click(await screen.findByRole('tab', { name: 'Body' }));
+}
+
 async function openAdvanced() {
   await userEvent.click(await screen.findByRole('tab', { name: 'Basic' }));
   await userEvent.click(screen.getByText('Advanced'));
@@ -66,19 +71,29 @@ describe('Editor', () => {
     expect(fake.patches()[0].body).toEqual({ config: { bargeIn: false } });
   });
 
-  it('keeps Body and Reflex out of the top tabs', async () => {
+  it('gives the body its own top tab and keeps Reflex out of them', async () => {
     installFakeApi([{ name: 'A' }]);
     render(<Editor {...props()} />);
     expect(await screen.findByRole('tab', { name: 'Basic' })).toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: 'Body' })).toBeNull();
+    expect(screen.getByRole('tab', { name: 'Body' })).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Reflex' })).toBeNull();
   });
 
-  it('puts the body cards under Advanced in Basic', async () => {
+  it('follows a later initialTab, so a link can open the Body tab', async () => {
+    installFakeApi([{ name: 'A' }]);
+    const { rerender } = render(<Editor {...props()} />);
+    await screen.findByLabelText('Name');
+    rerender(<Editor {...props({ initialTab: 'body' })} />);
+    expect(await screen.findByRole('radio', { name: /toy on wheels/i })).toBeVisible();
+  });
+
+  it('puts the body cards in the Body tab, not in Basic', async () => {
     installFakeApi([{ name: 'A' }]);
     render(<Editor {...props()} />);
-    await openAdvanced();
+    await openBody();
     expect(await screen.findByRole('radio', { name: /toy on wheels/i })).toBeVisible();
+    await userEvent.click(screen.getByRole('tab', { name: 'Basic' }));
+    expect(screen.queryByRole('radio', { name: /toy on wheels/i })).toBeNull();
   });
 
   it('opening Advanced writes nothing', async () => {
@@ -270,8 +285,9 @@ describe('Editor', () => {
   it('reflex: says which configured actions this body will ignore', async () => {
     installFakeApi([{ name: 'A' }]);
     render(<Editor {...props()} />);
-    await openAdvanced();
+    await openBody();
     await userEvent.click(await screen.findByRole('radio', { name: /voice only/i }));
+    await openAdvanced();
     await userEvent.selectOptions(screen.getByLabelText('Reflex preset'), 'commands');
     expect(screen.getByRole('note')).toHaveTextContent(/move/);
   });
@@ -432,7 +448,7 @@ describe('Editor', () => {
 it('pet: the body is picked from its card, and the patch says pet', async () => {
   const fake = installFakeApi([{ name: 'A' }]);
   render(<Editor {...props()} />);
-  await openAdvanced();
+  await openBody();
   const pet = await screen.findByRole('radio', { name: /pet on a screen/i });
   expect(pet).not.toBeChecked();
   await userEvent.click(pet);
@@ -474,7 +490,7 @@ it('pet: an action can be a pose, and the pose is picked from the three', async 
 it('tarot: the body is picked from its card, in English', async () => {
   const fake = installFakeApi([{ name: 'A' }]);
   render(<Editor {...props()} />);
-  await openAdvanced();
+  await openBody();
   const tarot = await screen.findByRole('radio', { name: /tarot reader/i });
   expect(tarot).not.toBeChecked();
   await userEvent.click(tarot);

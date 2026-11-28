@@ -54,3 +54,19 @@ test('another body on the character offers the switch, and says so', () => {
   assert.equal(out?.action, 'adopt');
   assert.equal(out?.params.name, 'Asten');
 });
+
+test('a body with no actions of its own is complete once the character wears it', () => {
+  // Voice only has nothing to add: asking it for its 0 actions would never end.
+  const out = nextStep({ body: 'none', installed: true, examples: [], character: asten('none', []) });
+  assert.equal(out?.key, 'bodyNext.isBody');
+  assert.equal(out?.action, null);
+});
+
+test('a template compares action names, not just a count', () => {
+  const out = nextStep({
+    body: 'pet', installed: true, examples: ['pose', 'play_sound'],
+    character: asten('pet', ['move']),
+  });
+  assert.equal(out?.key, 'bodyNext.needsActions');
+  assert.equal(out?.action, 'adopt');
+});

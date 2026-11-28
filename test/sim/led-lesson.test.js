@@ -25,8 +25,9 @@ test('LED lesson declares five bilingual stages, pin focus, controls and fault c
 test('the LED project builds a valid standalone loop and round-trips through bench storage', () => {
   const project = projectById('led-basics');
   assert.ok(project);
-  const bench = project.steps.reduce(applyStep, startBench(emptyBench()));
-  assert.deepEqual(bench.placed.map(part => part.part).sort(), ['dc-source', 'esp32', 'led-5mm', 'resistor']);
+  const bench = project.steps.reduce(applyStep, startBench(emptyBench(), { board: false }));
+  // No controller: this loop is the source, the resistor and the LED.
+  assert.deepEqual(bench.placed.map(part => part.part).sort(), ['dc-source', 'led-5mm', 'resistor']);
   assert.equal(bench.usb, false);
   assert.equal(bench.wires.length, 3);
   assert.equal(evaluateLedBench(bench, 'led').state, 'on');

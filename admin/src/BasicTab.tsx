@@ -4,10 +4,10 @@ import { t } from './i18n';
 import { TokenBox } from './TokenBox';
 import type { Detail, Patch } from './types';
 
-// The phone is this character's body, so it is paired beside the cards that say
-// which bodies use one; those cards, and everything else about the body and the
-// reflex, are under Advanced at the bottom. What stays in front is the token,
-// for a device that cannot scan a code.
+// The phone is this character's body, so it is paired here; the body itself
+// has its own tab, and the optional reflex layer is under Advanced at the
+// bottom. What stays in front is the token, for a device that cannot scan a
+// code.
 export function BasicTab({ detail, update, onToken, advanced }:
   { detail: Detail; update(p: Patch): void; onToken(token: string): void; advanced?: ReactNode }) {
   const c = detail.config;

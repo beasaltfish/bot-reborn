@@ -1,0 +1,50 @@
+{
+  "id": "motor-driver-basics",
+  "adoptable": false,
+  "label": { "en": "Motor driver basics", "zh": "电机驱动基础" },
+  "ending": "Spin the motor",
+  "parts": ["esp32", "tb6612fng", "dc-motor-small"],
+  "resources": [
+    {
+      "kind": "device",
+      "name": "driver",
+      "driver": "tb6612fng",
+      "part": "tb6612fng",
+      "ain1": 4,
+      "ain2": 5,
+      "pwma": 6
+    }
+  ],
+  "commands": [
+    {
+      "name": "spin",
+      "timeoutMs": 1000,
+      "run": [
+        {
+          "op": "device.write",
+          "args": { "device": "driver", "direction": "forward", "speed": 0.6, "load": "idle" }
+        }
+      ]
+    }
+  ],
+  "behaviors": [
+    { "on": { "everyMs": 1000 }, "run": [{ "command": "spin" }] }
+  ],
+  "wiring": {
+    "parts": [
+      { "id": "drv", "part": "tb6612fng", "at": { "x": -20, "z": 40 }, "seated": false },
+      { "id": "motor", "part": "dc-motor-small", "at": { "x": 15, "z": 40 }, "seated": false }
+    ],
+    "links": [
+      { "a": "drv:VM", "b": "esp:5V", "why": "VM is the motor supply." },
+      { "a": "drv:VCC", "b": "esp:3V3", "why": "VCC is the logic supply." },
+      { "a": "drv:GND2", "b": "esp:GND", "why": "The driver and controller need a common ground." },
+      { "a": "drv:STBY", "b": "esp:3V3", "why": "STBY must be high for the bridge to operate." },
+      { "a": "drv:AIN1", "b": "esp:GPIO4", "why": "AIN1 sets one direction input." },
+      { "a": "drv:AIN2", "b": "esp:GPIO5", "why": "AIN2 sets the other direction input." },
+      { "a": "drv:PWMA", "b": "esp:GPIO6", "why": "PWMA sets the motor speed." },
+      { "a": "motor:+", "b": "drv:AO1", "why": "Connect one motor terminal to AO1." },
+      { "a": "motor:-", "b": "drv:AO2", "why": "Connect the other motor terminal to AO2." }
+    ]
+  }
+}

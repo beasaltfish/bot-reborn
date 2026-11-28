@@ -175,7 +175,7 @@ test('a USB step followed by a flash enters the bootloader and writes the new fi
   const flashed = /** @type {string[]} */ ([]);
   await new Promise((resolve) => {
     runRecipe(/** @type {any} */ ({
-      steps: /** @type {any} */ ([{ kind: 'usb' }, { kind: 'flash', firmware: 'sketch-bme280' }]),
+      steps: /** @type {any} */ ([{ kind: 'usb' }, { kind: 'flash', firmware: 'sketch-env-display' }]),
       mode: 'watch',
       speed: 100,
       getBench: () => ({}),
@@ -188,8 +188,8 @@ test('a USB step followed by a flash enters the bootloader and writes the new fi
       onDone: resolve,
     }));
   });
-  assert.deepEqual(seen, [{ pendingFlash: 'sketch-bme280' }]);
-  assert.deepEqual(flashed, ['sketch-bme280']);
+  assert.deepEqual(seen, [{ pendingFlash: 'sketch-env-display' }]);
+  assert.deepEqual(flashed, ['sketch-env-display']);
 });
 
 test('a USB step with no flash after it boots the current firmware', async () => {
